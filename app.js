@@ -378,8 +378,12 @@ if (googleSignupBtn) {
     }
   }
 
+  const _TICKER_API_ROOT = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+    ? ""
+    : "https://blackportfolio-api-production.up.railway.app";
+
   function loadLivePrices() {
-    fetch(`/api/prices?symbols=${encodeURIComponent(ALL_TICKER_SYMBOLS)}`)
+    fetch(`${_TICKER_API_ROOT}/api/prices?symbols=${encodeURIComponent(ALL_TICKER_SYMBOLS)}`)
       .then(r => { if (!r.ok) throw new Error("api"); return r.json(); })
       .then(applyLiveApiPrices)
       .catch(() => {

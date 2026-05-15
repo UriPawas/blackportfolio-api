@@ -283,7 +283,10 @@ const defaultMarketState = {
 };
 
 // URL de tu nuevo servidor local en Python
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+const _IS_LOCAL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+const API_BASE_URL = _IS_LOCAL
+  ? "http://127.0.0.1:8000/api"
+  : "https://blackportfolio-api-production.up.railway.app/api";
 
 let marketState = getStoredMarketState();
 let activeSection = "home";

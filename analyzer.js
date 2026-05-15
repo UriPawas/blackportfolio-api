@@ -7,7 +7,8 @@ const AnalyzerModule = (() => {
   "use strict";
 
   // ── Constants ──────────────────────────────────────────────
-  const API          = "http://127.0.0.1:8000/api";
+  const _isLocal     = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+  const API          = _isLocal ? "http://127.0.0.1:8000/api" : "https://blackportfolio-api-production.up.railway.app/api";
   const MAX_ASSETS   = 3;
   const RF           = 0.045;   // Risk-free rate (US 10Y Treasury)
   const ERP          = 0.055;   // Equity risk premium
