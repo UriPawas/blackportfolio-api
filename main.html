@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAIN | BlackPortfolio</title>
+  <meta name="description" content="Area principal de BlackPortfolio con inicio personalizable, navegacion interna y modulo Portafolio Tracker.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="main.css">
+  <style>
+    .company-info-animation {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: 300px;
+      overflow: hidden;
+    }
+    .company-info-animation iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      pointer-events: none;
+    }
+    .company-info-animation.small { height: 150px; }
+  </style>
+</head>
+<body class="main-page">
+  <div class="background-orb orb-one"></div>
+  <div class="background-orb orb-two"></div>
+  <div class="grid-overlay"></div>
+
+  <main class="dashboard-main">
+    <aside class="dashboard-sidebar-shell">
+      <div class="sidebar-brand-row">
+        <a class="brand dashboard-brand" href="main.html"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
+        <button id="sidebarCloseBtn" class="sidebar-close-btn" type="button" aria-label="Cerrar menu">
+          <span class="bar"></span>
+          <span class="bar"></span>
+          <span class="bar"></span>
+        </button>
+      </div>
+      <div class="dashboard-user-card">
+        <span class="eyebrow">Sesion activa</span>
+        <strong id="sidebarUserName" class="is-skeleton">Cargando...</strong>
+        <span id="sidebarUserPlan" class="is-skeleton">Plan</span>
+      </div>
+
+      <nav class="dashboard-nav">
+        <button class="dashboard-nav-item active" data-section="home" data-i18n="nav_home">Inicio</button>
+        <button class="dashboard-nav-item" data-section="tracker" data-i18n="nav_tracker">Portafolio Tracker</button>
+        <button class="dashboard-nav-item" data-section="markowitz">Creación de portafolio</button>
+        <button class="dashboard-nav-item" data-section="topdown">Análisis Top-Down</button>
+        <button class="dashboard-nav-item" data-section="markets" data-i18n="nav_markets">Mercados</button>
+        <button class="dashboard-nav-item" data-section="analyzer">Analizador</button>
+        <button class="dashboard-nav-item" data-section="settings" data-i18n="nav_settings">Ajustes</button>
+      </nav>
+
+      <div class="dashboard-sidebar-footer">
+        <a class="button secondary" href="index.html" data-i18n="sidebar_back">Volver a landing</a>
+        <button id="logoutButton" class="button ghost" type="button" data-i18n="sidebar_logout">Cerrar sesion</button>
+      </div>
+    </aside>
+
+    <section class="dashboard-content-shell">
+      <header class="dashboard-topbar">
+        <div class="topbar-left">
+          <button id="sidebarToggleBtn" class="sidebar-toggle-btn" type="button" aria-label="Abrir menu">
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+          </button>
+          <div>
+            <span class="eyebrow">MAIN</span>
+            <h1 id="mainHeading">Centro de control</h1>
+          </div>
+        </div>
+        <div class="dashboard-topbar-meta">
+          <div class="mini-status-card">
+            <span>Cuenta</span>
+            <strong id="topbarUserName" class="is-skeleton">Cargando...</strong>
+          </div>
+          <div class="mini-status-card">
+            <span>Plan</span>
+            <strong id="topbarPlan" class="is-skeleton">--</strong>
+          </div>
+        </div>
+      </header>
+
+      <section id="section-home" class="dashboard-section active">
+        <div class="hub-shell">
+          <div class="hub-toolbar">
+            <div class="hub-tabs" id="hubTabs"></div>
+            <button class="hub-tab-add" id="hubAddSpaceBtn" type="button" title="Nuevo espacio">+</button>
+            <div class="hub-toolbar-spacer"></div>
+            <div class="hub-toolbar-actions">
+              <button class="hub-icon-btn" id="hubExportBtn" type="button" title="Exportar configuracion">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              </button>
+              <div class="hub-add-widget-wrap">
+                <button class="hub-icon-btn primary" id="hubAddWidgetBtn" type="button" title="Agregar tarjeta">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                </button>
+                <div class="hub-add-widget-menu hidden" id="hubAddWidgetMenu">
+                  <button type="button" data-widget-type="chart">
+                    <span class="hub-menu-icon">📈</span><span>Gráfica de precio</span>
+                  </button>
+                  <button type="button" data-widget-type="watchlist">
+                    <span class="hub-menu-icon">⭐</span><span>Lista de seguimiento</span>
+                  </button>
+                  <button type="button" data-widget-type="calendar">
+                    <span class="hub-menu-icon">📅</span><span>Calendario de eventos</span>
+                  </button>
+                  <button type="button" data-widget-type="note">
+                    <span class="hub-menu-icon">📝</span><span>Nota / KPI</span>
+                  </button>
+                </div>
+              </div>
+              <button class="hub-icon-btn" id="hubHelpBtn" type="button" title="Ayuda">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="hub-canvas" id="hubCanvas">
+            <div class="hub-empty" id="hubEmpty">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+              <p>Agrega tu primera tarjeta usando el botón de la derecha.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-tracker" class="dashboard-section">
+
+        <!-- ── Vista: Lista de portafolios ───────────────────────────────── -->
+        <div id="trackerListView" class="hidden">
+          <div class="tracker-list-header">
+            <div>
+              <span class="eyebrow">Mis portafolios</span>
+              <p class="tracker-list-sub">Selecciona un portafolio o crea uno nuevo</p>
+            </div>
+            <button id="newPortfolioBtn" class="button primary" type="button">+ Nuevo portafolio</button>
+          </div>
+          <div id="portfolioCardsGrid" class="portfolio-cards-grid"></div>
+          <div id="noPortfoliosMsg" class="tracker-empty-state hidden">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v4H3zM3 11h18v10H3z"/><path d="M7 15h4M7 18h2"/></svg>
+            <p>Aun no tienes portafolios. Crea el primero.</p>
+          </div>
+        </div>
+
+        <!-- ── Vista: Dashboard de portafolio ────────────────────────────── -->
+        <div id="trackerDashView" class="hidden">
+          <div class="tracker-dash-topbar">
+            <button id="backToListBtn" class="tracker-back-btn" type="button">← Mis portafolios</button>
+            <div class="tracker-dash-title-group">
+              <h2 id="dashPortfolioName" class="tracker-dash-title"></h2>
+              <button id="renamePortfolioBtn" class="portfolio-rename-btn" type="button" title="Editar nombre">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="tracker-kpi-grid">
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Suma de todas las compras realizadas en este portafolio, incluyendo comisiones e IVA pagados.</span>
+              </div>
+              <span>Total invertido</span><strong id="dashTotalInvested">$0.00</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Precio de mercado actual de cada posición multiplicado por la cantidad de acciones. Se actualiza al presionar "Actualizar precios".</span>
+              </div>
+              <span>Valor actual</span><strong id="dashCurrentValue">—</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Valor actual del portafolio menos el total invertido (compras + comisiones + IVA). Puede ser negativo si el mercado bajó.</span>
+              </div>
+              <span>Retorno total</span><strong id="dashReturnAmt">—</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Retorno total expresado como porcentaje del dinero invertido: (Valor actual − Total invertido) ÷ Total invertido × 100.</span>
+              </div>
+              <span>Retorno %</span><strong id="dashReturnPct">—</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Número de activos distintos con al menos una acción registrada en este portafolio.</span>
+              </div>
+              <span>Posiciones</span><strong id="dashPositionCount">0</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Suma de las comisiones de corretaje pagadas en todas las transacciones de compra registradas.</span>
+              </div>
+              <span>Comisiones totales</span><strong id="dashTotalCommissions">$0.00</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Impuesto al Valor Agregado (IVA) acumulado sobre las comisiones de todas las transacciones.</span>
+              </div>
+              <span>IVA total</span><strong id="dashTotalIva">$0.00</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Índice de referencia seleccionado (benchmark) para comparar el rendimiento del portafolio, p. ej. S&amp;P 500.</span>
+              </div>
+              <span>Referencia</span><strong id="dashBenchmark">—</strong>
+            </div>
+          </div>
+          <div class="tracker-price-status-bar">
+            <span id="dashPriceStatus" class="tracker-price-status-msg"></span>
+            <button id="refreshPricesBtn" class="button ghost tracker-refresh-btn" type="button">↻ Actualizar precios</button>
+          </div>
+
+          <!-- ── Tab nav ──────────────────────────────────────────────────── -->
+          <div class="tracker-tab-nav">
+            <button class="tracker-tab-btn active" type="button" data-tab="summary">Resumen</button>
+            <button class="tracker-tab-btn" type="button" data-tab="desempeno">Desempeño</button>
+            <button class="tracker-tab-btn" type="button" data-tab="transacciones">Transacciones</button>
+            <button class="tracker-tab-btn" type="button" data-tab="proyeccion">Proyección</button>
+          </div>
+
+          <!-- ── Tab: Summary ─────────────────────────────────────────────── -->
+          <div class="tracker-tab-panel" id="tabPanelSummary">
+            <div class="tracker-main-grid">
+              <div class="dashboard-card">
+                <div class="card-header">
+                  <h3>Ponderacion del portafolio</h3>
+                  <span>Por monto invertido</span>
+                </div>
+                <div class="donut-wrap">
+                  <canvas id="portfolioDonutChart"></canvas>
+                  <div id="donutLegend" class="donut-legend"></div>
+                </div>
+              </div>
+
+              <div class="dashboard-card">
+                <div class="card-header">
+                  <h3>Cambio diario</h3>
+                  <span>Variación respecto al cierre anterior</span>
+                </div>
+                <div class="tracker-table-shell">
+                  <table class="tracker-table">
+                    <thead>
+                      <tr>
+                        <th>Ticker</th>
+                        <th>Precio</th>
+                        <th>Cambio $</th>
+                        <th>Cambio %</th>
+                        <th>Valor posición</th>
+                      </tr>
+                    </thead>
+                    <tbody id="summaryTableBody"></tbody>
+                  </table>
+                </div>
+                <div id="noPositionsSummaryMsg" class="tracker-empty-state hidden">
+                  <p>Sin posiciones aun.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="dashboard-card" id="holdingsBarCard">
+              <div class="card-header">
+                <h3>Top 10 Holdings</h3>
+                <span id="holdingsBarSubtitle">Por valor actual</span>
+              </div>
+              <div class="holdings-bar-wrap">
+                <canvas id="holdingsBarChart"></canvas>
+              </div>
+            </div>
+
+            <div class="dashboard-card tracker-positions-section">
+              <div class="card-header">
+                <h3>Posiciones</h3>
+                <button id="addPositionBtn" class="button primary" type="button">+ Agregar posicion</button>
+              </div>
+              <div id="positionsTableShell" class="tracker-table-shell">
+                <table class="tracker-table">
+                  <thead>
+                    <tr>
+                      <th>Ticker</th>
+                      <th>Fecha</th>
+                      <th>Precio prom.</th>
+                      <th>Precio actual</th>
+                      <th>Cantidad</th>
+                      <th>Costo total</th>
+                      <th>Valor actual</th>
+                      <th>Retorno</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="positionsTableBody"></tbody>
+                </table>
+              </div>
+              <div id="noPositionsMsg" class="tracker-empty-state hidden">
+                <p>Agrega tu primera posicion para comenzar a construir tu portafolio.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Tab: Desempeño ────────────────────────────────────────────── -->
+          <div class="tracker-tab-panel" id="tabPanelDesempeno" style="display:none">
+
+            <!-- 3a. Metrics row -->
+            <div class="perf-metrics-grid">
+              <div class="perf-metric-card dashboard-card">
+                <div class="perf-metric-header">
+                  <span class="perf-metric-label">Sharpe Ratio</span>
+                  <button class="perf-info-btn" type="button" data-metric="sharpe" title="Ver cálculo">ℹ</button>
+                </div>
+                <strong id="sharpeValue" class="perf-metric-value">—</strong>
+                <span id="sharpeRfrLabel" class="perf-metric-sub">Tasa libre de riesgo: —</span>
+              </div>
+              <div class="perf-metric-card dashboard-card">
+                <div class="perf-metric-header">
+                  <span class="perf-metric-label">Volatilidad anualizada</span>
+                  <button class="perf-info-btn" type="button" data-metric="volatility" title="Ver cálculo">ℹ</button>
+                </div>
+                <strong id="volatilityValue" class="perf-metric-value">—</strong>
+              </div>
+              <div class="perf-metric-card dashboard-card">
+                <div class="perf-metric-header">
+                  <span class="perf-metric-label">VaR (Valor en Riesgo)</span>
+                  <button class="perf-info-btn" type="button" data-metric="var" title="Ver cálculo">ℹ</button>
+                </div>
+                <strong id="varValue" class="perf-metric-value">—</strong>
+                <span id="varConfLabel" class="perf-metric-sub">Nivel de confianza: 95%</span>
+                <div id="varConfBtns" class="var-conf-btns">
+                  <button class="var-conf-btn" type="button" data-conf="0.90">90%</button>
+                  <button class="var-conf-btn active" type="button" data-conf="0.95">95%</button>
+                  <button class="var-conf-btn" type="button" data-conf="0.99">99%</button>
+                </div>
+                <div id="varHorizonBtns" class="var-conf-btns" style="margin-top:6px">
+                  <button class="var-conf-btn active" type="button" data-horizon="daily">Diario</button>
+                  <button class="var-conf-btn" type="button" data-horizon="annual">Anualizado</button>
+                </div>
+              </div>
+              <div class="perf-metric-card dashboard-card">
+                <div class="perf-metric-header">
+                  <span class="perf-metric-label">Beta del portafolio</span>
+                  <button class="perf-info-btn" type="button" data-metric="beta" title="Ver cálculo">ℹ</button>
+                </div>
+                <strong id="betaValue" class="perf-metric-value">—</strong>
+                <span id="betaBenchmarkLabel" class="perf-metric-sub">vs Benchmark</span>
+              </div>
+              <div class="perf-metric-card dashboard-card">
+                <div class="perf-metric-header">
+                  <span class="perf-metric-label">Max Drawdown</span>
+                  <button class="perf-info-btn" type="button" data-metric="maxdd" title="Ver cálculo">ℹ</button>
+                </div>
+                <strong id="maxDrawdownValue" class="perf-metric-value">—</strong>
+                <span class="perf-metric-sub">Máx. caída pico a valle</span>
+              </div>
+            </div>
+
+            <!-- 3b. Performance chart -->
+            <div class="dashboard-card">
+              <div class="card-header">
+                <h3>Rendimiento acumulado</h3>
+                <div class="perf-period-nav">
+                  <button class="perf-period-btn" type="button" data-range="1mo" data-interval="1d">1M</button>
+                  <button class="perf-period-btn" type="button" data-range="3mo" data-interval="1d">3M</button>
+                  <button class="perf-period-btn" type="button" data-range="6mo" data-interval="1d">6M</button>
+                  <button class="perf-period-btn active" type="button" data-range="1y" data-interval="1d">1Y</button>
+                  <button class="perf-period-btn" type="button" data-range="max" data-interval="1wk">MAX</button>
+                </div>
+              </div>
+              <div id="perfChartWrap" class="perf-chart-wrap">
+                <canvas id="perfLineChart"></canvas>
+                <div id="perfChartTooltip" class="perf-chart-tooltip hidden"></div>
+              </div>
+              <div id="perfChartStatus" class="perf-chart-status"></div>
+            </div>
+
+            <!-- ── Allocations row ───────────────────────────────────────── -->
+            <div class="allocation-row">
+              <div class="dashboard-card">
+                <div class="card-header"><h3>Sector (portafolio)</h3></div>
+                <div class="alloc-donut-wrap">
+                  <canvas id="sectorDonutChart"></canvas>
+                  <div id="sectorDonutLegend" class="alloc-legend"></div>
+                </div>
+              </div>
+              <div class="dashboard-card">
+                <div class="card-header"><h3>Geográfico (portafolio)</h3></div>
+                <div class="alloc-donut-wrap">
+                  <canvas id="geoDonutChart"></canvas>
+                  <div id="geoDonutLegend" class="alloc-legend"></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ── Tab: Transacciones ────────────────────────────────────────── -->
+          <div class="tracker-tab-panel" id="tabPanelTransacciones" style="display:none">
+            <div class="dashboard-card">
+              <div class="card-header">
+                <h3>Historial de transacciones</h3>
+                <span id="txCountLabel"></span>
+              </div>
+
+              <!-- Filtros -->
+              <div class="tx-filters">
+                <div class="tx-filter-group">
+                  <label for="txFilterType">Tipo</label>
+                  <select id="txFilterType" onchange="renderTransactionsTab()">
+                    <option value="">Todos</option>
+                    <option value="COMPRA">Compra</option>
+                    <option value="VENTA">Venta</option>
+                    <option value="DIVIDENDO">Dividendo</option>
+                  </select>
+                </div>
+                <div class="tx-filter-group">
+                  <label for="txFilterTicker">Ticker</label>
+                  <input type="text" id="txFilterTicker" placeholder="Ej: AAPL" oninput="renderTransactionsTab()">
+                </div>
+                <div class="tx-filter-group">
+                  <label for="txFilterFrom">Desde</label>
+                  <input type="date" id="txFilterFrom" onchange="renderTransactionsTab()">
+                </div>
+                <div class="tx-filter-group">
+                  <label for="txFilterTo">Hasta</label>
+                  <input type="date" id="txFilterTo" onchange="renderTransactionsTab()">
+                </div>
+                <button class="tx-filter-clear" type="button" onclick="clearTxFilters()">Limpiar</button>
+              </div>
+
+              <div id="txTableShell" class="tracker-table-shell">
+                <table class="tracker-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Tipo</th>
+                      <th>Ticker</th>
+                      <th>Cantidad</th>
+                      <th>Precio</th>
+                      <th>Comisión</th>
+                      <th>Total neto</th>
+                    </tr>
+                  </thead>
+                  <tbody id="txTableBody"></tbody>
+                </table>
+              </div>
+              <div id="noTxMsg" class="tracker-empty-state hidden">
+                <p>No hay transacciones registradas todavía.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Tab: Proyección Monte Carlo ─────────────────────────────── -->
+          <div class="tracker-tab-panel" id="tabPanelProyeccion" style="display:none">
+            <div class="dashboard-card">
+              <div class="card-header">
+                <h3>Simulación Monte Carlo</h3>
+                <div class="mc-year-nav" id="mcYearNav">
+                  <button class="var-conf-btn" type="button" data-years="1">1 año</button>
+                  <button class="var-conf-btn" type="button" data-years="3">3 años</button>
+                  <button class="var-conf-btn" type="button" data-years="5">5 años</button>
+                  <button class="var-conf-btn active" type="button" data-years="10">10 años</button>
+                  <button class="var-conf-btn" type="button" data-years="20">20 años</button>
+                  <button class="var-conf-btn" type="button" data-years="30">30 años</button>
+                </div>
+              </div>
+
+              <div class="mc-legend" id="mcLegend">
+                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:rgba(111,134,255,0.15);border:1px solid rgba(111,134,255,0.25)"></span>5% – 95%</span>
+                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:rgba(111,134,255,0.28)"></span>10% – 90%</span>
+                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:rgba(111,134,255,0.42)"></span>25% – 75%</span>
+                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#6f86ff;height:3px"></span>Mediana</span>
+              </div>
+
+              <div class="mc-chart-wrap">
+                <canvas id="mcCanvas"></canvas>
+              </div>
+              <div id="mcStatus" class="perf-chart-status"></div>
+            </div>
+
+            <div class="mc-stats-grid" id="mcStatsGrid"></div>
+          </div>
+
+        </div>
+
+        <!-- ── Modal: Confirmar eliminacion portafolio ─────────────────── -->
+        <div id="deletePortfolioModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal tracker-modal--sm">
+            <div class="tracker-modal-header">
+              <h3>Eliminar portafolio</h3>
+            </div>
+            <p class="delete-confirm-msg">¿Seguro que deseas eliminar <strong id="deletePortfolioNameLabel"></strong>? Esta accion no se puede deshacer.</p>
+            <div class="delete-confirm-actions">
+              <button id="deletePortfolioCancelBtn" class="button secondary" type="button">Cancelar</button>
+              <button id="deletePortfolioConfirmBtn" class="button danger" type="button">Eliminar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Modal: Nuevo portafolio ─────────────────────────────────── -->
+        <div id="newPortfolioModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal">
+            <div class="tracker-modal-header">
+              <h3>Nuevo portafolio</h3>
+              <button id="closePortfolioModalBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="newPortfolioForm" class="dashboard-form">
+              <div class="form-row">
+                <label for="portfolioNameInput">Nombre del portafolio</label>
+                <input id="portfolioNameInput" type="text" placeholder="Ej. Mi portafolio ETFs" required>
+              </div>
+              <div class="form-row">
+                <label for="portfolioDescInput">Descripcion (opcional)</label>
+                <input id="portfolioDescInput" type="text" placeholder="Breve descripcion">
+              </div>
+              <div class="form-row">
+                <label>Indice de referencia</label>
+                <div class="custom-select" data-target="portfolioBenchmarkInput">
+                  <button class="custom-select-trigger" type="button" aria-haspopup="listbox">
+                    <span>S&amp;P 500</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5.5 7.5L10 12.5L14.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <ul class="custom-select-list" role="listbox">
+                    <li data-value="^GSPC" class="is-active" role="option">S&amp;P 500</li>
+                    <li data-value="^IXIC" role="option">NASDAQ 100</li>
+                    <li data-value="^DJI" role="option">Dow Jones</li>
+                    <li data-value="URTH" role="option">MSCI World (ETF)</li>
+                    <li data-value="EEM" role="option">MSCI Emerging Markets (ETF)</li>
+                    <li data-value="^MXX" role="option">IPC Mexico</li>
+                    <li data-value="^FTSE" role="option">FTSE 100</li>
+                    <li data-value="^N225" role="option">Nikkei 225</li>
+                    <li data-value="none" role="option">Sin referencia</li>
+                  </ul>
+                  <input type="hidden" id="portfolioBenchmarkInput" value="^GSPC">
+                </div>
+              </div>
+              <div class="form-row">
+                <label>Moneda principal</label>
+                <div class="custom-select" data-target="portfolioCurrencyInput">
+                  <button class="custom-select-trigger" type="button" aria-haspopup="listbox">
+                    <span>USD — Dolar estadounidense</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5.5 7.5L10 12.5L14.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <ul class="custom-select-list" role="listbox">
+                    <li data-value="USD" class="is-active" role="option">USD — Dolar estadounidense</li>
+                    <li data-value="MXN" role="option">MXN — Peso mexicano</li>
+                    <li data-value="EUR" role="option">EUR — Euro</li>
+                    <li data-value="GBP" role="option">GBP — Libra esterlina</li>
+                    <li data-value="CAD" role="option">CAD — Dolar canadiense</li>
+                    <li data-value="BRL" role="option">BRL — Real brasileno</li>
+                  </ul>
+                  <input type="hidden" id="portfolioCurrencyInput" value="USD">
+                </div>
+              </div>
+              <button class="button primary" type="submit">Crear portafolio</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Modal: Agregar posicion ─────────────────────────────────── -->
+        <div id="addPositionModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal">
+            <div class="tracker-modal-header">
+              <h3>Agregar posicion</h3>
+              <button id="closePositionModalBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="addPositionForm" class="dashboard-form">
+              <div class="form-row">
+                <label for="posTickerInput">Ticker</label>
+                <div class="pos-ticker-shell">
+                  <input id="posTickerInput" type="text" placeholder="Ej. VOO, AAPL, BTC-USD" required autocomplete="off" spellcheck="false">
+                  <div id="posTickerSuggestions" class="ticker-suggestions hidden"></div>
+                </div>
+              </div>
+              <div class="form-row">
+                <label for="posAvgPriceInput">Precio promedio</label>
+                <input id="posAvgPriceInput" type="number" step="0.0001" min="0.0001" placeholder="0.00" required>
+              </div>
+              <div class="form-row">
+                <label for="posCurrencyInput">Divisa del precio</label>
+                <select id="posCurrencyInput">
+                  <option value="USD">USD — Dólar</option>
+                  <option value="MXN">MXN — Peso mexicano</option>
+                  <option value="EUR">EUR — Euro</option>
+                  <option value="GBP">GBP — Libra esterlina</option>
+                  <option value="CAD">CAD — Dólar canadiense</option>
+                  <option value="BRL">BRL — Real brasileño</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="posQuantityInput">Cantidad (acciones / unidades)</label>
+                <input id="posQuantityInput" type="number" step="any" min="0" placeholder="0" required>
+              </div>
+              <div class="form-row">
+                <label for="posPurchaseDateInput">Fecha de compra</label>
+                <input id="posPurchaseDateInput" type="date" required>
+              </div>
+              <div class="form-row">
+                <label for="posCommissionInput">Comision (%)</label>
+                <input id="posCommissionInput" type="number" step="0.01" min="0" max="100" placeholder="0.00" value="0">
+              </div>
+              <div class="form-row">
+                <label class="pos-checkbox-label">
+                  <input id="posIvaCheck" type="checkbox">
+                  <span>Aplica IVA sobre comision</span>
+                </label>
+              </div>
+              <div id="posIvaRateRow" class="form-row hidden">
+                <label for="posIvaRateInput">Tasa de IVA (%)</label>
+                <input id="posIvaRateInput" type="number" step="0.01" min="0" max="100" value="16" placeholder="16">
+              </div>
+              <button class="button primary" type="submit">Agregar posicion</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Modal: Retirar posicion ────────────────────────────────── -->
+        <div id="withdrawPositionModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal">
+            <div class="tracker-modal-header">
+              <h3>Retirar posicion</h3>
+              <button id="closeWithdrawModalBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="withdrawPositionForm" class="dashboard-form">
+              <input type="hidden" id="withdrawPosId">
+              <div class="form-row">
+                <label>Ticker</label>
+                <div id="withdrawTickerDisplay" class="withdraw-ticker-display"></div>
+              </div>
+              <div class="form-row">
+                <label for="withdrawSellPriceInput">Precio de venta</label>
+                <input id="withdrawSellPriceInput" type="number" step="0.0001" min="0.0001" placeholder="0.00" required>
+              </div>
+              <div class="form-row">
+                <label for="withdrawQuantityInput">Cantidad a retirar</label>
+                <input id="withdrawQuantityInput" type="number" step="any" min="0" placeholder="0" required>
+                <small id="withdrawMaxQtyNote" class="form-hint"></small>
+              </div>
+              <div class="form-row">
+                <label for="withdrawCommissionInput">Comision (%)</label>
+                <input id="withdrawCommissionInput" type="number" step="0.01" min="0" max="100" placeholder="0.00" value="0">
+              </div>
+              <div class="form-row">
+                <label class="pos-checkbox-label">
+                  <input id="withdrawIvaCheck" type="checkbox">
+                  <span>Aplica IVA sobre comision</span>
+                </label>
+              </div>
+              <div id="withdrawIvaRateRow" class="form-row hidden">
+                <label for="withdrawIvaRateInput">Tasa de IVA (%)</label>
+                <input id="withdrawIvaRateInput" type="number" step="0.01" min="0" max="100" value="16" placeholder="16">
+              </div>
+              <div class="form-row withdraw-net-preview">
+                <label>Monto neto al portafolio (Cash)</label>
+                <span id="withdrawNetPreview" class="withdraw-net-amount">—</span>
+              </div>
+              <button class="button danger" type="submit">Confirmar retiro</button>
+            </form>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ══════════════════ SECCIÓN MARKOWITZ ══════════════════ -->
+      <section id="section-markowitz" class="dashboard-section">
+        <div class="mkw-layout">
+
+          <!-- ── Panel izquierdo: configuración ────────────────────────── -->
+          <div class="mkw-left-col">
+
+            <div class="dashboard-card mkw-config-card">
+              <div class="card-header">
+                <h3>Activos del portafolio</h3>
+                <span class="mkw-asset-count" id="mkwAssetCount">0 / 12</span>
+              </div>
+              <div class="mkw-presets">
+                <span class="mkw-presets-label">Presets rápidos:</span>
+                <button class="mkw-preset-btn" type="button" data-tickers="SPY,QQQ,TLT,GLD">ETF Clásico</button>
+                <button class="mkw-preset-btn" type="button" data-tickers="AAPL,MSFT,GOOGL,AMZN,NVDA">FAANG+</button>
+                <button class="mkw-preset-btn" type="button" data-tickers="VOO,VEA,VWO,BND,GLD">Global</button>
+              </div>
+              <div class="mkw-input-row">
+                <div class="pos-ticker-shell" style="flex:1">
+                  <input id="mkwTickerInput" type="text" class="mkw-ticker-input" placeholder="Ej. AAPL, VOO, BTC-USD" autocomplete="off" spellcheck="false">
+                  <div id="mkwTickerSuggestions" class="ticker-suggestions hidden"></div>
+                </div>
+                <button id="mkwAddAssetBtn" class="button primary mkw-add-btn" type="button">+ Agregar</button>
+              </div>
+              <div id="mkwAssetList" class="mkw-asset-list">
+                <p class="mkw-empty-assets">Agrega al menos 2 activos para optimizar.</p>
+              </div>
+            </div>
+
+            <div class="dashboard-card mkw-params-card">
+              <div class="card-header"><h3>Parámetros</h3></div>
+
+              <!-- ── Mode selector ──────────────────────────── -->
+              <div class="mkw-mode-tabs">
+                <button class="mkw-mode-tab mkw-mode-active" data-mode="mvo" type="button">MVO Clásico</button>
+                <button class="mkw-mode-tab" data-mode="smartbeta" type="button">Smart Beta</button>
+                <button class="mkw-mode-tab" data-mode="blacklitterman" type="button">Black-Litterman</button>
+              </div>
+
+              <div class="mkw-params-grid">
+                <div class="form-row">
+                  <label for="mkwPeriod">Período histórico</label>
+                  <select id="mkwPeriod">
+                    <option value="1y">1 año</option>
+                    <option value="2y" selected>2 años</option>
+                    <option value="5y">5 años</option>
+                    <option value="10y">10 años</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="mkwRfr">Tasa libre de riesgo (% anual)</label>
+                  <input id="mkwRfr" type="number" step="0.1" min="0" max="30" value="4.5">
+                  <div id="mkwRfrLabel" class="mkw-rfr-label"></div>
+                </div>
+                <div class="form-row">
+                  <label for="mkwNSim">Portafolios a simular</label>
+                  <select id="mkwNSim">
+                    <option value="10000" selected>10,000</option>
+                    <option value="25000">25,000</option>
+                    <option value="50000">50,000</option>
+                    <option value="75000">75,000</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="mkwVarConf">Nivel de confianza VaR</label>
+                  <select id="mkwVarConf">
+                    <option value="0.90">90%</option>
+                    <option value="0.95" selected>95%</option>
+                    <option value="0.99">99%</option>
+                  </select>
+                </div>
+              </div>
+              <!-- ── Restricciones renta fija ──────────────────────────── -->
+              <div class="mkw-fi-section">
+                <label class="mkw-fi-toggle">
+                  <input type="checkbox" id="mkwFiEnabled">
+                  <span>Restricciones de renta fija</span>
+                </label>
+                <div id="mkwFiOptions" class="mkw-fi-options hidden">
+                  <div class="mkw-fi-fields">
+                    <div class="mkw-fi-field">
+                      <label for="mkwFiMin">Mínimo (%)</label>
+                      <input id="mkwFiMin" type="number" step="1" min="0" max="100" value="0" placeholder="0">
+                    </div>
+                    <div class="mkw-fi-field">
+                      <label for="mkwFiMax">Máximo (%)</label>
+                      <input id="mkwFiMax" type="number" step="1" min="0" max="100" value="50" placeholder="50">
+                    </div>
+                  </div>
+                  <p class="mkw-fi-note" id="mkwFiNote"></p>
+                </div>
+              </div>
+
+              <!-- ── Smart Beta params (hidden by default) ──── -->
+              <div id="mkwSmartBetaPanel" class="mkw-mode-panel hidden">
+                <div class="mkw-sb-header">
+                  <span class="mkw-sb-title">Factores a incluir</span>
+                  <span class="mkw-sb-hint">Selecciona uno o más factores y su peso relativo</span>
+                </div>
+                <div class="mkw-sb-factors">
+                  <label class="mkw-sb-factor">
+                    <input type="checkbox" id="sbMomentum" checked>
+                    <div class="mkw-sb-factor-info">
+                      <strong>Momentum</strong>
+                      <span>Retorno 12-1 meses — favorece tendencias</span>
+                    </div>
+                    <input type="number" id="sbMomentumW" class="mkw-sb-weight" value="40" min="0" max="100" step="5">
+                    <span class="mkw-sb-pct">%</span>
+                  </label>
+                  <label class="mkw-sb-factor">
+                    <input type="checkbox" id="sbLowVol" checked>
+                    <div class="mkw-sb-factor-info">
+                      <strong>Low Volatility</strong>
+                      <span>Inverso de la volatilidad anualizada</span>
+                    </div>
+                    <input type="number" id="sbLowVolW" class="mkw-sb-weight" value="40" min="0" max="100" step="5">
+                    <span class="mkw-sb-pct">%</span>
+                  </label>
+                  <label class="mkw-sb-factor">
+                    <input type="checkbox" id="sbMeanRev">
+                    <div class="mkw-sb-factor-info">
+                      <strong>Mean Reversion</strong>
+                      <span>Contrarian — retorno 1-mes invertido</span>
+                    </div>
+                    <input type="number" id="sbMeanRevW" class="mkw-sb-weight" value="20" min="0" max="100" step="5">
+                    <span class="mkw-sb-pct">%</span>
+                  </label>
+                </div>
+                <p class="mkw-fi-note" id="sbNote">Los pesos de factores se normalizan automáticamente. El score compuesto se usa como vector de retornos esperados en MVO.</p>
+              </div>
+
+              <!-- ── Black-Litterman params (hidden by default) -->
+              <div id="mkwBLPanel" class="mkw-mode-panel hidden">
+                <div class="mkw-sb-header">
+                  <span class="mkw-sb-title">Views del inversor</span>
+                  <span class="mkw-sb-hint">Define tus expectativas de retorno relativo o absoluto</span>
+                </div>
+                <div id="mkwBLViews" class="mkw-bl-views"></div>
+                <button id="mkwBLAddViewBtn" class="button ghost" type="button" style="width:100%;margin-top:8px;font-size:12px">+ Agregar view</button>
+                <div class="mkw-sb-header" style="margin-top:14px">
+                  <span class="mkw-sb-title">Parámetros del modelo</span>
+                </div>
+                <div class="mkw-params-grid" style="margin-top:8px">
+                  <div class="form-row">
+                    <label for="blTau">Tau (τ) — confianza en el prior</label>
+                    <input id="blTau" type="number" step="0.01" min="0.01" max="1" value="0.05">
+                  </div>
+                  <div class="form-row">
+                    <label for="blDelta">Delta (δ) — aversión al riesgo</label>
+                    <input id="blDelta" type="number" step="0.1" min="0.5" max="10" value="2.5">
+                  </div>
+                </div>
+                <p class="mkw-fi-note">Prior: retornos implícitos de equilibrio (CAPM) con pesos iguales. BL combina el equilibrio con tus views usando la fórmula de Theil.</p>
+              </div>
+
+              <button id="mkwRunBtn" class="button primary mkw-run-btn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Optimizar portafolio
+              </button>
+              <div id="mkwStatus" class="mkw-status" style="display:none"></div>
+            </div>
+
+            <div class="dashboard-card mkw-info-card">
+              <div class="card-header"><h3>Modelo de Markowitz</h3></div>
+              <p class="mkw-info-text">La <strong>Teoría Moderna del Portafolio</strong> (Markowitz, 1952) busca la combinación de activos que maximiza el retorno esperado para un nivel dado de riesgo (volatilidad).</p>
+              <div class="mkw-info-points">
+                <div class="mkw-info-point">
+                  <span class="mkw-info-dot" style="background:#6f86ff"></span>
+                  <span><strong>Mín. Varianza:</strong> portafolio de menor riesgo posible.</span>
+                </div>
+                <div class="mkw-info-point">
+                  <span class="mkw-info-dot" style="background:#f5b84c"></span>
+                  <span><strong>Máx. Sharpe:</strong> mejor relación retorno/riesgo (portafolio de tangencia).</span>
+                </div>
+                <div class="mkw-info-point">
+                  <span class="mkw-info-dot mkw-info-dot-gradient"></span>
+                  <span><strong>Frontera eficiente:</strong> conjunto de portafolios óptimos para cada nivel de riesgo.</span>
+                </div>
+              </div>
+              <p class="mkw-info-note">Requiere el servidor API activo para descargar datos históricos de Yahoo Finance.</p>
+            </div>
+
+          </div>
+
+          <!-- ── Panel derecho: resultados ─────────────────────────────── -->
+          <div id="mkwResultsSection" class="mkw-right-col" style="display:none">
+
+            <div class="dashboard-card mkw-frontier-card">
+              <div class="card-header">
+                <h3>Frontera eficiente</h3>
+                <span>Retorno vs. Riesgo — simulación Monte Carlo</span>
+              </div>
+              <div class="mkw-frontier-wrap">
+                <canvas id="mkwFrontierCanvas"></canvas>
+              </div>
+            </div>
+
+            <div class="mkw-optimal-row">
+              <div class="dashboard-card mkw-optimal-card" id="mkwMinVarCard"></div>
+              <div class="dashboard-card mkw-optimal-card" id="mkwMaxSharpeCard"></div>
+            </div>
+
+            <!-- ── Forecast: Monte Carlo paths ─────────────────────────── -->
+            <div class="dashboard-card">
+              <div class="card-header">
+                <h3>Proyección de trayectorias</h3>
+                <div class="mc-year-nav" id="mkwForecastYearNav">
+                  <button class="var-conf-btn" type="button" data-years="1">1 año</button>
+                  <button class="var-conf-btn" type="button" data-years="3">3 años</button>
+                  <button class="var-conf-btn active" type="button" data-years="5">5 años</button>
+                  <button class="var-conf-btn" type="button" data-years="10">10 años</button>
+                  <button class="var-conf-btn" type="button" data-years="20">20 años</button>
+                  <button class="var-conf-btn" type="button" data-years="30">30 años</button>
+                </div>
+              </div>
+              <div class="mkw-forecast-legend" id="mkwForecastLegend">
+                <span class="mc-legend-item"><span class="mkw-forecast-gradient-swatch"></span>Bajo Sharpe → Alto Sharpe</span>
+                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#6f86ff;height:3px;width:22px"></span>Mín. Varianza (MV)</span>
+                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#f5b84c;height:3px;width:22px"></span>Máx. Sharpe (MS)</span>
+              </div>
+              <div class="mc-chart-wrap">
+                <canvas id="mkwForecastCanvas"></canvas>
+              </div>
+              <div id="mkwForecastStatus" class="perf-chart-status"></div>
+            </div>
+
+            <div class="dashboard-card mkw-weights-card">
+              <div class="card-header">
+                <h3 id="mkwWeightsPanelTitle">Ponderaciones</h3>
+                <span>Asignación óptima de capital</span>
+              </div>
+              <div class="mkw-weights-layout">
+                <canvas id="mkwWeightsPie"></canvas>
+                <div class="mkw-weights-table-shell tracker-table-shell">
+                  <table class="tracker-table">
+                    <thead><tr><th>Activo</th><th>Peso (%)</th><th>Distribución</th></tr></thead>
+                    <tbody id="mkwWeightsTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Sección de cálculos ─────────────────────────────────── -->
+            <div class="dashboard-card mkw-calc-card" id="mkwCalcCard">
+              <div class="card-header">
+                <h3>Cálculos y Metodología</h3>
+                <span>Estadísticas base, matrices y fórmulas</span>
+              </div>
+              <div class="mkw-calc-tabs">
+                <button class="mkw-calc-tab mkw-calc-tab-active" data-tab="methodology">Metodología</button>
+                <button class="mkw-calc-tab" data-tab="stats">Estadísticas</button>
+                <button class="mkw-calc-tab" data-tab="covariance">Covarianza</button>
+                <button class="mkw-calc-tab" data-tab="correlation">Correlación</button>
+                <button class="mkw-calc-tab" data-tab="var">VaR</button>
+              </div>
+
+              <!-- Metodología -->
+              <div id="mkwCalcPanelMethodology" class="mkw-calc-panel mkw-calc-panel-active">
+                <div class="mkw-methodology-grid">
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">1. Log-retornos semanales</div>
+                    <div class="mkw-method-formula">r<sub>t</sub> = ln(P<sub>t</sub> / P<sub>t−1</sub>)</div>
+                    <div class="mkw-method-desc">Se usan retornos logarítmicos para simetría y aditividad temporal. Los precios de cierre semanales ajustados provienen de Yahoo Finance.</div>
+                  </div>
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">2. Retorno esperado anualizado</div>
+                    <div class="mkw-method-formula">μ<sub>i</sub> = (Σ r<sub>t</sub> / T) × 52</div>
+                    <div class="mkw-method-desc">Media aritmética de los log-retornos semanales multiplicada por 52 para obtener la estimación anual.</div>
+                  </div>
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">3. Matriz de covarianza</div>
+                    <div class="mkw-method-formula">Σ<sub>ij</sub> = [Σ(r<sub>i</sub>−μ<sub>i</sub>)(r<sub>j</sub>−μ<sub>j</sub>) / (T−1)] × 52</div>
+                    <div class="mkw-method-desc">Estimador de covarianza muestral sesgado corregido (denominador T−1) y anualizado multiplicando por 52 semanas.</div>
+                  </div>
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">4. Retorno y varianza del portafolio</div>
+                    <div class="mkw-method-formula">E[R<sub>p</sub>] = w<sup>T</sup>μ &nbsp;&nbsp; σ²<sub>p</sub> = w<sup>T</sup>Σw</div>
+                    <div class="mkw-method-desc">El retorno es lineal en los pesos. La varianza captura correlaciones cruzadas entre activos a través de la matriz Σ.</div>
+                  </div>
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">5. Ratio de Sharpe</div>
+                    <div class="mkw-method-formula">S = (E[R<sub>p</sub>] − r<sub>f</sub>) / σ<sub>p</sub></div>
+                    <div class="mkw-method-desc">Mide el exceso de retorno por unidad de riesgo. r<sub>f</sub> es la tasa libre de riesgo (TIIE 28 días, Banxico).</div>
+                  </div>
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">6. Optimización</div>
+                    <div class="mkw-method-formula">min σ²<sub>p</sub> &nbsp; / &nbsp; max S<sub>p</sub> &nbsp; s.t. &nbsp; Σw<sub>i</sub>=1, w<sub>i</sub>≥0</div>
+                    <div class="mkw-method-desc">Descenso de gradiente proyectado sobre el símplex probabilístico. Restricción de no-venta en corto. Monte Carlo inicializa el espacio con muestras Dirichlet.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Estadísticas -->
+              <div id="mkwCalcPanelStats" class="mkw-calc-panel">
+                <div id="mkwCalcStatsContent" class="mkw-calc-placeholder">Ejecuta la optimización para ver las estadísticas individuales.</div>
+              </div>
+
+              <!-- Covarianza -->
+              <div id="mkwCalcPanelCovariance" class="mkw-calc-panel">
+                <p class="mkw-calc-matrix-note">Covarianza anualizada (×10⁴). Las diagonales son las varianzas individuales. Valores más altos = mayor co-movimiento.</p>
+                <div id="mkwCalcCovContent" class="mkw-calc-placeholder">Ejecuta la optimización para ver la matriz de covarianza.</div>
+              </div>
+
+              <!-- Correlación -->
+              <div id="mkwCalcPanelCorrelation" class="mkw-calc-panel">
+                <p class="mkw-calc-matrix-note">Matriz de correlación (ρ ∈ [−1, 1]). Diagonal siempre = 1. Colores: azul = correlación positiva alta, rojo = correlación negativa.</p>
+                <div id="mkwCalcCorrContent" class="mkw-calc-placeholder">Ejecuta la optimización para ver la matriz de correlación.</div>
+              </div>
+
+              <!-- VaR -->
+              <div id="mkwCalcPanelVar" class="mkw-calc-panel">
+                <div class="mkw-var-method-row">
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">VaR Paramétrico</div>
+                    <div class="mkw-method-formula">VaR<sub>α</sub> = −(μ<sub>p</sub> − z<sub>α</sub> · σ<sub>p</sub>)</div>
+                    <div class="mkw-method-desc">Asume retornos normalmente distribuidos. z<sub>90</sub>=1.282 · z<sub>95</sub>=1.645 · z<sub>99</sub>=2.326. Expresado como pérdida máxima esperada anual.</div>
+                  </div>
+                  <div class="mkw-method-block">
+                    <div class="mkw-method-title">VaR Histórico</div>
+                    <div class="mkw-method-formula">VaR<sub>α</sub> = −percentil<sub>(1−α)</sub>(R<sub>p,t</sub>) · √52</div>
+                    <div class="mkw-method-desc">Usa la distribución empírica de retornos semanales del portafolio (R<sub>p,t</sub> = Σ w<sub>i</sub>·r<sub>i,t</sub>), anualizado por raíz del tiempo.</div>
+                  </div>
+                </div>
+                <div id="mkwCalcVarContent" class="mkw-calc-placeholder">Ejecuta la optimización para ver el análisis de VaR.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+      <!-- ═══════════════════════════════════════════════════════ -->
+
+      <!-- ══════════════════ SECCIÓN TOP-DOWN ══════════════════ -->
+      <section id="section-topdown" class="dashboard-section">
+        <div class="topdown-layout">
+
+          <!-- ── Panel macro ──────────────────────────────────── -->
+          <div class="dashboard-card topdown-macro-card">
+            <div class="card-header">
+              <h3>Indicadores Macroeconómicos</h3>
+              <button id="tdRefreshBtn" class="button ghost" type="button" style="font-size:12px;padding:4px 10px">↻ Actualizar</button>
+            </div>
+            <div id="tdMacroGrid" class="topdown-macro-grid">
+              <div class="td-macro-loading">Cargando indicadores…</div>
+            </div>
+          </div>
+
+          <!-- ── Heatmap sectorial ────────────────────────────── -->
+          <div class="dashboard-card topdown-heatmap-card">
+            <div class="card-header">
+              <h3>Heatmap Sectorial — S&P 500</h3>
+              <div class="td-period-nav" id="tdPeriodNav">
+                <button class="td-period-btn active" data-period="1mo">1M</button>
+                <button class="td-period-btn" data-period="3mo">3M</button>
+                <button class="td-period-btn" data-period="ytd">YTD</button>
+                <button class="td-period-btn" data-period="1y">1A</button>
+              </div>
+            </div>
+            <p class="topdown-heatmap-hint">Haz clic en un sector para verlo en Mercados.</p>
+            <div id="tdHeatmapGrid" class="topdown-heatmap-grid">
+              <div class="td-macro-loading">Cargando sectores…</div>
+            </div>
+            <div id="tdHeatmapStatus" class="mkw-status" style="display:none;margin-top:10px"></div>
+          </div>
+
+          <!-- ── Flujo de decisión Top-Down ───────────────────── -->
+          <div class="dashboard-card topdown-flow-card">
+            <div class="card-header"><h3>Marco de Análisis Top-Down</h3></div>
+            <div class="topdown-flow">
+              <div class="td-flow-step td-flow-active" id="tdFlowMacro">
+                <div class="td-flow-num">1</div>
+                <div class="td-flow-body">
+                  <strong>Macro</strong>
+                  <span>Tasas, inflación, crecimiento</span>
+                  <div class="td-flow-verdict" id="tdMacroVerdict">—</div>
+                </div>
+              </div>
+              <div class="td-flow-arrow">↓</div>
+              <div class="td-flow-step" id="tdFlowSector">
+                <div class="td-flow-num">2</div>
+                <div class="td-flow-body">
+                  <strong>Sector</strong>
+                  <span>Selección del sector líder</span>
+                  <div class="td-flow-verdict" id="tdSectorVerdict">—</div>
+                </div>
+              </div>
+              <div class="td-flow-arrow">↓</div>
+              <div class="td-flow-step" id="tdFlowAsset">
+                <div class="td-flow-num">3</div>
+                <div class="td-flow-body">
+                  <strong>Activo</strong>
+                  <span>Ticker seleccionado</span>
+                  <div class="td-flow-verdict" id="tdAssetVerdict">—</div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:16px">
+              <p class="mkw-info-text" style="font-size:12px;color:rgba(255,255,255,0.45)">El análisis Top-Down parte del entorno macro global, identifica los sectores que mejor se posicionan en ese ciclo económico y luego selecciona activos específicos dentro de esos sectores. Complementa la optimización de portafolio y el análisis individual de activos.</p>
+            </div>
+          </div>
+
+          <!-- ── Rotación de sectores ─────────────────────────── -->
+          <div class="dashboard-card topdown-rotation-card">
+            <div class="card-header">
+              <h3>Ranking Sectorial</h3>
+              <span id="tdRankingPeriodLabel">Período seleccionado</span>
+            </div>
+            <div id="tdRankingTable" class="td-ranking-table">
+              <div class="td-macro-loading">Selecciona un período para ver el ranking.</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+      <!-- ═══════════════════════════════════════════════════════ -->
+
+      <section id="section-markets" class="dashboard-section">
+        <div class="market-workspace">
+          <div class="market-toolbar">
+            <div class="market-search-shell">
+              <div class="market-input-pill">
+                <input id="tickerInput" class="market-input" type="text" value="TTWO" autocomplete="off" spellcheck="false" aria-label="Ticker del activo">
+                <button id="applyTickerButton" class="market-input-action" type="button" title="Cargar ticker">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3l2.4 4.6L19 10l-4.6 2.4L12 17l-2.4-4.6L5 10l4.6-2.4L12 3Z"></path>
+                    <path d="M12 8v4M10 10h4"></path>
+                  </svg>
+                </button>
+              </div>
+              <div id="tickerSuggestions" class="ticker-suggestions hidden"></div>
+            </div>
+
+            <button id="saveTickerButton" class="market-circle-button" type="button" title="Guardar ticker">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"></path>
+              </svg>
+            </button>
+
+            <div class="market-divider"></div>
+
+            <div class="market-menu-group">
+              <button id="rangeMenuButton" class="market-menu-button" type="button" data-menu-target="rangeMenu">
+                <span id="rangeMenuLabel">D</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <div id="rangeMenu" class="market-menu hidden">
+                <button class="market-menu-item" type="button" data-range="HOY">HOY</button>
+                <button class="market-menu-item" type="button" data-range="5D">5D</button>
+                <button class="market-menu-item" type="button" data-range="1D">1D</button>
+                <button class="market-menu-item" type="button" data-range="1W">1W</button>
+                <button class="market-menu-item" type="button" data-range="1M">1M</button>
+                <button class="market-menu-item" type="button" data-range="3M">3M</button>
+                <button class="market-menu-item" type="button" data-range="6M">6M</button>
+                <button class="market-menu-item" type="button" data-range="1Y">1Y</button>
+                <button class="market-menu-item" type="button" data-range="2Y">2Y</button>
+                <button class="market-menu-item" type="button" data-range="5Y">5Y</button>
+                <button class="market-menu-item" type="button" data-range="MAX">MAX</button>
+              </div>
+            </div>
+
+            <div class="market-divider"></div>
+
+            <div class="market-menu-group">
+              <button id="chartTypeMenuButton" class="market-menu-button icon-button" type="button" data-menu-target="chartTypeMenu">
+                <span id="chartTypeButtonIcon" class="market-icon-wrap"></span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <div id="chartTypeMenu" class="market-menu hidden">
+                <button class="market-menu-item" type="button" data-chart-type="candlestick">Velas</button>
+                <button class="market-menu-item" type="button" data-chart-type="bars">Barras</button>
+                <button class="market-menu-item" type="button" data-chart-type="line">Linea</button>
+                <button class="market-menu-item" type="button" data-chart-type="area">Area</button>
+                <button class="market-menu-item" type="button" data-chart-type="volheatmap">Vol. Heatmap</button>
+              </div>
+            </div>
+
+            <div class="market-divider"></div>
+
+            <div class="market-menu-group market-menu-group-wide">
+              <button id="indicatorMenuButton" class="market-menu-button wide-button" type="button" data-menu-target="indicatorMenu">
+                <span class="market-icon-wrap market-bars-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20V10M10 20V4M16 20v-7M22 20v-12"></path>
+                  </svg>
+                </span>
+                <span>Indicadores</span>
+                <span id="indicatorCount" class="indicator-count hidden"></span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <div id="indicatorBackdrop" class="indicator-backdrop hidden"></div>
+              <div id="indicatorMenu" class="indicator-panel hidden">
+                <div class="indicator-panel-head">
+                  <span class="indicator-panel-title">Indicadores</span>
+                  <button id="clearIndicatorsBtn" class="indicator-clear-btn" type="button">Limpiar todo</button>
+                  <button id="closeIndicatorsBtn" class="indicator-close-btn" type="button" aria-label="Cerrar">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6l-12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+                  </button>
+                </div>
+
+                <div class="indicator-section">
+                  <div class="indicator-section-label">Medias móviles</div>
+                  <label class="indicator-row" data-ind="sma20">
+                    <input type="checkbox" value="sma20" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#39d0ff"></span>
+                    <div class="ind-info"><span class="ind-name">SMA 20</span><span class="ind-desc">Media simple · 20 periodos</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="ema20">
+                    <input type="checkbox" value="ema20" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#00e5ff"></span>
+                    <div class="ind-info"><span class="ind-name">EMA 20</span><span class="ind-desc">Media exponencial · 20 periodos</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="ema50">
+                    <input type="checkbox" value="ema50" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5b84c"></span>
+                    <div class="ind-info"><span class="ind-name">EMA 50</span><span class="ind-desc">Media exponencial · 50 periodos</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="sma50">
+                    <input type="checkbox" value="sma50" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#ff6b8a"></span>
+                    <div class="ind-info"><span class="ind-name">SMA 50</span><span class="ind-desc">Media simple · 50 periodos</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="sma200">
+                    <input type="checkbox" value="sma200" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#9f7aea"></span>
+                    <div class="ind-info"><span class="ind-name">SMA 200</span><span class="ind-desc">Media simple · 200 periodos</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="wma50">
+                    <input type="checkbox" value="wma50" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#c0a0ff"></span>
+                    <div class="ind-info"><span class="ind-name">WMA 50</span><span class="ind-desc">Media ponderada · 50 periodos</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                </div>
+
+                <div class="indicator-section">
+                  <div class="indicator-section-label">Bandas / Canales</div>
+                  <label class="indicator-row" data-ind="bb">
+                    <input type="checkbox" value="bb" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#6f86ff"></span>
+                    <div class="ind-info"><span class="ind-name">Bollinger Bands</span><span class="ind-desc">SMA 20 · ±2σ desviación estándar</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="vwap">
+                    <input type="checkbox" value="vwap" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#ff8c42"></span>
+                    <div class="ind-info"><span class="ind-name">VWAP</span><span class="ind-desc">Precio ponderado por volumen</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                </div>
+
+                <div class="indicator-section">
+                  <div class="indicator-section-label">Osciladores</div>
+                  <label class="indicator-row" data-ind="rsi">
+                    <input type="checkbox" value="rsi" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5b84c"></span>
+                    <div class="ind-info"><span class="ind-name">RSI (14)</span><span class="ind-desc">Índice de fuerza relativa</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="macd">
+                    <input type="checkbox" value="macd" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#6f86ff"></span>
+                    <div class="ind-info"><span class="ind-name">MACD</span><span class="ind-desc">12 · 26 · 9</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="stoch">
+                    <input type="checkbox" value="stoch" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#00c894"></span>
+                    <div class="ind-info"><span class="ind-name">Estocástico (14,3,3)</span><span class="ind-desc">%K y %D · sobrecompra/venta</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="cci">
+                    <input type="checkbox" value="cci" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5a623"></span>
+                    <div class="ind-info"><span class="ind-name">CCI (20)</span><span class="ind-desc">Commodity Channel Index</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="atr">
+                    <input type="checkbox" value="atr" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#ff8c42"></span>
+                    <div class="ind-info"><span class="ind-name">ATR (14)</span><span class="ind-desc">Average True Range · volatilidad</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="momentum">
+                    <input type="checkbox" value="momentum" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#c084fc"></span>
+                    <div class="ind-info"><span class="ind-name">Momentum (10)</span><span class="ind-desc">Velocidad del cambio de precio</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                </div>
+
+                <div class="indicator-section">
+                  <div class="indicator-section-label">Precio</div>
+                  <label class="indicator-row" data-ind="gaps">
+                    <input type="checkbox" value="gaps" class="ind-cb">
+                    <span class="ind-dot" style="--dot:rgba(0,200,148,0.85)"></span>
+                    <div class="ind-info"><span class="ind-name">Gaps</span><span class="ind-desc">Zonas de precio sin negociación</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="psar">
+                    <input type="checkbox" value="psar" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#32d6a2"></span>
+                    <div class="ind-info"><span class="ind-name">SAR Parabólico</span><span class="ind-desc">Stop and Reverse · puntos de cambio de tendencia</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="fiboext">
+                    <input type="checkbox" value="fiboext" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5b84c"></span>
+                    <div class="ind-info"><span class="ind-name">Fib. Extensión</span><span class="ind-desc">Niveles automáticos sobre swing alto/bajo</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                </div>
+
+                <div class="indicator-section">
+                  <div class="indicator-section-label">Volumen</div>
+                  <label class="indicator-row" data-ind="vol">
+                    <input type="checkbox" value="vol" class="ind-cb">
+                    <span class="ind-dot" style="--dot:rgba(111,134,255,0.85)"></span>
+                    <div class="ind-info"><span class="ind-name">Volumen</span><span class="ind-desc">Histograma por vela</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="vp">
+                    <input type="checkbox" value="vp" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#32d6a2"></span>
+                    <div class="ind-info"><span class="ind-name">Volume Profile</span><span class="ind-desc">Distribución por nivel de precio</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="market-toolbar-spacer"></div>
+            <button id="companyInfoButton" class="market-info-button" type="button">Más info</button>
+          </div>
+
+          <div class="market-chart-shell">
+            <div class="market-chart-header">
+              <div>
+                <strong id="chartSymbolLabel">TTWO</strong>
+                <span id="chartMetaLabel">Cargando datos de Yahoo Finance...</span>
+              </div>
+              <div id="chartPriceLabel" class="chart-price-label">--</div>
+            </div>
+            <div id="marketChartStatus" class="market-chart-status">Cargando gráfico...</div>
+            <div id="marketChart" class="market-chart">
+              <canvas id="drawingCanvas" class="drawing-canvas"></canvas>
+              <div id="indicatorLegend" class="indicator-legend"></div>
+              <div id="chartDrawingToolbar" class="chart-drawing-toolbar">
+                <div class="cdt-group">
+                  <button class="cdt-btn cdt-active" data-tool="" title="Cursor">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-7 2-3 8L5 3z"/></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn" data-tool="trendline" title="Línea de tendencia">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="2" fill="currentColor" stroke="none"/><circle cx="20" cy="4" r="2" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="hline" title="Línea horizontal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="vline" title="Línea vertical">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21"/><circle cx="12" cy="8" r="2" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="ray" title="Rayo extendido">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="2" fill="currentColor" stroke="none"/><polyline points="14,4 20,4 20,10"/></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn" data-tool="fib-retracement" title="Retroceso Fibonacci">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="10" x2="21" y2="10" opacity="0.6"/><line x1="3" y1="14" x2="21" y2="14" opacity="0.6"/><line x1="3" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="21" y2="18" stroke-dasharray="3,2" opacity="0.4"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="fib-extension" title="Extensión Fibonacci">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="4" x2="21" y2="4"/><line x1="3" y1="9" x2="21" y2="9" opacity="0.6"/><line x1="3" y1="14" x2="21" y2="14" opacity="0.6"/><line x1="3" y1="18" x2="21" y2="18" opacity="0.35"/><line x1="3" y1="4" x2="21" y2="21" stroke-dasharray="3,2" opacity="0.4"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="fib-fan" title="Abanico Fibonacci">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="4" y1="20" x2="20" y2="4"/><line x1="4" y1="20" x2="20" y2="10" opacity="0.6"/><line x1="4" y1="20" x2="20" y2="16" opacity="0.4"/><circle cx="4" cy="20" r="2" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn" data-tool="brush" title="Pincel libre">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c0 1.1.9 2 2 2h3l10-10-5-5L3 14v3z"/><path d="M18 5l1-1a1.4 1.4 0 0 0-2-2L16 3l2 2z"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="rectangle" title="Rectángulo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="ellipse" title="Elipse">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="12" rx="9" ry="6"/></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn cdt-long" data-tool="long-position" title="Posición larga">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="12,16 12,8 8,12 12,8 16,12"/><line x1="5" y1="19" x2="19" y2="19"/></svg>
+                  </button>
+                  <button class="cdt-btn cdt-short" data-tool="short-position" title="Posición corta">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="12,8 12,16 8,12 12,16 16,12"/><line x1="5" y1="5" x2="19" y2="5"/></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn" data-tool="text" title="Anotación de texto">
+                    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="6" y="18" font-size="14" font-weight="700" font-family="system-ui,sans-serif">T</text></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn" data-tool="abcd" title="Patrón ABCD">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,18 7,6 13,15 19,6"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="13" cy="15" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="6" r="1.5" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="harmonic" title="Patrón armónico">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,18 7,6 12,14 17,6 21,18"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none"/><circle cx="21" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn" data-tool="measure" title="Medir (pips / %)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="9" x2="3" y2="15"/><line x1="21" y1="9" x2="21" y2="15"/><line x1="9" y1="10" x2="9" y2="14"/><line x1="15" y1="10" x2="15" y2="14"/></svg>
+                  </button>
+                  <button class="cdt-btn" data-tool="time-ruler" title="Regla de tiempo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="8" rx="1"/><line x1="8" y1="8" x2="8" y2="12"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="16" y1="8" x2="16" y2="12"/></svg>
+                  </button>
+                </div>
+                <div class="cdt-sep"></div>
+                <div class="cdt-group">
+                  <button class="cdt-btn" data-tool="__undo" title="Deshacer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,14 4,9 9,4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                  </button>
+                  <button class="cdt-btn cdt-danger" data-tool="__clear" title="Borrar todo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="marketChartLoader" class="market-chart-loader hidden">
+                <canvas id="marketChartLoaderCanvas"></canvas>
+              </div>
+              <div id="marketChartOverlay" class="market-chart-overlay hidden">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                <p id="marketChartOverlayMsg"></p>
+              </div>
+            </div>
+            <div id="companyInfoPanel" class="company-info-panel hidden">
+              <div id="companyInfoContent" class="company-info-content">
+                <div class="company-info-animation">
+                  <iframe src="Resourses/Finance Loader.html" frameborder="0" scrolling="no" title="Cargando información financiera"></iframe>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tickerNewsSection" class="ticker-news-section hidden">
+          <h3 class="ticker-news-title" id="tickerNewsTitle">Noticias</h3>
+          <div id="tickerNewsList" class="ticker-news-list"></div>
+        </div>
+      </section>
+
+      <!-- Indicator Settings Panel (shared overlay) -->
+      <div id="indSettingsPanel" class="ind-settings-panel hidden">
+        <div class="ind-settings-head">
+          <span id="indSettingsPanelTitle">Indicador</span>
+          <button class="ind-settings-close-btn" id="indSettingsCloseBtn" type="button">×</button>
+        </div>
+        <div id="indSettingsPanelBody" class="ind-settings-body"></div>
+        <div class="ind-settings-footer">
+          <button class="ind-settings-reset-btn" id="indSettingsResetBtn" type="button">Restablecer</button>
+          <button class="ind-settings-apply-btn" id="indSettingsApplyBtn" type="button">Aplicar</button>
+        </div>
+      </div>
+
+      <section id="section-settings" class="dashboard-section">
+        <div class="dashboard-grid">
+          <article class="dashboard-card">
+            <div class="card-header">
+              <h3 data-i18n="settings_session_title">Datos de sesion</h3>
+              <span data-i18n="settings_session_sub">Resumen del usuario</span>
+            </div>
+            <div class="summary-grid">
+              <div class="summary-item"><span data-i18n="settings_email_label">Correo</span><strong id="settingsEmail">--</strong></div>
+              <div class="summary-item"><span data-i18n="settings_plan_label">Plan</span><strong id="settingsPlan">--</strong></div>
+              <div class="summary-item"><span data-i18n="settings_type_label">Tipo</span><strong id="settingsType">--</strong></div>
+            </div>
+            <div class="credentials-toggle-row">
+              <button id="credentialsToggleBtn" class="button secondary credentials-toggle-btn" type="button" data-i18n="settings_credentials_btn">Credenciales de acceso</button>
+            </div>
+            <div id="credentialsPanel" class="credentials-panel hidden">
+              <div class="summary-grid">
+                <div class="summary-item"><span data-i18n="settings_user_label">Usuario</span><strong id="settingsUser">--</strong></div>
+                <div class="summary-item cred-pass-item">
+                  <span data-i18n="settings_password_label">Contraseña</span>
+                  <strong class="cred-password-masked">●●●●●●●●</strong>
+                </div>
+              </div>
+              <button id="changePasswordBtn" class="button secondary" type="button" data-i18n="settings_change_password">Cambiar contraseña</button>
+              <form id="changePasswordForm" class="dashboard-form hidden" novalidate>
+                <div class="form-row">
+                  <label for="currentPasswordInput" data-i18n="settings_current_password">Contraseña actual</label>
+                  <input id="currentPasswordInput" type="password" autocomplete="current-password" required>
+                </div>
+                <div class="form-row">
+                  <label for="newPasswordInput" data-i18n="settings_new_password">Nueva contraseña</label>
+                  <input id="newPasswordInput" type="password" autocomplete="new-password" required>
+                </div>
+                <div class="form-row">
+                  <label for="confirmPasswordInput" data-i18n="settings_confirm_password">Confirmar contraseña</label>
+                  <input id="confirmPasswordInput" type="password" autocomplete="new-password" required>
+                </div>
+                <div class="form-row form-actions-row">
+                  <button class="button primary" type="submit" data-i18n="settings_save_password">Guardar contraseña</button>
+                  <button id="cancelPasswordBtn" class="button ghost" type="button" data-i18n="settings_cancel">Cancelar</button>
+                </div>
+                <p id="passwordChangeMessage" class="form-message" aria-live="polite"></p>
+              </form>
+            </div>
+          </article>
+
+          <article class="dashboard-card">
+            <div class="card-header">
+              <h3 data-i18n="settings_actions_title">Acciones</h3>
+              <span data-i18n="settings_actions_sub">Utilidades rapidas</span>
+            </div>
+            <div class="action-stack">
+              <button id="themeToggleButton" class="button theme-toggle" type="button" title="Cambiar tema">
+                <span class="theme-icon">🌙</span>
+                <span class="theme-label" data-i18n="theme_dark">Tema oscuro</span>
+              </button>
+              <button id="resetHomeButton" class="button secondary" type="button" data-i18n="settings_reset_home">Restablecer inicio (Hub)</button>
+              <button id="logoutButtonSecondary" class="button ghost" type="button" data-i18n="sidebar_logout">Cerrar sesion</button>
+            </div>
+          </article>
+
+          <article class="dashboard-card settings-lang-card">
+            <div class="card-header">
+              <h3 data-i18n="settings_lang_title">Idioma</h3>
+              <span data-i18n="settings_lang_sub">Selecciona el idioma de la interfaz</span>
+            </div>
+            <div class="lang-btn-group">
+              <button class="button lang-btn" type="button" data-lang="es">Español</button>
+              <button class="button lang-btn" type="button" data-lang="en">English</button>
+              <button class="button lang-btn" type="button" data-lang="fr">Français</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ═══════════════════ ANALYZER ═══════════════════ -->
+      <section id="section-analyzer" class="dashboard-section">
+        <div class="anlz-shell">
+
+          <!-- Search bar -->
+          <div class="anlz-search-area">
+            <div class="anlz-search-wrap">
+              <svg class="anlz-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input id="analyzerInput" type="text" placeholder="Buscar ticker (ej. AAPL, MSFT, AMZN)..." autocomplete="off" spellcheck="false">
+              <button id="analyzerAddBtn" class="anlz-add-btn" type="button">+ Agregar</button>
+            </div>
+            <div id="analyzerSuggestions" class="anlz-suggestions hidden"></div>
+          </div>
+
+          <!-- Asset chips -->
+          <div id="analyzerAssetCards" class="anlz-asset-cards"></div>
+
+          <!-- Run button -->
+          <div class="anlz-run-row">
+            <button id="analyzerRunBtn" class="anlz-run-btn" type="button" disabled>Agrega activos para analizar</button>
+            <span class="anlz-run-hint">DCF · Monte Carlo · 5,000 simulaciones · Scoring multifactor</span>
+          </div>
+
+          <!-- Loading -->
+          <div id="analyzerLoading" class="anlz-loading hidden">
+            <div class="anlz-spinner"></div>
+            <div>
+              <strong>Calculando…</strong>
+              <span>Modelo DCF · Proyecciones · Simulaciones Monte Carlo</span>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="analyzerResults" class="anlz-results hidden">
+
+            <!-- DCF -->
+            <div class="anlz-card">
+              <div class="anlz-card-header">
+                <div>
+                  <h3>Modelo DCF — Valor Intrínseco</h3>
+                  <p class="anlz-card-sub">Descuento de flujos libres proyectados a 10 años · Gordon Growth terminal value · WACC por CAPM</p>
+                </div>
+                <div class="anlz-scen-tabs">
+                  <button class="anlz-scen-tab active" data-scenario="base">Base</button>
+                  <button class="anlz-scen-tab" data-scenario="bull">Optimista</button>
+                  <button class="anlz-scen-tab" data-scenario="bear">Conservador</button>
+                </div>
+              </div>
+              <div id="dcfResultsGrid" class="anlz-dcf-grid"></div>
+              <div class="anlz-chart-wrap" style="height:260px">
+                <canvas id="dcfWaterfallChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Monte Carlo -->
+            <div class="anlz-card">
+              <div class="anlz-card-header">
+                <div>
+                  <h3>Simulación Monte Carlo — Probabilidad de Upside</h3>
+                  <p class="anlz-card-sub">Movimiento Browniano Geométrico · 5,000 trayectorias · Horizonte 12 meses</p>
+                </div>
+                <span class="anlz-badge">ML / Estocástico</span>
+              </div>
+              <div id="mcResultsGrid" class="anlz-mc-grid"></div>
+              <div class="anlz-chart-wrap" style="height:280px">
+                <canvas id="monteCarloChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Comparison table -->
+            <div class="anlz-card">
+              <div class="anlz-card-header">
+                <div>
+                  <h3>Comparación de Métricas Fundamentales</h3>
+                  <p class="anlz-card-sub">Valoración · Rentabilidad · Crecimiento · Balance — mejor valor resaltado</p>
+                </div>
+              </div>
+              <div id="comparisonTable" class="anlz-cmp-wrap"></div>
+            </div>
+
+            <!-- Decision panel -->
+            <div class="anlz-card anlz-decision-card">
+              <div class="anlz-card-header">
+                <div>
+                  <h3>Veredicto de Inversión</h3>
+                  <p class="anlz-card-sub">Score multifactor: DCF upside · probabilidad MC · calidad de balance · rentabilidad</p>
+                </div>
+              </div>
+              <div id="decisionGrid" class="anlz-decision-grid"></div>
+            </div>
+
+          </div><!-- /anlz-results -->
+        </div><!-- /anlz-shell -->
+      </section>
+      <!-- ════════════════════════════════════════════════ -->
+    </section>
+  </main>
+
+  <!-- Perf metric info popup -->
+  <div id="perfInfoOverlay" class="perf-info-overlay hidden" role="dialog" aria-modal="true">
+    <div class="perf-info-popup">
+      <div class="perf-info-popup-header">
+        <span id="perfInfoTitle" class="perf-info-popup-title"></span>
+        <button class="perf-info-close" type="button" id="perfInfoClose">✕</button>
+      </div>
+      <div id="perfInfoBody" class="perf-info-popup-body"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="auth.js?v=4"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="main.js"></script>
+  <script src="markowitz.js"></script>
+  <script src="analyzer.js"></script>
+  <script src="topdown.js"></script>
+</body>
+</html>

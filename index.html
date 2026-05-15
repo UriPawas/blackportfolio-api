@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlackPortfolio | Plataforma para portafolios de inversion</title>
+  <meta name="description" content="Landing moderna para una plataforma de creacion y gestion de portafolios de inversion con registro de cuenta, planes y base lista para integracion de pagos.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=4">
+  <script>
+    (function(){
+      var s=localStorage.getItem('bp-theme');
+      var d=window.matchMedia('(prefers-color-scheme:dark)').matches;
+      document.documentElement.setAttribute('data-theme', s || (d ? 'dark' : 'light'));
+    })();
+  </script>
+</head>
+<body>
+  <div class="background-orb orb-one"></div>
+  <div class="background-orb orb-two"></div>
+  <div class="grid-overlay"></div>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="#hero"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
+      <nav class="nav-links">
+        <a href="#features">Plataforma</a>
+        <a href="#plans">Planes</a>
+        <a href="#register">Cuenta</a>
+        <a href="#payments">Suscripcion</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Cambiar tema">
+          <svg class="tt-icon tt-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <span class="tt-pill"><span class="tt-thumb"></span></span>
+          <svg class="tt-icon tt-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <span class="nav-sep"></span>
+        <a class="button secondary" href="login.html">Log in</a>
+        <a class="button ghost" href="#register">Abrir cuenta</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="ticker-bar" id="tickerBar">
+    <div class="ticker-track" id="tickerTrack">
+      <span class="ticker-item ticker-skeleton">
+        <span class="ticker-label">S&P 500</span><span class="ticker-price">—</span>
+      </span>
+    </div>
+  </div>
+
+  <main>
+    <section id="hero" class="hero">
+      <div class="container hero-layout">
+        <div class="hero-copy">
+          <span class="eyebrow">Portfolio builder para inversionistas</span>
+          <h1>Crea, analiza y presenta portafolios de inversión con una <em>experiencia premium.</em></h1>
+          <p class="hero-text">
+            Construye estrategias multi-activo, mide riesgo, simula escenarios y comparte reportes con una interfaz
+            oscura, elegante y enfocada en decisiones financieras.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#register">Crear cuenta</a>
+            <a class="button secondary" href="#plans">Conocer planes</a>
+          </div>
+          <div class="hero-metrics">
+            <div class="metric-card"><strong data-count="18" data-prefix="+" data-suffix="K">+18K</strong><span>portafolios monitoreados</span></div>
+            <div class="metric-card"><strong data-count="32" data-prefix="-" data-suffix="%">-32%</strong><span>menos tiempo en rebalanceos</span></div>
+            <div class="metric-card"><strong>24/7</strong><span>seguimiento de mercado</span></div>
+          </div>
+        </div>
+
+        <div class="hero-panel">
+          <div class="panel-window">
+            <div class="panel-topbar"><span></span><span></span><span></span></div>
+            <div class="dashboard-preview">
+              <div class="dashboard-sidebar">
+                <div class="sidebar-card active">Asignacion</div>
+                <div class="sidebar-card">Riesgo</div>
+                <div class="sidebar-card">Backtesting</div>
+                <div class="sidebar-card">Suscripcion</div>
+              </div>
+              <div class="dashboard-content">
+                <div class="mini-chart"><div class="chart-glow"></div></div>
+                <div class="stat-grid">
+                  <article class="preview-card"><span>Volatilidad</span><strong>11.8%</strong></article>
+                  <article class="preview-card"><span>Sharpe ratio</span><strong>1.42</strong></article>
+                  <article class="preview-card"><span>Rebalanceo</span><strong>Mensual</strong></article>
+                  <article class="preview-card accent"><span>Broker sync</span><strong>Stripe ready</strong></article>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section">
+      <div class="container">
+        <div class="section-heading" data-animate="up">
+          <span class="eyebrow">Plataforma</span>
+          <h2>Todo lo que necesitas para crear portafolios de inversion claros, medibles y escalables.</h2>
+          <p>
+            La landing ahora habla directo a inversionistas, asesores y equipos que gestionan estrategias
+            con renta variable, ETFs, cripto, renta fija y mas.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card" data-animate="up" data-delay="1">
+            <div class="feature-icon">01</div>
+            <h3>Asignacion inteligente</h3>
+            <p>Distribuye capital por perfil de riesgo, clase de activo, sector o region con paneles faciles de leer.</p>
+          </article>
+          <article class="feature-card" data-animate="up" data-delay="2">
+            <div class="feature-icon">02</div>
+            <h3>Analisis de riesgo</h3>
+            <p>Consulta drawdown, volatilidad, correlacion y escenarios de estres en una sola vista ejecutiva.</p>
+          </article>
+          <article class="feature-card" data-animate="up" data-delay="3">
+            <div class="feature-icon">03</div>
+            <h3>Reportes para clientes</h3>
+            <p>Comparte avances, composicion y rendimiento de cada portafolio con una presentacion profesional.</p>
+          </article>
+          <article class="feature-card" data-animate="up" data-delay="4">
+            <div class="feature-icon">04</div>
+            <h3>Cuentas y suscripciones</h3>
+            <p>Incluye registro de usuarios y flujo listo para activar suscripciones con Stripe u otro gateway.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="gallery" class="section gallery-section">
+      <div class="container">
+        <div class="section-heading gallery-heading" data-animate="up">
+          <span class="eyebrow">Mercados</span>
+          <h2>Decisiones respaldadas por datos, visualizadas con precision.</h2>
+        </div>
+      </div>
+      <div class="gallery-mosaic" id="galleryBento">
+        <div class="gallery-skeleton gs1"></div>
+        <div class="gallery-skeleton gs2"></div>
+        <div class="gallery-skeleton gs3"></div>
+        <div class="gallery-skeleton gs4"></div>
+        <div class="gallery-skeleton gs5"></div>
+        <div class="gallery-skeleton gs6"></div>
+      </div>
+      <div class="gallery-kpi" data-animate="up">
+        <div class="gallery-kpi-item">
+          <span class="gallery-kpi-value">142</span>
+          <span class="gallery-kpi-label">Mercados cubiertos</span>
+        </div>
+        <div class="gallery-kpi-item">
+          <span class="gallery-kpi-value">+18K</span>
+          <span class="gallery-kpi-label">Portafolios activos</span>
+        </div>
+        <div class="gallery-kpi-item">
+          <span class="gallery-kpi-value">99.9%</span>
+          <span class="gallery-kpi-label">Uptime garantizado</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="plans" class="section">
+      <div class="container">
+        <div class="section-heading section-heading-inline" data-animate="up">
+          <div>
+            <span class="eyebrow">Planes</span>
+            <h2>Escala desde un inversionista individual hasta una mesa de analisis completa.</h2>
+          </div>
+          <label class="billing-toggle">
+            <span>Mensual</span>
+            <input id="billingSwitch" type="checkbox" aria-label="Cambiar entre cobro mensual y anual">
+            <span class="toggle-slider"></span>
+            <span>Anual</span>
+          </label>
+        </div>
+
+        <div class="pricing-grid">
+          <article class="pricing-card" data-animate="scale" data-delay="1">
+            <span class="plan-tag">Gratis</span>
+            <h3>Free</h3>
+            <p>Para explorar la plataforma con acceso basico y seguimiento de un portafolio personal.</p>
+            <div class="price" data-monthly="0" data-yearly="0">$0</div>
+            <span class="price-label">Sin costo</span>
+            <ul class="plan-list">
+              <li>1 portafolio</li>
+              <li>Rendimiento basico</li>
+              <li>Alertas limitadas</li>
+              <li style="opacity:.5;text-decoration:line-through">Analisis avanzado</li>
+              <li style="opacity:.5;text-decoration:line-through">Backtesting</li>
+            </ul>
+            <button class="button ghost select-plan" data-plan="Free">Comenzar gratis</button>
+          </article>
+
+          <article class="pricing-card" data-animate="scale" data-delay="2">
+            <span class="plan-tag">Starter</span>
+            <h3>Investor</h3>
+            <p>Para inversionistas que quieren visualizar y ordenar su patrimonio personal.</p>
+            <div class="price" data-monthly="29" data-yearly="23">$29</div>
+            <span class="price-label">USD / mes</span>
+            <ul class="plan-list">
+              <li>Hasta 3 portafolios</li>
+              <li>Seguimiento de rendimiento</li>
+              <li>Alertas basicas</li>
+              <li>Reportes mensuales</li>
+            </ul>
+            <button class="button secondary select-plan" data-plan="Investor">Elegir plan</button>
+          </article>
+
+          <article class="pricing-card featured" data-animate="scale" data-delay="3">
+            <span class="plan-tag">Popular</span>
+            <h3>Advisor Pro</h3>
+            <p>Ideal para asesores, family offices y equipos que gestionan multiples estrategias.</p>
+            <div class="price" data-monthly="79" data-yearly="64">$79</div>
+            <span class="price-label">USD / mes</span>
+            <ul class="plan-list">
+              <li>Portafolios ilimitados</li>
+              <li>Backtesting y rebalanceo</li>
+              <li>Panel de riesgo avanzado</li>
+              <li>Checkout embebible</li>
+            </ul>
+            <button class="button primary select-plan" data-plan="Advisor Pro">Elegir plan</button>
+          </article>
+
+          <article class="pricing-card" data-animate="scale" data-delay="4">
+            <span class="plan-tag">Scale</span>
+            <h3>Institutional Desk</h3>
+            <p>Para operaciones con marca blanca, roles de equipo y necesidades de integracion profunda.</p>
+            <div class="price" data-monthly="149" data-yearly="119">$149</div>
+            <span class="price-label">USD / mes</span>
+            <ul class="plan-list">
+              <li>Roles y permisos</li>
+              <li>API y webhooks</li>
+              <li>Marca blanca</li>
+              <li>Soporte prioritario</li>
+            </ul>
+            <button class="button secondary select-plan" data-plan="Institutional Desk">Elegir plan</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="register" class="section register-section">
+      <div class="container register-layout">
+        <div class="register-copy" data-animate="left">
+          <span class="eyebrow">Cuenta</span>
+          <h2>Abre tu cuenta y deja lista tu operacion para gestionar portafolios y activar suscripciones.</h2>
+          <p>
+            Este demo registra cuentas en el navegador para completar el flujo desde front-end.
+            Despues podemos enlazar autenticacion, base de datos y brokers reales.
+          </p>
+          <div class="stack-cards">
+            <article class="stack-card"><strong>Perfil de inversion</strong><span>Selecciona el plan que mejor se adapta a tu operacion.</span></article>
+            <article class="stack-card"><strong>Flujo listo para onboarding</strong><span>El usuario llega al checkout con contexto y plan elegido.</span></article>
+            <article class="stack-card"><strong>Preparado para crecer</strong><span>Base clara para sumar KYC, webhooks y dashboards reales.</span></article>
+          </div>
+        </div>
+
+        <div class="register-card" data-animate="right">
+          <form id="signupForm" class="signup-form">
+            <div class="social-buttons">
+              <button id="googleSignupBtn" class="button-google" type="button">
+                <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
+                <span>Registrarse con Google</span>
+              </button>
+              <button id="appleSignupBtn" class="button-apple" type="button">
+                <svg width="18" height="18" viewBox="0 0 814 1000" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 439.8 0 336.7 0 238.6c0-187.2 121.8-286.1 241.8-286.1 61.4 0 112.5 40.8 150.6 40.8 36.3 0 93.4-43.2 163.4-43.2 62.5 0 163.5 22.5 220.9 112.2zm-109.5-95.8c-28.6-35.5-70.4-62.4-119.7-62.4-56.3 0-102 37.2-134.7 37.2-36.3 0-79.3-39.4-131.7-39.4-48.8 0-100.6 27.6-141.5 81.8C112.9 213 92 270.1 92 325.2c0 113.1 42.8 231.1 107 322.3 55.5 77.4 101.4 131.8 165.2 131.8 51.8 0 82.5-37.1 155.8-37.1 73.3 0 100.3 37.1 160.6 37.1 59.3 0 107.7-57.5 159.6-130.9 24.1-34.3 43.1-69.3 55.4-104.3z"/></svg>
+                <span>Registrarse con Apple</span>
+              </button>
+            </div>
+            <div class="auth-divider" id="signupDivider"><span>o registrate con correo</span></div>
+
+            <div class="form-row"><label for="fullName">Nombre completo</label><input id="fullName" name="fullName" type="text" placeholder="Tu nombre" required></div>
+            <div class="form-row"><label for="email">Correo electronico</label><input id="email" name="email" type="email" placeholder="tu@firma.com" required></div>
+            <div class="form-row" id="passwordRow">
+              <label for="password">Contrasena</label>
+              <div class="pw-input-wrap">
+                <input id="password" name="password" type="password" placeholder="Minimo 8 caracteres" minlength="8" required autocomplete="new-password">
+                <button type="button" class="pw-toggle" id="pwToggle" aria-label="Mostrar contrasena">
+                  <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg id="eyeOffIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+              <div class="pw-strength-bars" id="pwBars">
+                <span class="pw-bar" data-idx="1"></span>
+                <span class="pw-bar" data-idx="2"></span>
+                <span class="pw-bar" data-idx="3"></span>
+                <span class="pw-bar" data-idx="4"></span>
+                <span class="pw-bar" data-idx="5"></span>
+              </div>
+              <p class="pw-strength-label" id="pwStrengthLabel">
+                <span>Debe contener:</span>
+                <span id="pwStrengthText"></span>
+              </p>
+              <ul class="pw-requirements" id="pwReqs" aria-label="Requisitos de contrasena">
+                <li data-req="length"><span class="pw-req-icon"></span><span>Al menos 8 caracteres</span></li>
+                <li data-req="number"><span class="pw-req-icon"></span><span>Al menos 1 numero</span></li>
+                <li data-req="lower"><span class="pw-req-icon"></span><span>Al menos 1 letra minuscula</span></li>
+                <li data-req="upper"><span class="pw-req-icon"></span><span>Al menos 1 letra mayuscula</span></li>
+                <li data-req="special"><span class="pw-req-icon"></span><span>Al menos 1 caracter especial</span></li>
+              </ul>
+            </div>
+            <div class="form-row">
+              <label for="selectedPlan">Plan inicial</label>
+              <select id="selectedPlan" name="selectedPlan">
+                <option value="Free">Free</option>
+                <option value="Investor">Investor</option>
+                <option value="Advisor Pro" selected>Advisor Pro</option>
+                <option value="Institutional Desk">Institutional Desk</option>
+              </select>
+            </div>
+            <button class="button primary submit-button" type="submit">Crear cuenta</button>
+            <p id="formMessage" class="form-message" aria-live="polite"></p>
+          </form>
+
+          <aside class="account-preview">
+            <div class="account-header"><span class="status-dot"></span><span id="accountStatus">Aun no hay cuenta creada</span></div>
+            <div class="account-body">
+              <div><span>Plan activo</span><strong id="accountPlan">Advisor Pro</strong></div>
+              <div><span>Usuarios</span><strong id="accountCount">0</strong></div>
+              <div><span>Suscripcion</span><strong id="checkoutState">Pendiente</strong></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="payments" class="section">
+      <div class="container">
+        <div class="payment-shell" data-animate="up">
+          <div class="section-heading">
+            <span class="eyebrow">Suscripcion</span>
+            <h2>Activa tu suscripcion de forma segura con Stripe Billing.</h2>
+            <p>
+              Cobra suscripciones mensuales o anuales con Stripe. Webhooks, facturas automaticas
+              y cancelaciones gestionadas sin friccion.
+            </p>
+          </div>
+
+          <div class="payment-grid">
+            <article class="payment-card"><h3>Stripe Billing</h3><p>Suscripciones recurrentes, cupones, facturas automaticas y gestion de cancelaciones via webhooks.</p><button class="button primary pay-button" data-gateway="stripe">Activar suscripcion</button></article>
+            <article class="payment-card"><h3>Gateway propio</h3><p>Enlaza otro procesador de pagos conservando la misma interfaz de integracion y los mismos hooks.</p><button class="button ghost pay-button" data-gateway="custom">Usar gateway propio</button></article>
+          </div>
+
+          <div class="integration-note"><strong>Hook listo:</strong><code>window.BlackPortfolioPayments.startCheckout({ gateway, plan, user })</code></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-layout">
+      <div>
+        <a class="brand" href="#hero"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
+        <p>Landing enfocada en creacion y gestion de portafolios de inversion con registro y checkout listo para integrar.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#features">Plataforma</a>
+        <a href="#plans">Planes</a>
+        <a href="#register">Cuenta</a>
+        <a href="#payments">Suscripcion</a>
+      </div>
+    </div>
+  </footer>
+
+  <div id="paymentModal" class="payment-modal hidden" role="dialog" aria-modal="true" aria-labelledby="paymentTitle">
+    <div class="payment-modal-card">
+      <h3 id="paymentTitle">Checkout preparado</h3>
+      <p id="paymentDescription"></p>
+      <div class="payment-code"><pre id="paymentPayload"></pre></div>
+      <button id="closePaymentModal" class="button primary" type="button">Cerrar</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="tickers-data.js"></script>
+  <script src="auth.js?v=4"></script>
+  <script src="app.js?v=8"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "firestore.rules",
+      "**/.*",
+      "*.py",
+      "**/__pycache__/**",
+      ".claude/**",
+      "memory/**",
+      "*.md",
+      "requirements*.txt"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css)",
+        "headers": [
+          { "key": "Cache-Control", "value": "max-age=86400" }
+        ]
+      }
+    ]
+  }
+}

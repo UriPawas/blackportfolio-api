@@ -1,0 +1,22 @@
+INFO:     Started server process [10100]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:14068 - "GET /api/holdings/SPY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:19324 - "GET /api/chart/EWY?range=30y&interval=1d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:19324 - "GET /api/info/EWY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:19324 - "GET /api/holdings/EWY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:25029 - "GET /api/chart/EWY?range=30y&interval=1d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9946 - "GET /api/info/EWY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9946 - "GET /api/holdings/EWY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9946 - "GET /api/search?q=AIA HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9946 - "GET /api/info/AIA HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4385 - "GET /api/chart/AIA?range=30y&interval=1d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9946 - "GET /api/holdings/AIA HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43971 - "GET /api/chart/AIA?range=30y&interval=1d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34116 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34116 - "GET /styles.css?v=3 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:11746 - "GET /tickers-data.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:34116 - "GET /auth.js?v=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11746 - "GET /app.js?v=7 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:11174 - "HEAD / HTTP/1.1" 200 OK

@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Candle Loader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #05060a;
+      --up: #32d6a2;
+      --up-glow: rgba(50,214,162,0.95);
+      --down: #ff5d7a;
+      --down-glow: rgba(255,93,122,0.95);
+      --wick: rgba(255,255,255,0.85);
+    }
+    html, body { margin: 0; padding: 0; height: 100%; background: var(--bg);
+      font-family: "Inter", system-ui, sans-serif; color: #f5f7fb; overflow: hidden; }
+    body {
+      display: grid; place-items: center;
+      background:
+        radial-gradient(circle at 30% 40%, rgba(111,134,255,0.08), transparent 55%),
+        radial-gradient(circle at 70% 60%, rgba(57,208,255,0.06), transparent 55%),
+        linear-gradient(180deg, #05060a 0%, #020307 100%);
+    }
+    .stage {
+      width: min(1120px, 92vw);
+      height: min(640px, 76vh);
+      position: relative;
+    }
+    #chart {
+      position: absolute; inset: 0;
+      display: block;
+      width: 100%; height: 100%;
+    }
+
+    /* ── Tweaks panel ── */
+    .tweaks {
+      position: fixed; bottom: 20px; right: 20px; z-index: 200;
+      width: 260px; padding: 16px 18px; border-radius: 16px;
+      background: rgba(10,10,15,0.92);
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(14px);
+      font-size: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      display: none;
+    }
+    .tweaks.open { display: block; }
+    .tweaks h4 {
+      margin: 0 0 12px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.12em; color: #8d93a9;
+    }
+    .tweaks .row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+    .tweaks .row:last-child { margin-bottom: 0; }
+    .tweaks label { display: flex; justify-content: space-between; font-weight: 500; color: #d5ddf5; }
+    .tweaks label span:last-child { font-variant-numeric: tabular-nums; color: #9aa4c7; }
+    .tweaks input[type="range"] { width: 100%; accent-color: #6f86ff; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div id="tweaks" class="tweaks">
+    <h4>Tweaks</h4>
+    <div class="row">
+      <label><span>Animation speed</span><span id="speed-label">2.2×</span></label>
+      <input id="speed" type="range" min="0.3" max="4" step="0.1" value="2.2" />
+    </div>
+    <div class="row">
+      <label><span>Glow intensity</span><span id="glow-label">1.90</span></label>
+      <input id="glow" type="range" min="0" max="2.5" step="0.05" value="1.9" />
+    </div>
+  </div>
+
+  <script>
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "speed": 1.2,
+      "glow": 0.85
+    }/*EDITMODE-END*/;
+
+    // ───── Data: OHLC series shaped after the reference — rising trend,
+    // varied candle widths, long wicks, mix of filled (down) and hollow (up).
+    // Hand-tuned to look like a real chart rather than pure noise.
+    const SERIES = (() => {
+      // [open, close, highExtra, lowExtra, width] — values 0..1 on Y
+      const raw = [
+        [0.10, 0.08, 0.03, 0.03, 0.7],
+        [0.08, 0.11, 0.04, 0.03, 0.7],
+        [0.11, 0.10, 0.03, 0.02, 0.7],
+        [0.10, 0.17, 0.04, 0.02, 0.8],
+        [0.17, 0.28, 0.05, 0.03, 0.9],
+        [0.28, 0.42, 0.06, 0.02, 1.0],
+        [0.42, 0.30, 0.05, 0.04, 0.85],
+        [0.30, 0.35, 0.04, 0.06, 0.75],
+        [0.35, 0.22, 0.04, 0.02, 0.8],
+        [0.22, 0.24, 0.02, 0.10, 0.55],
+        [0.24, 0.20, 0.02, 0.03, 0.55],
+        [0.20, 0.30, 0.03, 0.02, 0.85],
+        [0.30, 0.48, 0.08, 0.03, 0.95],
+        [0.48, 0.46, 0.18, 0.02, 0.9],
+        [0.46, 0.68, 0.12, 0.03, 1.0],
+        [0.68, 0.55, 0.06, 0.03, 0.85],
+        [0.55, 0.60, 0.04, 0.03, 0.7],
+        [0.60, 0.54, 0.02, 0.06, 0.75],
+        [0.54, 0.58, 0.05, 0.02, 0.45],
+        [0.58, 0.56, 0.03, 0.05, 0.45],
+        [0.56, 0.50, 0.03, 0.04, 0.85],
+        [0.50, 0.55, 0.05, 0.04, 0.5],
+        [0.55, 0.66, 0.04, 0.03, 0.85],
+        [0.66, 0.72, 0.05, 0.03, 0.85],
+        [0.72, 0.68, 0.04, 0.02, 0.85],
+        [0.68, 0.62, 0.02, 0.04, 0.85],
+        [0.62, 0.60, 0.02, 0.12, 0.55],
+        [0.60, 0.70, 0.04, 0.03, 0.85],
+        [0.70, 0.66, 0.04, 0.03, 0.75],
+        [0.66, 0.72, 0.03, 0.03, 0.75],
+        [0.72, 0.65, 0.02, 0.04, 0.85],
+        [0.65, 0.80, 0.04, 0.02, 1.0],
+        [0.80, 0.76, 0.03, 0.02, 0.55],
+      ];
+      return raw.map(([o, c, hx, lx, w]) => ({
+        open: o, close: c,
+        hi: Math.max(o, c) + hx,
+        lo: Math.min(o, c) - lx,
+        w,
+        up: c >= o,
+      }));
+    })();
+
+    // ───── Render
+    const canvas = document.getElementById('chart');
+    const ctx = canvas.getContext('2d');
+
+    let state = { speed: TWEAK_DEFAULTS.speed, glow: TWEAK_DEFAULTS.glow };
+    let dpr = Math.max(1, window.devicePixelRatio || 1);
+
+    function resize() {
+      dpr = Math.max(1, window.devicePixelRatio || 1);
+      const r = canvas.getBoundingClientRect();
+      canvas.width = Math.round(r.width * dpr);
+      canvas.height = Math.round(r.height * dpr);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Animation progress: 0..N as each candle builds.
+    // After N + hold, reset so the chart re-draws continuously while data loads.
+    const N = SERIES.length;
+    let progress = 0;
+    let last = performance.now();
+
+    function frame(t) {
+      const dt = t - last; last = t;
+      // Base: 120 ms per candle at speed=1, then scaled
+      const stepMs = 120 / Math.max(0.1, state.speed);
+      progress += dt / stepMs;
+      // Hold for ~10 candle-steps on the completed chart, then wipe + restart
+      const HOLD = 10;
+      if (progress > N + HOLD) progress = 0;
+      draw();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame((t) => { last = t; frame(t); });
+
+    function draw() {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      // Layout: reserve small vertical padding so wicks don't clip
+      const padY = H * 0.08;
+      const plotTop = padY, plotBot = H - padY;
+      const plotH = plotBot - plotTop;
+
+      // Candles share the full canvas width
+      const slotW = W / N;
+      const baseWidth = slotW * 0.55; // max body width
+
+      const Y = (v) => plotBot - v * plotH; // v in 0..1
+
+      for (let i = 0; i < N; i++) {
+        const c = SERIES[i];
+        const local = progress - i;
+        if (local <= 0) continue;        // not yet built
+        const build = Math.min(1, local); // 0..1 build factor
+        // Leading: last fully-unbuilt slot that just finished (= candle index == floor(progress))
+        const isLeading = (Math.floor(progress) === i) && local < 1.0;
+
+        const cx = slotW * (i + 0.5);
+        const bodyW = baseWidth * c.w;
+
+        const yHi = Y(c.hi);
+        const yLo = Y(c.lo);
+        const yOpen = Y(c.open);
+        const yClose = Y(c.close);
+        const top = Math.min(yOpen, yClose);
+        const bot = Math.max(yOpen, yClose);
+
+        // ---- Wick reveals first (0..0.35 of build), then body grows
+        const wickT = Math.min(1, build / 0.35);
+        const bodyT = Math.max(0, Math.min(1, (build - 0.25) / 0.75));
+
+        const color = c.up
+          ? getCss('--up', '#32d6a2')
+          : getCss('--down', '#ff5d7a');
+        const glowColor = c.up
+          ? getCss('--up-glow', 'rgba(50,214,162,0.95)')
+          : getCss('--down-glow', 'rgba(255,93,122,0.95)');
+
+        // Wick (glowing line from high to low, growing downward)
+        ctx.save();
+        const wickBot = yHi + (yLo - yHi) * wickT;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(1.2 * dpr, slotW * 0.05 * dpr * 0.18);
+        ctx.lineCap = 'round';
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 8 * dpr * state.glow * (isLeading ? 1.6 : 0.9);
+        ctx.beginPath();
+        ctx.moveTo(cx, yHi);
+        ctx.lineTo(cx, wickBot);
+        ctx.stroke();
+        ctx.restore();
+
+        // ---- Body (grows from the candle's OPEN toward its CLOSE)
+        const bodyFullH = Math.max(2 * dpr, bot - top);
+        const anchor = c.up ? bot : top; // up grows upward; down grows downward
+        const dir = c.up ? -1 : 1;
+        const bodyH = bodyFullH * bodyT;
+        const bodyY = c.up ? anchor + dir * bodyH : anchor;
+
+        // Pulse factor for the leading candle
+        const pulse = isLeading ? (0.55 + 0.45 * Math.sin(build * Math.PI * 3.2)) : 1;
+
+        // Draw glow pass (multiple shadows for arcade bloom)
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.shadowColor = glowColor;
+        const glowMult = state.glow * (isLeading ? 1.0 + pulse * 0.8 : 0.55);
+
+        // Outer halo
+        ctx.shadowBlur = 34 * dpr * glowMult;
+        ctx.globalAlpha = 0.9;
+        roundRect(ctx, cx - bodyW/2, bodyY, bodyW, bodyH, Math.min(3 * dpr, bodyW * 0.18));
+        ctx.fill();
+
+        // Mid halo
+        ctx.shadowBlur = 14 * dpr * glowMult;
+        ctx.globalAlpha = 1;
+        roundRect(ctx, cx - bodyW/2, bodyY, bodyW, bodyH, Math.min(3 * dpr, bodyW * 0.18));
+        ctx.fill();
+
+        // Inner sharp edge
+        ctx.shadowBlur = 3 * dpr * glowMult;
+        roundRect(ctx, cx - bodyW/2, bodyY, bodyW, bodyH, Math.min(3 * dpr, bodyW * 0.18));
+        ctx.fill();
+        ctx.restore();
+
+        // Bright inner highlight (screen blend feel)
+        if (bodyT > 0.3 && bodyH > 6 * dpr) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const grad = ctx.createLinearGradient(cx - bodyW/2, bodyY, cx - bodyW/2, bodyY + bodyH);
+          grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+          grad.addColorStop(0.45, 'rgba(255,255,255,0.05)');
+          grad.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = grad;
+          roundRect(ctx, cx - bodyW/2 + bodyW*0.15, bodyY + 1, bodyW * 0.25, Math.max(0, bodyH - 2), Math.min(2 * dpr, bodyW * 0.15));
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Soft radial bloom beneath the leading candle
+        if (isLeading) {
+          ctx.save();
+          const r = slotW * (1.8 + pulse * 1.4) * dpr;
+          const g = ctx.createRadialGradient(cx, (top + bot) / 2, 0, cx, (top + bot) / 2, r);
+          g.addColorStop(0, glowColor);
+          g.addColorStop(0.35, glowColor.replace(/[\d.]+\)$/, '0.25)'));
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.55 * state.glow;
+          ctx.beginPath();
+          ctx.arc(cx, (top + bot) / 2, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      const rr = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.lineTo(x + w - rr, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+      ctx.lineTo(x + w, y + h - rr);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+      ctx.lineTo(x + rr, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+      ctx.lineTo(x, y + rr);
+      ctx.quadraticCurveTo(x, y, x + rr, y);
+      ctx.closePath();
+    }
+
+    function getCss(name, fallback) {
+      const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    }
+
+    // ───── Tweaks wiring
+    const sEl = document.getElementById('speed');
+    const gEl = document.getElementById('glow');
+    const sL  = document.getElementById('speed-label');
+    const gL  = document.getElementById('glow-label');
+    sEl.value = state.speed; sL.textContent = state.speed.toFixed(1) + '×';
+    gEl.value = state.glow;  gL.textContent  = state.glow.toFixed(2);
+    sEl.addEventListener('input', (e) => {
+      state.speed = +e.target.value;
+      sL.textContent = state.speed.toFixed(1) + '×';
+      window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { speed: state.speed } }, '*');
+    });
+    gEl.addEventListener('input', (e) => {
+      state.glow = +e.target.value;
+      gL.textContent = state.glow.toFixed(2);
+      window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { glow: state.glow } }, '*');
+    });
+
+    // ───── Edit-mode protocol (register first, then announce)
+    window.addEventListener('message', (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode')   document.getElementById('tweaks').classList.add('open');
+      if (e.data.type === '__deactivate_edit_mode') document.getElementById('tweaks').classList.remove('open');
+    });
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+  </script>
+</body>
+</html>

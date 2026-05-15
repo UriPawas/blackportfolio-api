@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Map — Portfolio Regional Exposure</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    color: #fff;
+    font-family: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  input[type=range] { cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "primaryColor": "#8B5CF6",
+  "bgColor": "#0a0a0f",
+  "landColor": "#2a2a35",
+  "labelSize": 13,
+  "showTooltip": true
+}/*EDITMODE-END*/;
+
+// Country ISO → Region mapping
+const COUNTRY_REGION = {
+  // North America
+  "USA": "northAmerica", "CAN": "northAmerica", "MEX": "northAmerica",
+  "GRL": "northAmerica",
+  // Latin America
+  "BRA": "latinAmerica", "ARG": "latinAmerica", "COL": "latinAmerica",
+  "CHL": "latinAmerica", "PER": "latinAmerica", "VEN": "latinAmerica",
+  "ECU": "latinAmerica", "BOL": "latinAmerica", "PRY": "latinAmerica",
+  "URY": "latinAmerica", "GUY": "latinAmerica", "SUR": "latinAmerica",
+  "GUF": "latinAmerica", "CRI": "latinAmerica", "PAN": "latinAmerica",
+  "HND": "latinAmerica", "GTM": "latinAmerica", "SLV": "latinAmerica",
+  "NIC": "latinAmerica", "BLZ": "latinAmerica", "CUB": "latinAmerica",
+  "HTI": "latinAmerica", "DOM": "latinAmerica", "JAM": "latinAmerica",
+  "TTO": "latinAmerica", "PRI": "latinAmerica",
+  // Europe
+  "GBR": "europe", "FRA": "europe", "DEU": "europe", "ITA": "europe",
+  "ESP": "europe", "PRT": "europe", "NLD": "europe", "BEL": "europe",
+  "CHE": "europe", "AUT": "europe", "SWE": "europe", "NOR": "europe",
+  "DNK": "europe", "FIN": "europe", "POL": "europe", "CZE": "europe",
+  "SVK": "europe", "HUN": "europe", "ROU": "europe", "BGR": "europe",
+  "GRC": "europe", "HRV": "europe", "SRB": "europe", "BIH": "europe",
+  "SVN": "europe", "MKD": "europe", "ALB": "europe", "MNE": "europe",
+  "LUX": "europe", "IRL": "europe", "ISL": "europe", "EST": "europe",
+  "LVA": "europe", "LTU": "europe", "BLR": "europe", "UKR": "europe",
+  "MDA": "europe", "RUS": "europe",
+  // Asia Pacific
+  "CHN": "asiaPacific", "JPN": "asiaPacific", "KOR": "asiaPacific",
+  "IND": "asiaPacific", "AUS": "asiaPacific", "NZL": "asiaPacific",
+  "IDN": "asiaPacific", "THA": "asiaPacific", "MYS": "asiaPacific",
+  "SGP": "asiaPacific", "PHL": "asiaPacific", "VNM": "asiaPacific",
+  "MMR": "asiaPacific", "BGD": "asiaPacific", "PAK": "asiaPacific",
+  "LKA": "asiaPacific", "NPL": "asiaPacific", "KHM": "asiaPacific",
+  "LAO": "asiaPacific", "TWN": "asiaPacific", "HKG": "asiaPacific",
+  "MNG": "asiaPacific", "PRK": "asiaPacific", "KAZ": "asiaPacific",
+  "UZB": "asiaPacific", "TKM": "asiaPacific", "TJK": "asiaPacific",
+  "KGZ": "asiaPacific", "AFG": "asiaPacific", "PNG": "asiaPacific",
+  "FJI": "asiaPacific",
+  // Middle East & Africa
+  "SAU": "middleEastAfrica", "IRN": "middleEastAfrica", "IRQ": "middleEastAfrica",
+  "TUR": "middleEastAfrica", "ISR": "middleEastAfrica", "JOR": "middleEastAfrica",
+  "LBN": "middleEastAfrica", "SYR": "middleEastAfrica", "YEM": "middleEastAfrica",
+  "OMN": "middleEastAfrica", "ARE": "middleEastAfrica", "KWT": "middleEastAfrica",
+  "QAT": "middleEastAfrica", "BHR": "middleEastAfrica", "EGY": "middleEastAfrica",
+  "LBY": "middleEastAfrica", "TUN": "middleEastAfrica", "DZA": "middleEastAfrica",
+  "MAR": "middleEastAfrica", "MRT": "middleEastAfrica", "MLI": "middleEastAfrica",
+  "NER": "middleEastAfrica", "TCD": "middleEastAfrica", "SDN": "middleEastAfrica",
+  "SSD": "middleEastAfrica", "ETH": "middleEastAfrica", "ERI": "middleEastAfrica",
+  "DJI": "middleEastAfrica", "SOM": "middleEastAfrica", "KEN": "middleEastAfrica",
+  "UGA": "middleEastAfrica", "TZA": "middleEastAfrica", "MOZ": "middleEastAfrica",
+  "ZAF": "middleEastAfrica", "ZMB": "middleEastAfrica", "ZWE": "middleEastAfrica",
+  "BWA": "middleEastAfrica", "NAM": "middleEastAfrica", "AGO": "middleEastAfrica",
+  "COD": "middleEastAfrica", "COG": "middleEastAfrica", "CMR": "middleEastAfrica",
+  "NGA": "middleEastAfrica", "GHA": "middleEastAfrica", "CIV": "middleEastAfrica",
+  "SEN": "middleEastAfrica", "GIN": "middleEastAfrica", "SLE": "middleEastAfrica",
+  "LBR": "middleEastAfrica", "BFA": "middleEastAfrica", "TGO": "middleEastAfrica",
+  "BEN": "middleEastAfrica", "MDG": "middleEastAfrica", "MWI": "middleEastAfrica",
+  "RWA": "middleEastAfrica", "BDI": "middleEastAfrica", "CAF": "middleEastAfrica",
+  "GAB": "middleEastAfrica", "GNQ": "middleEastAfrica", "STP": "middleEastAfrica",
+  "CPV": "middleEastAfrica", "GMB": "middleEastAfrica", "GNB": "middleEastAfrica",
+  "LSO": "middleEastAfrica", "SWZ": "middleEastAfrica",
+};
+
+const REGION_LABELS = {
+  northAmerica: "North America",
+  latinAmerica: "Latin America",
+  europe: "Europe",
+  asiaPacific: "Asia Pacific",
+  middleEastAfrica: "Middle East & Africa",
+};
+
+// Approximate label positions in projected coordinates (set after render)
+const REGION_LABEL_LONLAT = {
+  northAmerica:    [-100, 50],
+  latinAmerica:    [-60, -15],
+  europe:          [15, 52],
+  asiaPacific:     [105, 30],
+  middleEastAfrica:[25, 5],
+};
+
+function hexToRgb(hex) {
+  const h = hex.replace('#','');
+  return [
+    parseInt(h.slice(0,2),16),
+    parseInt(h.slice(2,4),16),
+    parseInt(h.slice(4,6),16)
+  ];
+}
+
+function heatColor(primaryHex, pct) {
+  if (!pct || pct <= 0) return null;
+  const [r,g,b] = hexToRgb(primaryHex);
+  const minA = 0.20, maxA = 1.0;
+  const alpha = minA + (maxA - minA) * Math.pow(pct / 100, 0.6);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function heatStroke(primaryHex, pct) {
+  if (!pct || pct <= 0) return 'rgba(255,255,255,0.07)';
+  const [r,g,b] = hexToRgb(primaryHex);
+  return `rgba(${r},${g},${b},${0.4 + 0.5*(pct/100)})`;
+}
+
+// ─── World Map Component ────────────────────────────────────────────────────
+function WorldMap({ allocations, primaryColor, landColor, bgColor, labelSize, showTooltip }) {
+  const svgRef = useRef(null);
+  const [paths, setPaths] = useState([]); // {id, region, d}
+  const [labelPositions, setLabelPositions] = useState({});
+  const [hovered, setHovered] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const W = 960, H = 480;
+
+  useEffect(() => {
+    const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+    fetch(url)
+      .then(r => r.json())
+      .then(world => {
+        const projection = d3.geoNaturalEarth1()
+          .scale(153)
+          .translate([W / 2, H / 2]);
+        const path = d3.geoPath().projection(projection);
+
+        const countries = topojson.feature(world, world.objects.countries);
+
+        // Build ISO lookup by numeric id
+        // world-atlas 110m uses numeric ISO codes
+        const isoNumericToAlpha3 = {};
+        // Populate from a hardcoded map of the most common numeric→alpha3
+        const numMap = {
+          4:"AFG",8:"ALB",12:"DZA",24:"AGO",32:"ARG",36:"AUS",40:"AUT",50:"BGD",
+          56:"BEL",64:"BTN",68:"BOL",76:"BRA",100:"BGR",116:"KHM",120:"CMR",124:"CAN",
+          140:"CAF",144:"LKA",152:"CHL",156:"CHN",170:"COL",178:"COG",180:"COD",
+          188:"CRI",192:"CUB",204:"BEN",208:"DNK",218:"ECU",818:"EGY",222:"SLV",
+          231:"ETH",246:"FIN",250:"FRA",266:"GAB",276:"DEU",288:"GHA",320:"GTM",
+          324:"GIN",332:"HTI",340:"HND",348:"HUN",356:"IND",360:"IDN",364:"IRN",
+          368:"IRQ",372:"IRL",376:"ISR",380:"ITA",388:"JAM",392:"JPN",400:"JOR",
+          398:"KAZ",404:"KEN",408:"PRK",410:"KOR",414:"KWT",418:"LAO",422:"LBN",
+          430:"LBR",434:"LBY",440:"LTU",442:"LUX",450:"MDG",454:"MWI",458:"MYS",
+          466:"MLI",484:"MEX",496:"MNG",504:"MAR",508:"MOZ",516:"NAM",524:"NPL",
+          528:"NLD",558:"NIC",562:"NER",566:"NGA",578:"NOR",586:"PAK",591:"PAN",
+          598:"PNG",600:"PRY",604:"PER",608:"PHL",616:"POL",620:"PRT",630:"PRI",
+          642:"ROU",643:"RUS",646:"RWA",682:"SAU",686:"SEN",694:"SLE",706:"SOM",
+          710:"ZAF",724:"ESP",729:"SDN",752:"SWE",756:"CHE",760:"SYR",762:"TJK",
+          764:"THA",768:"TGO",780:"TTO",788:"TUN",792:"TUR",800:"UGA",804:"UKR",
+          784:"ARE",826:"GBR",840:"USA",858:"URY",860:"UZB",862:"VEN",704:"VNM",
+          887:"YEM",894:"ZMB",716:"ZWE",334:"HMD",
+          300:"GRR",191:"HRV",703:"SVK",705:"SVN",807:"MKD",688:"SRB",
+          70:"BIH",499:"MNE",428:"LVA",233:"EST",
+          112:"BLR",498:"MDA",352:"ISL",
+        };
+        Object.assign(isoNumericToAlpha3, numMap);
+
+        const pathData = [];
+        countries.features.forEach(feature => {
+          const numId = +feature.id;
+          const alpha3 = isoNumericToAlpha3[numId];
+          const region = alpha3 ? COUNTRY_REGION[alpha3] : undefined;
+          const d = path(feature);
+          if (d) {
+            pathData.push({ numId, alpha3, region: region || 'other', d });
+          }
+        });
+
+        // Compute label positions using projection
+        const lp = {};
+        Object.entries(REGION_LABEL_LONLAT).forEach(([region, lonlat]) => {
+          const pt = projection(lonlat);
+          if (pt) lp[region] = { x: pt[0], y: pt[1] };
+        });
+
+        setPaths(pathData);
+        setLabelPositions(lp);
+        setLoaded(true);
+      })
+      .catch(err => console.error('Failed to load world map:', err));
+  }, []);
+
+  const regionForHover = hovered;
+
+  return (
+    <div style={{ position: 'relative', width: '100%', background: bgColor, borderRadius: 12, overflow: 'hidden' }}>
+      {!loaded && (
+        <div style={{
+          width: '100%', paddingBottom: '50%', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          color: 'rgba(255,255,255,0.2)', fontSize: 13,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          position: 'relative'
+        }}>
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }}>
+            Loading map…
+          </div>
+        </div>
+      )}
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: '100%', display: loaded ? 'block' : 'none' }}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          <filter id="textShadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="1" stdDeviation="2.5" floodColor="rgba(0,0,0,0.95)" />
+          </filter>
+        </defs>
+
+        <rect width={W} height={H} fill={bgColor} />
+
+        {/* Subtle graticule */}
+        {[...Array(12)].map((_,i) => {
+          const x = (i+1) * W/12;
+          return <line key={`vg${i}`} x1={x} y1={0} x2={x} y2={H} stroke="rgba(255,255,255,0.025)" strokeWidth="0.5" />;
+        })}
+        {[...Array(6)].map((_,i) => {
+          const y = (i+1) * H/6;
+          return <line key={`hg${i}`} x1={0} y1={y} x2={W} y2={y} stroke="rgba(255,255,255,0.025)" strokeWidth="0.5" />;
+        })}
+
+        {/* Country paths — inactive layer first */}
+        {paths.filter(p => p.region === 'other' || !allocations[p.region]).map(p => (
+          <path
+            key={p.numId}
+            d={p.d}
+            fill={landColor}
+            stroke="rgba(255,255,255,0.07)"
+            strokeWidth="0.5"
+            strokeLinejoin="round"
+          />
+        ))}
+
+        {/* Active regions — render grouped by region for hover */}
+        {Object.keys(REGION_LABELS).map(region => {
+          const pct = allocations[region] ?? 0;
+          if (pct <= 0) return null;
+          const isHov = regionForHover === region;
+          const fill = heatColor(primaryColor, isHov ? Math.min(pct * 1.12, 100) : pct);
+          const stroke = heatStroke(primaryColor, pct);
+          return (
+            <g
+              key={region}
+              onMouseEnter={() => setHovered(region)}
+              onMouseLeave={() => setHovered(null)}
+              style={{ cursor: 'pointer' }}
+            >
+              {paths.filter(p => p.region === region).map(p => (
+                <path
+                  key={p.numId}
+                  d={p.d}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth="0.7"
+                  strokeLinejoin="round"
+                />
+              ))}
+            </g>
+          );
+        })}
+
+        {/* Percentage labels */}
+        {Object.keys(REGION_LABELS).map(region => {
+          const pct = allocations[region] ?? 0;
+          if (pct <= 0 || !labelPositions[region]) return null;
+          const { x, y } = labelPositions[region];
+          const label = pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
+          return (
+            <text
+              key={region}
+              x={x}
+              y={y}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="white"
+              fontSize={labelSize}
+              fontWeight="700"
+              fontFamily="'Inter', system-ui, sans-serif"
+              filter="url(#textShadow)"
+              style={{ pointerEvents: 'none', letterSpacing: '-0.01em' }}
+            >
+              {label}
+            </text>
+          );
+        })}
+
+        {/* Hover tooltip */}
+        {showTooltip && hovered && (allocations[hovered] ?? 0) > 0 && labelPositions[hovered] && (() => {
+          const { x, y } = labelPositions[hovered];
+          const name = REGION_LABELS[hovered];
+          const w = Math.max(name.length * 6.5 + 20, 80);
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <rect
+                x={x - w/2}
+                y={y - 46}
+                width={w}
+                height={24}
+                rx={6}
+                fill="rgba(10,10,20,0.88)"
+                stroke={primaryColor}
+                strokeWidth="0.8"
+              />
+              <text
+                x={x}
+                y={y - 34}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="rgba(255,255,255,0.88)"
+                fontSize={10}
+                fontFamily="'Inter', system-ui, sans-serif"
+              >
+                {name}
+              </text>
+            </g>
+          );
+        })()}
+      </svg>
+
+      {/* Unallocated note */}
+      {(() => {
+        const total = Object.values(allocations).reduce((s,v) => s+v, 0);
+        if (total > 0 && total < 99.5) return (
+          <div style={{
+            position: 'absolute', bottom: 10, right: 14,
+            fontSize: 10.5, color: 'rgba(255,255,255,0.3)',
+            fontFamily: 'Inter, system-ui, sans-serif'
+          }}>
+            {(100 - total).toFixed(1)}% unallocated
+          </div>
+        );
+        return null;
+      })()}
+    </div>
+  );
+}
+
+// ─── Slider Row ─────────────────────────────────────────────────────────────
+function SliderRow({ label, value, onChange, color }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9 }}>
+      <div style={{
+        width: 148, fontSize: 12, color: 'rgba(255,255,255,0.65)',
+        fontFamily: 'Inter, system-ui, sans-serif', flexShrink: 0,
+        letterSpacing: '-0.01em'
+      }}>
+        {label}
+      </div>
+      <div style={{ flex: 1, position: 'relative', height: 18, display: 'flex', alignItems: 'center' }}>
+        <div style={{
+          position: 'absolute', left: 0, width: `${value}%`, height: 3,
+          background: color, borderRadius: 3, opacity: 0.7
+        }} />
+        <div style={{
+          position: 'absolute', left: 0, right: 0, height: 3,
+          background: 'rgba(255,255,255,0.10)', borderRadius: 3
+        }} />
+        <input
+          type="range" min={0} max={100} step={1} value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{
+            position: 'relative', zIndex: 1, width: '100%',
+            accentColor: color, background: 'transparent',
+            WebkitAppearance: 'none', appearance: 'none',
+            height: 18, outline: 'none', border: 'none',
+          }}
+        />
+      </div>
+      <div style={{
+        width: 36, textAlign: 'right', fontSize: 12, fontWeight: 600,
+        color: 'rgba(255,255,255,0.82)', fontFamily: 'Inter, system-ui, sans-serif',
+        fontVariantNumeric: 'tabular-nums'
+      }}>
+        {value}%
+      </div>
+    </div>
+  );
+}
+
+// ─── App ─────────────────────────────────────────────────────────────────────
+function App() {
+  const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
+
+  const [alloc, setAlloc] = useState({
+    northAmerica: 55,
+    latinAmerica: 8,
+    europe: 22,
+    asiaPacific: 12,
+    middleEastAfrica: 3,
+  });
+
+  const setRegion = useCallback((id, val) => {
+    setAlloc(prev => ({ ...prev, [id]: val }));
+  }, []);
+
+  const total = Object.values(alloc).reduce((s, v) => s + v, 0);
+
+  return (
+    <div style={{ width: '100%', maxWidth: 820, padding: '28px 24px' }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 16,
+        fontFamily: 'Inter, system-ui, sans-serif',
+      }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: 'rgba(255,255,255,0.82)', letterSpacing: '0.01em' }}>
+          Stock breakdown by region
+        </span>
+        <span style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: tweaks.primaryColor, display: 'inline-block', marginBottom: 1, flexShrink: 0
+        }}></span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+          Total:{' '}
+          <span style={{
+            color: total > 100 ? '#f87171' : total === 100 ? '#4ade80' : 'rgba(255,255,255,0.5)',
+            fontWeight: 600
+          }}>
+            {total}%
+          </span>
+        </span>
+      </div>
+
+      {/* Map */}
+      <WorldMap
+        allocations={alloc}
+        primaryColor={tweaks.primaryColor}
+        landColor={tweaks.landColor}
+        bgColor={tweaks.bgColor}
+        labelSize={tweaks.labelSize}
+        showTooltip={tweaks.showTooltip}
+      />
+
+      {/* Demo sliders */}
+      <div style={{
+        marginTop: 20,
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 10,
+        padding: '15px 18px 12px',
+      }}>
+        <div style={{
+          fontSize: 10, fontWeight: 600,
+          color: 'rgba(255,255,255,0.28)', letterSpacing: '0.09em',
+          textTransform: 'uppercase', marginBottom: 14,
+          fontFamily: 'Inter, system-ui, sans-serif'
+        }}>
+          Adjust allocations
+        </div>
+        {Object.keys(alloc).map(id => (
+          <SliderRow
+            key={id}
+            label={REGION_LABELS[id]}
+            value={alloc[id]}
+            onChange={v => setRegion(id, v)}
+            color={tweaks.primaryColor}
+          />
+        ))}
+      </div>
+
+      {/* Tweaks Panel */}
+      <window.TweaksPanel>
+        <window.TweakSection label="Colors">
+          <window.TweakColor label="Highlight color" value={tweaks.primaryColor} onChange={v => setTweak('primaryColor', v)} />
+          <window.TweakColor label="Background" value={tweaks.bgColor} onChange={v => setTweak('bgColor', v)} />
+          <window.TweakColor label="Land (no exposure)" value={tweaks.landColor} onChange={v => setTweak('landColor', v)} />
+        </window.TweakSection>
+        <window.TweakSection label="Labels">
+          <window.TweakSlider label="Label font size" value={tweaks.labelSize} min={9} max={20} step={1} onChange={v => setTweak('labelSize', v)} />
+          <window.TweakToggle label="Show tooltip on hover" value={tweaks.showTooltip} onChange={v => setTweak('showTooltip', v)} />
+        </window.TweakSection>
+      </window.TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
