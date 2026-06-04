@@ -3,10 +3,45 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
+from collections import OrderedDict
 import requests
 import yfinance as yf
 import os
 import stripe
+import time as _time_module
+
+# ── HTTP session singleton (connection pool reutilizado entre requests) ────────
+_HTTP_SESSION = requests.Session()
+_HTTP_SESSION.headers.update({"User-Agent": "Mozilla/5.0"})
+
+# ── LRU cache con TTL ─────────────────────────────────────────────────────────
+class _TTLCache:
+    def __init__(self, maxsize: int, ttl: int):
+        self._store: OrderedDict = OrderedDict()
+        self._maxsize = maxsize
+        self._ttl = ttl
+
+    def get(self, key):
+        entry = self._store.get(key)
+        if not entry:
+            return None
+        if _time_module.time() - entry["ts"] > self._ttl:
+            self._store.pop(key, None)
+            return None
+        self._store.move_to_end(key)
+        return entry["data"]
+
+    def set(self, key, data):
+        if key in self._store:
+            self._store.move_to_end(key)
+        elif len(self._store) >= self._maxsize:
+            self._store.popitem(last=False)
+        self._store[key] = {"ts": _time_module.time(), "data": data}
+
+_CHART_CACHE      = _TTLCache(maxsize=100, ttl=300)   # 5 min, 100 símbolos/rangos
+_SEASONALITY_CACHE_V2 = _TTLCache(maxsize=50,  ttl=86400) # 24 h, 50 símbolos
+_CALENDAR_CACHE_V2    = _TTLCache(maxsize=30,  ttl=3600)  # 1 h, 30 combinaciones
+_TIIE_CACHE_V2        = _TTLCache(maxsize=1,   ttl=86400) # 24 h
 
 stripe.api_key = "sk_test_51TXCZHCZ7HiRNXSJvHBpx27n0KyRK0E61XHSs297tf7JQXanCsLZKAhm0nqsz2o24oakXa5fTsAyfsMeylvlqGWG00dKIszZWb"
 
@@ -30,12 +65,10 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
-
 @app.get("/api/search")
 def search(q: str):
     url = f"https://query1.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=8&newsCount=0"
-    res = requests.get(url, headers=HEADERS)
+    res = _HTTP_SESSION.get(url)
     return res.json()
 
 @app.get("/api/info/{symbol}")
@@ -300,7 +333,8 @@ def prices_batch(symbols: str):
             result[sym] = {"price": p, "prev": prev}
     return result
 
-RAPIDAPI_KEY = "03aab7a2aamsh5f6964b96339010p1ec652jsnbff2ece7211e"
+RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "03aab7a2aamsh5f6964b96339010p1ec652jsnbff2ece7211e")
+PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")
 RAPIDAPI_BOND_HOST = "bond-details.p.rapidapi.com"
 
 # ── Banxico SIE ──────────────────────────────────────────────────────────────
@@ -359,7 +393,7 @@ def banxico_bond(isin: str):
 
     ids_str = ",".join(s["id"] for s in series_list)
     url = f"{BANXICO_BASE}/series/{ids_str}/datos/oportuno"
-    res = requests.get(url, headers={"Bmx-Token": BANXICO_TOKEN})
+    res = _HTTP_SESSION.get(url, headers={"Bmx-Token": BANXICO_TOKEN})
 
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code, detail="Error al consultar Banxico SIE")
@@ -385,7 +419,7 @@ def banxico_bond(isin: str):
 @app.get("/api/bond/{isin}")
 def bond_info(isin: str):
     url = f"https://{RAPIDAPI_BOND_HOST}/Detailed_Bond"
-    res = requests.get(url, params={"ISIN": isin}, headers={
+    res = _HTTP_SESSION.get(url, params={"ISIN": isin}, headers={
         "x-rapidapi-key": RAPIDAPI_KEY,
         "x-rapidapi-host": RAPIDAPI_BOND_HOST,
     })
@@ -430,7 +464,7 @@ def intraday_chart(symbol: str, period: str = "1D"):
     url = f"https://{RAPIDAPI_FINANCE_HOST}/stock-time-series"
 
     try:
-        res = requests.get(
+        res = _HTTP_SESSION.get(
             url,
             params={"symbol": rapid_symbol, "period": period, "language": "en"},
             headers={"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_FINANCE_HOST},
@@ -539,24 +573,20 @@ def dividends(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Cache simple en memoria para la TIIE (24 h)
-_TIIE_CACHE = {"ts": 0, "data": None}
-
 @app.get("/api/risk-free-rate")
 def risk_free_rate():
     """
     Devuelve la TIIE a 28 días desde Banxico (serie SF43783).
     Cacheado 24 h. Si falla, devuelve fallback 9.0%.
     """
-    import time
-    now = time.time()
-    if _TIIE_CACHE["data"] and (now - _TIIE_CACHE["ts"] < 86400):
-        return _TIIE_CACHE["data"]
+    cached = _TIIE_CACHE_V2.get("tiie")
+    if cached is not None:
+        return cached
 
     fallback = {"rate": 9.0, "label": "Tasa libre de riesgo (fallback)", "date": None, "source": "fallback"}
     try:
         url = f"{BANXICO_BASE}/series/SF43783/datos/oportuno"
-        res = requests.get(url, headers={"Bmx-Token": BANXICO_TOKEN, "Accept": "application/json"}, timeout=8)
+        res = _HTTP_SESSION.get(url, headers={"Bmx-Token": BANXICO_TOKEN, "Accept": "application/json"}, timeout=8)
         if res.status_code != 200:
             return fallback
         j = res.json()
@@ -564,8 +594,7 @@ def risk_free_rate():
         dato = serie["datos"][0]
         rate = float(str(dato["dato"]).replace(",", ""))
         out = {"rate": rate, "label": "TIIE 28 (Banxico)", "date": dato.get("fecha"), "source": "banxico"}
-        _TIIE_CACHE["ts"] = now
-        _TIIE_CACHE["data"] = out
+        _TIIE_CACHE_V2.set("tiie", out)
         return out
     except Exception:
         return fallback
@@ -583,7 +612,7 @@ def stock_news(symbol: str, language: str = "es"):
     url = f"https://{RAPIDAPI_FINANCE_HOST}/stock-news"
 
     try:
-        res = requests.get(
+        res = _HTTP_SESSION.get(
             url,
             params={"symbol": rapid_symbol, "language": language},
             headers={"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_FINANCE_HOST},
@@ -599,8 +628,6 @@ def stock_news(symbol: str, language: str = "es"):
     news_list = raw.get("data", {}).get("news", [])
     return {"news": news_list[:10]}
 
-
-_CALENDAR_CACHE = {"ts": 0, "data": None, "key": None}
 
 def _next_first_friday(year: int, month: int):
     from datetime import date, timedelta
@@ -645,15 +672,12 @@ def _build_economic_events():
 @app.get("/api/calendar")
 def calendar(symbols: str = ""):
     """Returns upcoming earnings + economic events. `symbols` is a comma-separated ticker list."""
-    import time
     from datetime import date, timedelta
-    now = time.time()
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:25]
     cache_key = ",".join(sorted(syms))
-    if (_CALENDAR_CACHE["data"]
-        and _CALENDAR_CACHE["key"] == cache_key
-        and now - _CALENDAR_CACHE["ts"] < 3600):
-        return _CALENDAR_CACHE["data"]
+    cached = _CALENDAR_CACHE_V2.get(cache_key)
+    if cached is not None:
+        return cached
 
     earnings = []
     today = date.today()
@@ -687,9 +711,7 @@ def calendar(symbols: str = ""):
     earnings.sort(key=lambda e: e["date"])
 
     data = {"earnings": earnings, "economic": _build_economic_events()}
-    _CALENDAR_CACHE["ts"] = now
-    _CALENDAR_CACHE["data"] = data
-    _CALENDAR_CACHE["key"] = cache_key
+    _CALENDAR_CACHE_V2.set(cache_key, data)
     return data
 
 @app.get("/api/seasonality/{symbol}")
@@ -697,9 +719,13 @@ def seasonality(symbol: str):
     import pandas as pd
     import numpy as np
 
+    cached = _SEASONALITY_CACHE_V2.get(symbol)
+    if cached is not None:
+        return cached
+
     try:
         t = yf.Ticker(symbol)
-        hist = t.history(period="max")
+        hist = t.history(period="10y")
         if hist.empty:
             raise HTTPException(status_code=404, detail="Sin datos históricos")
 
@@ -742,11 +768,13 @@ def seasonality(symbol: str):
                 running *= (1 + r / 100)
             avg_cum.append(round((running - 1) * 100, 2))
 
-        return {
+        result = {
             "years": sorted(result_years.keys()),
             "data": result_years,
             "average": {"monthly_returns": avg_monthly, "cumulative": avg_cum},
         }
+        _SEASONALITY_CACHE_V2.set(symbol, result)
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -755,13 +783,17 @@ def seasonality(symbol: str):
 
 @app.get("/api/chart/{symbol}")
 def chart(symbol: str, range: str = "1d", interval: str = "5m"):
-    import time as _time
+    cache_key = f"{symbol}:{range}:{interval}"
+    cached = _CHART_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     _RANGE_SECONDS = {
         "1d": 86400, "5d": 432000, "1mo": 2592000, "3mo": 7776000,
         "6mo": 15552000, "1y": 31536000, "2y": 63072000, "5y": 157680000,
         "10y": 315360000, "30y": 946080000,
     }
-    now = int(_time.time())
+    now = int(_time_module.time())
     if range in _RANGE_SECONDS:
         p1 = now - _RANGE_SECONDS[range]
         url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -771,10 +803,38 @@ def chart(symbol: str, range: str = "1d", interval: str = "5m"):
         url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
                f"?range={range}&interval={interval}"
                f"&includePrePost=false&events=div%2Csplits")
-    res = requests.get(url, headers=HEADERS)
+    res = _HTTP_SESSION.get(url)
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code, detail="Error de Yahoo Finance")
-    return res.json()
+    data = res.json()
+    _CHART_CACHE.set(cache_key, data)
+    return data
+
+# ── Pexels gallery proxy (la clave nunca sale al frontend) ────────────────────
+@app.get("/api/gallery")
+def gallery():
+    if not PEXELS_KEY:
+        return {"photos": [], "videos": []}
+    headers = {"Authorization": PEXELS_KEY}
+    try:
+        photos_res = _HTTP_SESSION.get(
+            "https://api.pexels.com/v1/search",
+            params={"query": "stock market trading finance charts",
+                    "per_page": 4, "orientation": "landscape"},
+            headers=headers, timeout=10,
+        )
+        videos_res = _HTTP_SESSION.get(
+            "https://api.pexels.com/videos/search",
+            params={"query": "stock market trading finance",
+                    "per_page": 2, "size": "medium"},
+            headers=headers, timeout=10,
+        )
+        photos = photos_res.json() if photos_res.status_code == 200 else {}
+        videos = videos_res.json() if videos_res.status_code == 200 else {}
+        return {"photos": photos.get("photos", []), "videos": videos.get("videos", [])}
+    except Exception:
+        return {"photos": [], "videos": []}
+
 
 # ── Stripe ───────────────────────────────────────────────────────────────────
 class CheckoutRequest(BaseModel):
