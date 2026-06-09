@@ -40,6 +40,12 @@ class _TTLCache:
             self._store.popitem(last=False)
         self._store[key] = {"ts": _time_module.time(), "data": data}
 
+    def purge_expired(self):
+        now = _time_module.time()
+        expired = [k for k, v in self._store.items() if now - v["ts"] > self._ttl]
+        for k in expired:
+            self._store.pop(k, None)
+
 _CHART_CACHE          = _TTLCache(maxsize=100, ttl=300)    # 5 min
 _SEASONALITY_CACHE_V2 = _TTLCache(maxsize=50,  ttl=86400) # 24 h
 _CALENDAR_CACHE_V2    = _TTLCache(maxsize=30,  ttl=3600)  # 1 h
@@ -50,6 +56,24 @@ _FINANCIALS_CACHE     = _TTLCache(maxsize=50,  ttl=86400) # 24 h — datos trime
 _HOLDINGS_CACHE       = _TTLCache(maxsize=50,  ttl=86400) # 24 h — composición fondos
 _DIVIDENDS_CACHE      = _TTLCache(maxsize=100, ttl=3600)  # 1 h
 _NEWS_CACHE           = _TTLCache(maxsize=100, ttl=900)   # 15 min
+
+_ALL_CACHES = [
+    _CHART_CACHE, _SEASONALITY_CACHE_V2, _CALENDAR_CACHE_V2, _TIIE_CACHE_V2,
+    _SEARCH_CACHE, _INFO_CACHE, _FINANCIALS_CACHE, _HOLDINGS_CACHE,
+    _DIVIDENDS_CACHE, _NEWS_CACHE,
+]
+
+def _cache_cleanup_loop():
+    import threading
+    def _run():
+        while True:
+            _time_module.sleep(600)  # cada 10 minutos
+            for c in _ALL_CACHES:
+                c.purge_expired()
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+_cache_cleanup_loop()
 
 stripe.api_key = "sk_test_51TXCZHCZ7HiRNXSJvHBpx27n0KyRK0E61XHSs297tf7JQXanCsLZKAhm0nqsz2o24oakXa5fTsAyfsMeylvlqGWG00dKIszZWb"
 
