@@ -935,9 +935,10 @@ async def stripe_create_session(request: Request, body: CheckoutRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Servir archivos estáticos del frontend solo si existe index.html (modo local)
+# Servir estáticos solo en local — en Railway lo hace Firebase Hosting
 static_dir = os.path.dirname(os.path.abspath(__file__))
-if os.path.exists(os.path.join(static_dir, "index.html")):
+_on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_SERVICE_ID"))
+if not _on_railway and os.path.exists(os.path.join(static_dir, "index.html")):
     app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 if __name__ == "__main__":
