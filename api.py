@@ -6,6 +6,8 @@ from typing import Optional
 from collections import OrderedDict
 import requests
 import yfinance as yf
+import numpy as np
+import pandas as pd
 import os
 import stripe
 import time as _time_module
@@ -38,10 +40,16 @@ class _TTLCache:
             self._store.popitem(last=False)
         self._store[key] = {"ts": _time_module.time(), "data": data}
 
-_CHART_CACHE      = _TTLCache(maxsize=100, ttl=300)   # 5 min, 100 símbolos/rangos
-_SEASONALITY_CACHE_V2 = _TTLCache(maxsize=50,  ttl=86400) # 24 h, 50 símbolos
-_CALENDAR_CACHE_V2    = _TTLCache(maxsize=30,  ttl=3600)  # 1 h, 30 combinaciones
+_CHART_CACHE          = _TTLCache(maxsize=100, ttl=300)    # 5 min
+_SEASONALITY_CACHE_V2 = _TTLCache(maxsize=50,  ttl=86400) # 24 h
+_CALENDAR_CACHE_V2    = _TTLCache(maxsize=30,  ttl=3600)  # 1 h
 _TIIE_CACHE_V2        = _TTLCache(maxsize=1,   ttl=86400) # 24 h
+_SEARCH_CACHE         = _TTLCache(maxsize=200, ttl=120)   # 2 min — autocomplete
+_INFO_CACHE           = _TTLCache(maxsize=100, ttl=900)   # 15 min — ticker info
+_FINANCIALS_CACHE     = _TTLCache(maxsize=50,  ttl=86400) # 24 h — datos trimestrales
+_HOLDINGS_CACHE       = _TTLCache(maxsize=50,  ttl=86400) # 24 h — composición fondos
+_DIVIDENDS_CACHE      = _TTLCache(maxsize=100, ttl=3600)  # 1 h
+_NEWS_CACHE           = _TTLCache(maxsize=100, ttl=900)   # 15 min
 
 stripe.api_key = "sk_test_51TXCZHCZ7HiRNXSJvHBpx27n0KyRK0E61XHSs297tf7JQXanCsLZKAhm0nqsz2o24oakXa5fTsAyfsMeylvlqGWG00dKIszZWb"
 
@@ -67,16 +75,25 @@ def health():
 
 @app.get("/api/search")
 def search(q: str):
+    cached = _SEARCH_CACHE.get(q)
+    if cached is not None:
+        return cached
     url = f"https://query1.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=8&newsCount=0"
     res = _HTTP_SESSION.get(url)
-    return res.json()
+    data = res.json()
+    _SEARCH_CACHE.set(q, data)
+    return data
 
 @app.get("/api/info/{symbol}")
 def info(symbol: str):
+    cached = _INFO_CACHE.get(symbol)
+    if cached is not None:
+        return cached
     try:
         data = yf.Ticker(symbol).info
         if not data or "symbol" not in data:
             raise HTTPException(status_code=404, detail="Ticker no encontrado")
+        _INFO_CACHE.set(symbol, data)
         return data
     except HTTPException:
         raise
@@ -85,8 +102,10 @@ def info(symbol: str):
 
 @app.get("/api/financials/{symbol}")
 def financials(symbol: str):
+    cached = _FINANCIALS_CACHE.get(symbol)
+    if cached is not None:
+        return cached
     try:
-        import numpy as np
         t = yf.Ticker(symbol)
 
         def safe_val(v, kind):
@@ -221,12 +240,17 @@ def financials(symbol: str):
         balance = build_section(t.balance_sheet, t.quarterly_balance_sheet, BALANCE_KEYS, use_ttm=True,  ttm_mode="last")
         cashflow= build_section(t.cashflow,      t.quarterly_cashflow,    CASHFLOW_KEYS, use_ttm=True,  ttm_mode="sum")
 
-        return {"income": income, "balance": balance, "cashflow": cashflow}
+        result = {"income": income, "balance": balance, "cashflow": cashflow}
+        _FINANCIALS_CACHE.set(symbol, result)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/holdings/{symbol}")
 def holdings(symbol: str):
+    cached = _HOLDINGS_CACHE.get(symbol)
+    if cached is not None:
+        return cached
     try:
         result = []
 
@@ -257,7 +281,9 @@ def holdings(symbol: str):
             except Exception:
                 pass
 
-        return {"holdings": result}
+        out = {"holdings": result}
+        _HOLDINGS_CACHE.set(symbol, out)
+        return out
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -303,7 +329,6 @@ def price(symbol: str):
 @app.get("/api/prices")
 def prices_batch(symbols: str):
     """Batch price fetch. Returns {sym: {price, prev}} with previousClose when available."""
-    import pandas as pd
     symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     if not symbol_list:
         return {}
@@ -524,6 +549,9 @@ def intraday_chart(symbol: str, period: str = "1D"):
 
 @app.get("/api/dividends/{symbol}")
 def dividends(symbol: str):
+    cached = _DIVIDENDS_CACHE.get(symbol)
+    if cached is not None:
+        return cached
     try:
         t = yf.Ticker(symbol)
         info = t.info or {}
@@ -567,7 +595,9 @@ def dividends(symbol: str):
                     date_str = str(dt_idx)[:10]
                 history.append({"date": date_str, "amount": float(amount)})
 
-        return {"summary": summary, "history": history[:40]}
+        out = {"summary": summary, "history": history[:40]}
+        _DIVIDENDS_CACHE.set(symbol, out)
+        return out
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -602,6 +632,10 @@ def risk_free_rate():
 
 @app.get("/api/news/{symbol}")
 def stock_news(symbol: str, language: str = "es"):
+    cache_key = f"{symbol}:{language}"
+    cached = _NEWS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     try:
         ex_code = yf.Ticker(symbol).fast_info.exchange or ""
         exchange = YAHOO_EXCHANGE_MAP.get(ex_code, "NASDAQ")
@@ -626,7 +660,9 @@ def stock_news(symbol: str, language: str = "es"):
 
     raw = res.json()
     news_list = raw.get("data", {}).get("news", [])
-    return {"news": news_list[:10]}
+    out = {"news": news_list[:10]}
+    _NEWS_CACHE.set(cache_key, out)
+    return out
 
 
 def _next_first_friday(year: int, month: int):
@@ -716,9 +752,6 @@ def calendar(symbols: str = ""):
 
 @app.get("/api/seasonality/{symbol}")
 def seasonality(symbol: str):
-    import pandas as pd
-    import numpy as np
-
     cached = _SEASONALITY_CACHE_V2.get(symbol)
     if cached is not None:
         return cached
