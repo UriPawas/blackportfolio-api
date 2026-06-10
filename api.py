@@ -112,10 +112,10 @@ _COINGECKO_ID = {
     "CAKE":"pancakeswap-token",
 }
 
-# range de Yahoo Finance → parámetro days de CoinGecko
+# range de Yahoo Finance → parámetro days de CoinGecko (free tier: max=365)
 _RANGE_TO_CG_DAYS = {
     "1d":1,"5d":7,"1mo":30,"3mo":90,"6mo":180,
-    "1y":365,"2y":730,"5y":1825,"10y":3650,"30y":"max","max":"max",
+    "1y":365,"2y":365,"5y":365,"10y":365,"30y":365,"max":365,
 }
 
 def _is_crypto(symbol: str) -> bool:
