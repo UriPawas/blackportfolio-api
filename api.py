@@ -75,7 +75,7 @@ def _cache_cleanup_loop():
 
 _cache_cleanup_loop()
 
-stripe.api_key = "sk_test_51TXCZHCZ7HiRNXSJvHBpx27n0KyRK0E61XHSs297tf7JQXanCsLZKAhm0nqsz2o24oakXa5fTsAyfsMeylvlqGWG00dKIszZWb"
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "sk_test_51TXCZHCZ7HiRNXSJvHBpx27n0KyRK0E61XHSs297tf7JQXanCsLZKAhm0nqsz2o24oakXa5fTsAyfsMeylvlqGWG00dKIszZWb")
 
 PLAN_PRICES = {
     "Free":               {"monthly": 0,     "yearly": 0},
@@ -88,8 +88,11 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=[
+        "https://portify-6467f.web.app",
+        "https://portify-6467f.firebaseapp.com",
+    ],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -387,7 +390,7 @@ PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")
 RAPIDAPI_BOND_HOST = "bond-details.p.rapidapi.com"
 
 # ── Banxico SIE ──────────────────────────────────────────────────────────────
-BANXICO_TOKEN = "475407b727d8a30912b641a7dce2924cd6156262a00a5b01b111e34d58bd8d60"
+BANXICO_TOKEN = os.environ.get("BANXICO_TOKEN", "475407b727d8a30912b641a7dce2924cd6156262a00a5b01b111e34d58bd8d60")
 BANXICO_BASE  = "https://www.banxico.org.mx/SieAPIRest/service/v1"
 
 _MX_ISIN_PREFIXES = [

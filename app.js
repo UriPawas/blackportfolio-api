@@ -138,8 +138,11 @@ paymentButtons.forEach((button) => {
       const originalText = button.textContent;
       button.disabled = true;
       button.textContent = "Preparando pago…";
+      const RAILWAY_API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+        ? "http://127.0.0.1:8000"
+        : "https://blackportfolio-api-production.up.railway.app";
       try {
-        const res = await fetch("/api/billing/stripe/create-checkout-session", {
+        const res = await fetch(`${RAILWAY_API}/api/billing/stripe/create-checkout-session`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -155,7 +158,7 @@ paymentButtons.forEach((button) => {
         const data = await res.json();
         window.location.href = data.url;
       } catch (err) {
-        showFormMessage(err.message, "error");
+        showFormMessage(err.message || "Error al iniciar el pago. Intenta de nuevo.", "error");
         button.disabled = false;
         button.textContent = originalText;
       }
@@ -183,12 +186,119 @@ signupForm.addEventListener("submit", async (event) => {
     const newUser = await window.BlackPortfolioAuth.createUser(payload);
     signupForm.reset();
     selectedPlanInput.value = newUser.selectedPlan;
-    showFormMessage(`Cuenta creada con exito para ${newUser.fullName}.`, "success");
+    showFormMessage(`Cuenta creada con éxito para ${newUser.fullName}. Configura tu autenticador para mayor seguridad.`, "success");
     syncAccountCard();
+    // Trigger 2FA setup flow for new accounts
+    openTotpSetupModal(newUser.id);
   } catch (error) {
     showFormMessage(error.message, "error");
   }
 });
+
+// ── 2FA Setup Modal ──────────────────────────────────────────────────────────
+function openTotpSetupModal(uid) {
+  const modal      = document.getElementById("totpSetupModal");
+  const loading    = document.getElementById("totpSetupLoading");
+  const content    = document.getElementById("totpSetupContent");
+  const qrImg      = document.getElementById("totpQrImg");
+  const manualKey  = document.getElementById("totpManualKey");
+  const grid       = document.getElementById("totpSetupOtpGrid");
+  const verifyBtn  = document.getElementById("totpSetupVerifyBtn");
+  const skipBtn    = document.getElementById("totpSetupSkipBtn");
+  const msg        = document.getElementById("totpSetupMsg");
+  const boxes      = Array.from(grid.querySelectorAll(".otp-box"));
+
+  modal.classList.remove("hidden");
+  loading.classList.remove("hidden");
+  content.classList.add("hidden");
+
+  window.BlackPortfolioAuth.setupTwoFactor().then(result => {
+    loading.classList.add("hidden");
+    if (!result.ok) {
+      content.classList.remove("hidden");
+      msg.textContent = "No se pudo generar el código QR. Configura 2FA desde los Ajustes del dashboard.";
+      msg.className = "totp-setup-msg form-message error";
+      verifyBtn.disabled = true;
+      return;
+    }
+    // Generate QR code in-browser using cdn.jsdelivr.net/npm/qrcode
+    if (typeof QRCode !== "undefined") {
+      QRCode.toDataURL(result.otpauthUri, { width: 200, margin: 2 }, function(err, url) {
+        qrImg.src = err ? "" : url;
+      });
+    } else {
+      // Fallback: show manual key if QRCode lib not loaded
+      qrImg.style.display = "none";
+    }
+    manualKey.textContent = result.manualKey;
+    content.classList.remove("hidden");
+  });
+
+  function getCode() { return boxes.map(b => b.value).join(""); }
+
+  function syncBtn() {
+    verifyBtn.disabled = !boxes.every(b => b.value !== "");
+  }
+
+  function clearError() {
+    msg.textContent = "";
+    msg.className = "totp-setup-msg";
+    boxes.forEach(b => b.classList.remove("otp-box--error"));
+  }
+
+  boxes.forEach((box, i) => {
+    box.addEventListener("input", () => {
+      box.value = box.value.replace(/\D/g, "").slice(-1);
+      clearError();
+      if (box.value && i < 5) boxes[i + 1].focus();
+      syncBtn();
+    });
+    box.addEventListener("keydown", e => {
+      if (e.key === "Backspace" && !box.value && i > 0) boxes[i - 1].focus();
+      else if (e.key === "ArrowLeft"  && i > 0) boxes[i - 1].focus();
+      else if (e.key === "ArrowRight" && i < 5) boxes[i + 1].focus();
+    });
+    box.addEventListener("paste", e => {
+      e.preventDefault();
+      const digits = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+      digits.split("").forEach((d, j) => { if (boxes[j]) boxes[j].value = d; });
+      clearError();
+      syncBtn();
+      const next = boxes.findIndex(b => !b.value);
+      (next === -1 ? boxes[5] : boxes[next]).focus();
+    });
+  });
+
+  verifyBtn.addEventListener("click", async () => {
+    const code = getCode();
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = "Verificando…";
+    clearError();
+
+    const result = await window.BlackPortfolioAuth.verifyTwoFactorSetup(code);
+
+    if (result.ok) {
+      sessionStorage.setItem("totp_verified", uid);
+      msg.textContent = "✓ 2FA activado. Redirigiendo al dashboard…";
+      msg.className = "totp-setup-msg form-message success";
+      setTimeout(() => { window.location.href = "main.html"; }, 1200);
+      return;
+    }
+
+    msg.textContent = result.error || "Código incorrecto. Intenta de nuevo.";
+    msg.className = "totp-setup-msg form-message error";
+    boxes.forEach(b => { b.value = ""; b.classList.add("otp-box--error"); });
+    verifyBtn.textContent = "Activar 2FA y acceder al dashboard";
+    verifyBtn.disabled = true;
+    boxes[0].focus();
+  });
+
+  skipBtn.addEventListener("click", () => {
+    sessionStorage.setItem("totp_verified", uid);
+    modal.classList.add("hidden");
+    window.location.href = "main.html";
+  });
+}
 
 closePaymentModal.addEventListener("click", () => {
   paymentModal.classList.add("hidden");
@@ -383,7 +493,11 @@ if (googleSignupBtn) {
     : "https://blackportfolio-api-production.up.railway.app";
 
   function loadLivePrices() {
-    fetch(`${_TICKER_API_ROOT}/api/prices?symbols=${encodeURIComponent(ALL_TICKER_SYMBOLS)}`)
+    const _isLocal = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+    const _pricesUrl = _isLocal
+      ? `/api/prices?symbols=${encodeURIComponent(ALL_TICKER_SYMBOLS)}`
+      : `https://us-central1-portify-6467f.cloudfunctions.net/prices?symbols=${encodeURIComponent(ALL_TICKER_SYMBOLS)}`;
+    fetch(_pricesUrl)
       .then(r => { if (!r.ok) throw new Error("api"); return r.json(); })
       .then(applyLiveApiPrices)
       .catch(() => {
@@ -518,84 +632,77 @@ if (googleSignupBtn) {
   });
 })();
 
-// ── Pexels Gallery (photos + videos) ─────────────────────────────────────────
-(async function loadPexelsGallery() {
+// ── Gallery (local assets) ────────────────────────────────────────────────────
+(function loadGallery() {
   const bento = document.getElementById('galleryBento');
   if (!bento) return;
 
-  const KEY = 'FTx1assv7I7aECNmhqThfxi7DkD4TsbTGVMhQZysGynDjYQLS28rFCQd';
+  const slots = [
+    `<video autoplay muted loop playsinline preload="metadata">
+       <source src="assets/gallery/video-1.mp4" type="video/mp4">
+     </video>`,
+    `<img src="assets/gallery/photo-1.jpg" alt="Mercado financiero" loading="eager">`,
+    `<img src="assets/gallery/photo-2.jpg" alt="Trading charts" loading="eager">`,
+    `<img src="assets/gallery/photo-3.jpg" alt="Inversiones" loading="lazy">`,
+    `<img src="assets/gallery/photo-4.jpg" alt="Portafolio" loading="lazy">`,
+    `<video autoplay muted loop playsinline preload="metadata">
+       <source src="assets/gallery/video-2.mp4" type="video/mp4">
+     </video>`,
+  ];
 
-  try {
-    const [photosRes, videosRes] = await Promise.all([
-      fetch('https://api.pexels.com/v1/search?query=stock+market+trading+finance+charts&per_page=4&orientation=landscape',
-        { headers: { Authorization: KEY } }),
-      fetch('https://api.pexels.com/videos/search?query=stock+market+trading+finance&per_page=2&size=medium',
-        { headers: { Authorization: KEY } })
-    ]);
+  bento.innerHTML = slots
+    .map(content => `<div class="gallery-item">${content}</div>`)
+    .join('');
 
-    const [pd, vd] = await Promise.all([photosRes.json(), videosRes.json()]);
-    const photos = pd.photos || [];
-    const vids   = vd.videos  || [];
-
-    if (!photos.length) throw new Error('no media');
-
-    function pickVideoSrc(v) {
-      const files = v.video_files || [];
-      return (
-        files.find(f => f.quality === 'sd'  && f.file_type === 'video/mp4') ||
-        files.find(f => f.quality === 'hd'  && f.file_type === 'video/mp4') ||
-        files[0]
-      )?.link || '';
-    }
-
-    function videoTile(v) {
-      const src = pickVideoSrc(v);
-      return `<video autoplay muted loop playsinline preload="none" poster="${v.image || ''}">
-        <source src="${src}" type="video/mp4">
-      </video>`;
-    }
-
-    function photoTile(p, eager) {
-      return `<img src="${p.src.large}"
-               alt="${p.alt || 'Mercado financiero'}"
-               loading="${eager ? 'eager' : 'lazy'}">`;
-    }
-
-    // Slot order: [vid1, photo1, photo2, photo3, photo4, vid2]
-    // Fallback to photo if no video available for that slot
-    const slots = [
-      vids[0]   ? videoTile(vids[0])          : photoTile(photos[0], true),
-      photos[0] ? photoTile(photos[0], true)  : '',
-      photos[1] ? photoTile(photos[1], true)  : '',
-      photos[2] ? photoTile(photos[2], false) : '',
-      photos[3] ? photoTile(photos[3], false) : '',
-      vids[1]   ? videoTile(vids[1])          : (photos[3] ? photoTile(photos[3], false) : ''),
-    ];
-
-    bento.innerHTML = slots
-      .map(content => `<div class="gallery-item">${content}</div>`)
-      .join('');
-
-    if (window.IntersectionObserver) {
-      const obs = new IntersectionObserver((entries) => {
-        entries.forEach(e => {
-          if (e.isIntersecting) {
-            e.target.classList.add('gallery-visible');
-            obs.unobserve(e.target);
-          }
-        });
-      }, { threshold: 0.05, rootMargin: '0px 0px -16px 0px' });
-
-      bento.querySelectorAll('.gallery-item').forEach((el, i) => {
-        el.style.transitionDelay = `${i * 0.08}s`;
-        obs.observe(el);
+  if (window.IntersectionObserver) {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('gallery-visible');
+          obs.unobserve(e.target);
+        }
       });
-    } else {
-      bento.querySelectorAll('.gallery-item').forEach(el => el.classList.add('gallery-visible'));
-    }
+    }, { threshold: 0.05, rootMargin: '0px 0px -16px 0px' });
 
-  } catch (_) {
-    const section = bento.closest('.gallery-section');
-    if (section) section.style.display = 'none';
+    bento.querySelectorAll('.gallery-item').forEach((el, i) => {
+      el.style.transitionDelay = `${i * 0.08}s`;
+      obs.observe(el);
+    });
+  } else {
+    bento.querySelectorAll('.gallery-item').forEach(el => el.classList.add('gallery-visible'));
   }
+})();
+
+// ── Mobile nav hamburger ─────────────────────────────────────────────────────
+(function initMobileNav() {
+  const btn = document.getElementById("navHamburger");
+  const nav = document.getElementById("mobileNav");
+  if (!btn || !nav) return;
+
+  function close() {
+    btn.classList.remove("is-open");
+    nav.classList.add("hidden");
+    nav.setAttribute("aria-hidden", "true");
+    btn.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+  }
+
+  btn.addEventListener("click", () => {
+    const isOpen = !nav.classList.contains("hidden");
+    if (isOpen) {
+      close();
+    } else {
+      btn.classList.add("is-open");
+      nav.classList.remove("hidden");
+      nav.setAttribute("aria-hidden", "false");
+      btn.setAttribute("aria-expanded", "true");
+      document.body.style.overflow = "hidden";
+    }
+  });
+
+  nav.querySelectorAll("a").forEach(a => a.addEventListener("click", close));
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 720) close();
+  });
 })();
