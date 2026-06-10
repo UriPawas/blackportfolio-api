@@ -4,6 +4,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 from collections import OrderedDict
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import requests
 import yfinance as yf
 import numpy as np
@@ -75,7 +78,8 @@ def _cache_cleanup_loop():
 
 _cache_cleanup_loop()
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "sk_test_51TXCZHCZ7HiRNXSJvHBpx27n0KyRK0E61XHSs297tf7JQXanCsLZKAhm0nqsz2o24oakXa5fTsAyfsMeylvlqGWG00dKIszZWb")
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 PLAN_PRICES = {
     "Free":               {"monthly": 0,     "yearly": 0},
@@ -84,7 +88,10 @@ PLAN_PRICES = {
     "Institutional Desk": {"monthly": 14900, "yearly": 11900},
 }
 
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -101,7 +108,8 @@ def health():
     return {"status": "ok"}
 
 @app.get("/api/search")
-def search(q: str):
+@limiter.limit("60/minute")
+def search(request: Request, q: str):
     cached = _SEARCH_CACHE.get(q)
     if cached is not None:
         return cached
@@ -112,7 +120,8 @@ def search(q: str):
     return data
 
 @app.get("/api/info/{symbol}")
-def info(symbol: str):
+@limiter.limit("30/minute")
+def info(request: Request, symbol: str):
     cached = _INFO_CACHE.get(symbol)
     if cached is not None:
         return cached
@@ -128,7 +137,8 @@ def info(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/financials/{symbol}")
-def financials(symbol: str):
+@limiter.limit("20/minute")
+def financials(request: Request, symbol: str):
     cached = _FINANCIALS_CACHE.get(symbol)
     if cached is not None:
         return cached
@@ -274,7 +284,8 @@ def financials(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/holdings/{symbol}")
-def holdings(symbol: str):
+@limiter.limit("20/minute")
+def holdings(request: Request, symbol: str):
     cached = _HOLDINGS_CACHE.get(symbol)
     if cached is not None:
         return cached
@@ -347,14 +358,16 @@ def _price_and_prev_for_ticker(symbol: str):
     return None, None
 
 @app.get("/api/price/{symbol}")
-def price(symbol: str):
+@limiter.limit("60/minute")
+def price(request: Request, symbol: str):
     p, prev = _price_and_prev_for_ticker(symbol)
     if p is not None:
         return {"symbol": symbol, "price": p, "previousClose": prev}
     raise HTTPException(status_code=404, detail="Precio no disponible")
 
 @app.get("/api/prices")
-def prices_batch(symbols: str):
+@limiter.limit("30/minute")
+def prices_batch(request: Request, symbols: str):
     """Batch price fetch. Returns {sym: {price, prev}} with previousClose when available."""
     symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     if not symbol_list:
@@ -385,12 +398,12 @@ def prices_batch(symbols: str):
             result[sym] = {"price": p, "prev": prev}
     return result
 
-RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "03aab7a2aamsh5f6964b96339010p1ec652jsnbff2ece7211e")
+RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "")
 PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")
 RAPIDAPI_BOND_HOST = "bond-details.p.rapidapi.com"
 
 # ── Banxico SIE ──────────────────────────────────────────────────────────────
-BANXICO_TOKEN = os.environ.get("BANXICO_TOKEN", "475407b727d8a30912b641a7dce2924cd6156262a00a5b01b111e34d58bd8d60")
+BANXICO_TOKEN = os.environ.get("BANXICO_TOKEN", "")
 BANXICO_BASE  = "https://www.banxico.org.mx/SieAPIRest/service/v1"
 
 _MX_ISIN_PREFIXES = [
@@ -435,7 +448,8 @@ def _classify_mx_isin(isin: str):
     return "MX_GOV", "Valor gubernamental mexicano"
 
 @app.get("/api/banxico/bond/{isin}")
-def banxico_bond(isin: str):
+@limiter.limit("20/minute")
+def banxico_bond(request: Request, isin: str):
     isin = isin.upper()
     bond_type, description = _classify_mx_isin(isin)
     series_list = _BANXICO_SERIES.get(bond_type, [])
@@ -469,7 +483,8 @@ def banxico_bond(isin: str):
     return {"isin": isin, "type": bond_type, "description": description, "rates": rates}
 
 @app.get("/api/bond/{isin}")
-def bond_info(isin: str):
+@limiter.limit("20/minute")
+def bond_info(request: Request, isin: str):
     url = f"https://{RAPIDAPI_BOND_HOST}/Detailed_Bond"
     res = _HTTP_SESSION.get(url, params={"ISIN": isin}, headers={
         "x-rapidapi-key": RAPIDAPI_KEY,
@@ -494,7 +509,8 @@ YAHOO_EXCHANGE_MAP = {
 
 
 @app.get("/api/intraday/{symbol}")
-def intraday_chart(symbol: str, period: str = "1D"):
+@limiter.limit("20/minute")
+def intraday_chart(request: Request, symbol: str, period: str = "1D"):
     from datetime import datetime
 
     try:
@@ -575,7 +591,8 @@ def intraday_chart(symbol: str, period: str = "1D"):
     }
 
 @app.get("/api/dividends/{symbol}")
-def dividends(symbol: str):
+@limiter.limit("30/minute")
+def dividends(request: Request, symbol: str):
     cached = _DIVIDENDS_CACHE.get(symbol)
     if cached is not None:
         return cached
@@ -658,7 +675,8 @@ def risk_free_rate():
 
 
 @app.get("/api/news/{symbol}")
-def stock_news(symbol: str, language: str = "es"):
+@limiter.limit("20/minute")
+def stock_news(request: Request, symbol: str, language: str = "es"):
     cache_key = f"{symbol}:{language}"
     cached = _NEWS_CACHE.get(cache_key)
     if cached is not None:
@@ -733,7 +751,8 @@ def _build_economic_events():
     return out
 
 @app.get("/api/calendar")
-def calendar(symbols: str = ""):
+@limiter.limit("20/minute")
+def calendar(request: Request, symbols: str = ""):
     """Returns upcoming earnings + economic events. `symbols` is a comma-separated ticker list."""
     from datetime import date, timedelta
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:25]
@@ -778,7 +797,8 @@ def calendar(symbols: str = ""):
     return data
 
 @app.get("/api/seasonality/{symbol}")
-def seasonality(symbol: str):
+@limiter.limit("10/minute")
+def seasonality(request: Request, symbol: str):
     cached = _SEASONALITY_CACHE_V2.get(symbol)
     if cached is not None:
         return cached
@@ -842,7 +862,8 @@ def seasonality(symbol: str):
 
 
 @app.get("/api/chart/{symbol}")
-def chart(symbol: str, range: str = "1d", interval: str = "5m"):
+@limiter.limit("30/minute")
+def chart(request: Request, symbol: str, range: str = "1d", interval: str = "5m"):
     cache_key = f"{symbol}:{range}:{interval}"
     cached = _CHART_CACHE.get(cache_key)
     if cached is not None:
@@ -897,6 +918,26 @@ def gallery():
 
 
 # ── Stripe ───────────────────────────────────────────────────────────────────
+@app.post("/api/billing/stripe/webhook")
+async def stripe_webhook(request: Request):
+    if not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook no configurado")
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Payload inválido")
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Firma inválida")
+
+    if event["type"] == "checkout.session.completed":
+        # TODO P2: actualizar Firestore via Admin SDK con selectedPlan y stripeSubscriptionId
+        pass
+
+    return {"received": True}
+
+
 class CheckoutRequest(BaseModel):
     plan: str = "Advisor Pro"
     billingCycle: str = "monthly"

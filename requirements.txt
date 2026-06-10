@@ -4,5 +4,6 @@ yfinance==0.2.61
 requests==2.32.3
 stripe==15.1.0
 pydantic==2.10.6
+slowapi==0.1.9
 numpy
 pandas
