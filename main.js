@@ -1628,7 +1628,7 @@ async function loadMarketChart() {
   const _CRYPTO_BASES = new Set(["BTC","ETH","BNB","ADA","XRP","SOL","DOT","DOGE","AVAX","MATIC","LINK","UNI","ATOM","LTC","BCH","ALGO","VET","TRX","ETC","XLM","AAVE","EOS","CAKE","NEO","MKR","COMP","SAND","MANA","ENJ","EGLD","NEAR","FTM","HBAR","GRT","RUNE","FLOW","XTZ","ZIL","DASH","ZEC","BAT","SNX","YFI","SUSHI","CRV","RNDR","INJ","APE","LDO","ARB","OP","PEPE","SHIB","FLOKI","WIF","TON","SUI","SEI","TIA","PYTH","JUP","BOME","NOT","TAO","BONK","BRETT"]);
   const _symBase = symbol.toUpperCase().split("-")[0];
   const isCrypto = _CRYPTO_BASES.has(_symBase);
-  const dataSource = isIntraday ? "RapidAPI" : isCrypto ? "Binance" : "Yahoo Finance";
+  const dataSource = isIntraday ? "RapidAPI" : isCrypto ? "CoinGecko" : "Yahoo Finance";
   showChartStatus(`Cargando datos de ${dataSource}...`);
   chartSymbolLabel.textContent = symbol;
   chartMetaLabel.textContent = `${rangeConfig.label} · ${dataSource}`;

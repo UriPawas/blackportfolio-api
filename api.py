@@ -79,7 +79,7 @@ def _cache_cleanup_loop():
 
 _cache_cleanup_loop()
 
-# ── Binance crypto routing ────────────────────────────────────────────────────
+# ── Crypto routing vía CoinGecko (Binance da HTTP 451 desde IPs de Railway/US) ─
 
 _CRYPTO_BASE_SYMBOLS = {
     "BTC","ETH","BNB","ADA","XRP","SOL","DOT","DOGE","AVAX","MATIC","LINK",
@@ -90,63 +90,65 @@ _CRYPTO_BASE_SYMBOLS = {
     "TON","SUI","SEI","TIA","PYTH","JUP","BOME","NOT","TAO","BONK","BRETT",
 }
 
+# Símbolo → ID de CoinGecko
+_COINGECKO_ID = {
+    "BTC":"bitcoin","ETH":"ethereum","BNB":"binancecoin","ADA":"cardano",
+    "XRP":"ripple","SOL":"solana","DOT":"polkadot","DOGE":"dogecoin",
+    "AVAX":"avalanche-2","MATIC":"matic-network","LINK":"chainlink",
+    "UNI":"uniswap","ATOM":"cosmos","LTC":"litecoin","BCH":"bitcoin-cash",
+    "ALGO":"algorand","VET":"vechain","TRX":"tron","ETC":"ethereum-classic",
+    "XLM":"stellar","AAVE":"aave","EOS":"eos","NEO":"neo","MKR":"maker",
+    "COMP":"compound-governance-token","SAND":"the-sandbox","MANA":"decentraland",
+    "ENJ":"enjincoin","EGLD":"elrond-erd-2","NEAR":"near","FTM":"fantom",
+    "HBAR":"hedera-hashgraph","GRT":"the-graph","RUNE":"thorchain","FLOW":"flow",
+    "XTZ":"tezos","ZIL":"zilliqa","DASH":"dash","ZEC":"zcash",
+    "BAT":"basic-attention-token","SNX":"havven","YFI":"yearn-finance",
+    "SUSHI":"sushi","CRV":"curve-dao-token","RNDR":"render-token",
+    "INJ":"injective-protocol","APE":"apecoin","LDO":"lido-dao",
+    "ARB":"arbitrum","OP":"optimism","PEPE":"pepe","SHIB":"shiba-inu",
+    "FLOKI":"floki","WIF":"dogwifcoin","TON":"the-open-network","SUI":"sui",
+    "SEI":"sei-network","TIA":"celestia","PYTH":"pyth-network",
+    "JUP":"jupiter-exchange-solana","TAO":"bittensor","BONK":"bonk",
+    "CAKE":"pancakeswap-token",
+}
+
+# range de Yahoo Finance → parámetro days de CoinGecko
+_RANGE_TO_CG_DAYS = {
+    "1d":1,"5d":7,"1mo":30,"3mo":90,"6mo":180,
+    "1y":365,"2y":730,"5y":1825,"10y":3650,"30y":"max","max":"max",
+}
+
 def _is_crypto(symbol: str) -> bool:
-    s = symbol.upper()
-    base = s.split("-")[0] if "-" in s else s
+    base = symbol.upper().split("-")[0]
     return base in _CRYPTO_BASE_SYMBOLS
 
-def _to_binance_symbol(symbol: str) -> str:
-    s = symbol.upper()
-    base = s.split("-")[0] if "-" in s else s
-    return f"{base}USDT"
+def _crypto_base(symbol: str) -> str:
+    return symbol.upper().split("-")[0]
 
-# Yahoo Finance interval → Binance interval
-_YF_TO_BNC_INTERVAL = {
-    "1m":"1m","5m":"5m","15m":"15m","30m":"30m",
-    "60m":"1h","90m":"1h","1h":"1h",
-    "1d":"1d","5d":"1d","1wk":"1w","1mo":"1M","3mo":"1M",
-}
-
-# Binance interval duration in milliseconds
-_BNC_INTERVAL_MS = {
-    "1m":60_000,"5m":300_000,"15m":900_000,"30m":1_800_000,
-    "1h":3_600_000,"4h":14_400_000,"1d":86_400_000,
-    "3d":259_200_000,"1w":604_800_000,"1M":2_592_000_000,
-}
-
-_RANGE_SECONDS_BNC = {
-    "1d":86400,"5d":432000,"1mo":2_592_000,"3mo":7_776_000,
-    "6mo":15_552_000,"1y":31_536_000,"2y":63_072_000,"5y":157_680_000,
-    "10y":315_360_000,"30y":946_080_000,"max":946_080_000,
-}
-
-def _binance_klines(binance_sym: str, yf_interval: str, yf_range: str) -> list:
-    b_interval = _YF_TO_BNC_INTERVAL.get(yf_interval, "1d")
-    range_secs  = _RANGE_SECONDS_BNC.get(yf_range, 946_080_000)
-    interval_ms = _BNC_INTERVAL_MS.get(b_interval, 86_400_000)
-    now_ms      = int(_time_module.time() * 1000)
-    start_ms    = now_ms - range_secs * 1000
-    limit       = min(max(int(range_secs * 1000 / interval_ms) + 5, 10), 1000)
-    params = {
-        "symbol": binance_sym, "interval": b_interval,
-        "startTime": start_ms, "endTime": now_ms, "limit": limit,
-    }
-    res = _HTTP_SESSION.get("https://api.binance.com/api/v3/klines",
-                            params=params, timeout=10)
+def _coingecko_ohlc(symbol: str, yf_range: str) -> list:
+    """Devuelve lista de velas [[ts_ms, o, h, l, c], ...] desde CoinGecko."""
+    cg_id = _COINGECKO_ID.get(_crypto_base(symbol))
+    if not cg_id:
+        return []
+    days = _RANGE_TO_CG_DAYS.get(yf_range, 365)
+    res = _HTTP_SESSION.get(
+        f"https://api.coingecko.com/api/v3/coins/{cg_id}/ohlc",
+        params={"vs_currency": "usd", "days": days},
+        timeout=12,
+    )
     res.raise_for_status()
     return res.json()
 
-def _binance_klines_to_yahoo(klines: list, symbol: str) -> dict:
-    timestamps, opens, highs, lows, closes, volumes = [], [], [], [], [], []
-    for k in klines:
-        timestamps.append(int(k[0]) // 1000)
-        opens.append(float(k[1]))
-        highs.append(float(k[2]))
-        lows.append(float(k[3]))
-        closes.append(float(k[4]))
-        volumes.append(float(k[5]))
-    last  = closes[-1]  if closes       else 0
-    prev  = closes[-2]  if len(closes) >= 2 else last
+def _coingecko_ohlc_to_yahoo(candles: list, symbol: str) -> dict:
+    timestamps, opens, highs, lows, closes = [], [], [], [], []
+    for c in candles:
+        timestamps.append(int(c[0]) // 1000)
+        opens.append(float(c[1]))
+        highs.append(float(c[2]))
+        lows.append(float(c[3]))
+        closes.append(float(c[4]))
+    last = closes[-1] if closes else 0
+    prev = closes[-2] if len(closes) >= 2 else last
     return {
         "chart": {
             "result": [{
@@ -155,8 +157,8 @@ def _binance_klines_to_yahoo(klines: list, symbol: str) -> dict:
                     "shortName": symbol.upper(),
                     "longName": f"{symbol.upper()} / USD",
                     "currency": "USD",
-                    "fullExchangeName": "Binance",
-                    "exchangeName": "Binance",
+                    "fullExchangeName": "CoinGecko",
+                    "exchangeName": "CoinGecko",
                     "instrumentType": "CRYPTOCURRENCY",
                     "regularMarketPrice": last,
                     "previousClose": prev,
@@ -164,66 +166,71 @@ def _binance_klines_to_yahoo(klines: list, symbol: str) -> dict:
                 },
                 "timestamp": timestamps,
                 "indicators": {
-                    "quote": [{"open": opens,"high": highs,
-                               "low": lows,"close": closes,"volume": volumes}]
+                    "quote": [{"open": opens, "high": highs,
+                               "low": lows, "close": closes,
+                               "volume": [None] * len(closes)}]
                 },
             }],
             "error": None,
         }
     }
 
-def _binance_price_and_prev(symbol: str):
-    """Returns (price, prev_close) via Binance 24hr mini-ticker. Cached 30 s."""
+def _crypto_price_and_prev(symbol: str):
+    """Precio + prevClose de CoinGecko. Cacheado 30 s."""
     cached = _BINANCE_PRICE_CACHE.get(symbol)
     if cached:
         return cached["price"], cached["prev"]
-    binance_sym = _to_binance_symbol(symbol)
+    cg_id = _COINGECKO_ID.get(_crypto_base(symbol))
+    if not cg_id:
+        return None, None
     try:
         res = _HTTP_SESSION.get(
-            f"https://api.binance.com/api/v3/ticker/24hr?symbol={binance_sym}",
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": cg_id, "vs_currencies": "usd", "include_24hr_change": "true"},
             timeout=8,
         )
         res.raise_for_status()
-        d = res.json()
-        price = float(d["lastPrice"])
-        prev  = float(d["prevClosePrice"])
+        d = res.json().get(cg_id, {})
+        price = float(d.get("usd", 0))
+        chg   = float(d.get("usd_24h_change", 0))
+        denom = 1 + chg / 100
+        prev  = round(price / denom, 8) if denom else price
         _BINANCE_PRICE_CACHE.set(symbol, {"price": price, "prev": prev})
         return price, prev
     except Exception:
         return None, None
 
-def _binance_prices_batch(symbols: list) -> dict:
-    """Batch price fetch for a list of crypto symbols via Binance 24hr ticker."""
+def _crypto_prices_batch(symbols: list) -> dict:
+    """Batch de precios crypto desde CoinGecko."""
     if not symbols:
         return {}
-    binance_map = {_to_binance_symbol(s): s for s in symbols}
-    result = {}
+    sym_to_id = {s: _COINGECKO_ID.get(_crypto_base(s)) for s in symbols}
+    sym_to_id = {s: cid for s, cid in sym_to_id.items() if cid}
+    if not sym_to_id:
+        return {}
+    id_to_sym = {cid: s for s, cid in sym_to_id.items()}
     try:
-        # Use comma-separated symbols param (Binance supports it without JSON encoding)
-        sym_param = ",".join(binance_map.keys())
         res = _HTTP_SESSION.get(
-            f"https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22{'%22%2C%22'.join(binance_map.keys())}%22%5D",
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": ",".join(set(sym_to_id.values())),
+                    "vs_currencies": "usd", "include_24hr_change": "true"},
             timeout=10,
         )
-        if res.status_code == 200:
-            items = res.json()
-            if isinstance(items, list):
-                for item in items:
-                    orig = binance_map.get(item.get("symbol", ""))
-                    if orig:
-                        p    = float(item["lastPrice"])
-                        prev = float(item["prevClosePrice"])
-                        _BINANCE_PRICE_CACHE.set(orig, {"price": p, "prev": prev})
-                        result[orig] = {"price": p, "prev": prev}
-                return result
+        res.raise_for_status()
+        result = {}
+        for cg_id, sym in id_to_sym.items():
+            d = res.json().get(cg_id, {})
+            if "usd" not in d:
+                continue
+            price = float(d["usd"])
+            chg   = float(d.get("usd_24h_change", 0))
+            denom = 1 + chg / 100
+            prev  = round(price / denom, 8) if denom else price
+            _BINANCE_PRICE_CACHE.set(sym, {"price": price, "prev": prev})
+            result[sym] = {"price": price, "prev": prev}
+        return result
     except Exception:
-        pass
-    # Fallback: individual requests
-    for binance_sym, orig in binance_map.items():
-        p, prev = _binance_price_and_prev(orig)
-        if p is not None:
-            result[orig] = {"price": p, "prev": prev}
-    return result
+        return {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -256,33 +263,18 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
-@app.get("/api/debug/binance")
-def debug_binance():
-    """Temporal: verifica conectividad con Binance desde Railway."""
-    import time as _t
+@app.get("/api/debug/crypto")
+def debug_crypto():
+    """Verifica conectividad con CoinGecko desde Railway."""
     results = {}
-    for sym in ["BTCUSDT", "BNBUSDT"]:
-        try:
-            r = _HTTP_SESSION.get(
-                f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}",
-                timeout=8,
-            )
-            results[sym] = {"status": r.status_code, "ok": r.status_code == 200,
-                            "price": r.json().get("lastPrice") if r.status_code == 200 else None,
-                            "error": None}
-        except Exception as e:
-            results[sym] = {"status": None, "ok": False, "price": None, "error": str(e)}
-    # Also test klines
+    for sym in ["BTC-USD", "BNB-USD", "SOL"]:
+        p, prev = _crypto_price_and_prev(sym)
+        results[sym] = {"price": p, "prev": prev, "ok": p is not None}
     try:
-        r2 = _HTTP_SESSION.get(
-            "https://api.binance.com/api/v3/klines",
-            params={"symbol":"BTCUSDT","interval":"1d","limit":3},
-            timeout=8,
-        )
-        results["klines_test"] = {"status": r2.status_code, "ok": r2.status_code == 200,
-                                   "candles": len(r2.json()) if r2.status_code == 200 else 0}
+        candles = _coingecko_ohlc("BTC-USD", "1mo")
+        results["ohlc_test"] = {"candles": len(candles), "ok": len(candles) > 0}
     except Exception as e:
-        results["klines_test"] = {"status": None, "ok": False, "error": str(e)}
+        results["ohlc_test"] = {"candles": 0, "ok": False, "error": str(e)}
     return results
 
 @app.get("/api/search")
@@ -539,7 +531,7 @@ def _price_for_ticker(symbol: str):
 def _price_and_prev_for_ticker(symbol: str):
     """Return (price, prev_close) as floats, or (None, None) on failure."""
     if _is_crypto(symbol):
-        p, prev = _binance_price_and_prev(symbol)
+        p, prev = _crypto_price_and_prev(symbol)
         if p is not None:
             return p, prev
     try:
@@ -586,7 +578,7 @@ def prices_batch(request: Request, symbols: str):
     trad_syms   = [s for s in symbol_list if not _is_crypto(s)]
 
     if crypto_syms:
-        result.update(_binance_prices_batch(crypto_syms))
+        result.update(_crypto_prices_batch(crypto_syms))
 
     if not trad_syms:
         return result
@@ -1090,15 +1082,15 @@ def chart(request: Request, symbol: str, range: str = "1d", interval: str = "5m"
 
     # Binance route for crypto
     if _is_crypto(symbol):
-        bnc_key = f"bnc:{symbol}:{range}:{interval}"
-        bnc_cached = _CHART_CACHE.get(bnc_key)
-        if bnc_cached is not None:
-            return bnc_cached
+        cg_key = f"cg:{symbol}:{range}"
+        cg_cached = _CHART_CACHE.get(cg_key)
+        if cg_cached is not None:
+            return cg_cached
         try:
-            klines = _binance_klines(_to_binance_symbol(symbol), interval, range)
-            if klines:
-                data = _binance_klines_to_yahoo(klines, symbol)
-                _CHART_CACHE.set(bnc_key, data)
+            candles = _coingecko_ohlc(symbol, range)
+            if candles:
+                data = _coingecko_ohlc_to_yahoo(candles, symbol)
+                _CHART_CACHE.set(cg_key, data)
                 return data
         except Exception:
             pass  # fallback to Yahoo Finance
