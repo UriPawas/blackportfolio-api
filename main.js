@@ -282,11 +282,13 @@ const defaultMarketState = {
   indicatorSettings: {}
 };
 
-// URL de tu nuevo servidor local en Python
 const _IS_LOCAL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
-const API_BASE_URL = _IS_LOCAL
-  ? "http://127.0.0.1:8000/api"
-  : "https://blackportfolio-api-production.up.railway.app/api";
+const _API_HOST = _IS_LOCAL
+  ? "http://127.0.0.1:8000"
+  : "https://blackportfolio-api-production.up.railway.app";
+const API_BASE_URL = `${_API_HOST}/api`;
+// Warm-up ping en producción para evitar cold-start delays en Railway
+if (!_IS_LOCAL) fetch(`${_API_HOST}/health`).catch(() => {});
 
 let marketState = getStoredMarketState();
 let activeSection = "home";
@@ -408,6 +410,7 @@ function activateSection(sectionId) {
 }
 
 function handleLogout() {
+  window.BlackPortfolioAuth.stopSessionTimeout();
   window.BlackPortfolioAuth.clearSession();
   window.location.href = "login.html";
 }
@@ -1622,9 +1625,13 @@ async function loadMarketChart() {
   chartAbortController = new AbortController();
   hideChartOverlay();
   const isIntraday = rangeConfig.source === "rapid";
-  showChartStatus(isIntraday ? "Cargando datos intraday..." : "Cargando grafico desde Yahoo Finance...");
+  const _CRYPTO_BASES = new Set(["BTC","ETH","BNB","ADA","XRP","SOL","DOT","DOGE","AVAX","MATIC","LINK","UNI","ATOM","LTC","BCH","ALGO","VET","TRX","ETC","XLM","AAVE","EOS","CAKE","NEO","MKR","COMP","SAND","MANA","ENJ","EGLD","NEAR","FTM","HBAR","GRT","RUNE","FLOW","XTZ","ZIL","DASH","ZEC","BAT","SNX","YFI","SUSHI","CRV","RNDR","INJ","APE","LDO","ARB","OP","PEPE","SHIB","FLOKI","WIF","TON","SUI","SEI","TIA","PYTH","JUP","BOME","NOT","TAO","BONK","BRETT"]);
+  const _symBase = symbol.toUpperCase().split("-")[0];
+  const isCrypto = _CRYPTO_BASES.has(_symBase);
+  const dataSource = isIntraday ? "RapidAPI" : isCrypto ? "Binance" : "Yahoo Finance";
+  showChartStatus(`Cargando datos de ${dataSource}...`);
   chartSymbolLabel.textContent = symbol;
-  chartMetaLabel.textContent = `${rangeConfig.label} · ${isIntraday ? "RapidAPI" : "Yahoo Finance"}`;
+  chartMetaLabel.textContent = `${rangeConfig.label} · ${dataSource}`;
   chartPriceLabel.textContent = "--";
 
   try {
@@ -2430,12 +2437,17 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(function(user) {
   if (!_appInitialized) {
     _appInitialized = true;
     updateHeading("home");
+    window.BlackPortfolioAuth.startSessionTimeout();
   }
 });
 
 navItems.forEach((item) => {
   item.addEventListener("click", () => {
     activateSection(item.dataset.section);
+    if (isMobileViewport() && mobileSidebarOpen) {
+      mobileSidebarOpen = false;
+      hideMobileSidebar();
+    }
   });
 });
 
@@ -2455,7 +2467,7 @@ const dashboardSidebarShell = document.querySelector(".dashboard-sidebar-shell")
 
 const sidebarBackdrop = document.createElement("div");
 sidebarBackdrop.className = "sidebar-backdrop";
-document.body.appendChild(sidebarBackdrop);
+dashboardMain.appendChild(sidebarBackdrop);
 
 const isMobileViewport = () => window.innerWidth <= 1100;
 
@@ -2470,7 +2482,7 @@ function showMobileSidebar() {
   dashboardSidebarShell.style.transition = "transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)";
   dashboardSidebarShell.getBoundingClientRect(); // force reflow so browser records new transition before transform change
   dashboardSidebarShell.style.transform = "translateX(0)";
-  dashboardSidebarShell.style.pointerEvents = "all";
+  dashboardSidebarShell.style.pointerEvents = "auto";
   sidebarBackdrop.classList.add("active");
 }
 
@@ -4015,12 +4027,23 @@ function showTrackerListView() {
   renderPortfolioCards();
 }
 
+function _invalidatePriceCache(portfolioId) {
+  const portfolio = getPortfolios().find((p) => p.id === portfolioId);
+  if (!portfolio) return;
+  const tickers = [...new Set((portfolio.positions || []).map((p) => p.ticker))];
+  if (!tickers.length) return;
+  const cache = getPriceCache();
+  tickers.forEach(t => { if (cache[t]) cache[t].ts = 0; });
+  savePriceCache(cache);
+}
+
 function showTrackerDashView(portfolioId) {
   if (_dashRefreshTimer) { clearInterval(_dashRefreshTimer); _dashRefreshTimer = null; }
   activePortfolioId = portfolioId;
   perfTabLoaded = false;
   perfDailyReturns = null;
   mcTabLoaded = false;
+  _invalidatePriceCache(portfolioId);
   // Reset to Summary tab
   document.querySelectorAll(".tracker-tab-btn").forEach((b) => b.classList.remove("active"));
   const summaryBtn = document.querySelector(".tracker-tab-btn[data-tab='summary']");
@@ -4144,7 +4167,7 @@ async function renderPortfolioDashboard() {
   const needsFx = (portfolio.positions || []).some(p => getPosCurrency(p, portfolioCur) !== portfolioCur);
   const fxNote = needsFx ? " · tipos de cambio aplicados" : "";
   if (failed.length === tickers.length) {
-    setDashPriceStatus("No se pudo obtener precios. Verifica que el servidor Python esté corriendo: python api.py", "error");
+    setDashPriceStatus("No se pudieron obtener precios. Intenta de nuevo en un momento.", "error");
   } else if (failed.length) {
     setDashPriceStatus(`Precios actualizados${fxNote}. Sin datos para: ${failed.join(", ")}`, "warn");
   } else {
@@ -4889,6 +4912,7 @@ function initializeTrackerModule() {
   document.getElementById("refreshPricesBtn").addEventListener("click", () => {
     perfTabLoaded = false;
     perfDailyReturns = null;
+    _invalidatePriceCache(activePortfolioId);
     renderPortfolioDashboard();
     // If desempeño tab is active, reload it after prices refresh
     const activeTab = document.querySelector(".tracker-tab-btn.active");
@@ -5171,23 +5195,27 @@ function initializeTrackerModule() {
 // ── Performance tab helpers ───────────────────────────────────────────────────
 
 async function fetchHistoricalCloses(symbol, range, interval) {
-  try {
-    const res = await fetch(`${API_BASE_URL}/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const result = data?.chart?.result?.[0];
-    if (!result) return [];
-    const timestamps = result.timestamp || [];
-    const closes = result.indicators?.quote?.[0]?.close || [];
-    const out = [];
-    for (let i = 0; i < timestamps.length; i++) {
-      const c = closes[i];
-      if (c !== null && c !== undefined && isFinite(c)) {
-        out.push({ ts: timestamps[i] * 1000, close: c });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+    try {
+      const res = await fetch(`${API_BASE_URL}/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const result = data?.chart?.result?.[0];
+      if (!result) continue;
+      const timestamps = result.timestamp || [];
+      const closes = result.indicators?.quote?.[0]?.close || [];
+      const out = [];
+      for (let i = 0; i < timestamps.length; i++) {
+        const c = closes[i];
+        if (c !== null && c !== undefined && isFinite(c)) {
+          out.push({ ts: timestamps[i] * 1000, close: c });
+        }
       }
-    }
-    return out.sort((a, b) => a.ts - b.ts);
-  } catch { return []; }
+      if (out.length > 0) return out.sort((a, b) => a.ts - b.ts);
+    } catch {}
+  }
+  return [];
 }
 
 function updateVarDisplay() {
@@ -5261,154 +5289,318 @@ function getPerfChartColors() {
   };
 }
 
-function drawPerfChart(canvas, portfolioCumulative, benchmarkCumulative, labels, portfolioLabel, benchmarkLabel) {
-  const wrap = canvas.parentElement; // .perf-chart-wrap
+function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labels, portfolioLabel, benchmarkLabel) {
+  const wrap = canvasEl.parentElement;
   const W = wrap.clientWidth || 700;
-  const H = 280;
-  const dpr = window.devicePixelRatio || 1;
-
-  const padL = 52, padR = 20, padTop = 36, padBot = 30;
+  const H = 288;
+  const padL = 56, padR = 20, padTop = 40, padBot = 38;
   const chartW = W - padL - padR;
   const chartH = H - padTop - padBot;
-
   const total = portfolioCumulative.length;
   if (!total) return;
 
-  const allVals = [...portfolioCumulative.map((d) => d.value), ...benchmarkCumulative.map((d) => d.value)];
-  const minV = Math.min(0, ...allVals);
-  const maxV = Math.max(0, ...allVals);
-  const vRange = maxV - minV || 1;
+  const allVals = [
+    ...portfolioCumulative.map(d => d.value),
+    ...benchmarkCumulative.map(d => d.value)
+  ];
+  const rawMin = Math.min(0, ...allVals);
+  const rawMax = Math.max(0, ...allVals);
+  const yPad = (rawMax - rawMin) * 0.12 || 1;
+  const yMin = rawMin - yPad;
+  const yMax = rawMax + yPad;
+  const yRange = yMax - yMin;
 
-  const toX = (i) => padL + (i / Math.max(total - 1, 1)) * chartW;
-  const toY = (v) => padTop + chartH - ((v - minV) / vRange) * chartH;
+  const toX = i => (i / Math.max(total - 1, 1)) * chartW;
+  const toY = v => chartH * (1 - (v - yMin) / yRange);
 
-  // Replace canvas to clear old event listeners
-  const nc = canvas.cloneNode(false);
-  canvas.parentNode.replaceChild(nc, canvas);
-  nc.width = W * dpr; nc.height = H * dpr;
-  nc.style.width = W + "px"; nc.style.height = H + "px";
-  const ctx = nc.getContext("2d");
-  ctx.scale(dpr, dpr);
-
-  const tooltip = document.getElementById("perfChartTooltip");
-
-  function repaint(hovIdx) {
-    const C = getPerfChartColors();
-    ctx.clearRect(0, 0, W, H);
-
-    // Grid + Y labels
-    const gridSteps = 5;
-    for (let i = 0; i <= gridSteps; i++) {
-      const v = minV + (vRange / gridSteps) * i;
-      const y = toY(v);
-      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + chartW, y);
-      ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = C.axisLabel; ctx.font = "10px Inter, sans-serif";
-      ctx.textAlign = "right"; ctx.textBaseline = "middle";
-      ctx.fillText((v >= 0 ? "+" : "") + v.toFixed(1) + "%", padL - 6, y);
+  const NS = "http://www.w3.org/2000/svg";
+  const mkEl = (tag, attrs) => {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const [k, v] of Object.entries(attrs)) {
+      if (k === "style") e.style.cssText = String(v);
+      else e.setAttribute(k, String(v));
     }
+    return e;
+  };
+  const uid = `pc${(Date.now() % 1e7).toString(36)}`;
 
-    // Y=0 baseline dashed
-    ctx.strokeStyle = C.baseline; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(padL, toY(0)); ctx.lineTo(padL + chartW, toY(0)); ctx.stroke();
-    ctx.setLineDash([]);
+  const isLight = document.body.classList.contains("light-mode");
+  const portColor = "#6f86ff";
+  const bmColor   = isLight ? "rgba(0,0,0,0.45)"  : "rgba(255,255,255,0.45)";
+  const gridClr   = isLight ? "rgba(0,0,0,0.07)"  : "rgba(255,255,255,0.07)";
+  const blClr     = isLight ? "rgba(0,0,0,0.18)"  : "rgba(255,255,255,0.22)";
+  const axClr     = isLight ? "rgba(0,0,0,0.4)"   : "rgba(255,255,255,0.38)";
+  const xhClr     = isLight ? "rgba(0,0,0,0.2)"   : "rgba(255,255,255,0.25)";
+  const dotBg     = isLight ? "#ffffff"            : "#0d0d14";
 
-    // X labels
-    const step = Math.max(1, Math.floor(total / 7));
-    ctx.fillStyle = C.axisLabel; ctx.font = "10px Inter, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
-    for (let i = 0; i < total; i += step) {
-      ctx.fillText(portfolioCumulative[i].date, toX(i), padTop + chartH + 5);
-    }
+  // Path data
+  const portPathD = portfolioCumulative.map((d, i) =>
+    `${i ? "L" : "M"}${toX(i).toFixed(1)},${toY(d.value).toFixed(1)}`
+  ).join(" ");
+  const portAreaD = `${portPathD} L${toX(total - 1).toFixed(1)},${toY(0).toFixed(1)} L${toX(0).toFixed(1)},${toY(0).toFixed(1)} Z`;
+  const bmPathD = benchmarkCumulative.length
+    ? benchmarkCumulative.map((d, i) =>
+        `${i ? "L" : "M"}${toX(i).toFixed(1)},${toY(d.value).toFixed(1)}`
+      ).join(" ")
+    : null;
 
-    // Benchmark line
-    if (benchmarkCumulative.length) {
-      ctx.beginPath();
-      benchmarkCumulative.forEach((d, i) => { const x = toX(i), y = toY(d.value); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-      ctx.strokeStyle = C.benchmark; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.stroke();
-    }
+  // ── SVG root ──────────────────────────────────────────────────────────────
+  const svg = mkEl("svg", {
+    id: "perfLineChart", width: W, height: H,
+    viewBox: `0 0 ${W} ${H}`,
+    style: "display:block;width:100%;user-select:none;overflow:visible;"
+  });
 
-    // Portfolio area
-    ctx.beginPath();
-    portfolioCumulative.forEach((d, i) => { const x = toX(i), y = toY(d.value); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-    ctx.lineTo(toX(total - 1), toY(0)); ctx.lineTo(toX(0), toY(0)); ctx.closePath();
-    const grad = ctx.createLinearGradient(0, padTop, 0, padTop + chartH);
-    grad.addColorStop(0, C.fillFrom); grad.addColorStop(1, C.fillTo);
-    ctx.fillStyle = grad; ctx.fill();
+  // ── Defs ──────────────────────────────────────────────────────────────────
+  const defs = mkEl("defs");
 
-    // Portfolio line
-    ctx.beginPath();
-    portfolioCumulative.forEach((d, i) => { const x = toX(i), y = toY(d.value); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
-    ctx.strokeStyle = C.portfolio; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+  // Portfolio area fill gradient (top-opaque → bottom-transparent)
+  const fillGrad = mkEl("linearGradient", { id: `${uid}f`, x1:"0", y1:"0", x2:"0", y2:"1" });
+  [[0, 0.22], [1, 0]].forEach(([off, op]) => {
+    fillGrad.appendChild(mkEl("stop", { offset: `${off * 100}%`, "stop-color": portColor, "stop-opacity": op }));
+  });
+  defs.appendChild(fillGrad);
 
-    // Legend top-right
-    const legendItems = [[portfolioLabel, C.portfolio]];
-    if (benchmarkCumulative.length) legendItems.push([benchmarkLabel, C.benchmark]);
-    ctx.font = "11px Inter, sans-serif"; ctx.textBaseline = "middle";
-    let lx = padL + chartW;
-    const ly = padTop - 14;
-    for (let i = legendItems.length - 1; i >= 0; i--) {
-      const [lbl, col] = legendItems[i];
-      lx -= ctx.measureText(lbl).width;
-      ctx.fillStyle = C.axisLabel; ctx.textAlign = "left"; ctx.fillText(lbl, lx, ly);
-      lx -= 14; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fill(); lx -= 20;
-    }
+  // Portfolio line stroke gradient (fade left/right edges)
+  const strokeGrad = mkEl("linearGradient", { id: `${uid}s`, x1:"0", y1:"0", x2:"1", y2:"0" });
+  [["0%",0],["8%",1],["92%",1],["100%",0]].forEach(([off, op]) => {
+    strokeGrad.appendChild(mkEl("stop", { offset: off, "stop-color": portColor, "stop-opacity": op }));
+  });
+  defs.appendChild(strokeGrad);
 
-    // Hover crosshair + dots
-    if (hovIdx !== null && hovIdx >= 0 && hovIdx < total) {
-      const hx = toX(hovIdx);
-      ctx.strokeStyle = C.crosshair; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(hx, padTop); ctx.lineTo(hx, padTop + chartH); ctx.stroke();
-      const drawDot = (val, color) => {
-        const hy = toY(val);
-        ctx.fillStyle = C.dotBorder; ctx.beginPath(); ctx.arc(hx, hy, 5.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(hx, hy, 3.5, 0, Math.PI * 2); ctx.fill();
-      };
-      drawDot(portfolioCumulative[hovIdx].value, C.portfolio);
-      if (benchmarkCumulative[hovIdx]) drawDot(benchmarkCumulative[hovIdx].value, C.benchmark);
-    }
+  // Benchmark line gradient
+  const bmGrad = mkEl("linearGradient", { id: `${uid}b`, x1:"0", y1:"0", x2:"1", y2:"0" });
+  [["0%",0],["8%",1],["92%",1],["100%",0]].forEach(([off, op]) => {
+    bmGrad.appendChild(mkEl("stop", { offset: off, "stop-color": bmColor, "stop-opacity": op }));
+  });
+  defs.appendChild(bmGrad);
+
+  // Grid fade mask
+  const gGrad = mkEl("linearGradient", { id: `${uid}g`, x1:"0", y1:"0", x2:"1", y2:"0" });
+  [["0%",0],["8%",1],["92%",1],["100%",0]].forEach(([off, op]) => {
+    gGrad.appendChild(mkEl("stop", { offset: off, "stop-color": "white", "stop-opacity": op }));
+  });
+  defs.appendChild(gGrad);
+  const gMask = mkEl("mask", { id: `${uid}m` });
+  gMask.appendChild(mkEl("rect", { x: 0, y: 0, width: chartW, height: chartH, fill: `url(#${uid}g)` }));
+  defs.appendChild(gMask);
+
+  // Crosshair gradient (fade top/bottom)
+  const xhGrad = mkEl("linearGradient", { id: `${uid}x`, x1:"0", y1:"0", x2:"0", y2:"1" });
+  [["0%",0],["12%",1],["88%",1],["100%",0]].forEach(([off, op]) => {
+    xhGrad.appendChild(mkEl("stop", { offset: off, "stop-color": xhClr, "stop-opacity": op }));
+  });
+  defs.appendChild(xhGrad);
+
+  // Clip path for chart area
+  const clipPath = mkEl("clipPath", { id: `${uid}c` });
+  clipPath.appendChild(mkEl("rect", { x: 0, y: -4, width: chartW, height: chartH + 8 }));
+  defs.appendChild(clipPath);
+
+  svg.appendChild(defs);
+
+  // ── Chart group (translated to chart origin) ──────────────────────────────
+  const g = mkEl("g", { transform: `translate(${padL},${padTop})` });
+
+  // Grid lines (masked for edge fade)
+  const gridG = mkEl("g", { mask: `url(#${uid}m)` });
+  const gridSteps = 5;
+  for (let i = 0; i <= gridSteps; i++) {
+    const v = yMin + (yRange / gridSteps) * i;
+    const y = toY(v).toFixed(1);
+    gridG.appendChild(mkEl("line", {
+      x1: 0, y1: y, x2: chartW, y2: y,
+      stroke: gridClr, "stroke-width": "1", "stroke-dasharray": "4,4"
+    }));
+  }
+  g.appendChild(gridG);
+
+  // Y=0 baseline dashed
+  g.appendChild(mkEl("line", {
+    x1: 0, y1: toY(0).toFixed(1), x2: chartW, y2: toY(0).toFixed(1),
+    stroke: blClr, "stroke-width": "1", "stroke-dasharray": "4,4"
+  }));
+
+  // Benchmark line
+  if (bmPathD) {
+    g.appendChild(mkEl("path", {
+      d: bmPathD, fill: "none",
+      stroke: `url(#${uid}b)`, "stroke-width": "1.5",
+      "stroke-linejoin": "round", "stroke-linecap": "round",
+      "clip-path": `url(#${uid}c)`
+    }));
   }
 
-  function showTooltip(hovIdx) {
-    if (hovIdx === null) { tooltip.classList.add("hidden"); return; }
-    const C = getPerfChartColors();
-    const pd = portfolioCumulative[hovIdx];
-    const bd = benchmarkCumulative[hovIdx];
-    const fmt = (v) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+  // Portfolio area fill
+  g.appendChild(mkEl("path", { d: portAreaD, fill: `url(#${uid}f)`, "clip-path": `url(#${uid}c)` }));
+
+  // Portfolio line
+  g.appendChild(mkEl("path", {
+    d: portPathD, fill: "none",
+    stroke: `url(#${uid}s)`, "stroke-width": "2",
+    "stroke-linejoin": "round", "stroke-linecap": "round",
+    "clip-path": `url(#${uid}c)`
+  }));
+
+  svg.appendChild(g);
+
+  // ── Y-axis labels (in full SVG coords, outside chart group) ───────────────
+  for (let i = 0; i <= gridSteps; i++) {
+    const v = yMin + (yRange / gridSteps) * i;
+    const t = mkEl("text", {
+      x: padL - 8, y: (toY(v) + padTop).toFixed(1),
+      "text-anchor": "end", "dominant-baseline": "middle",
+      fill: axClr, "font-size": "10", "font-family": "Inter, sans-serif"
+    });
+    t.textContent = (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
+    svg.appendChild(t);
+  }
+
+  // ── X-axis labels ──────────────────────────────────────────────────────────
+  const xStep = Math.max(1, Math.floor(total / 7));
+  for (let i = 0; i < total; i += xStep) {
+    const t = mkEl("text", {
+      x: (toX(i) + padL).toFixed(1), y: padTop + chartH + 16,
+      "text-anchor": "middle",
+      fill: axClr, "font-size": "10", "font-family": "Inter, sans-serif"
+    });
+    t.textContent = portfolioCumulative[i].date;
+    svg.appendChild(t);
+  }
+
+  // ── Legend (top-right) ────────────────────────────────────────────────────
+  const legendItems = [[portfolioLabel, portColor]];
+  if (benchmarkCumulative.length) legendItems.push([benchmarkLabel, bmColor]);
+  let lx = padL + chartW;
+  const ly = padTop - 18;
+  for (let i = legendItems.length - 1; i >= 0; i--) {
+    const [lbl, col] = legendItems[i];
+    const tw = lbl.length * 6.4;
+    lx -= tw;
+    const lt = mkEl("text", {
+      x: lx.toFixed(1), y: ly,
+      "dominant-baseline": "middle",
+      fill: axClr, "font-size": "11", "font-family": "Inter, sans-serif"
+    });
+    lt.textContent = lbl;
+    svg.appendChild(lt);
+    lx -= 11;
+    svg.appendChild(mkEl("circle", { cx: lx.toFixed(1), cy: ly, r: "4", fill: col }));
+    lx -= 16;
+  }
+
+  // ── Crosshair + dots (CSS-transitioned via transform on <g>) ──────────────
+  const SPRING = "transition:transform 0.12s cubic-bezier(0.4,0,0.2,1),opacity 0.1s;pointer-events:none;will-change:transform;";
+
+  const xhairG = mkEl("g", { style: `opacity:0;${SPRING}` });
+  xhairG.appendChild(mkEl("rect", {
+    x: "-0.5", y: 0, width: "1", height: chartH,
+    fill: `url(#${uid}x)`
+  }));
+  svg.appendChild(xhairG);
+
+  const makeDot = color => {
+    const dg = mkEl("g", { style: `opacity:0;${SPRING}` });
+    dg.appendChild(mkEl("circle", { cx: 0, cy: 0, r: "5.5", fill: dotBg }));
+    dg.appendChild(mkEl("circle", { cx: 0, cy: 0, r: "3.5", fill: color }));
+    svg.appendChild(dg);
+    return dg;
+  };
+  const dotPort = makeDot(portColor);
+  const dotBm = benchmarkCumulative.length ? makeDot(bmColor) : null;
+
+  // Invisible interaction rect on top of everything
+  const iRect = mkEl("rect", {
+    x: padL, y: padTop, width: chartW, height: chartH,
+    fill: "transparent", style: "cursor:crosshair;"
+  });
+  svg.appendChild(iRect);
+
+  // ── Replace existing element ───────────────────────────────────────────────
+  wrap.replaceChild(svg, canvasEl);
+
+  const tooltip  = document.getElementById("perfChartTooltip");
+  const datePill = document.getElementById("perfDatePill");
+
+  // ── Hover handler ──────────────────────────────────────────────────────────
+  function onHover(idx) {
+    if (idx === null) {
+      xhairG.style.opacity = "0";
+      dotPort.style.opacity = "0";
+      if (dotBm) dotBm.style.opacity = "0";
+      tooltip.classList.add("hidden");
+      if (datePill) datePill.classList.add("hidden");
+      return;
+    }
+
+    const hx = toX(idx);
+    const pY = toY(portfolioCumulative[idx].value);
+    const absX = padL + hx;
+    const absY = padTop + pY;
+
+    xhairG.style.transform  = `translate(${absX.toFixed(1)}px,${padTop}px)`;
+    xhairG.style.opacity     = "1";
+    dotPort.style.transform  = `translate(${absX.toFixed(1)}px,${absY.toFixed(1)}px)`;
+    dotPort.style.opacity    = "1";
+
+    if (dotBm && benchmarkCumulative[idx]) {
+      const bY = toY(benchmarkCumulative[idx].value);
+      dotBm.style.transform = `translate(${absX.toFixed(1)}px,${(padTop + bY).toFixed(1)}px)`;
+      dotBm.style.opacity   = "1";
+    }
+
+    // Tooltip content
+    const pd  = portfolioCumulative[idx];
+    const bd  = benchmarkCumulative[idx];
+    const fmt = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
     let html = `<div class="perf-tooltip-date">${pd.date}</div>
       <div class="perf-tooltip-row">
-        <span class="perf-tooltip-dot" style="background:${C.portfolio}"></span>
+        <span class="perf-tooltip-dot" style="background:${portColor}"></span>
         <span class="perf-tooltip-label">${portfolioLabel}</span>
-        <span class="perf-tooltip-value">${fmt(pd.value)}</span>
+        <span class="perf-tooltip-value ${pd.value >= 0 ? "perf-pos" : "perf-neg"}">${fmt(pd.value)}</span>
       </div>`;
     if (bd) html += `<div class="perf-tooltip-row">
-        <span class="perf-tooltip-dot" style="background:${C.benchmark}"></span>
+        <span class="perf-tooltip-dot" style="background:${bmColor}"></span>
         <span class="perf-tooltip-label">${benchmarkLabel}</span>
-        <span class="perf-tooltip-value">${fmt(bd.value)}</span>
+        <span class="perf-tooltip-value ${bd.value >= 0 ? "perf-pos" : "perf-neg"}">${fmt(bd.value)}</span>
       </div>`;
     tooltip.innerHTML = html;
     tooltip.classList.remove("hidden");
-    const hx = toX(hovIdx);
+
+    // Flip tooltip left/right
     const TW = tooltip.offsetWidth || 160;
-    const margin = 10;
-    let tx = hx + margin;
-    if (tx + TW > W - padR) tx = hx - TW - margin;
+    const mg = 14;
+    const tx = (absX + mg + TW > W - padR) ? absX - TW - mg : absX + mg;
     tooltip.style.left = tx + "px";
-    tooltip.style.top = (padTop - 4) + "px";
+    tooltip.style.top  = padTop + "px";
+
+    // Date pill
+    if (datePill) {
+      datePill.textContent = pd.date;
+      datePill.classList.remove("hidden");
+      const pw = datePill.offsetWidth || 80;
+      const px = Math.max(padL, Math.min(W - padR - pw, absX - pw / 2));
+      datePill.style.left   = px + "px";
+      datePill.style.bottom = "4px";
+    }
   }
 
-  repaint(null);
-
-  nc.addEventListener("mousemove", (e) => {
-    const rect = nc.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    if (mx < padL || mx > padL + chartW) { repaint(null); showTooltip(null); return; }
-    const idx = Math.max(0, Math.min(total - 1, Math.round((mx - padL) / chartW * (total - 1))));
-    repaint(idx);
-    showTooltip(idx);
+  svg.addEventListener("mousemove", e => {
+    const rect = svg.getBoundingClientRect();
+    const mx = e.clientX - rect.left - padL;
+    if (mx < 0 || mx > chartW) { onHover(null); return; }
+    onHover(Math.max(0, Math.min(total - 1, Math.round(mx / chartW * (total - 1)))));
   });
-
-  nc.addEventListener("mouseleave", () => { repaint(null); showTooltip(null); });
+  svg.addEventListener("mouseleave", () => onHover(null));
+  svg.addEventListener("touchmove", e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = svg.getBoundingClientRect();
+    const mx = touch.clientX - rect.left - padL;
+    if (mx < 0 || mx > chartW) { onHover(null); return; }
+    onHover(Math.max(0, Math.min(total - 1, Math.round(mx / chartW * (total - 1)))));
+  }, { passive: false });
+  svg.addEventListener("touchend", () => onHover(null));
 }
 
 function buildAllPositionHistory(portfolio) {
@@ -5499,13 +5691,59 @@ async function loadPerformanceTab(portfolio) {
   const portfolioCur = portfolio.currency || "USD";
   const uniqueTickers = [...new Set(allPositions.map((p) => p.ticker))];
 
-  // Fetch all historical data in parallel
-  const [tickerHistories, benchmarkHistory] = await Promise.all([
+  // Fetch all historical data in parallel + Yahoo beta per active ticker
+  const activeTickersForBeta = [...new Set(allPositions.filter((p) => !p.sellDate).map((p) => p.ticker))];
+  const [tickerHistories, benchmarkHistory, yahooBetaResults] = await Promise.all([
     Promise.all(uniqueTickers.map((t) => fetchHistoricalCloses(t, range, interval).then((h) => ({ t, h })))),
     portfolio.benchmark && portfolio.benchmark !== "none"
       ? fetchHistoricalCloses(portfolio.benchmark, range, interval)
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    Promise.all(activeTickersForBeta.map((t) =>
+      fetch(`${API_BASE_URL}/info/${encodeURIComponent(t)}`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => ({ t, beta: d?.beta ?? null }))
+        .catch(() => ({ t, beta: null }))
+    ))
   ]);
+  const yahooBetas = {};
+  yahooBetaResults.forEach(({ t, beta }) => { yahooBetas[t] = beta; });
+
+  // Fallback: tickers sin beta de Yahoo → regresión vs ^GSPC (mensual → semanal → diario)
+  const missingBetaTickers = activeTickersForBeta.filter((t) => yahooBetas[t] == null);
+  if (missingBetaTickers.length > 0) {
+    const fallbackConfigs = [
+      { range: "5y", interval: "1mo", sliceKey: 7, minPairs: 3 },
+      { range: "2y", interval: "1wk", sliceKey: 10, minPairs: 10 },
+      { range: "1y", interval: "1d",  sliceKey: 10, minPairs: 20 },
+    ];
+    for (const cfg of fallbackConfigs) {
+      const stillMissing = missingBetaTickers.filter((t) => yahooBetas[t] == null);
+      if (!stillMissing.length) break;
+      const [bmData, ...tickerDatas] = await Promise.all([
+        fetchHistoricalCloses("^GSPC", cfg.range, cfg.interval),
+        ...stillMissing.map((t) => fetchHistoricalCloses(t, cfg.range, cfg.interval))
+      ]);
+      const bmDateMap = {};
+      bmData.forEach((d) => { bmDateMap[new Date(d.ts).toISOString().slice(0, cfg.sliceKey)] = d.close; });
+      const bmKeys = Object.keys(bmDateMap).sort();
+      const bmReturns = bmKeys.slice(1).map((k, i) => {
+        const c0 = bmDateMap[bmKeys[i]], c1 = bmDateMap[k];
+        return c0 > 0 ? (c1 - c0) / c0 : 0;
+      });
+      stillMissing.forEach((ticker, idx) => {
+        const tDateMap = {};
+        (tickerDatas[idx] || []).forEach((d) => { tDateMap[new Date(d.ts).toISOString().slice(0, cfg.sliceKey)] = d.close; });
+        const pairs = bmKeys.slice(1).reduce((acc, k, i) => {
+          const c0 = tDateMap[bmKeys[i]], c1 = tDateMap[k];
+          if (c0 && c1 && c0 > 0) acc.push([(c1 - c0) / c0, bmReturns[i]]);
+          return acc;
+        }, []);
+        if (pairs.length >= cfg.minPairs) {
+          yahooBetas[ticker] = calcBeta(pairs.map((p) => p[0]), pairs.map((p) => p[1]));
+        }
+      });
+    }
+  }
 
   const histMap = {};
   tickerHistories.forEach(({ t, h }) => { histMap[t] = h; });
@@ -5523,7 +5761,17 @@ async function loadPerformanceTab(portfolio) {
   // Intersection of dates across all tickers with data
   const tickersWithData = uniqueTickers.filter((t) => (histMap[t] || []).length > 1);
   if (!tickersWithData.length) {
-    statusEl.textContent = "No hay datos históricos disponibles. Verifica que el servidor esté corriendo: python api.py";
+    statusEl.textContent = "No se pudieron obtener datos históricos.";
+    const retryBtn = document.createElement("button");
+    retryBtn.className = "button ghost";
+    retryBtn.style.cssText = "margin-left:8px;padding:0.2rem 0.7rem;font-size:0.8rem;vertical-align:middle";
+    retryBtn.textContent = "↻ Reintentar";
+    retryBtn.addEventListener("click", () => {
+      perfTabLoaded = false;
+      const p = getPortfolios().find(q => q.id === activePortfolioId);
+      if (p) loadPerformanceTab(p);
+    });
+    statusEl.appendChild(retryBtn);
     perfTabLoaded = false;
     return;
   }
@@ -5627,18 +5875,59 @@ async function loadPerformanceTab(portfolio) {
       if (!tickerWeights[pos.ticker]) tickerWeights[pos.ticker] = 0;
       tickerWeights[pos.ticker] += activeTotalCost > 0 ? (pos._cost || 0) / activeTotalCost : 0;
     });
-    const activeTickers = tickersWithData.filter((t) => tickerWeights[t] !== undefined);
+    // Mapa de closes del benchmark por fecha (para fallback de beta)
+    const bmCloseMap = {};
+    benchmarkHistory.forEach((d) => { bmCloseMap[new Date(d.ts).toISOString().slice(0, 10)] = d.close; });
+
+    const activeTickers = [...new Set(Object.keys(tickerWeights))];
+    const missingHistTickers = activeTickers.filter((t) => !tickersWithData.includes(t) && yahooBetas[t] == null);
+    let extraMonthlyBetas = {};
+    if (missingHistTickers.length > 0) {
+      const fbConfigs = [
+        { range: "5y", interval: "1mo", sliceKey: 7, minPairs: 3 },
+        { range: "2y", interval: "1wk", sliceKey: 10, minPairs: 10 },
+        { range: "1y", interval: "1d",  sliceKey: 10, minPairs: 20 },
+      ];
+      for (const cfg of fbConfigs) {
+        const still = missingHistTickers.filter((t) => extraMonthlyBetas[t] == null);
+        if (!still.length) break;
+        const [bmD, ...tDs] = await Promise.all([
+          fetchHistoricalCloses("^GSPC", cfg.range, cfg.interval),
+          ...still.map((t) => fetchHistoricalCloses(t, cfg.range, cfg.interval))
+        ]);
+        const bmDM = {};
+        bmD.forEach((d) => { bmDM[new Date(d.ts).toISOString().slice(0, cfg.sliceKey)] = d.close; });
+        const bmKs = Object.keys(bmDM).sort();
+        const bmR = bmKs.slice(1).map((k, i) => { const c0 = bmDM[bmKs[i]], c1 = bmDM[k]; return c0 > 0 ? (c1 - c0) / c0 : 0; });
+        still.forEach((ticker, idx) => {
+          const tDM = {};
+          (tDs[idx] || []).forEach((d) => { tDM[new Date(d.ts).toISOString().slice(0, cfg.sliceKey)] = d.close; });
+          const pairs = bmKs.slice(1).reduce((acc, k, i) => {
+            const c0 = tDM[bmKs[i]], c1 = tDM[k];
+            if (c0 && c1 && c0 > 0) acc.push([(c1 - c0) / c0, bmR[i]]);
+            return acc;
+          }, []);
+          if (pairs.length >= cfg.minPairs) extraMonthlyBetas[ticker] = calcBeta(pairs.map((p) => p[0]), pairs.map((p) => p[1]));
+        });
+      }
+    }
     activeTickers.forEach((ticker) => {
       const w = tickerWeights[ticker] || 0;
-      const tickerReturns = [];
-      for (let i = 1; i < commonDates.length; i++) {
-        const d0 = commonDates[i - 1];
-        const d1 = commonDates[i];
-        const c0 = tickerDateMaps[ticker]?.[d0];
-        const c1 = tickerDateMaps[ticker]?.[d1];
-        tickerReturns.push(c0 && c1 && c0 > 0 ? (c1 - c0) / c0 : 0);
+      let assetBeta = yahooBetas[ticker] ?? extraMonthlyBetas[ticker] ?? null;
+      if (assetBeta === null && benchmarkHistory.length > 1) {
+        const tMap = tickerDateMaps[ticker] || {};
+        const tDates = Object.keys(tMap).sort();
+        const tRets = [], bmRets = [];
+        for (let i = 1; i < tDates.length; i++) {
+          const tc0 = tMap[tDates[i - 1]], tc1 = tMap[tDates[i]];
+          const bc0 = bmCloseMap[tDates[i - 1]], bc1 = bmCloseMap[tDates[i]];
+          if (tc0 > 0 && tc1 > 0 && bc0 > 0 && bc1 > 0) {
+            tRets.push((tc1 - tc0) / tc0);
+            bmRets.push((bc1 - bc0) / bc0);
+          }
+        }
+        if (tRets.length >= 2) assetBeta = calcBeta(tRets, bmRets);
       }
-      const assetBeta = calcBeta(tickerReturns, dailyBenchmarkReturns);
       assetBetas.push({ ticker, weight: w, beta: assetBeta, contribution: assetBeta !== null ? assetBeta * w : null });
     });
     assetBetas.sort((a, b) => Math.abs(b.contribution ?? 0) - Math.abs(a.contribution ?? 0));
@@ -5794,7 +6083,7 @@ async function loadMonteCarloTab(portfolio) {
   }
 
   if (!dailyReturns || dailyReturns.length < 20) {
-    statusEl.textContent = "Datos históricos insuficientes. Verifica que el servidor esté corriendo: python api.py";
+    statusEl.textContent = "Datos históricos insuficientes para calcular riesgo.";
     return;
   }
 
@@ -6162,8 +6451,8 @@ const translations = {
     nav_markets: "Mercados",
     nav_settings: "Ajustes",
     sidebar_back: "Volver a landing",
-    sidebar_logout: "Cerrar sesion",
-    settings_session_title: "Datos de sesion",
+    sidebar_logout: "Cerrar sesión",
+    settings_session_title: "Datos de sesión",
     settings_session_sub: "Resumen del usuario",
     settings_email_label: "Correo",
     settings_plan_label: "Plan",
@@ -6364,6 +6653,181 @@ changePasswordForm.addEventListener("submit", async e => {
   }
 });
 
+// ── Two-Factor Auth management (Settings section) ────────────────────────────
+(function init2FASettings() {
+  const statusEl  = document.getElementById("twoFaStatus");
+  const actionsEl = document.getElementById("twoFaActions");
+
+  function makeOtpBoxListeners(boxes, syncFn, clearFn) {
+    boxes.forEach((box, i) => {
+      box.addEventListener("input", () => {
+        box.value = box.value.replace(/\D/g, "").slice(-1);
+        clearFn();
+        if (box.value && i < 5) boxes[i + 1].focus();
+        syncFn();
+      });
+      box.addEventListener("keydown", e => {
+        if (e.key === "Backspace" && !box.value && i > 0) boxes[i - 1].focus();
+        else if (e.key === "ArrowLeft"  && i > 0) boxes[i - 1].focus();
+        else if (e.key === "ArrowRight" && i < 5) boxes[i + 1].focus();
+      });
+      box.addEventListener("paste", e => {
+        e.preventDefault();
+        const digits = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+        digits.split("").forEach((d, j) => { if (boxes[j]) boxes[j].value = d; });
+        clearFn();
+        syncFn();
+        const next = boxes.findIndex(b => !b.value);
+        (next === -1 ? boxes[5] : boxes[next]).focus();
+      });
+    });
+  }
+
+  async function refresh2FAStatus() {
+    const session = window.BlackPortfolioAuth.getSession();
+    if (!session || session.isDemo) {
+      statusEl.textContent = "El usuario demo no requiere 2FA.";
+      actionsEl.innerHTML = "";
+      return;
+    }
+
+    const enabled = await window.BlackPortfolioAuth.isTwoFactorEnabled(session.id);
+
+    if (enabled) {
+      statusEl.innerHTML = '<span style="color:var(--success)">● Activo</span> — Tu cuenta está protegida con Google Authenticator.';
+      actionsEl.innerHTML = '<button id="disable2FABtn" class="button secondary" type="button" style="color:#ff8ca4;border-color:#ff8ca4">Desactivar 2FA</button>';
+      document.getElementById("disable2FABtn").addEventListener("click", openDisableModal);
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--warning)">● Inactivo</span> — Tu cuenta no tiene verificación en dos pasos.';
+      actionsEl.innerHTML = '<button id="enable2FABtn" class="button primary" type="button">Activar Google Authenticator</button>';
+      document.getElementById("enable2FABtn").addEventListener("click", openSetupModal);
+    }
+  }
+
+  function openSetupModal() {
+    const modal     = document.getElementById("mainTotpSetupModal");
+    const loading   = document.getElementById("mainTotpLoading");
+    const content   = document.getElementById("mainTotpContent");
+    const qrImg     = document.getElementById("mainTotpQrImg");
+    const manualKey = document.getElementById("mainTotpManualKey");
+    const grid      = document.getElementById("mainTotpOtpGrid");
+    const verifyBtn = document.getElementById("mainTotpVerifyBtn");
+    const cancelBtn = document.getElementById("mainTotpCancelBtn");
+    const msg       = document.getElementById("mainTotpMsg");
+    const boxes     = Array.from(grid.querySelectorAll(".otp-box"));
+
+    boxes.forEach(b => { b.value = ""; b.classList.remove("otp-box--complete", "otp-box--error"); });
+    msg.textContent = "";
+    msg.className = "totp-setup-msg";
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = "Activar 2FA";
+    modal.classList.remove("hidden");
+    loading.classList.remove("hidden");
+    content.classList.add("hidden");
+
+    window.BlackPortfolioAuth.setupTwoFactor().then(result => {
+      loading.classList.add("hidden");
+      if (!result.ok) {
+        content.classList.remove("hidden");
+        msg.textContent = "Error al generar el QR. Intenta de nuevo.";
+        msg.className = "totp-setup-msg form-message error";
+        return;
+      }
+      if (typeof QRCode !== "undefined") {
+        QRCode.toDataURL(result.otpauthUri, { width: 200, margin: 2 }, function(err, url) {
+          qrImg.src = err ? "" : url;
+        });
+      } else {
+        qrImg.style.display = "none";
+      }
+      manualKey.textContent = result.manualKey;
+      content.classList.remove("hidden");
+    });
+
+    makeOtpBoxListeners(boxes,
+      () => { verifyBtn.disabled = !boxes.every(b => b.value !== ""); },
+      () => { msg.textContent = ""; msg.className = "totp-setup-msg"; boxes.forEach(b => b.classList.remove("otp-box--error")); }
+    );
+
+    verifyBtn.onclick = async () => {
+      const code = boxes.map(b => b.value).join("");
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = "Verificando…";
+
+      const result = await window.BlackPortfolioAuth.verifyTwoFactorSetup(code);
+      if (result.ok) {
+        msg.textContent = "✓ 2FA activado correctamente.";
+        msg.className = "totp-setup-msg form-message success";
+        setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); }, 1200);
+        return;
+      }
+
+      msg.textContent = result.error || "Código incorrecto.";
+      msg.className = "totp-setup-msg form-message error";
+      boxes.forEach(b => { b.value = ""; b.classList.add("otp-box--error"); });
+      verifyBtn.textContent = "Activar 2FA";
+      verifyBtn.disabled = true;
+      boxes[0].focus();
+    };
+
+    cancelBtn.onclick = () => modal.classList.add("hidden");
+  }
+
+  function openDisableModal() {
+    const modal      = document.getElementById("mainTotpDisableModal");
+    const grid       = document.getElementById("mainDisableOtpGrid");
+    const confirmBtn = document.getElementById("mainDisableConfirmBtn");
+    const cancelBtn  = document.getElementById("mainDisableCancelBtn");
+    const msg        = document.getElementById("mainDisableMsg");
+    const boxes      = Array.from(grid.querySelectorAll(".otp-box"));
+
+    boxes.forEach(b => { b.value = ""; b.classList.remove("otp-box--complete", "otp-box--error"); });
+    msg.textContent = "";
+    msg.className = "totp-setup-msg";
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Confirmar desactivación";
+    modal.classList.remove("hidden");
+
+    makeOtpBoxListeners(boxes,
+      () => { confirmBtn.disabled = !boxes.every(b => b.value !== ""); },
+      () => { msg.textContent = ""; msg.className = "totp-setup-msg"; boxes.forEach(b => b.classList.remove("otp-box--error")); }
+    );
+
+    confirmBtn.onclick = async () => {
+      const code = boxes.map(b => b.value).join("");
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Desactivando…";
+
+      const result = await window.BlackPortfolioAuth.disableTwoFactor(code);
+      if (result.ok) {
+        msg.textContent = "2FA desactivado.";
+        msg.className = "totp-setup-msg form-message success";
+        setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); }, 1000);
+        return;
+      }
+
+      msg.textContent = result.error || "Código incorrecto.";
+      msg.className = "totp-setup-msg form-message error";
+      boxes.forEach(b => { b.value = ""; b.classList.add("otp-box--error"); });
+      confirmBtn.textContent = "Confirmar desactivación";
+      confirmBtn.disabled = true;
+      boxes[0].focus();
+    };
+
+    cancelBtn.onclick = () => modal.classList.add("hidden");
+  }
+
+  // Load 2FA status when user navigates to settings
+  document.querySelectorAll(".dashboard-nav-item[data-section='settings']").forEach(btn => {
+    btn.addEventListener("click", refresh2FAStatus);
+  });
+
+  // Also load if settings is the active section on init
+  if (document.getElementById("section-settings")?.classList.contains("active")) {
+    refresh2FAStatus();
+  }
+})();
+
 // ── Hub: customizable home with spaces + free-drag widgets ───────────────
 (function initHub() {
   const tabsEl = document.getElementById("hubTabs");
@@ -6394,7 +6858,40 @@ changePasswordForm.addEventListener("submit", async e => {
     } catch {}
     return DEFAULT_STATE();
   }
-  function saveHubState() { localStorage.setItem(hubStorageKey, JSON.stringify(state)); }
+  let _hubSyncTimer = null;
+  async function pushHubStateToCloud(s) {
+    try {
+      const db = window.BlackPortfolioAuth?.db;
+      const session = window.BlackPortfolioAuth?.getSession();
+      if (!db || !session?.id || session.id === "anonymous") return;
+      await db.collection("hubState").doc(session.id).set({
+        data: s,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (_) {}
+  }
+  async function syncHubStateFromCloud() {
+    try {
+      const db = window.BlackPortfolioAuth?.db;
+      const session = window.BlackPortfolioAuth?.getSession();
+      if (!db || !session?.id || session.id === "anonymous") return false;
+      const doc = await db.collection("hubState").doc(session.id).get();
+      if (!doc.exists) return false;
+      const cloudData = doc.data()?.data;
+      if (!cloudData || !Array.isArray(cloudData.spaces) || !cloudData.spaces.length) return false;
+      if (JSON.stringify(cloudData) !== JSON.stringify(state)) {
+        state = cloudData;
+        localStorage.setItem(hubStorageKey, JSON.stringify(state));
+        return true;
+      }
+      return false;
+    } catch (_) { return false; }
+  }
+  function saveHubState() {
+    localStorage.setItem(hubStorageKey, JSON.stringify(state));
+    if (_hubSyncTimer) clearTimeout(_hubSyncTimer);
+    _hubSyncTimer = setTimeout(() => pushHubStateToCloud(state), 1500);
+  }
   function activeSpace() { return state.spaces.find(s => s.id === state.activeSpaceId) || state.spaces[0]; }
   function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -6481,7 +6978,9 @@ changePasswordForm.addEventListener("submit", async e => {
       chart:     { w: 380, h: 280, title: "AAPL", config: { symbol: "AAPL", range: "6mo", interval: "1d" } },
       watchlist: { w: 320, h: 320, title: "Lista de seguimiento", config: { symbols: ["AAPL", "MSFT", "NVDA"] } },
       calendar:  { w: 380, h: 360, title: "Calendario de eventos", config: { tab: "earnings" } },
-      note:      { w: 260, h: 180, title: "Nota", config: { text: "Escribe aquí…" } }
+      note:      { w: 260, h: 180, title: "Nota", config: { text: "Escribe aquí…" } },
+      heatmap:   { w: 660, h: 440, title: "Mapa de calor", config: { index: "SP500", sector: "Todos" } },
+      portfolio: { w: 340, h: 320, title: "Resumen de cartera", config: { portfolioId: null } }
     }[type];
     if (!defaults) return;
     const offset = sp.widgets.length * 24;
@@ -6563,7 +7062,7 @@ changePasswordForm.addEventListener("submit", async e => {
 
     const body = document.createElement("div");
     body.className = "hub-widget-body";
-    if (widget.type === "chart" || widget.type === "calendar") body.classList.add("no-padding");
+    if (widget.type === "chart" || widget.type === "calendar" || widget.type === "heatmap") body.classList.add("no-padding");
     el.appendChild(body);
 
     const resize = document.createElement("div");
@@ -6647,6 +7146,8 @@ changePasswordForm.addEventListener("submit", async e => {
     if (widget.type === "watchlist") return renderWatchlistWidget(widget, body, ref);
     if (widget.type === "calendar") return renderCalendarWidget(widget, body, ref);
     if (widget.type === "note") return renderNoteWidget(widget, body, ref);
+    if (widget.type === "heatmap") return renderHeatmapWidget(widget, body, ref);
+    if (widget.type === "portfolio") return renderPortfolioWidget(widget, body, ref);
   }
 
   // Chart widget
@@ -6655,12 +7156,25 @@ changePasswordForm.addEventListener("submit", async e => {
     meta.className = "hw-chart-meta";
     meta.innerHTML = `<span class="hw-chart-price">—</span><span class="hw-chart-change">—</span>`;
     const inputBar = document.createElement("div");
-    inputBar.style.cssText = "display:flex;gap:6px;padding:0 12px 6px;";
+    inputBar.style.cssText = "display:flex;gap:6px;padding:0 12px 6px;align-items:flex-start;";
+
+    // Wrapper for ticker input + suggestions dropdown
+    const tickerWrap = document.createElement("div");
+    tickerWrap.style.cssText = "flex:1;position:relative;";
+
     const tickerInp = document.createElement("input");
     tickerInp.type = "text";
     tickerInp.value = widget.config.symbol;
-    tickerInp.placeholder = "Ticker";
-    tickerInp.style.cssText = "flex:1;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 8px;color:inherit;font-size:11px;text-transform:uppercase;";
+    tickerInp.placeholder = "Buscar ticker…";
+    tickerInp.style.cssText = "width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 8px;color:inherit;font-size:11px;box-sizing:border-box;";
+
+    const suggestionsEl = document.createElement("div");
+    suggestionsEl.className = "hw-ticker-suggestions hidden";
+    suggestionsEl.style.cssText = "position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:220px;overflow-y:auto;background:rgba(10,10,12,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:10px;z-index:9999;padding:4px;";
+
+    tickerWrap.appendChild(tickerInp);
+    tickerWrap.appendChild(suggestionsEl);
+
     const rangeSel = document.createElement("select");
     rangeSel.style.cssText = "background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 6px;color:inherit;font-size:11px;";
     [["1mo","1d","1M"],["6mo","1d","6M"],["1y","1wk","1Y"],["5y","1mo","5Y"]].forEach(([r, i, l]) => {
@@ -6669,7 +7183,7 @@ changePasswordForm.addEventListener("submit", async e => {
       if (r === widget.config.range) o.selected = true;
       rangeSel.appendChild(o);
     });
-    inputBar.appendChild(tickerInp);
+    inputBar.appendChild(tickerWrap);
     inputBar.appendChild(rangeSel);
     body.appendChild(meta);
     body.appendChild(inputBar);
@@ -6682,6 +7196,79 @@ changePasswordForm.addEventListener("submit", async e => {
 
     let chart = null;
     let series = null;
+    let hwSuggestDebounce = null;
+    let hwSuggestAbort = null;
+
+    function hideSuggestions() {
+      suggestionsEl.innerHTML = "";
+      suggestionsEl.classList.add("hidden");
+    }
+
+    function applySymbol(symbol, name) {
+      widget.config.symbol = symbol;
+      tickerInp.value = symbol;
+      // Use the friendly name as the widget title
+      const displayName = name || symbol;
+      widget.title = displayName;
+      widget.config.displayName = displayName;
+      const titleEl = ref.el.querySelector(".hub-widget-title");
+      if (titleEl) titleEl.value = displayName;
+      hideSuggestions();
+      saveHubState();
+      fetchAndDraw();
+    }
+
+    function showSuggestions(items) {
+      if (!items.length) { hideSuggestions(); return; }
+      suggestionsEl.innerHTML = items.map(item => `
+        <button type="button" data-symbol="${item.symbol}" data-name="${item.name.replace(/"/g,'&quot;')}"
+          style="width:100%;display:flex;align-items:center;gap:8px;text-align:left;padding:6px 10px;border-radius:8px;background:transparent;border:none;color:inherit;cursor:pointer;font-size:11px;">
+          <div style="flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:rgba(111,134,255,0.2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#6f86ff;">${item.symbol.slice(0,2)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;color:#fff;">${item.symbol}</div>
+            <div style="color:#9aa3b8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
+          </div>
+          <div style="color:#6f86ff;font-size:10px;flex-shrink:0;">${item.exchange}</div>
+        </button>`).join("");
+      suggestionsEl.classList.remove("hidden");
+      suggestionsEl.querySelectorAll("button[data-symbol]").forEach(btn => {
+        btn.addEventListener("mousedown", e => {
+          e.preventDefault();
+          applySymbol(btn.dataset.symbol, btn.dataset.name);
+        });
+        btn.addEventListener("mouseover", () => { btn.style.background = "rgba(111,134,255,0.1)"; });
+        btn.addEventListener("mouseout", () => { btn.style.background = "transparent"; });
+      });
+    }
+
+    tickerInp.addEventListener("mousedown", e => e.stopPropagation());
+    tickerInp.addEventListener("input", () => {
+      const q = tickerInp.value.trim();
+      if (hwSuggestDebounce) clearTimeout(hwSuggestDebounce);
+      if (!q) { hideSuggestions(); return; }
+      hwSuggestDebounce = setTimeout(async () => {
+        try {
+          if (hwSuggestAbort) hwSuggestAbort.abort();
+          hwSuggestAbort = new AbortController();
+          const res = await fetch(getYahooSearchUrl(q), { signal: hwSuggestAbort.signal });
+          if (!res.ok) return;
+          const payload = await res.json();
+          const items = (payload.quotes || [])
+            .filter(qt => qt.symbol && qt.isYahooFinance)
+            .slice(0, 6)
+            .map(qt => ({ symbol: qt.symbol, name: qt.longname || qt.shortname || qt.symbol, exchange: qt.exchDisp || qt.exchange || "" }));
+          showSuggestions(items);
+        } catch (err) { if (err.name !== "AbortError") hideSuggestions(); }
+      }, 280);
+    });
+    tickerInp.addEventListener("blur", () => { setTimeout(hideSuggestions, 150); });
+    tickerInp.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        const sym = tickerInp.value.trim().toUpperCase() || "AAPL";
+        applySymbol(sym, null);
+      }
+      if (e.key === "Escape") hideSuggestions();
+    });
 
     function makeChart() {
       if (chart) try { chart.remove(); } catch {}
@@ -6731,15 +7318,6 @@ changePasswordForm.addEventListener("submit", async e => {
       }
     }
 
-    tickerInp.addEventListener("change", () => {
-      widget.config.symbol = tickerInp.value.trim().toUpperCase() || "AAPL";
-      tickerInp.value = widget.config.symbol;
-      widget.title = widget.config.symbol;
-      const titleEl = ref.el.querySelector(".hub-widget-title");
-      if (titleEl) titleEl.value = widget.config.symbol;
-      saveHubState();
-      fetchAndDraw();
-    });
     rangeSel.addEventListener("change", () => {
       const [r, i] = rangeSel.value.split("|");
       widget.config.range = r; widget.config.interval = i;
@@ -6747,38 +7325,192 @@ changePasswordForm.addEventListener("submit", async e => {
       fetchAndDraw();
     });
 
-    requestAnimationFrame(() => { makeChart(); fetchAndDraw(); });
+    // Restore display name in title if already stored
+    requestAnimationFrame(() => {
+      if (widget.config.displayName) {
+        const titleEl = ref.el.querySelector(".hub-widget-title");
+        if (titleEl && titleEl.value === widget.config.symbol) titleEl.value = widget.config.displayName;
+        widget.title = widget.config.displayName;
+      }
+      makeChart();
+      fetchAndDraw();
+    });
     ref.refresh = fetchAndDraw;
     ref.onResize = () => {
       if (chart) chart.applyOptions({ width: chartHost.clientWidth, height: chartHost.clientHeight });
     };
     const interval = setInterval(fetchAndDraw, 60000);
-    ref.cleanup = () => { clearInterval(interval); if (chart) try { chart.remove(); } catch {} };
+    ref.cleanup = () => {
+      clearInterval(interval);
+      if (hwSuggestDebounce) clearTimeout(hwSuggestDebounce);
+      if (hwSuggestAbort) hwSuggestAbort.abort();
+      if (chart) try { chart.remove(); } catch {}
+    };
   }
 
   // Watchlist widget
   function renderWatchlistWidget(widget, body, ref) {
-    const adder = document.createElement("div");
-    adder.className = "hw-watchlist-add";
+    // Init column config for existing widgets that were saved without it
+    if (!widget.config.columns) {
+      widget.config.columns = { ytd: false, mktcap: false };
+    }
+
+    // ── Toolbar: input + add + config ─────────────────────────────────
+    const toolbar = document.createElement("div");
+    toolbar.className = "hw-watchlist-toolbar";
+
     const inp = document.createElement("input");
     inp.placeholder = "Agregar ticker (ej. TSLA)";
     inp.maxLength = 12;
+
     const addBtn = document.createElement("button");
     addBtn.type = "button"; addBtn.textContent = "+";
-    adder.appendChild(inp); adder.appendChild(addBtn);
-    body.appendChild(adder);
+    addBtn.className = "hw-wl-add-btn";
 
+    const cfgBtn = document.createElement("button");
+    cfgBtn.type = "button"; cfgBtn.className = "hw-wl-cfg-btn";
+    cfgBtn.title = "Configurar columnas";
+    cfgBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+    toolbar.appendChild(inp);
+    toolbar.appendChild(addBtn);
+    toolbar.appendChild(cfgBtn);
+    body.appendChild(toolbar);
+
+    // ── Inline config section (toggles on gear click) ──────────────────
+    const cfgSection = document.createElement("div");
+    cfgSection.className = "hw-wl-cfg-section hidden";
+    cfgSection.innerHTML = `
+      <div class="hw-wl-cfg-title">Columnas visibles</div>
+      <label class="hw-wl-cfg-row hw-wl-cfg-disabled">
+        <span style="font-size:10px;color:#6f86ff">✓</span><span>Precio</span>
+        <span class="hw-wl-cfg-lock">siempre</span>
+      </label>
+      <label class="hw-wl-cfg-row hw-wl-cfg-disabled">
+        <span style="font-size:10px;color:#6f86ff">✓</span><span>Cambio diario</span>
+        <span class="hw-wl-cfg-lock">siempre</span>
+      </label>
+      <label class="hw-wl-cfg-row">
+        <input type="checkbox" data-col="ytd" ${widget.config.columns.ytd ? "checked" : ""}>
+        <span>YTD Return</span>
+      </label>
+      <label class="hw-wl-cfg-row">
+        <input type="checkbox" data-col="mktcap" ${widget.config.columns.mktcap ? "checked" : ""}>
+        <span>Market Cap</span>
+      </label>`;
+    cfgSection.addEventListener("mousedown", e => e.stopPropagation());
+    body.appendChild(cfgSection);
+
+    cfgBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cfgSection.classList.toggle("hidden");
+    });
+
+    cfgSection.querySelector('[data-col="ytd"]').addEventListener("change", (e) => {
+      widget.config.columns.ytd = e.target.checked;
+      saveHubState();
+      if (e.target.checked) fetchOptional(); else render();
+    });
+    cfgSection.querySelector('[data-col="mktcap"]').addEventListener("change", (e) => {
+      widget.config.columns.mktcap = e.target.checked;
+      saveHubState();
+      if (e.target.checked) fetchOptional(); else render();
+    });
+
+    // ── List container ─────────────────────────────────────────────────
     const list = document.createElement("div");
     list.className = "hw-watchlist";
     body.appendChild(list);
 
+    // ── Helpers ────────────────────────────────────────────────────────
+    const PALETTE = [
+      ["rgba(111,134,255,0.8)", "rgba(111,134,255,0.45)"],
+      ["rgba(159,122,234,0.8)", "rgba(159,122,234,0.45)"],
+      ["rgba(0,186,136,0.8)",   "rgba(0,186,136,0.45)"],
+      ["rgba(245,158,11,0.8)",  "rgba(245,158,11,0.45)"],
+      ["rgba(239,68,68,0.75)",  "rgba(239,68,68,0.4)"],
+      ["rgba(14,165,233,0.8)",  "rgba(14,165,233,0.45)"],
+    ];
+    function tickerBg(sym) {
+      const h = sym.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+      return PALETTE[h % PALETTE.length];
+    }
+    const INDEX_FLAGS = {
+      '^GSPC':'us','^SPX':'us','^DJI':'us','^IXIC':'us','^NDX':'us','^RUT':'us','^VIX':'us','^TNX':'us','^TYX':'us',
+      '^MXX':'mx','^IPC':'mx',
+      '^FTSE':'gb',
+      '^DAX':'de',
+      '^FCHI':'fr',
+      '^IBEX':'es','^IBEX35':'es',
+      '^AEX':'nl',
+      '^N225':'jp',
+      '^HSI':'hk',
+      '^SSEC':'cn','^SSE':'cn',
+      '^BVSP':'br',
+      '^MERV':'ar',
+      '^IPSA':'cl',
+      '^KS11':'kr','^KOSPI':'kr',
+      '^STI':'sg',
+      '^TWII':'tw',
+      '^NSEI':'in','^BSESN':'in',
+      '^AXJO':'au','^AORD':'au',
+      '^NZ50':'nz',
+      '^FTMIB':'it',
+      '^ATX':'at',
+      '^OMXS30':'se',
+      '^OSEBX':'no',
+      '^OMXC25':'dk',
+      '^OMXH25':'fi','^HEX':'fi',
+      '^SMI':'ch',
+      '^JSE':'za','^J203':'za',
+      '^SET':'th',
+      '^JKSE':'id',
+      '^KLSE':'my',
+      '^PSI20':'pt',
+      '^BEL20':'be',
+      '^XU100':'tr',
+      '^TA125':'il',
+      '^CASE30':'eg',
+    };
+    function buildLogoHtml(sym, bg, border, initials) {
+      const esc = initials.replace(/'/g, "\\'");
+      const bgEsc = bg.replace(/'/g, "\\'");
+      if (sym.startsWith('^')) {
+        const cc = INDEX_FLAGS[sym];
+        if (cc) {
+          return `<div class="hw-wl-logo hw-wl-logo--flag" style="border-color:${border}">` +
+            `<img src="https://flagcdn.com/w40/${cc}.png" alt="" ` +
+            `onerror="this.parentElement.className='hw-wl-logo';this.parentElement.style.background='${bgEsc}';this.parentElement.style.borderColor='${border}';this.parentElement.textContent='${esc}'">` +
+            `</div>`;
+        }
+      } else {
+        return `<div class="hw-wl-logo hw-wl-logo--img" style="border-color:${border}">` +
+          `<img src="https://assets.parqet.com/logos/symbol/${sym}?format=png" alt="" ` +
+          `onerror="this.parentElement.className='hw-wl-logo';this.parentElement.style.background='${bgEsc}';this.parentElement.style.borderColor='${border}';this.parentElement.style.padding='';this.parentElement.textContent='${esc}'">` +
+          `</div>`;
+      }
+      return `<div class="hw-wl-logo" style="background:${bg};border-color:${border}">${initials}</div>`;
+    }
+    function fmtPrice(p) {
+      if (p == null) return "—";
+      return p >= 1000 ? p.toFixed(0) : p >= 10 ? p.toFixed(2) : p.toFixed(3);
+    }
+    function fmtMktCap(v) {
+      if (!v || v <= 0) return "—";
+      if (v >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
+      if (v >= 1e9)  return `$${(v / 1e9).toFixed(1)}B`;
+      if (v >= 1e6)  return `$${(v / 1e6).toFixed(1)}M`;
+      return `$${Math.round(v).toLocaleString()}`;
+    }
+
+    // ── Symbol add logic ───────────────────────────────────────────────
     function addSym() {
       const s = inp.value.trim().toUpperCase();
       if (!s) return;
       if (!widget.config.symbols.includes(s)) {
         widget.config.symbols.push(s);
         saveHubState();
-        render();
+        fetchPrices();
       }
       inp.value = "";
     }
@@ -6786,48 +7518,132 @@ changePasswordForm.addEventListener("submit", async e => {
     inp.addEventListener("keydown", e => { if (e.key === "Enter") addSym(); });
     inp.addEventListener("mousedown", e => e.stopPropagation());
 
-    let cache = {}; // sym → { price, prev }
+    // ── Cache & data fetching ──────────────────────────────────────────
+    let cache = {}; // sym → { price, prev, name, ytdReturn, ytdFetched, mktcap, mktcapFetched }
 
     async function fetchPrices() {
-      await Promise.all(widget.config.symbols.map(async sym => {
+      const syms = widget.config.symbols;
+      if (!syms.length) { render(); return; }
+      await Promise.all(syms.map(async sym => {
         try {
           const r = await fetch(`${API_BASE_URL}/chart/${encodeURIComponent(sym)}?range=5d&interval=1d`);
           const j = await r.json();
-          const result = j.chart && j.chart.result && j.chart.result[0];
+          const result = j.chart?.result?.[0];
           if (!result) return;
           const closes = (result.indicators?.quote?.[0]?.close || []).filter(v => v != null);
+          if (!cache[sym]) cache[sym] = {};
+          if (!cache[sym].name) cache[sym].name = result.meta?.shortName || null;
           if (closes.length >= 2) {
-            cache[sym] = { price: closes[closes.length - 1], prev: closes[closes.length - 2] };
+            cache[sym].price = closes[closes.length - 1];
+            cache[sym].prev  = closes[closes.length - 2];
           } else if (closes.length === 1) {
-            cache[sym] = { price: closes[0], prev: closes[0] };
+            cache[sym].price = closes[0];
+            cache[sym].prev  = closes[0];
           }
         } catch {}
       }));
+      await fetchOptional();
+    }
+
+    async function fetchOptional() {
+      const syms = widget.config.symbols;
+      const cols = widget.config.columns;
+      const tasks = [];
+
+      if (cols.ytd) {
+        tasks.push(...syms.map(async sym => {
+          if (cache[sym]?.ytdFetched) return;
+          try {
+            const r = await fetch(`${API_BASE_URL}/chart/${encodeURIComponent(sym)}?range=ytd&interval=1mo`);
+            const j = await r.json();
+            const result = j.chart?.result?.[0];
+            if (!result) return;
+            const closes = (result.indicators?.quote?.[0]?.close || []).filter(v => v != null);
+            if (!cache[sym]) cache[sym] = {};
+            if (closes.length >= 2) {
+              cache[sym].ytdReturn = ((closes[closes.length - 1] - closes[0]) / closes[0]) * 100;
+            }
+            cache[sym].ytdFetched = true;
+          } catch {}
+        }));
+      }
+
+      if (cols.mktcap) {
+        tasks.push(...syms.map(async sym => {
+          if (cache[sym]?.mktcapFetched) return;
+          try {
+            const r = await fetch(`${API_BASE_URL}/info/${encodeURIComponent(sym)}`);
+            const j = await r.json();
+            if (!cache[sym]) cache[sym] = {};
+            cache[sym].mktcap = j.marketCap || null;
+            if (!cache[sym].name) cache[sym].name = j.shortName || j.longName || null;
+            cache[sym].mktcapFetched = true;
+          } catch {}
+        }));
+      }
+
+      await Promise.all(tasks);
       render();
     }
 
+    // ── Render ─────────────────────────────────────────────────────────
     function render() {
       list.innerHTML = "";
       if (!widget.config.symbols.length) {
-        list.innerHTML = `<div style="opacity:0.5;font-size:11px;padding:8px;text-align:center;">Sin tickers. Agrega uno arriba.</div>`;
+        list.innerHTML = `<div class="hw-wl-empty">Sin tickers. Agrega uno arriba.</div>`;
         return;
       }
+      const cols = widget.config.columns;
       widget.config.symbols.forEach(sym => {
         const row = document.createElement("div");
         row.className = "hw-watchlist-row";
-        const c = cache[sym];
-        let priceTxt = "—", chgTxt = "—", chgCls = "";
-        if (c) {
-          priceTxt = c.price.toFixed(2);
-          const ch = ((c.price - c.prev) / c.prev) * 100;
-          chgCls = ch >= 0 ? "up" : "down";
-          chgTxt = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%";
+
+        const c = cache[sym] || {};
+        const priceStr = fmtPrice(c.price);
+        let chgPct = null;
+        if (c.price != null && c.prev != null && c.prev > 0) {
+          chgPct = ((c.price - c.prev) / c.prev) * 100;
         }
-        row.innerHTML = `<span class="hw-watchlist-sym">${sym}</span><span class="hw-watchlist-price">${priceTxt}</span><span class="hw-watchlist-chg ${chgCls}">${chgTxt}</span>`;
+        const chgStr = chgPct != null ? (chgPct >= 0 ? "+" : "") + chgPct.toFixed(2) + "%" : "—";
+        const chgCls = chgPct == null ? "neutral" : chgPct >= 0 ? "positive" : "negative";
+
+        const [bg, border] = tickerBg(sym);
+        const initials = sym.replace(/[^A-Z]/g, "").slice(0, 2) || sym.slice(0, 2).toUpperCase();
+
+        let html = buildLogoHtml(sym, bg, border, initials) + `
+          <div class="hw-wl-info">
+            <span class="hw-wl-sym">${sym}</span>
+            ${c.name ? `<span class="hw-wl-name">${c.name}</span>` : ""}
+          </div>`;
+
+        if (cols.ytd) {
+          const ytdCls = c.ytdReturn == null ? "neutral" : c.ytdReturn >= 0 ? "positive" : "negative";
+          const ytdStr = c.ytdReturn != null
+            ? "YTD " + (c.ytdReturn >= 0 ? "+" : "") + c.ytdReturn.toFixed(1) + "%"
+            : "YTD —";
+          html += `<span class="hw-wl-badge ${ytdCls}">${ytdStr}</span>`;
+        }
+
+        if (cols.mktcap) {
+          html += `<div class="hw-wl-col">
+            <span class="hw-wl-mktcap-val">${fmtMktCap(c.mktcap)}</span>
+            <span class="hw-wl-col-label">Cap</span>
+          </div>`;
+        }
+
+        html += `<div class="hw-wl-col">
+          <span class="hw-wl-price-val">${priceStr}</span>
+          <span class="hw-wl-col-label">Precio</span>
+        </div>
+        <span class="hw-wl-badge ${chgCls}">${chgStr}</span>`;
+
+        row.innerHTML = html;
+
         const del = document.createElement("button");
-        del.className = "hw-watchlist-del"; del.type = "button"; del.innerHTML = "×";
+        del.className = "hw-wl-del"; del.type = "button"; del.innerHTML = "×";
         del.addEventListener("click", () => {
           widget.config.symbols = widget.config.symbols.filter(s => s !== sym);
+          delete cache[sym];
           saveHubState();
           render();
         });
@@ -6942,6 +7758,1299 @@ changePasswordForm.addEventListener("submit", async e => {
     body.appendChild(ta);
   }
 
+  // Heatmap widget – native canvas treemap, multi-index, zoom+pan
+  function renderHeatmapWidget(widget, body, ref) {
+    const INDICES = {
+      SP500: { label: "S&P 500", cur: "$", stocks: [
+        // ── Tecnología ────────────────────────────────────────────────
+        { s:"AAPL",  d:"AAPL",  n:"Apple",                sec:"Tecnología",     w:7.5 },
+        { s:"NVDA",  d:"NVDA",  n:"NVIDIA",               sec:"Tecnología",     w:6.2 },
+        { s:"MSFT",  d:"MSFT",  n:"Microsoft",            sec:"Tecnología",     w:6.0 },
+        { s:"AVGO",  d:"AVGO",  n:"Broadcom",             sec:"Tecnología",     w:1.4 },
+        { s:"ORCL",  d:"ORCL",  n:"Oracle",               sec:"Tecnología",     w:0.8 },
+        { s:"NOW",   d:"NOW",   n:"ServiceNow",           sec:"Tecnología",     w:0.5 },
+        { s:"ACN",   d:"ACN",   n:"Accenture",            sec:"Tecnología",     w:0.5 },
+        { s:"AMD",   d:"AMD",   n:"AMD",                  sec:"Tecnología",     w:0.5 },
+        { s:"CRM",   d:"CRM",   n:"Salesforce",           sec:"Tecnología",     w:0.5 },
+        { s:"IBM",   d:"IBM",   n:"IBM",                  sec:"Tecnología",     w:0.45 },
+        { s:"INTU",  d:"INTU",  n:"Intuit",               sec:"Tecnología",     w:0.42 },
+        { s:"QCOM",  d:"QCOM",  n:"Qualcomm",             sec:"Tecnología",     w:0.40 },
+        { s:"TXN",   d:"TXN",   n:"Texas Instruments",    sec:"Tecnología",     w:0.38 },
+        { s:"AMAT",  d:"AMAT",  n:"Applied Materials",    sec:"Tecnología",     w:0.37 },
+        { s:"PANW",  d:"PANW",  n:"Palo Alto Networks",   sec:"Tecnología",     w:0.36 },
+        { s:"ANET",  d:"ANET",  n:"Arista Networks",      sec:"Tecnología",     w:0.28 },
+        { s:"CSCO",  d:"CSCO",  n:"Cisco",                sec:"Tecnología",     w:0.35 },
+        { s:"LRCX",  d:"LRCX",  n:"Lam Research",         sec:"Tecnología",     w:0.34 },
+        { s:"KLAC",  d:"KLAC",  n:"KLA Corp",             sec:"Tecnología",     w:0.33 },
+        { s:"MU",    d:"MU",    n:"Micron Technology",    sec:"Tecnología",     w:0.32 },
+        { s:"ADI",   d:"ADI",   n:"Analog Devices",       sec:"Tecnología",     w:0.30 },
+        { s:"SNPS",  d:"SNPS",  n:"Synopsys",             sec:"Tecnología",     w:0.28 },
+        { s:"CDNS",  d:"CDNS",  n:"Cadence Design",       sec:"Tecnología",     w:0.27 },
+        { s:"CRWD",  d:"CRWD",  n:"CrowdStrike",          sec:"Tecnología",     w:0.22 },
+        { s:"MSI",   d:"MSI",   n:"Motorola Solutions",   sec:"Tecnología",     w:0.18 },
+        { s:"INTC",  d:"INTC",  n:"Intel",                sec:"Tecnología",     w:0.17 },
+        { s:"FTNT",  d:"FTNT",  n:"Fortinet",             sec:"Tecnología",     w:0.16 },
+        { s:"ADSK",  d:"ADSK",  n:"Autodesk",             sec:"Tecnología",     w:0.14 },
+        { s:"ON",    d:"ON",    n:"ON Semiconductor",     sec:"Tecnología",     w:0.14 },
+        { s:"KEYS",  d:"KEYS",  n:"Keysight",             sec:"Tecnología",     w:0.14 },
+        { s:"CTSH",  d:"CTSH",  n:"Cognizant",            sec:"Tecnología",     w:0.13 },
+        { s:"MPWR",  d:"MPWR",  n:"Monolithic Power",     sec:"Tecnología",     w:0.12 },
+        { s:"HPQ",   d:"HPQ",   n:"HP Inc.",              sec:"Tecnología",     w:0.12 },
+        { s:"HPE",   d:"HPE",   n:"HP Enterprise",        sec:"Tecnología",     w:0.12 },
+        { s:"WDC",   d:"WDC",   n:"Western Digital",      sec:"Tecnología",     w:0.11 },
+        { s:"NTAP",  d:"NTAP",  n:"NetApp",               sec:"Tecnología",     w:0.11 },
+        { s:"ZBRA",  d:"ZBRA",  n:"Zebra Technologies",   sec:"Tecnología",     w:0.10 },
+        { s:"TER",   d:"TER",   n:"Teradyne",             sec:"Tecnología",     w:0.10 },
+        { s:"FSLR",  d:"FSLR",  n:"First Solar",          sec:"Tecnología",     w:0.09 },
+        { s:"ENPH",  d:"ENPH",  n:"Enphase Energy",       sec:"Tecnología",     w:0.08 },
+        { s:"CDW",   d:"CDW",   n:"CDW Corp",             sec:"Tecnología",     w:0.08 },
+        { s:"LDOS",  d:"LDOS",  n:"Leidos Holdings",      sec:"Tecnología",     w:0.08 },
+        { s:"TRMB",  d:"TRMB",  n:"Trimble",              sec:"Tecnología",     w:0.08 },
+        { s:"PAYX",  d:"PAYX",  n:"Paychex",              sec:"Tecnología",     w:0.08 },
+        { s:"BR",    d:"BR",    n:"Broadridge Financial",  sec:"Tecnología",     w:0.08 },
+        { s:"AKAM",  d:"AKAM",  n:"Akamai",               sec:"Tecnología",     w:0.08 },
+        { s:"VRSN",  d:"VRSN",  n:"VeriSign",             sec:"Tecnología",     w:0.08 },
+        { s:"JNPR",  d:"JNPR",  n:"Juniper Networks",     sec:"Tecnología",     w:0.07 },
+        { s:"FFIV",  d:"FFIV",  n:"F5 Inc.",              sec:"Tecnología",     w:0.07 },
+        { s:"PTC",   d:"PTC",   n:"PTC Inc.",             sec:"Tecnología",     w:0.07 },
+        { s:"TYL",   d:"TYL",   n:"Tyler Technologies",   sec:"Tecnología",     w:0.07 },
+        { s:"ANSS",  d:"ANSS",  n:"ANSYS",                sec:"Tecnología",     w:0.07 },
+        { s:"EPAM",  d:"EPAM",  n:"EPAM Systems",         sec:"Tecnología",     w:0.07 },
+        { s:"FI",    d:"FI",    n:"Fiserv",               sec:"Tecnología",     w:0.22 },
+        { s:"GDDY",  d:"GDDY",  n:"GoDaddy",              sec:"Tecnología",     w:0.07 },
+        { s:"PAYC",  d:"PAYC",  n:"Paycom Software",      sec:"Tecnología",     w:0.07 },
+        { s:"GEN",   d:"GEN",   n:"Gen Digital",          sec:"Tecnología",     w:0.06 },
+        { s:"SWKS",  d:"SWKS",  n:"Skyworks Solutions",   sec:"Tecnología",     w:0.10 },
+        // ── Comunicación ─────────────────────────────────────────────
+        { s:"META",  d:"META",  n:"Meta Platforms",       sec:"Comunicación",   w:2.9 },
+        { s:"GOOGL", d:"GOOGL", n:"Alphabet A",           sec:"Comunicación",   w:2.1 },
+        { s:"GOOG",  d:"GOOG",  n:"Alphabet C",           sec:"Comunicación",   w:1.8 },
+        { s:"NFLX",  d:"NFLX",  n:"Netflix",              sec:"Comunicación",   w:0.68 },
+        { s:"CMCSA", d:"CMCSA", n:"Comcast",              sec:"Comunicación",   w:0.35 },
+        { s:"T",     d:"T",     n:"AT&T",                 sec:"Comunicación",   w:0.42 },
+        { s:"VZ",    d:"VZ",    n:"Verizon",              sec:"Comunicación",   w:0.12 },
+        { s:"TMUS",  d:"TMUS",  n:"T-Mobile US",          sec:"Comunicación",   w:0.12 },
+        { s:"DIS",   d:"DIS",   n:"Walt Disney",          sec:"Comunicación",   w:0.24 },
+        { s:"CHTR",  d:"CHTR",  n:"Charter Comm.",        sec:"Comunicación",   w:0.16 },
+        { s:"EA",    d:"EA",    n:"Electronic Arts",      sec:"Comunicación",   w:0.14 },
+        { s:"TTWO",  d:"TTWO",  n:"Take-Two Interactive", sec:"Comunicación",   w:0.10 },
+        { s:"LYV",   d:"LYV",   n:"Live Nation",          sec:"Comunicación",   w:0.10 },
+        { s:"OMC",   d:"OMC",   n:"Omnicom",              sec:"Comunicación",   w:0.09 },
+        { s:"IPG",   d:"IPG",   n:"Interpublic",          sec:"Comunicación",   w:0.09 },
+        { s:"MTCH",  d:"MTCH",  n:"Match Group",          sec:"Comunicación",   w:0.09 },
+        { s:"FOXA",  d:"FOXA",  n:"Fox Corp A",           sec:"Comunicación",   w:0.08 },
+        { s:"FOX",   d:"FOX",   n:"Fox Corp B",           sec:"Comunicación",   w:0.08 },
+        { s:"NWSA",  d:"NWSA",  n:"News Corp A",          sec:"Comunicación",   w:0.08 },
+        { s:"WBD",   d:"WBD",   n:"Warner Bros. Discovery",sec:"Comunicación",  w:0.08 },
+        // ── Finanzas ─────────────────────────────────────────────────
+        { s:"BRK-B", d:"BRK.B", n:"Berkshire Hathaway",   sec:"Finanzas",       w:1.75 },
+        { s:"JPM",   d:"JPM",   n:"JPMorgan Chase",       sec:"Finanzas",       w:1.35 },
+        { s:"V",     d:"V",     n:"Visa",                 sec:"Finanzas",       w:0.95 },
+        { s:"MA",    d:"MA",    n:"Mastercard",           sec:"Finanzas",       w:0.88 },
+        { s:"GS",    d:"GS",    n:"Goldman Sachs",        sec:"Finanzas",       w:0.56 },
+        { s:"BAC",   d:"BAC",   n:"Bank of America",      sec:"Finanzas",       w:0.55 },
+        { s:"SPGI",  d:"SPGI",  n:"S&P Global",           sec:"Finanzas",       w:0.48 },
+        { s:"MS",    d:"MS",    n:"Morgan Stanley",       sec:"Finanzas",       w:0.46 },
+        { s:"AXP",   d:"AXP",   n:"American Express",     sec:"Finanzas",       w:0.44 },
+        { s:"BLK",   d:"BLK",   n:"BlackRock",            sec:"Finanzas",       w:0.42 },
+        { s:"WFC",   d:"WFC",   n:"Wells Fargo",          sec:"Finanzas",       w:0.40 },
+        { s:"CB",    d:"CB",    n:"Chubb",                sec:"Finanzas",       w:0.34 },
+        { s:"AON",   d:"AON",   n:"Aon",                  sec:"Finanzas",       w:0.32 },
+        { s:"MMC",   d:"MMC",   n:"Marsh McLennan",       sec:"Finanzas",       w:0.30 },
+        { s:"ICE",   d:"ICE",   n:"Intercontinental Exch",sec:"Finanzas",       w:0.30 },
+        { s:"SCHW",  d:"SCHW",  n:"Charles Schwab",       sec:"Finanzas",       w:0.30 },
+        { s:"CME",   d:"CME",   n:"CME Group",            sec:"Finanzas",       w:0.29 },
+        { s:"MCO",   d:"MCO",   n:"Moody's",              sec:"Finanzas",       w:0.26 },
+        { s:"PNC",   d:"PNC",   n:"PNC Financial",        sec:"Finanzas",       w:0.26 },
+        { s:"USB",   d:"USB",   n:"U.S. Bancorp",         sec:"Finanzas",       w:0.25 },
+        { s:"COF",   d:"COF",   n:"Capital One",          sec:"Finanzas",       w:0.22 },
+        { s:"TFC",   d:"TFC",   n:"Truist Financial",     sec:"Finanzas",       w:0.20 },
+        { s:"AJG",   d:"AJG",   n:"Arthur J. Gallagher",  sec:"Finanzas",       w:0.20 },
+        { s:"BK",    d:"BK",    n:"BNY Mellon",           sec:"Finanzas",       w:0.17 },
+        { s:"AFL",   d:"AFL",   n:"Aflac",                sec:"Finanzas",       w:0.17 },
+        { s:"AMP",   d:"AMP",   n:"Ameriprise Financial", sec:"Finanzas",       w:0.16 },
+        { s:"ALL",   d:"ALL",   n:"Allstate",             sec:"Finanzas",       w:0.16 },
+        { s:"AIG",   d:"AIG",   n:"American Intl Group",  sec:"Finanzas",       w:0.16 },
+        { s:"STT",   d:"STT",   n:"State Street",         sec:"Finanzas",       w:0.14 },
+        { s:"HIG",   d:"HIG",   n:"Hartford Financial",   sec:"Finanzas",       w:0.14 },
+        { s:"TROW",  d:"TROW",  n:"T. Rowe Price",        sec:"Finanzas",       w:0.13 },
+        { s:"PRU",   d:"PRU",   n:"Prudential Financial", sec:"Finanzas",       w:0.12 },
+        { s:"MET",   d:"MET",   n:"MetLife",              sec:"Finanzas",       w:0.12 },
+        { s:"WTW",   d:"WTW",   n:"Willis Towers Watson", sec:"Finanzas",       w:0.10 },
+        { s:"NDAQ",  d:"NDAQ",  n:"Nasdaq Inc.",          sec:"Finanzas",       w:0.09 },
+        { s:"CBOE",  d:"CBOE",  n:"Cboe Global Markets",  sec:"Finanzas",       w:0.09 },
+        { s:"RE",    d:"RE",    n:"Everest Re Group",     sec:"Finanzas",       w:0.09 },
+        { s:"CINF",  d:"CINF",  n:"Cincinnati Financial", sec:"Finanzas",       w:0.09 },
+        { s:"DFS",   d:"DFS",   n:"Discover Financial",   sec:"Finanzas",       w:0.09 },
+        { s:"GL",    d:"GL",    n:"Globe Life",           sec:"Finanzas",       w:0.09 },
+        { s:"L",     d:"L",     n:"Loews",                sec:"Finanzas",       w:0.09 },
+        { s:"PFG",   d:"PFG",   n:"Principal Financial",  sec:"Finanzas",       w:0.08 },
+        { s:"MTB",   d:"MTB",   n:"M&T Bank",             sec:"Finanzas",       w:0.08 },
+        { s:"RF",    d:"RF",    n:"Regions Financial",    sec:"Finanzas",       w:0.08 },
+        { s:"FITB",  d:"FITB",  n:"Fifth Third Bancorp",  sec:"Finanzas",       w:0.08 },
+        { s:"HBAN",  d:"HBAN",  n:"Huntington Bancshares",sec:"Finanzas",       w:0.08 },
+        { s:"CFG",   d:"CFG",   n:"Citizens Financial",   sec:"Finanzas",       w:0.08 },
+        { s:"SYF",   d:"SYF",   n:"Synchrony Financial",  sec:"Finanzas",       w:0.07 },
+        { s:"IVZ",   d:"IVZ",   n:"Invesco",              sec:"Finanzas",       w:0.07 },
+        { s:"BEN",   d:"BEN",   n:"Franklin Resources",   sec:"Finanzas",       w:0.07 },
+        { s:"FDS",   d:"FDS",   n:"FactSet Research",     sec:"Finanzas",       w:0.07 },
+        { s:"MKTX",  d:"MKTX",  n:"MarketAxess",          sec:"Finanzas",       w:0.07 },
+        { s:"ALLY",  d:"ALLY",  n:"Ally Financial",       sec:"Finanzas",       w:0.07 },
+        { s:"KEY",   d:"KEY",   n:"KeyCorp",              sec:"Finanzas",       w:0.07 },
+        { s:"CMA",   d:"CMA",   n:"Comerica",             sec:"Finanzas",       w:0.06 },
+        { s:"ZION",  d:"ZION",  n:"Zions Bancorporation", sec:"Finanzas",       w:0.06 },
+        { s:"UNM",   d:"UNM",   n:"Unum Group",           sec:"Finanzas",       w:0.06 },
+        { s:"LNC",   d:"LNC",   n:"Lincoln National",     sec:"Finanzas",       w:0.06 },
+        // ── Salud ─────────────────────────────────────────────────────
+        { s:"LLY",   d:"LLY",   n:"Eli Lilly",            sec:"Salud",          w:1.20 },
+        { s:"UNH",   d:"UNH",   n:"UnitedHealth",         sec:"Salud",          w:0.85 },
+        { s:"ABBV",  d:"ABBV",  n:"AbbVie",               sec:"Salud",          w:0.62 },
+        { s:"JNJ",   d:"JNJ",   n:"Johnson & Johnson",    sec:"Salud",          w:0.62 },
+        { s:"ABT",   d:"ABT",   n:"Abbott Labs",          sec:"Salud",          w:0.55 },
+        { s:"MRK",   d:"MRK",   n:"Merck",                sec:"Salud",          w:0.55 },
+        { s:"ISRG",  d:"ISRG",  n:"Intuitive Surgical",   sec:"Salud",          w:0.48 },
+        { s:"BMY",   d:"BMY",   n:"Bristol-Myers Squibb", sec:"Salud",          w:0.26 },
+        { s:"PFE",   d:"PFE",   n:"Pfizer",               sec:"Salud",          w:0.26 },
+        { s:"AMGN",  d:"AMGN",  n:"Amgen",                sec:"Salud",          w:0.38 },
+        { s:"VRTX",  d:"VRTX",  n:"Vertex Pharma",        sec:"Salud",          w:0.35 },
+        { s:"REGN",  d:"REGN",  n:"Regeneron",            sec:"Salud",          w:0.30 },
+        { s:"GILD",  d:"GILD",  n:"Gilead Sciences",      sec:"Salud",          w:0.30 },
+        { s:"DHR",   d:"DHR",   n:"Danaher",              sec:"Salud",          w:0.35 },
+        { s:"BSX",   d:"BSX",   n:"Boston Scientific",    sec:"Salud",          w:0.34 },
+        { s:"SYK",   d:"SYK",   n:"Stryker",              sec:"Salud",          w:0.32 },
+        { s:"MDT",   d:"MDT",   n:"Medtronic",            sec:"Salud",          w:0.30 },
+        { s:"ELV",   d:"ELV",   n:"Elevance Health",      sec:"Salud",          w:0.24 },
+        { s:"CI",    d:"CI",    n:"Cigna",                sec:"Salud",          w:0.24 },
+        { s:"HCA",   d:"HCA",   n:"HCA Healthcare",       sec:"Salud",          w:0.24 },
+        { s:"ZTS",   d:"ZTS",   n:"Zoetis",               sec:"Salud",          w:0.20 },
+        { s:"GEHC",  d:"GEHC",  n:"GE HealthCare",        sec:"Salud",          w:0.18 },
+        { s:"A",     d:"A",     n:"Agilent Technologies", sec:"Salud",          w:0.16 },
+        { s:"IDXX",  d:"IDXX",  n:"IDEXX Laboratories",   sec:"Salud",          w:0.15 },
+        { s:"BDX",   d:"BDX",   n:"Becton Dickinson",     sec:"Salud",          w:0.16 },
+        { s:"BAX",   d:"BAX",   n:"Baxter",               sec:"Salud",          w:0.15 },
+        { s:"ZBH",   d:"ZBH",   n:"Zimmer Biomet",        sec:"Salud",          w:0.14 },
+        { s:"EW",    d:"EW",    n:"Edwards Lifesciences", sec:"Salud",          w:0.14 },
+        { s:"DXCM",  d:"DXCM",  n:"Dexcom",               sec:"Salud",          w:0.13 },
+        { s:"CVS",   d:"CVS",   n:"CVS Health",           sec:"Salud",          w:0.12 },
+        { s:"MCK",   d:"MCK",   n:"McKesson",             sec:"Salud",          w:0.12 },
+        { s:"IQV",   d:"IQV",   n:"IQVIA Holdings",       sec:"Salud",          w:0.12 },
+        { s:"BIIB",  d:"BIIB",  n:"Biogen",               sec:"Salud",          w:0.12 },
+        { s:"ABC",   d:"ABC",   n:"AmerisourceBergen",    sec:"Salud",          w:0.11 },
+        { s:"CAH",   d:"CAH",   n:"Cardinal Health",      sec:"Salud",          w:0.11 },
+        { s:"HOLX",  d:"HOLX",  n:"Hologic",              sec:"Salud",          w:0.11 },
+        { s:"RMD",   d:"RMD",   n:"ResMed",               sec:"Salud",          w:0.10 },
+        { s:"STE",   d:"STE",   n:"STERIS",               sec:"Salud",          w:0.10 },
+        { s:"DGX",   d:"DGX",   n:"Quest Diagnostics",    sec:"Salud",          w:0.10 },
+        { s:"LH",    d:"LH",    n:"Labcorp",              sec:"Salud",          w:0.10 },
+        { s:"MRNA",  d:"MRNA",  n:"Moderna",              sec:"Salud",          w:0.09 },
+        { s:"PODD",  d:"PODD",  n:"Insulet Corp",         sec:"Salud",          w:0.09 },
+        { s:"INCY",  d:"INCY",  n:"Incyte",               sec:"Salud",          w:0.09 },
+        { s:"VTRS",  d:"VTRS",  n:"Viatris",              sec:"Salud",          w:0.08 },
+        { s:"TFX",   d:"TFX",   n:"Teleflex",             sec:"Salud",          w:0.08 },
+        { s:"ALGN",  d:"ALGN",  n:"Align Technology",     sec:"Salud",          w:0.08 },
+        { s:"XRAY",  d:"XRAY",  n:"Dentsply Sirona",      sec:"Salud",          w:0.07 },
+        { s:"CTLT",  d:"CTLT",  n:"Catalent",             sec:"Salud",          w:0.07 },
+        { s:"TECH",  d:"TECH",  n:"Bio-Techne",           sec:"Salud",          w:0.07 },
+        // ── Consumo discrecional ──────────────────────────────────────
+        { s:"AMZN",  d:"AMZN",  n:"Amazon",               sec:"Consumo disc.",  w:3.80 },
+        { s:"TSLA",  d:"TSLA",  n:"Tesla",                sec:"Consumo disc.",  w:1.62 },
+        { s:"HD",    d:"HD",    n:"Home Depot",           sec:"Consumo disc.",  w:0.60 },
+        { s:"BKNG",  d:"BKNG",  n:"Booking Holdings",     sec:"Consumo disc.",  w:0.55 },
+        { s:"TJX",   d:"TJX",   n:"TJX Companies",        sec:"Consumo disc.",  w:0.36 },
+        { s:"LOW",   d:"LOW",   n:"Lowe's",               sec:"Consumo disc.",  w:0.28 },
+        { s:"MCD",   d:"MCD",   n:"McDonald's",           sec:"Consumo disc.",  w:0.38 },
+        { s:"ROST",  d:"ROST",  n:"Ross Stores",          sec:"Consumo disc.",  w:0.28 },
+        { s:"NKE",   d:"NKE",   n:"Nike",                 sec:"Consumo disc.",  w:0.24 },
+        { s:"ABNB",  d:"ABNB",  n:"Airbnb",               sec:"Consumo disc.",  w:0.22 },
+        { s:"HLT",   d:"HLT",   n:"Hilton Worldwide",     sec:"Consumo disc.",  w:0.22 },
+        { s:"MAR",   d:"MAR",   n:"Marriott",             sec:"Consumo disc.",  w:0.22 },
+        { s:"CMG",   d:"CMG",   n:"Chipotle",             sec:"Consumo disc.",  w:0.20 },
+        { s:"TGT",   d:"TGT",   n:"Target",               sec:"Consumo disc.",  w:0.20 },
+        { s:"ORLY",  d:"ORLY",  n:"O'Reilly Auto",        sec:"Consumo disc.",  w:0.20 },
+        { s:"AZO",   d:"AZO",   n:"AutoZone",             sec:"Consumo disc.",  w:0.18 },
+        { s:"DLTR",  d:"DLTR",  n:"Dollar Tree",          sec:"Consumo disc.",  w:0.14 },
+        { s:"YUM",   d:"YUM",   n:"Yum! Brands",          sec:"Consumo disc.",  w:0.14 },
+        { s:"EBAY",  d:"EBAY",  n:"eBay",                 sec:"Consumo disc.",  w:0.14 },
+        { s:"RCL",   d:"RCL",   n:"Royal Caribbean",      sec:"Consumo disc.",  w:0.14 },
+        { s:"CCL",   d:"CCL",   n:"Carnival",             sec:"Consumo disc.",  w:0.13 },
+        { s:"GRMN",  d:"GRMN",  n:"Garmin",               sec:"Consumo disc.",  w:0.10 },
+        { s:"EXPE",  d:"EXPE",  n:"Expedia",              sec:"Consumo disc.",  w:0.10 },
+        { s:"TSCO",  d:"TSCO",  n:"Tractor Supply",       sec:"Consumo disc.",  w:0.10 },
+        { s:"BBY",   d:"BBY",   n:"Best Buy",             sec:"Consumo disc.",  w:0.09 },
+        { s:"DRI",   d:"DRI",   n:"Darden Restaurants",   sec:"Consumo disc.",  w:0.09 },
+        { s:"DHI",   d:"DHI",   n:"D.R. Horton",          sec:"Consumo disc.",  w:0.09 },
+        { s:"LEN",   d:"LEN",   n:"Lennar",               sec:"Consumo disc.",  w:0.09 },
+        { s:"PHM",   d:"PHM",   n:"PulteGroup",           sec:"Consumo disc.",  w:0.09 },
+        { s:"F",     d:"F",     n:"Ford Motor",           sec:"Consumo disc.",  w:0.09 },
+        { s:"GM",    d:"GM",    n:"General Motors",       sec:"Consumo disc.",  w:0.09 },
+        { s:"NCLH",  d:"NCLH",  n:"Norwegian Cruise",     sec:"Consumo disc.",  w:0.08 },
+        { s:"APTV",  d:"APTV",  n:"Aptiv",                sec:"Consumo disc.",  w:0.08 },
+        { s:"BWA",   d:"BWA",   n:"BorgWarner",           sec:"Consumo disc.",  w:0.08 },
+        { s:"POOL",  d:"POOL",  n:"Pool Corp",            sec:"Consumo disc.",  w:0.08 },
+        { s:"ULTA",  d:"ULTA",  n:"Ulta Beauty",          sec:"Consumo disc.",  w:0.08 },
+        { s:"NVR",   d:"NVR",   n:"NVR Inc.",             sec:"Consumo disc.",  w:0.08 },
+        { s:"TOL",   d:"TOL",   n:"Toll Brothers",        sec:"Consumo disc.",  w:0.08 },
+        { s:"ETSY",  d:"ETSY",  n:"Etsy",                 sec:"Consumo disc.",  w:0.08 },
+        { s:"RL",    d:"RL",    n:"Ralph Lauren",         sec:"Consumo disc.",  w:0.08 },
+        { s:"TPR",   d:"TPR",   n:"Tapestry",             sec:"Consumo disc.",  w:0.08 },
+        { s:"PVH",   d:"PVH",   n:"PVH Corp",             sec:"Consumo disc.",  w:0.08 },
+        { s:"HAS",   d:"HAS",   n:"Hasbro",               sec:"Consumo disc.",  w:0.08 },
+        { s:"WHR",   d:"WHR",   n:"Whirlpool",            sec:"Consumo disc.",  w:0.08 },
+        { s:"LKQ",   d:"LKQ",   n:"LKQ Corp",             sec:"Consumo disc.",  w:0.08 },
+        { s:"MHK",   d:"MHK",   n:"Mohawk Industries",    sec:"Consumo disc.",  w:0.08 },
+        { s:"NWL",   d:"NWL",   n:"Newell Brands",        sec:"Consumo disc.",  w:0.07 },
+        { s:"VFC",   d:"VFC",   n:"VF Corporation",       sec:"Consumo disc.",  w:0.07 },
+        // ── Bienes básicos ────────────────────────────────────────────
+        { s:"WMT",   d:"WMT",   n:"Walmart",              sec:"Bienes básicos", w:0.95 },
+        { s:"COST",  d:"COST",  n:"Costco",               sec:"Bienes básicos", w:0.68 },
+        { s:"PG",    d:"PG",    n:"Procter & Gamble",     sec:"Bienes básicos", w:0.62 },
+        { s:"KO",    d:"KO",    n:"Coca-Cola",            sec:"Bienes básicos", w:0.38 },
+        { s:"PEP",   d:"PEP",   n:"PepsiCo",              sec:"Bienes básicos", w:0.38 },
+        { s:"MNST",  d:"MNST",  n:"Monster Beverage",     sec:"Bienes básicos", w:0.26 },
+        { s:"MO",    d:"MO",    n:"Altria",               sec:"Bienes básicos", w:0.24 },
+        { s:"PM",    d:"PM",    n:"Philip Morris",        sec:"Bienes básicos", w:0.20 },
+        { s:"MDLZ",  d:"MDLZ",  n:"Mondelez",             sec:"Bienes básicos", w:0.20 },
+        { s:"CL",    d:"CL",    n:"Colgate-Palmolive",    sec:"Bienes básicos", w:0.20 },
+        { s:"KMB",   d:"KMB",   n:"Kimberly-Clark",       sec:"Bienes básicos", w:0.18 },
+        { s:"STZ",   d:"STZ",   n:"Constellation Brands", sec:"Bienes básicos", w:0.18 },
+        { s:"KR",    d:"KR",    n:"Kroger",               sec:"Bienes básicos", w:0.16 },
+        { s:"WBA",   d:"WBA",   n:"Walgreens",            sec:"Bienes básicos", w:0.14 },
+        { s:"HSY",   d:"HSY",   n:"Hershey",              sec:"Bienes básicos", w:0.14 },
+        { s:"GIS",   d:"GIS",   n:"General Mills",        sec:"Bienes básicos", w:0.14 },
+        { s:"MKC",   d:"MKC",   n:"McCormick",            sec:"Bienes básicos", w:0.11 },
+        { s:"ADM",   d:"ADM",   n:"Archer-Daniels-Midland",sec:"Bienes básicos",w:0.10 },
+        { s:"TSN",   d:"TSN",   n:"Tyson Foods",          sec:"Bienes básicos", w:0.10 },
+        { s:"CAG",   d:"CAG",   n:"Conagra Brands",       sec:"Bienes básicos", w:0.10 },
+        { s:"HRL",   d:"HRL",   n:"Hormel Foods",         sec:"Bienes básicos", w:0.10 },
+        { s:"SJM",   d:"SJM",   n:"J.M. Smucker",         sec:"Bienes básicos", w:0.10 },
+        { s:"CPB",   d:"CPB",   n:"Campbell Soup",        sec:"Bienes básicos", w:0.10 },
+        { s:"K",     d:"K",     n:"Kellanova",            sec:"Bienes básicos", w:0.09 },
+        { s:"BG",    d:"BG",    n:"Bunge",                sec:"Bienes básicos", w:0.09 },
+        { s:"LW",    d:"LW",    n:"Lamb Weston",          sec:"Bienes básicos", w:0.09 },
+        // ── Industriales ──────────────────────────────────────────────
+        { s:"RTX",   d:"RTX",   n:"RTX Corp",             sec:"Industriales",   w:0.42 },
+        { s:"CAT",   d:"CAT",   n:"Caterpillar",          sec:"Industriales",   w:0.40 },
+        { s:"HON",   d:"HON",   n:"Honeywell",            sec:"Industriales",   w:0.38 },
+        { s:"DE",    d:"DE",    n:"Deere & Co.",          sec:"Industriales",   w:0.36 },
+        { s:"ETN",   d:"ETN",   n:"Eaton",                sec:"Industriales",   w:0.28 },
+        { s:"TT",    d:"TT",    n:"Trane Technologies",   sec:"Industriales",   w:0.28 },
+        { s:"GE",    d:"GE",    n:"GE Aerospace",         sec:"Industriales",   w:0.26 },
+        { s:"UPS",   d:"UPS",   n:"United Parcel Service",sec:"Industriales",   w:0.28 },
+        { s:"WM",    d:"WM",    n:"Waste Management",     sec:"Industriales",   w:0.26 },
+        { s:"NSC",   d:"NSC",   n:"Norfolk Southern",     sec:"Industriales",   w:0.25 },
+        { s:"CSX",   d:"CSX",   n:"CSX Corp",             sec:"Industriales",   w:0.24 },
+        { s:"PCAR",  d:"PCAR",  n:"PACCAR",               sec:"Industriales",   w:0.24 },
+        { s:"MMM",   d:"MMM",   n:"3M",                   sec:"Industriales",   w:0.22 },
+        { s:"EMR",   d:"EMR",   n:"Emerson Electric",     sec:"Industriales",   w:0.22 },
+        { s:"ITW",   d:"ITW",   n:"Illinois Tool Works",  sec:"Industriales",   w:0.22 },
+        { s:"CTAS",  d:"CTAS",  n:"Cintas",               sec:"Industriales",   w:0.22 },
+        { s:"PH",    d:"PH",    n:"Parker Hannifin",      sec:"Industriales",   w:0.20 },
+        { s:"LMT",   d:"LMT",   n:"Lockheed Martin",      sec:"Industriales",   w:0.14 },
+        { s:"NOC",   d:"NOC",   n:"Northrop Grumman",     sec:"Industriales",   w:0.14 },
+        { s:"GD",    d:"GD",    n:"General Dynamics",     sec:"Industriales",   w:0.14 },
+        { s:"BA",    d:"BA",    n:"Boeing",               sec:"Industriales",   w:0.14 },
+        { s:"LHX",   d:"LHX",   n:"L3Harris Technologies",sec:"Industriales",   w:0.14 },
+        { s:"GWW",   d:"GWW",   n:"W.W. Grainger",        sec:"Industriales",   w:0.18 },
+        { s:"TDG",   d:"TDG",   n:"TransDigm",            sec:"Industriales",   w:0.16 },
+        { s:"FDX",   d:"FDX",   n:"FedEx",                sec:"Industriales",   w:0.18 },
+        { s:"ODFL",  d:"ODFL",  n:"Old Dominion Freight", sec:"Industriales",   w:0.18 },
+        { s:"CARR",  d:"CARR",  n:"Carrier Global",       sec:"Industriales",   w:0.16 },
+        { s:"PWR",   d:"PWR",   n:"Quanta Services",      sec:"Industriales",   w:0.15 },
+        { s:"WAB",   d:"WAB",   n:"Wabtec",               sec:"Industriales",   w:0.14 },
+        { s:"HWM",   d:"HWM",   n:"Howmet Aerospace",     sec:"Industriales",   w:0.14 },
+        { s:"IR",    d:"IR",    n:"Ingersoll Rand",       sec:"Industriales",   w:0.14 },
+        { s:"AME",   d:"AME",   n:"AMETEK",               sec:"Industriales",   w:0.10 },
+        { s:"ROP",   d:"ROP",   n:"Roper Technologies",   sec:"Industriales",   w:0.10 },
+        { s:"FTV",   d:"FTV",   n:"Fortive",              sec:"Industriales",   w:0.09 },
+        { s:"FAST",  d:"FAST",  n:"Fastenal",             sec:"Industriales",   w:0.14 },
+        { s:"DOV",   d:"DOV",   n:"Dover",                sec:"Industriales",   w:0.14 },
+        { s:"XYL",   d:"XYL",   n:"Xylem",                sec:"Industriales",   w:0.10 },
+        { s:"VRSK",  d:"VRSK",  n:"Verisk Analytics",     sec:"Industriales",   w:0.09 },
+        { s:"CPRT",  d:"CPRT",  n:"Copart",               sec:"Industriales",   w:0.09 },
+        { s:"AXON",  d:"AXON",  n:"Axon Enterprise",      sec:"Industriales",   w:0.09 },
+        { s:"GNRC",  d:"GNRC",  n:"Generac Holdings",     sec:"Industriales",   w:0.09 },
+        { s:"MAS",   d:"MAS",   n:"Masco",                sec:"Industriales",   w:0.09 },
+        { s:"SWK",   d:"SWK",   n:"Stanley Black & Decker",sec:"Industriales",  w:0.09 },
+        { s:"NDSN",  d:"NDSN",  n:"Nordson",              sec:"Industriales",   w:0.09 },
+        { s:"VLTO",  d:"VLTO",  n:"Veralto",              sec:"Industriales",   w:0.09 },
+        { s:"DAL",   d:"DAL",   n:"Delta Air Lines",      sec:"Industriales",   w:0.09 },
+        { s:"LUV",   d:"LUV",   n:"Southwest Airlines",   sec:"Industriales",   w:0.08 },
+        { s:"UAL",   d:"UAL",   n:"United Airlines",      sec:"Industriales",   w:0.08 },
+        { s:"AAL",   d:"AAL",   n:"American Airlines",    sec:"Industriales",   w:0.06 },
+        { s:"SNA",   d:"SNA",   n:"Snap-on",              sec:"Industriales",   w:0.08 },
+        { s:"BAH",   d:"BAH",   n:"Booz Allen Hamilton",  sec:"Industriales",   w:0.08 },
+        { s:"SAIC",  d:"SAIC",  n:"Science Applications", sec:"Industriales",   w:0.08 },
+        { s:"HII",   d:"HII",   n:"Huntington Ingalls",   sec:"Industriales",   w:0.08 },
+        { s:"J",     d:"J",     n:"Jacobs Solutions",     sec:"Industriales",   w:0.08 },
+        { s:"JBHT",  d:"JBHT",  n:"J.B. Hunt Transport",  sec:"Industriales",   w:0.08 },
+        { s:"EXPD",  d:"EXPD",  n:"Expeditors Intl.",     sec:"Industriales",   w:0.07 },
+        { s:"CHRW",  d:"CHRW",  n:"C.H. Robinson",        sec:"Industriales",   w:0.07 },
+        { s:"GXO",   d:"GXO",   n:"GXO Logistics",        sec:"Industriales",   w:0.07 },
+        { s:"RHI",   d:"RHI",   n:"Robert Half",          sec:"Industriales",   w:0.07 },
+        // ── Energía ───────────────────────────────────────────────────
+        { s:"XOM",   d:"XOM",   n:"ExxonMobil",           sec:"Energía",        w:0.74 },
+        { s:"CVX",   d:"CVX",   n:"Chevron",              sec:"Energía",        w:0.55 },
+        { s:"COP",   d:"COP",   n:"ConocoPhillips",       sec:"Energía",        w:0.30 },
+        { s:"EOG",   d:"EOG",   n:"EOG Resources",        sec:"Energía",        w:0.27 },
+        { s:"OKE",   d:"OKE",   n:"ONEOK",                sec:"Energía",        w:0.22 },
+        { s:"WMB",   d:"WMB",   n:"Williams Companies",   sec:"Energía",        w:0.20 },
+        { s:"SLB",   d:"SLB",   n:"SLB (Schlumberger)",   sec:"Energía",        w:0.18 },
+        { s:"PSX",   d:"PSX",   n:"Phillips 66",          sec:"Energía",        w:0.18 },
+        { s:"MPC",   d:"MPC",   n:"Marathon Petroleum",   sec:"Energía",        w:0.18 },
+        { s:"KMI",   d:"KMI",   n:"Kinder Morgan",        sec:"Energía",        w:0.15 },
+        { s:"VLO",   d:"VLO",   n:"Valero Energy",        sec:"Energía",        w:0.15 },
+        { s:"TRGP",  d:"TRGP",  n:"Targa Resources",      sec:"Energía",        w:0.14 },
+        { s:"OXY",   d:"OXY",   n:"Occidental Petroleum", sec:"Energía",        w:0.14 },
+        { s:"HAL",   d:"HAL",   n:"Halliburton",          sec:"Energía",        w:0.14 },
+        { s:"BKR",   d:"BKR",   n:"Baker Hughes",         sec:"Energía",        w:0.13 },
+        { s:"DVN",   d:"DVN",   n:"Devon Energy",         sec:"Energía",        w:0.13 },
+        { s:"FANG",  d:"FANG",  n:"Diamondback Energy",   sec:"Energía",        w:0.13 },
+        { s:"HES",   d:"HES",   n:"Hess Corporation",     sec:"Energía",        w:0.12 },
+        { s:"MRO",   d:"MRO",   n:"Marathon Oil",         sec:"Energía",        w:0.09 },
+        { s:"APA",   d:"APA",   n:"APA Corporation",      sec:"Energía",        w:0.08 },
+        { s:"CTRA",  d:"CTRA",  n:"Coterra Energy",       sec:"Energía",        w:0.08 },
+        // ── Materiales ────────────────────────────────────────────────
+        { s:"LIN",   d:"LIN",   n:"Linde",                sec:"Materiales",     w:0.36 },
+        { s:"SHW",   d:"SHW",   n:"Sherwin-Williams",     sec:"Materiales",     w:0.27 },
+        { s:"APD",   d:"APD",   n:"Air Products",         sec:"Materiales",     w:0.24 },
+        { s:"FCX",   d:"FCX",   n:"Freeport-McMoRan",     sec:"Materiales",     w:0.26 },
+        { s:"ECL",   d:"ECL",   n:"Ecolab",               sec:"Materiales",     w:0.20 },
+        { s:"NEM",   d:"NEM",   n:"Newmont",              sec:"Materiales",     w:0.16 },
+        { s:"DOW",   d:"DOW",   n:"Dow",                  sec:"Materiales",     w:0.15 },
+        { s:"DD",    d:"DD",    n:"DuPont",               sec:"Materiales",     w:0.14 },
+        { s:"NUE",   d:"NUE",   n:"Nucor",                sec:"Materiales",     w:0.14 },
+        { s:"PPG",   d:"PPG",   n:"PPG Industries",       sec:"Materiales",     w:0.12 },
+        { s:"RS",    d:"RS",    n:"Reliance Steel",       sec:"Materiales",     w:0.10 },
+        { s:"IFF",   d:"IFF",   n:"Intl. Flavors & Frag.",sec:"Materiales",     w:0.10 },
+        { s:"ALB",   d:"ALB",   n:"Albemarle",            sec:"Materiales",     w:0.10 },
+        { s:"STLD",  d:"STLD",  n:"Steel Dynamics",       sec:"Materiales",     w:0.10 },
+        { s:"CF",    d:"CF",    n:"CF Industries",        sec:"Materiales",     w:0.10 },
+        { s:"MOS",   d:"MOS",   n:"Mosaic",               sec:"Materiales",     w:0.10 },
+        { s:"AVY",   d:"AVY",   n:"Avery Dennison",       sec:"Materiales",     w:0.10 },
+        { s:"PKG",   d:"PKG",   n:"Packaging Corp.",      sec:"Materiales",     w:0.10 },
+        { s:"IP",    d:"IP",    n:"International Paper",  sec:"Materiales",     w:0.10 },
+        { s:"RPM",   d:"RPM",   n:"RPM International",    sec:"Materiales",     w:0.08 },
+        { s:"CE",    d:"CE",    n:"Celanese",             sec:"Materiales",     w:0.08 },
+        { s:"BALL",  d:"BALL",  n:"Ball Corporation",     sec:"Materiales",     w:0.08 },
+        { s:"CCK",   d:"CCK",   n:"Crown Holdings",       sec:"Materiales",     w:0.08 },
+        { s:"SEE",   d:"SEE",   n:"Sealed Air",           sec:"Materiales",     w:0.07 },
+        { s:"SON",   d:"SON",   n:"Sonoco Products",      sec:"Materiales",     w:0.07 },
+        { s:"X",     d:"X",     n:"U.S. Steel",           sec:"Materiales",     w:0.07 },
+        // ── Bienes raíces ─────────────────────────────────────────────
+        { s:"PLD",   d:"PLD",   n:"Prologis",             sec:"Bienes raíces",  w:0.34 },
+        { s:"WELL",  d:"WELL",  n:"Welltower",            sec:"Bienes raíces",  w:0.26 },
+        { s:"SPG",   d:"SPG",   n:"Simon Property",       sec:"Bienes raíces",  w:0.20 },
+        { s:"PSA",   d:"PSA",   n:"Public Storage",       sec:"Bienes raíces",  w:0.20 },
+        { s:"O",     d:"O",     n:"Realty Income",        sec:"Bienes raíces",  w:0.18 },
+        { s:"CCI",   d:"CCI",   n:"Crown Castle",         sec:"Bienes raíces",  w:0.16 },
+        { s:"EQIX",  d:"EQIX",  n:"Equinix",              sec:"Bienes raíces",  w:0.16 },
+        { s:"IRM",   d:"IRM",   n:"Iron Mountain",        sec:"Bienes raíces",  w:0.14 },
+        { s:"DLR",   d:"DLR",   n:"Digital Realty",       sec:"Bienes raíces",  w:0.14 },
+        { s:"VTR",   d:"VTR",   n:"Ventas",               sec:"Bienes raíces",  w:0.12 },
+        { s:"EQR",   d:"EQR",   n:"Equity Residential",   sec:"Bienes raíces",  w:0.12 },
+        { s:"AVB",   d:"AVB",   n:"AvalonBay",            sec:"Bienes raíces",  w:0.12 },
+        { s:"ARE",   d:"ARE",   n:"Alexandria RE",        sec:"Bienes raíces",  w:0.12 },
+        { s:"ESS",   d:"ESS",   n:"Essex Property",       sec:"Bienes raíces",  w:0.10 },
+        { s:"MAA",   d:"MAA",   n:"Mid-America Apt.",     sec:"Bienes raíces",  w:0.10 },
+        { s:"PEAK",  d:"PEAK",  n:"Healthpeak Properties",sec:"Bienes raíces",  w:0.10 },
+        { s:"CPT",   d:"CPT",   n:"Camden Property",      sec:"Bienes raíces",  w:0.10 },
+        { s:"KIM",   d:"KIM",   n:"Kimco Realty",         sec:"Bienes raíces",  w:0.10 },
+        { s:"REG",   d:"REG",   n:"Regency Centers",      sec:"Bienes raíces",  w:0.10 },
+        { s:"UDR",   d:"UDR",   n:"UDR Inc.",             sec:"Bienes raíces",  w:0.09 },
+        { s:"HST",   d:"HST",   n:"Host Hotels",          sec:"Bienes raíces",  w:0.09 },
+        { s:"FRT",   d:"FRT",   n:"Federal Realty",       sec:"Bienes raíces",  w:0.09 },
+        { s:"WPC",   d:"WPC",   n:"W. P. Carey",          sec:"Bienes raíces",  w:0.08 },
+        { s:"NNN",   d:"NNN",   n:"NNN REIT",             sec:"Bienes raíces",  w:0.08 },
+        // ── Utilidades ────────────────────────────────────────────────
+        { s:"NEE",   d:"NEE",   n:"NextEra Energy",       sec:"Utilidades",     w:0.38 },
+        { s:"DUK",   d:"DUK",   n:"Duke Energy",          sec:"Utilidades",     w:0.32 },
+        { s:"SO",    d:"SO",    n:"Southern Company",     sec:"Utilidades",     w:0.30 },
+        { s:"CEG",   d:"CEG",   n:"Constellation Energy", sec:"Utilidades",     w:0.22 },
+        { s:"D",     d:"D",     n:"Dominion Energy",      sec:"Utilidades",     w:0.20 },
+        { s:"SRE",   d:"SRE",   n:"Sempra",               sec:"Utilidades",     w:0.18 },
+        { s:"AEP",   d:"AEP",   n:"American Electric Power",sec:"Utilidades",   w:0.16 },
+        { s:"EXC",   d:"EXC",   n:"Exelon",               sec:"Utilidades",     w:0.16 },
+        { s:"XEL",   d:"XEL",   n:"Xcel Energy",          sec:"Utilidades",     w:0.14 },
+        { s:"ED",    d:"ED",    n:"Consolidated Edison",  sec:"Utilidades",     w:0.14 },
+        { s:"AEE",   d:"AEE",   n:"Ameren",               sec:"Utilidades",     w:0.13 },
+        { s:"WEC",   d:"WEC",   n:"WEC Energy",           sec:"Utilidades",     w:0.13 },
+        { s:"PPL",   d:"PPL",   n:"PPL Corp",             sec:"Utilidades",     w:0.13 },
+        { s:"ETR",   d:"ETR",   n:"Entergy",              sec:"Utilidades",     w:0.12 },
+        { s:"FE",    d:"FE",    n:"FirstEnergy",          sec:"Utilidades",     w:0.12 },
+        { s:"PCG",   d:"PCG",   n:"PG&E Corp",            sec:"Utilidades",     w:0.12 },
+        { s:"EIX",   d:"EIX",   n:"Edison International", sec:"Utilidades",     w:0.12 },
+        { s:"NI",    d:"NI",    n:"NiSource",             sec:"Utilidades",     w:0.10 },
+        { s:"CNP",   d:"CNP",   n:"CenterPoint Energy",   sec:"Utilidades",     w:0.10 },
+        { s:"CMS",   d:"CMS",   n:"CMS Energy",           sec:"Utilidades",     w:0.10 },
+        { s:"ATO",   d:"ATO",   n:"Atmos Energy",         sec:"Utilidades",     w:0.10 },
+        { s:"AWK",   d:"AWK",   n:"American Water Works", sec:"Utilidades",     w:0.10 },
+      ]},
+      BMV: { label: "BMV IPC", cur: "$MXN", stocks: [
+        { s:"AMXL.MX",     d:"AMXL",    n:"América Móvil",        sec:"Comunicación",   w:9.0 },
+        { s:"WALMEX.MX",   d:"WALMEX",  n:"Walmart México",       sec:"Bienes básicos", w:7.0 },
+        { s:"GFNORTEO.MX", d:"BANORTE", n:"Banorte",              sec:"Finanzas",       w:6.5 },
+        { s:"GMEXICOB.MX", d:"GMEX",    n:"Grupo México",         sec:"Materiales",     w:6.0 },
+        { s:"FEMSAUBD.MX", d:"FEMSA",   n:"FEMSA",                sec:"Bienes básicos", w:5.5 },
+        { s:"CEMEXCPO.MX", d:"CEMEX",   n:"CEMEX",                sec:"Materiales",     w:4.5 },
+        { s:"AC.MX",       d:"AC",      n:"Arca Continental",     sec:"Bienes básicos", w:4.0 },
+        { s:"BIMBOA.MX",   d:"BIMBO",   n:"Grupo Bimbo",          sec:"Bienes básicos", w:3.8 },
+        { s:"KIMBERA.MX",  d:"KIMBER",  n:"Kimberly-Clark MX",    sec:"Bienes básicos", w:3.2 },
+        { s:"ASURB.MX",    d:"ASUR",    n:"ASUR",                 sec:"Industriales",   w:3.0 },
+        { s:"GRUMAB.MX",   d:"GRUMA",   n:"Gruma",                sec:"Bienes básicos", w:2.8 },
+        { s:"GAPB.MX",     d:"GAP",     n:"Grupo Aerop. Pacífico",sec:"Industriales",   w:2.8 },
+        { s:"CHDRAUIB.MX", d:"CHEDRAUI",n:"Chedraui",             sec:"Bienes básicos", w:2.5 },
+        { s:"OMAB.MX",     d:"OMA",     n:"OMA",                  sec:"Industriales",   w:2.2 },
+        { s:"ORBIA.MX",    d:"ORBIA",   n:"Orbia",                sec:"Materiales",     w:2.0 },
+        { s:"MEGACPO.MX",  d:"MEGA",    n:"Megacable",            sec:"Comunicación",   w:1.8 },
+        { s:"LIVEPOL1.MX", d:"LPOOL",   n:"El Puerto de Liverpool",sec:"Consumo disc.", w:1.8 },
+        { s:"ALSEA.MX",    d:"ALSEA",   n:"Alsea",                sec:"Consumo disc.",  w:1.6 },
+        { s:"PINFRA.MX",   d:"PINFRA",  n:"Pinfra",               sec:"Industriales",   w:1.5 },
+        { s:"GFINBURO.MX", d:"INBURSA", n:"Inbursa",              sec:"Finanzas",       w:1.5 },
+        { s:"GCARSO.MX",   d:"GCARSO",  n:"Grupo Carso",          sec:"Industriales",   w:1.3 },
+        { s:"ELEKTRA.MX",  d:"ELEKTRA", n:"Grupo Elektra",        sec:"Consumo disc.",  w:1.2 },
+        { s:"CUERVO.MX",   d:"CUERVO",  n:"José Cuervo",          sec:"Bienes básicos", w:1.2 },
+        { s:"LALAB.MX",    d:"LALA",    n:"Grupo Lala",           sec:"Bienes básicos", w:1.0 },
+        { s:"Q.MX",        d:"Q",       n:"Qualitas Controladora", sec:"Finanzas",      w:1.0 },
+        { s:"BOLSAA.MX",   d:"BOLSA",   n:"Bolsa Mexicana",       sec:"Finanzas",       w:0.9 },
+        { s:"VOLAR.MX",    d:"VOLAR",   n:"Volaris",              sec:"Industriales",   w:0.8 },
+        { s:"BACHOCOB.MX", d:"BACHOCO", n:"Industrias Bachoco",   sec:"Bienes básicos", w:0.7 },
+        { s:"VESTA.MX",    d:"VESTA",   n:"Corp. Inmob. Vesta",   sec:"Bienes raíces",  w:0.7 },
+        { s:"MFRISCO.MX",  d:"MFRISCO", n:"Minera Frisco",        sec:"Materiales",     w:0.6 },
+        { s:"SITES.MX",    d:"SITES",   n:"Sites",                sec:"Comunicación",   w:0.5 },
+        { s:"POCHTECB.MX", d:"POCHTE",  n:"Pochteca",             sec:"Materiales",     w:0.4 },
+        { s:"JAVER.MX",    d:"JAVER",   n:"Javer",                sec:"Bienes raíces",  w:0.4 },
+        { s:"LABB.MX",     d:"LABB",    n:"Genomma Lab",          sec:"Salud",          w:0.4 },
+        { s:"HCITY.MX",    d:"HCITY",   n:"Hotel City Express",   sec:"Consumo disc.",  w:0.3 },
+      ]},
+      DAX: { label: "DAX 40", cur: "€", stocks: [
+        { s:"SAP.DE",   d:"SAP",    n:"SAP SE",                   sec:"Tecnología",    w:9.0 },
+        { s:"SIE.DE",   d:"SIE",    n:"Siemens",                  sec:"Industriales",  w:6.5 },
+        { s:"ALV.DE",   d:"ALV",    n:"Allianz",                  sec:"Finanzas",      w:5.5 },
+        { s:"RHM.DE",   d:"RHM",    n:"Rheinmetall",              sec:"Industriales",  w:5.0 },
+        { s:"DTE.DE",   d:"DTE",    n:"Deutsche Telekom",         sec:"Comunicación",  w:5.0 },
+        { s:"MUV2.DE",  d:"MUV2",   n:"Munich Re",                sec:"Finanzas",      w:4.5 },
+        { s:"SHL.DE",   d:"SHL",    n:"Siemens Healthineers",     sec:"Salud",         w:3.8 },
+        { s:"ADS.DE",   d:"ADS",    n:"Adidas",                   sec:"Consumo disc.", w:3.2 },
+        { s:"DB1.DE",   d:"DB1",    n:"Deutsche Börse",           sec:"Finanzas",      w:3.0 },
+        { s:"BMW.DE",   d:"BMW",    n:"BMW",                      sec:"Consumo disc.", w:2.8 },
+        { s:"MBG.DE",   d:"MBG",    n:"Mercedes-Benz",            sec:"Consumo disc.", w:2.6 },
+        { s:"MRK.DE",   d:"MRKG",   n:"Merck KGaA",               sec:"Salud",         w:2.5 },
+        { s:"DHL.DE",   d:"DHL",    n:"DHL Group",                sec:"Industriales",  w:2.5 },
+        { s:"HNR1.DE",  d:"HNR1",   n:"Hannover Re",              sec:"Finanzas",      w:2.4 },
+        { s:"BAS.DE",   d:"BAS",    n:"BASF",                     sec:"Materiales",    w:2.2 },
+        { s:"BAYN.DE",  d:"BAYN",   n:"Bayer",                    sec:"Salud",         w:2.0 },
+        { s:"IFX.DE",   d:"IFX",    n:"Infineon Technologies",    sec:"Tecnología",    w:2.0 },
+        { s:"VOW3.DE",  d:"VOW3",   n:"Volkswagen",               sec:"Consumo disc.", w:1.8 },
+        { s:"MTX.DE",   d:"MTX",    n:"MTU Aero Engines",         sec:"Industriales",  w:1.8 },
+        { s:"EOAN.DE",  d:"E.ON",   n:"E.ON",                     sec:"Utilidades",    w:1.7 },
+        { s:"RWE.DE",   d:"RWE",    n:"RWE",                      sec:"Utilidades",    w:1.7 },
+        { s:"P911.DE",  d:"P911",   n:"Porsche AG",               sec:"Consumo disc.", w:1.6 },
+        { s:"DTG.DE",   d:"DTG",    n:"Daimler Truck",            sec:"Industriales",  w:1.5 },
+        { s:"DBK.DE",   d:"DBK",    n:"Deutsche Bank",            sec:"Finanzas",      w:1.5 },
+        { s:"HEI.DE",   d:"HEI",    n:"Heidelberg Materials",     sec:"Materiales",    w:1.4 },
+        { s:"ENR.DE",   d:"ENR",    n:"Siemens Energy",           sec:"Industriales",  w:1.3 },
+        { s:"BEI.DE",   d:"BEI",    n:"Beiersdorf",               sec:"Bienes básicos",w:1.3 },
+        { s:"VNA.DE",   d:"VNA",    n:"Vonovia",                  sec:"Bienes raíces", w:1.2 },
+        { s:"SY1.DE",   d:"SY1",    n:"Symrise",                  sec:"Materiales",    w:1.2 },
+        { s:"PAH3.DE",  d:"PAH3",   n:"Porsche SE",               sec:"Consumo disc.", w:1.1 },
+        { s:"FRE.DE",   d:"FRE",    n:"Fresenius",                sec:"Salud",         w:1.0 },
+        { s:"SRT3.DE",  d:"SRT3",   n:"Sartorius",                sec:"Salud",         w:1.0 },
+        { s:"CBK.DE",   d:"CBK",    n:"Commerzbank",              sec:"Finanzas",      w:1.0 },
+        { s:"CON.DE",   d:"CON",    n:"Continental",              sec:"Consumo disc.", w:0.9 },
+        { s:"BNR.DE",   d:"BNR",    n:"Brenntag",                 sec:"Materiales",    w:0.9 },
+        { s:"FME.DE",   d:"FME",    n:"Fresenius Medical Care",   sec:"Salud",         w:0.8 },
+        { s:"QGEN.DE",  d:"QGEN",   n:"Qiagen",                   sec:"Salud",         w:0.8 },
+        { s:"PUM.DE",   d:"PUM",    n:"Puma",                     sec:"Consumo disc.", w:0.7 },
+        { s:"ZAL.DE",   d:"ZAL",    n:"Zalando",                  sec:"Consumo disc.", w:0.6 },
+        { s:"1COV.DE",  d:"1COV",   n:"Covestro",                 sec:"Materiales",    w:0.5 },
+      ]},
+      Nikkei: { label: "Nikkei 225", cur: "¥", stocks: [
+        { s:"7203.T",  d:"Toyota",  n:"Toyota Motor",           sec:"Consumo disc.", w:4.5 },
+        { s:"6758.T",  d:"Sony",    n:"Sony Group",             sec:"Tecnología",    w:3.5 },
+        { s:"8306.T",  d:"MUFG",   n:"Mitsubishi UFJ Fin.",    sec:"Finanzas",      w:3.0 },
+        { s:"9984.T",  d:"SoftBk", n:"SoftBank Group",         sec:"Tecnología",    w:2.8 },
+        { s:"6861.T",  d:"Keyenc", n:"Keyence",                sec:"Tecnología",    w:2.5 },
+        { s:"9983.T",  d:"FastRet",n:"Fast Retailing",         sec:"Consumo disc.", w:2.3 },
+        { s:"7974.T",  d:"Nintnd", n:"Nintendo",               sec:"Tecnología",    w:2.0 },
+        { s:"8035.T",  d:"TokElec",n:"Tokyo Electron",         sec:"Tecnología",    w:1.9 },
+        { s:"7267.T",  d:"Honda",  n:"Honda Motor",            sec:"Consumo disc.", w:1.8 },
+        { s:"4519.T",  d:"Chugai", n:"Chugai Pharma",          sec:"Salud",         w:1.8 },
+        { s:"8316.T",  d:"SMFG",   n:"Sumitomo Mitsui",        sec:"Finanzas",      w:1.6 },
+        { s:"4568.T",  d:"Daiichi",n:"Daiichi Sankyo",         sec:"Salud",         w:1.5 },
+        { s:"4502.T",  d:"Takeda", n:"Takeda Pharma",          sec:"Salud",         w:1.5 },
+        { s:"6367.T",  d:"Daikin", n:"Daikin Industries",      sec:"Industriales",  w:1.4 },
+        { s:"8766.T",  d:"TokMar", n:"Tokio Marine",           sec:"Finanzas",      w:1.4 },
+        { s:"4063.T",  d:"ShinEtsu",n:"Shin-Etsu Chemical",    sec:"Materiales",    w:1.3 },
+        { s:"9433.T",  d:"KDDI",   n:"KDDI",                   sec:"Comunicación",  w:1.3 },
+        { s:"3382.T",  d:"7&I",    n:"Seven & I Holdings",     sec:"Bienes básicos",w:1.2 },
+        { s:"9432.T",  d:"NTT",    n:"NTT",                    sec:"Comunicación",  w:1.2 },
+        { s:"6098.T",  d:"Recruit",n:"Recruit Holdings",       sec:"Industriales",  w:1.1 },
+        { s:"6501.T",  d:"Hitachi",n:"Hitachi",                sec:"Industriales",  w:1.1 },
+        { s:"7741.T",  d:"HOYA",   n:"HOYA",                   sec:"Salud",         w:1.0 },
+        { s:"4661.T",  d:"OLC",    n:"Oriental Land",          sec:"Consumo disc.", w:0.9 },
+        { s:"9434.T",  d:"SBCorp", n:"SoftBank Corp",          sec:"Comunicación",  w:0.9 },
+        { s:"8411.T",  d:"Mizuho", n:"Mizuho Financial",       sec:"Finanzas",      w:0.9 },
+        { s:"6954.T",  d:"Fanuc",  n:"Fanuc",                  sec:"Industriales",  w:0.9 },
+        { s:"7751.T",  d:"Canon",  n:"Canon",                  sec:"Tecnología",    w:0.8 },
+        { s:"8001.T",  d:"Itochu", n:"Itochu",                 sec:"Industriales",  w:0.8 },
+        { s:"8058.T",  d:"MitCorp",n:"Mitsubishi Corp.",       sec:"Industriales",  w:0.8 },
+        { s:"8031.T",  d:"Mitsui", n:"Mitsui & Co.",           sec:"Industriales",  w:0.8 },
+        { s:"6301.T",  d:"Komatsu",n:"Komatsu",                sec:"Industriales",  w:0.7 },
+        { s:"5108.T",  d:"Bridge", n:"Bridgestone",            sec:"Consumo disc.", w:0.7 },
+        { s:"9613.T",  d:"NTTData",n:"NTT DATA",               sec:"Tecnología",    w:0.7 },
+        { s:"6857.T",  d:"Advnst", n:"Advantest",              sec:"Tecnología",    w:0.7 },
+        { s:"8750.T",  d:"DaiiLfe",n:"Dai-ichi Life",          sec:"Finanzas",      w:0.7 },
+        { s:"9020.T",  d:"JREast", n:"JR East",                sec:"Industriales",  w:0.7 },
+        { s:"6702.T",  d:"Fujitsu",n:"Fujitsu",                sec:"Tecnología",    w:0.7 },
+        { s:"4452.T",  d:"Kao",    n:"Kao Corp",               sec:"Bienes básicos",w:0.6 },
+        { s:"2914.T",  d:"JapTob", n:"Japan Tobacco",          sec:"Bienes básicos",w:0.6 },
+        { s:"7269.T",  d:"Suzuki", n:"Suzuki Motor",           sec:"Consumo disc.", w:0.6 },
+        { s:"8267.T",  d:"AEON",   n:"AEON",                   sec:"Bienes básicos",w:0.6 },
+        { s:"4901.T",  d:"Fujiflm",n:"Fujifilm Holdings",      sec:"Tecnología",    w:0.6 },
+        { s:"7832.T",  d:"Bandai", n:"Bandai Namco",           sec:"Consumo disc.", w:0.6 },
+        { s:"2503.T",  d:"Kirin",  n:"Kirin Holdings",         sec:"Bienes básicos",w:0.5 },
+        { s:"6503.T",  d:"MitElec",n:"Mitsubishi Electric",    sec:"Industriales",  w:0.5 },
+        { s:"5401.T",  d:"NipStl", n:"Nippon Steel",           sec:"Materiales",    w:0.5 },
+        { s:"7201.T",  d:"Nissan", n:"Nissan Motor",           sec:"Consumo disc.", w:0.5 },
+        { s:"8053.T",  d:"SumCorp",n:"Sumitomo Corp.",         sec:"Industriales",  w:0.5 },
+        { s:"8002.T",  d:"Marube", n:"Marubeni",               sec:"Industriales",  w:0.5 },
+        { s:"6971.T",  d:"Kyocera",n:"Kyocera",                sec:"Tecnología",    w:0.5 },
+        { s:"2802.T",  d:"Ajinom", n:"Ajinomoto",              sec:"Bienes básicos",w:0.5 },
+        { s:"6645.T",  d:"Omron",  n:"Omron",                  sec:"Industriales",  w:0.5 },
+        { s:"4523.T",  d:"Eisai",  n:"Eisai",                  sec:"Salud",         w:0.5 },
+        { s:"6762.T",  d:"TDK",    n:"TDK",                    sec:"Tecnología",    w:0.5 },
+        { s:"9022.T",  d:"JRTok",  n:"JR Tokai",               sec:"Industriales",  w:0.5 },
+        { s:"7270.T",  d:"Subaru", n:"Subaru",                 sec:"Consumo disc.", w:0.4 },
+        { s:"4307.T",  d:"NRI",    n:"Nomura Research Inst.",  sec:"Tecnología",    w:0.4 },
+        { s:"9021.T",  d:"JRWest", n:"JR West",                sec:"Industriales",  w:0.4 },
+        { s:"7733.T",  d:"Olympus",n:"Olympus",                sec:"Salud",         w:0.4 },
+        { s:"4151.T",  d:"KyowaK", n:"Kyowa Kirin",            sec:"Salud",         w:0.4 },
+        { s:"4704.T",  d:"Trend",  n:"Trend Micro",            sec:"Tecnología",    w:0.4 },
+        { s:"5020.T",  d:"ENEOS",  n:"ENEOS Holdings",         sec:"Energía",       w:0.4 },
+        { s:"1925.T",  d:"DaiwHs", n:"Daiwa House Industry",   sec:"Bienes raíces", w:0.4 },
+        { s:"8028.T",  d:"FamMart",n:"FamilyMart",             sec:"Bienes básicos",w:0.4 },
+        { s:"3659.T",  d:"Nexon",  n:"Nexon",                  sec:"Comunicación",  w:0.4 },
+        { s:"4021.T",  d:"NissanC",n:"Nissan Chemical",        sec:"Materiales",    w:0.3 },
+        { s:"6724.T",  d:"Seiko",  n:"Seiko Epson",            sec:"Tecnología",    w:0.3 },
+        { s:"5411.T",  d:"JFE",    n:"JFE Steel",              sec:"Materiales",    w:0.3 },
+        { s:"6770.T",  d:"Alps",   n:"Alps Alpine",            sec:"Tecnología",    w:0.3 },
+        { s:"7912.T",  d:"DNP",    n:"Dai Nippon Printing",    sec:"Industriales",  w:0.3 },
+        { s:"7911.T",  d:"Toppan", n:"Toppan Inc.",            sec:"Industriales",  w:0.3 },
+        { s:"9001.T",  d:"Tobu",   n:"Tobu Railway",           sec:"Industriales",  w:0.3 },
+        { s:"9005.T",  d:"Tokyu",  n:"Tokyu Corp",             sec:"Industriales",  w:0.3 },
+        { s:"4183.T",  d:"MitsCh", n:"Mitsui Chemicals",       sec:"Materiales",    w:0.3 },
+        { s:"6305.T",  d:"HitCon", n:"Hitachi Construction",   sec:"Industriales",  w:0.3 },
+        { s:"2282.T",  d:"NHFds",  n:"NH Foods",               sec:"Bienes básicos",w:0.3 },
+        { s:"4005.T",  d:"SumChem",n:"Sumitomo Chemical",      sec:"Materiales",    w:0.3 },
+        { s:"7211.T",  d:"MitMot", n:"Mitsubishi Motors",      sec:"Consumo disc.", w:0.2 },
+        { s:"9031.T",  d:"NishiRR",n:"Nishi-Nippon Railroad",  sec:"Industriales",  w:0.2 },
+        { s:"3289.T",  d:"Tokyu R",n:"Tokyu Fudosan",          sec:"Bienes raíces", w:0.2 },
+      ]},
+      KOSPI: { label: "KOSPI 100", cur: "₩", stocks: [
+        { s:"005930.KS", d:"Samsng",  n:"Samsung Electronics",    sec:"Tecnología",    w:5.0 },
+        { s:"000660.KS", d:"SKHynix", n:"SK Hynix",               sec:"Tecnología",    w:3.0 },
+        { s:"005380.KS", d:"Hyundai", n:"Hyundai Motor",          sec:"Consumo disc.", w:2.5 },
+        { s:"035420.KS", d:"NAVER",   n:"NAVER",                  sec:"Comunicación",  w:2.0 },
+        { s:"000270.KS", d:"Kia",     n:"Kia Corp",               sec:"Consumo disc.", w:1.8 },
+        { s:"207940.KS", d:"SamBio",  n:"Samsung Biologics",      sec:"Salud",         w:1.6 },
+        { s:"051910.KS", d:"LGChem",  n:"LG Chem",                sec:"Materiales",    w:1.5 },
+        { s:"006400.KS", d:"SamSDI",  n:"Samsung SDI",            sec:"Tecnología",    w:1.4 },
+        { s:"035720.KS", d:"Kakao",   n:"Kakao",                  sec:"Comunicación",  w:1.3 },
+        { s:"068270.KS", d:"Celltrn", n:"Celltrion",              sec:"Salud",         w:1.2 },
+        { s:"028260.KS", d:"SamC&T",  n:"Samsung C&T",            sec:"Industriales",  w:1.1 },
+        { s:"066570.KS", d:"LGElec",  n:"LG Electronics",         sec:"Tecnología",    w:1.0 },
+        { s:"003550.KS", d:"LGCorp",  n:"LG Corp",                sec:"Industriales",  w:1.0 },
+        { s:"105560.KS", d:"KB Fin",  n:"KB Financial",           sec:"Finanzas",      w:1.0 },
+        { s:"055550.KS", d:"Shinhan", n:"Shinhan Financial",      sec:"Finanzas",      w:0.9 },
+        { s:"047050.KS", d:"POSCO",   n:"POSCO Holdings",         sec:"Materiales",    w:0.9 },
+        { s:"034730.KS", d:"SK Inc",  n:"SK Inc.",                sec:"Industriales",  w:0.8 },
+        { s:"086790.KS", d:"Hana",    n:"Hana Financial",         sec:"Finanzas",      w:0.8 },
+        { s:"012330.KS", d:"HynMobs", n:"Hyundai Mobis",          sec:"Consumo disc.", w:0.7 },
+        { s:"000810.KS", d:"SamFire", n:"Samsung Fire & Marine",  sec:"Finanzas",      w:0.7 },
+        { s:"096770.KS", d:"SKInno",  n:"SK Innovation",          sec:"Energía",       w:0.7 },
+        { s:"017670.KS", d:"SKTel",   n:"SK Telecom",             sec:"Comunicación",  w:0.7 },
+        { s:"032830.KS", d:"SamLife", n:"Samsung Life Insurance", sec:"Finanzas",      w:0.6 },
+        { s:"030200.KS", d:"KTCorp",  n:"KT Corp",                sec:"Comunicación",  w:0.6 },
+        { s:"015760.KS", d:"KEPCO",   n:"Korea Electric Power",   sec:"Utilidades",    w:0.6 },
+        { s:"259960.KS", d:"Krafton", n:"Krafton",                sec:"Comunicación",  w:0.6 },
+        { s:"009150.KS", d:"SamElMc", n:"Samsung Electro-Mec.",   sec:"Tecnología",    w:0.5 },
+        { s:"033780.KS", d:"KT&G",    n:"KT&G",                   sec:"Bienes básicos",w:0.5 },
+        { s:"352820.KS", d:"HYBE",    n:"HYBE",                   sec:"Comunicación",  w:0.5 },
+        { s:"090430.KS", d:"Amore",   n:"Amorepacific",           sec:"Bienes básicos",w:0.5 },
+        { s:"036570.KS", d:"NCSOFT",  n:"NCSOFT",                 sec:"Comunicación",  w:0.5 },
+        { s:"018260.KS", d:"SamSDS",  n:"Samsung SDS",            sec:"Tecnología",    w:0.5 },
+        { s:"323410.KS", d:"KakaoBk", n:"Kakao Bank",             sec:"Finanzas",      w:0.5 },
+        { s:"010130.KS", d:"KorZinc", n:"Korea Zinc",             sec:"Materiales",    w:0.5 },
+        { s:"036460.KS", d:"KorGas",  n:"Korea Gas Corp",         sec:"Utilidades",    w:0.4 },
+        { s:"009830.KS", d:"HanwhSl", n:"Hanwha Solutions",       sec:"Materiales",    w:0.4 },
+        { s:"071050.KS", d:"KorInvst",n:"Korea Investment Hold.", sec:"Finanzas",      w:0.4 },
+        { s:"010950.KS", d:"S-Oil",   n:"S-Oil",                  sec:"Energía",       w:0.4 },
+        { s:"000720.KS", d:"HynE&C",  n:"Hyundai E&C",            sec:"Industriales",  w:0.4 },
+        { s:"011200.KS", d:"HMM",     n:"HMM",                    sec:"Industriales",  w:0.4 },
+        { s:"003490.KS", d:"KorAir",  n:"Korean Air",             sec:"Industriales",  w:0.4 },
+        { s:"024110.KS", d:"IBKBank", n:"Industrial Bank of Korea",sec:"Finanzas",     w:0.4 },
+        { s:"034020.KS", d:"DsEnrgy", n:"Doosan Enerbility",      sec:"Industriales",  w:0.4 },
+        { s:"008770.KS", d:"HotShil", n:"Hotel Shilla",           sec:"Consumo disc.", w:0.3 },
+        { s:"042660.KS", d:"DaeShip", n:"Hanwha Ocean",           sec:"Industriales",  w:0.3 },
+        { s:"006800.KS", d:"Mirae",   n:"Mirae Asset Securities", sec:"Finanzas",      w:0.3 },
+        { s:"010140.KS", d:"SamHI",   n:"Samsung Heavy Industries",sec:"Industriales", w:0.3 },
+        { s:"002380.KS", d:"KCCCrp",  n:"KCC Corp",               sec:"Materiales",    w:0.3 },
+        { s:"000100.KS", d:"Yuhan",   n:"Yuhan Corporation",      sec:"Salud",         w:0.3 },
+        { s:"011210.KS", d:"HynWia",  n:"Hyundai WIA",            sec:"Industriales",  w:0.3 },
+        { s:"000150.KS", d:"DooSn",   n:"Doosan Corp",            sec:"Industriales",  w:0.2 },
+      ]},
+      IBEX: { label: "IBEX 35", cur: "€", stocks: [
+        { s:"SAN.MC",   d:"SAN",    n:"Santander",               sec:"Finanzas",      w:8.0 },
+        { s:"BBVA.MC",  d:"BBVA",   n:"BBVA",                    sec:"Finanzas",      w:7.5 },
+        { s:"ITX.MC",   d:"ITX",    n:"Inditex",                 sec:"Consumo disc.", w:7.0 },
+        { s:"IBE.MC",   d:"IBE",    n:"Iberdrola",               sec:"Utilidades",    w:6.5 },
+        { s:"TEF.MC",   d:"TEF",    n:"Telefónica",              sec:"Comunicación",  w:4.0 },
+        { s:"CLNX.MC",  d:"CLNX",   n:"Cellnex Telecom",         sec:"Comunicación",  w:3.5 },
+        { s:"AMS.MC",   d:"AMS",    n:"Amadeus IT",              sec:"Tecnología",    w:3.2 },
+        { s:"AENA.MC",  d:"AENA",   n:"Aena",                    sec:"Industriales",  w:3.0 },
+        { s:"REP.MC",   d:"REP",    n:"Repsol",                  sec:"Energía",       w:3.0 },
+        { s:"FER.MC",   d:"FER",    n:"Ferrovial",               sec:"Industriales",  w:2.8 },
+        { s:"CABK.MC",  d:"CABK",   n:"CaixaBank",               sec:"Finanzas",      w:2.5 },
+        { s:"IAG.MC",   d:"IAG",    n:"IAG (Iberia/BA)",         sec:"Industriales",  w:2.2 },
+        { s:"ACS.MC",   d:"ACS",    n:"ACS",                     sec:"Industriales",  w:2.0 },
+        { s:"MTS.MC",   d:"MTS",    n:"ArcelorMittal",           sec:"Materiales",    w:1.8 },
+        { s:"ELE.MC",   d:"ELE",    n:"Endesa",                  sec:"Utilidades",    w:1.6 },
+        { s:"NTGY.MC",  d:"NTGY",   n:"Naturgy",                 sec:"Utilidades",    w:1.5 },
+        { s:"ANA.MC",   d:"ANA",    n:"Acciona",                 sec:"Industriales",  w:1.4 },
+        { s:"ANE.MC",   d:"ANE",    n:"Acciona Energía",         sec:"Utilidades",    w:1.2 },
+        { s:"IDR.MC",   d:"IDR",    n:"Indra Sistemas",          sec:"Tecnología",    w:1.0 },
+        { s:"ENG.MC",   d:"ENG",    n:"Enagás",                  sec:"Utilidades",    w:0.9 },
+        { s:"RED.MC",   d:"RED",    n:"Redeia (Red Eléctrica)",  sec:"Utilidades",    w:0.9 },
+        { s:"LOG.MC",   d:"LOG",    n:"Logista",                 sec:"Industriales",  w:0.9 },
+        { s:"MAP.MC",   d:"MAP",    n:"Mapfre",                  sec:"Finanzas",      w:0.8 },
+        { s:"COL.MC",   d:"COL",    n:"Colonial Inmobiliaria",   sec:"Bienes raíces", w:0.8 },
+        { s:"CIE.MC",   d:"CIE",    n:"CIE Automotive",          sec:"Consumo disc.", w:0.8 },
+        { s:"SAB.MC",   d:"SAB",    n:"Banco Sabadell",          sec:"Finanzas",      w:0.7 },
+        { s:"GRF.MC",   d:"GRF",    n:"Grifols",                 sec:"Salud",         w:0.7 },
+        { s:"VIS.MC",   d:"VIS",    n:"Viscofan",                sec:"Bienes básicos",w:0.7 },
+        { s:"MRL.MC",   d:"MRL",    n:"Merlin Properties",       sec:"Bienes raíces", w:0.7 },
+        { s:"SCYR.MC",  d:"SCYR",   n:"Sacyr",                   sec:"Industriales",  w:0.6 },
+        { s:"BKT.MC",   d:"BKT",    n:"Bankinter",               sec:"Finanzas",      w:0.6 },
+        { s:"UNI.MC",   d:"UNI",    n:"Unicaja Banco",           sec:"Finanzas",      w:0.5 },
+        { s:"MEL.MC",   d:"MEL",    n:"Meliá Hotels",            sec:"Consumo disc.", w:0.5 },
+        { s:"ACX.MC",   d:"ACX",    n:"Acerinox",                sec:"Materiales",    w:0.5 },
+        { s:"SOL.MC",   d:"SOL",    n:"Solaria",                 sec:"Utilidades",    w:0.4 },
+      ]},
+    };
+
+    // Persist selections in widget.config
+    if (!widget.config.index) widget.config.index = "SP500";
+    if (!widget.config.sector) widget.config.sector = "Todos";
+
+    // DOM
+    body.style.cssText = "padding:0;display:flex;flex-direction:column;overflow:hidden;";
+    const toolbar = document.createElement("div");
+    toolbar.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;flex-wrap:wrap;";
+    const selStyle = "background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:5px;padding:3px 7px;color:inherit;font-size:11px;outline:none;cursor:pointer;";
+
+    const indexSel = document.createElement("select");
+    indexSel.style.cssText = selStyle;
+    Object.entries(INDICES).forEach(([key, cfg]) => {
+      const o = document.createElement("option");
+      o.value = key; o.textContent = cfg.label;
+      if (key === widget.config.index) o.selected = true;
+      indexSel.appendChild(o);
+    });
+
+    const sectorSel = document.createElement("select");
+    sectorSel.style.cssText = selStyle + "flex:1;max-width:150px;";
+
+    const statusEl = document.createElement("span");
+    statusEl.style.cssText = "font-size:10px;opacity:0.45;margin-left:auto;white-space:nowrap;";
+    statusEl.textContent = "Cargando…";
+
+    toolbar.appendChild(indexSel);
+    toolbar.appendChild(sectorSel);
+    toolbar.appendChild(statusEl);
+    body.appendChild(toolbar);
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:relative;flex:1;min-height:0;overflow:hidden;";
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "display:block;width:100%;height:100%;cursor:crosshair;";
+    const tip = document.createElement("div");
+    tip.style.cssText = "position:absolute;background:rgba(8,10,18,0.96);border:1px solid rgba(255,255,255,0.14);border-radius:7px;padding:7px 11px;font-size:11.5px;line-height:1.5;pointer-events:none;display:none;z-index:20;white-space:nowrap;";
+    wrap.appendChild(canvas); wrap.appendChild(tip);
+    body.appendChild(wrap);
+
+    let prices = {};
+    let layoutCells = [];
+    let layoutW = 0, layoutH = 0;
+
+    // ── Zoom/pan state ──────────────────────────────────────────────
+    let zoom = 1, panX = 0, panY = 0;
+    let isPanning = false, panStartX = 0, panStartY = 0, panOriX = 0, panOriY = 0;
+
+    function currentStocks() { return INDICES[widget.config.index].stocks; }
+    function currentCur()    { return INDICES[widget.config.index].cur; }
+
+    function resetView() { zoom = 1; panX = 0; panY = 0; canvas.style.cursor = "crosshair"; }
+
+    function clampPan(cw, ch) {
+      panX = Math.max(0, Math.min(panX, cw * (zoom - 1)));
+      panY = Math.max(0, Math.min(panY, ch * (zoom - 1)));
+    }
+
+    function rebuildSectorSel() {
+      sectorSel.innerHTML = "";
+      const sectors = ["Todos", ...new Set(currentStocks().map(s => s.sec))];
+      sectors.forEach(sec => {
+        const o = document.createElement("option");
+        o.value = sec; o.textContent = sec;
+        if (sec === widget.config.sector) o.selected = true;
+        sectorSel.appendChild(o);
+      });
+    }
+    rebuildSectorSel();
+
+    function pctColor(p) {
+      if (p == null) return "#111827";           // sin datos
+      const a = Math.abs(p);
+      if (a < 0.15) return "#374151";            // neutral ≈ 0%
+      if (p > 0) {
+        if (p < 0.5)  return "#14532d";          // +0.15–0.5%
+        if (p < 1.0)  return "#166534";          // +0.5–1%
+        if (p < 2.0)  return "#15803d";          // +1–2%
+        if (p < 3.5)  return "#16a34a";          // +2–3.5%
+        if (p < 5.0)  return "#22c55e";          // +3.5–5%
+        if (p < 7.0)  return "#4ade80";          // +5–7%
+        return "#86efac";                        // >+7%
+      } else {
+        if (p > -0.5)  return "#4a0d0d";         // -0.15–-0.5%
+        if (p > -1.0)  return "#7f1d1d";         // -0.5–-1%
+        if (p > -2.0)  return "#991b1b";         // -1–-2%
+        if (p > -3.5)  return "#b91c1c";         // -2–-3.5%
+        if (p > -5.0)  return "#dc2626";         // -3.5–-5%
+        if (p > -7.0)  return "#ef4444";         // -5–-7%
+        return "#fca5a5";                        // >-7%
+      }
+    }
+
+    function squarify(data, x, y, w, h) {
+      const out = [];
+      if (!data.length || w < 1 || h < 1) return out;
+      const totalW = data.reduce((s, d) => s + d.w, 0);
+      const totalA = w * h;
+      const items = data.map(d => ({ ...d, a: (d.w / totalW) * totalA }));
+      function worst(row, side) {
+        const s = row.reduce((a, b) => a + b.a, 0);
+        const max = Math.max(...row.map(i => i.a));
+        const min = Math.min(...row.map(i => i.a));
+        return Math.max(side * side * max / (s * s), s * s / (side * side * min));
+      }
+      function place(it, rx, ry, rw, rh) {
+        if (!it.length) return;
+        if (it.length === 1) { out.push({ ...it[0], x: rx, y: ry, w: rw, h: rh }); return; }
+        const horiz = rw >= rh, side = horiz ? rh : rw;
+        let strip = [it[0]], i = 1;
+        while (i < it.length) {
+          const cand = [...strip, it[i]];
+          if (worst(cand, side) <= worst(strip, side)) { strip = cand; i++; } else break;
+        }
+        const sA = strip.reduce((s, xv) => s + xv.a, 0);
+        const totA = it.reduce((s, xv) => s + xv.a, 0);
+        const frac = sA / totA;
+        if (horiz) {
+          const sw = frac * rw; let py = ry;
+          strip.forEach(xv => { const ih = (xv.a / sA) * rh; out.push({ ...xv, x: rx, y: py, w: sw, h: ih }); py += ih; });
+          place(it.slice(strip.length), rx + sw, ry, rw - sw, rh);
+        } else {
+          const sh = frac * rh; let px = rx;
+          strip.forEach(xv => { const iw = (xv.a / sA) * rw; out.push({ ...xv, x: px, y: ry, w: iw, h: sh }); px += iw; });
+          place(it.slice(strip.length), rx, ry + sh, rw, rh - sh);
+        }
+      }
+      place(items, x, y, w, h);
+      return out;
+    }
+
+    function computeLayout(cw, ch) {
+      const sec = widget.config.sector;
+      const vis = (sec === "Todos" ? [...currentStocks()] : currentStocks().filter(s => s.sec === sec))
+        .sort((a, b) => b.w - a.w);
+      layoutCells = squarify(vis, 0, 0, cw, ch);
+      layoutW = cw; layoutH = ch;
+    }
+
+    // ── Logo cache (lazy-load, no CORS needed for drawImage) ───────
+    const logoCache = new Map(); // sym -> HTMLImageElement | 'loading' | 'error'
+    let logoRedrawTimer = null;
+    function scheduleLogoRedraw() {
+      if (logoRedrawTimer) return;
+      logoRedrawTimer = setTimeout(() => { logoRedrawTimer = null; draw(); }, 80);
+    }
+    function loadLogo(sym) {
+      if (logoCache.has(sym)) return;
+      logoCache.set(sym, 'loading');
+      const img = new Image();
+      img.onload = () => { logoCache.set(sym, img); scheduleLogoRedraw(); };
+      img.onerror = () => { logoCache.set(sym, 'error'); };
+      img.src = `https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}?format=png`;
+    }
+
+    function draw() {
+      const dpr = window.devicePixelRatio || 1;
+      const cw = wrap.clientWidth, ch = wrap.clientHeight;
+      if (cw < 10 || ch < 10) return;
+      canvas.width = cw * dpr; canvas.height = ch * dpr;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cw, ch);
+
+      if (layoutW !== cw || layoutH !== ch) {
+        computeLayout(cw, ch);
+        clampPan(cw, ch);
+      }
+
+      const pad = 1.5;
+      layoutCells.forEach(cell => {
+        const info = prices[cell.s];
+        const pct = info ? info.pct : null;
+
+        const sx = cell.x * zoom - panX;
+        const sy = cell.y * zoom - panY;
+        const sw = cell.w * zoom;
+        const sh = cell.h * zoom;
+        if (sx + sw < 0 || sx > cw || sy + sh < 0 || sy > ch) return;
+
+        const bx = sx + pad, by = sy + pad, bw = sw - pad * 2, bh = sh - pad * 2;
+        if (bw < 2 || bh < 2) return;
+
+        ctx.fillStyle = pctColor(pct);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, Math.min(3, bw * 0.12, bh * 0.12));
+        else ctx.rect(bx, by, bw, bh);
+        ctx.fill();
+
+        if (bw < 12 || bh < 8) return;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        const cx = bx + bw / 2, cy = by + bh / 2;
+        const label = cell.d;
+
+        if (bh >= 58 && bw >= 48) {
+          // Large tile: logo + ticker + %change
+          const logoEntry = logoCache.get(cell.s);
+          if (!logoEntry) loadLogo(cell.s);
+          const hasLogo = logoEntry instanceof HTMLImageElement;
+          const logoSize = Math.min(bw * 0.44, bh * 0.30, 34);
+          const logoTop = by + bh * 0.07;
+          const logoCY = logoTop + logoSize / 2;
+
+          if (hasLogo) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, logoCY, logoSize / 2 + 3, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,255,255,0.13)";
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(cx, logoCY, logoSize / 2, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(logoEntry, cx - logoSize / 2, logoTop, logoSize, logoSize);
+            ctx.restore();
+          }
+
+          const textTop = by + bh * 0.44;
+          const fs = Math.min(bw / (label.length + 1) * 1.4, bh * 0.22, 17);
+          ctx.font = `700 ${fs}px Inter,sans-serif`;
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
+          ctx.fillText(label, cx, textTop + fs * 0.5);
+          const pctStr = pct != null ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—";
+          ctx.font = `${Math.max(8, fs * 0.72)}px Inter,sans-serif`;
+          ctx.fillStyle = "rgba(255,255,255,0.72)";
+          ctx.fillText(pctStr, cx, textTop + fs * 1.9);
+        } else if (bh >= 38 && bw >= 30) {
+          const fs = Math.min(bw / (label.length + 1) * 1.4, bh * 0.28, 18);
+          ctx.font = `700 ${fs}px Inter,sans-serif`;
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
+          ctx.fillText(label, cx, cy - fs * 0.55);
+          const pctStr = pct != null ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—";
+          ctx.font = `${Math.max(8, fs * 0.72)}px Inter,sans-serif`;
+          ctx.fillStyle = "rgba(255,255,255,0.72)";
+          ctx.fillText(pctStr, cx, cy + fs * 0.65);
+        } else if (bh >= 14 && bw >= 14) {
+          const fs = Math.min(bw / (label.length + 1) * 1.3, bh * 0.46, 13);
+          ctx.font = `700 ${fs}px Inter,sans-serif`;
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fillText(label, cx, cy);
+        }
+      });
+
+      // Zoom hint overlay
+      if (zoom > 1.05) {
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(0, ch - 20, cw, 20);
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.font = "10px Inter,sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${zoom.toFixed(1)}×  •  Rueda: zoom  •  Arrastrar: mover  •  Doble clic: reset`, cw / 2, ch - 10);
+        ctx.restore();
+      }
+    }
+
+    // ── Fetch prices in batches of 100 to avoid URL length limits ──
+    async function fetchAll() {
+      prices = {};
+      statusEl.textContent = "Cargando…";
+      draw();
+      const syms = currentStocks().map(s => s.s);
+      const BATCH = 100;
+      try {
+        for (let i = 0; i < syms.length; i += BATCH) {
+          const chunk = syms.slice(i, i + BATCH);
+          const r = await fetch(`${API_BASE_URL}/prices?symbols=${encodeURIComponent(chunk.join(","))}`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j = await r.json();
+          Object.entries(j).forEach(([sym, data]) => {
+            if (data.price != null) {
+              const pct = (data.prev != null && data.prev > 0)
+                ? ((data.price - data.prev) / data.prev) * 100
+                : null;
+              prices[sym] = { price: data.price, pct };
+            }
+          });
+        }
+      } catch (err) {
+        statusEl.textContent = "Error al cargar datos";
+        draw();
+        return;
+      }
+      const n = Object.keys(prices).length;
+      statusEl.textContent = `${n} valores · ${new Date().toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"})}`;
+      draw();
+    }
+
+    // ── Zoom (wheel) ────────────────────────────────────────────────
+    canvas.addEventListener("wheel", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = canvas.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const cw = wrap.clientWidth, ch = wrap.clientHeight;
+      const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+      const newZoom = Math.max(1, Math.min(32, zoom * factor));
+      if (newZoom === zoom) return;
+      panX = mx + (panX - mx) * (newZoom / zoom);
+      panY = my + (panY - my) * (newZoom / zoom);
+      zoom = newZoom;
+      clampPan(cw, ch);
+      canvas.style.cursor = zoom > 1 ? "grab" : "crosshair";
+      draw();
+    }, { passive: false });
+
+    // ── Pan (drag) ──────────────────────────────────────────────────
+    canvas.addEventListener("mousedown", e => {
+      if (e.button !== 0 || zoom <= 1) return;
+      isPanning = true;
+      panStartX = e.clientX; panStartY = e.clientY;
+      panOriX = panX; panOriY = panY;
+      canvas.style.cursor = "grabbing";
+      e.stopPropagation();
+    });
+    function onPanMove(e) {
+      if (!isPanning) return;
+      const cw = wrap.clientWidth, ch = wrap.clientHeight;
+      panX = panOriX - (e.clientX - panStartX);
+      panY = panOriY - (e.clientY - panStartY);
+      clampPan(cw, ch);
+      tip.style.display = "none";
+      draw();
+    }
+    function onPanUp() {
+      if (!isPanning) return;
+      isPanning = false;
+      canvas.style.cursor = zoom > 1 ? "grab" : "crosshair";
+    }
+    document.addEventListener("mousemove", onPanMove);
+    document.addEventListener("mouseup", onPanUp);
+
+    // ── Double-click: reset zoom ────────────────────────────────────
+    canvas.addEventListener("dblclick", e => {
+      resetView();
+      draw();
+      e.stopPropagation();
+    });
+
+    // ── Tooltip (uses world coords) ─────────────────────────────────
+    canvas.addEventListener("mousemove", e => {
+      if (isPanning) return;
+      const r = canvas.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const wx = (mx + panX) / zoom, wy = (my + panY) / zoom;
+      const cell = layoutCells.find(c => wx >= c.x && wx <= c.x + c.w && wy >= c.y && wy <= c.y + c.h);
+      if (!cell) { tip.style.display = "none"; return; }
+      const info = prices[cell.s];
+      const pct = info ? ((info.pct >= 0 ? "+" : "") + info.pct.toFixed(2) + "%") : "Sin datos";
+      const pc = info ? (info.pct >= 0 ? "#4caf50" : "#ef5350") : "#888";
+      const priceStr = info ? `${currentCur()} ${info.price.toLocaleString("es", {minimumFractionDigits:2,maximumFractionDigits:2})}  ` : "";
+      tip.innerHTML = `<strong>${cell.d}</strong> <span style="opacity:.6">${cell.n}</span><br><span style="opacity:.5">${cell.sec}</span>  ${priceStr}<span style="color:${pc}">${pct}</span>`;
+      tip.style.display = "block";
+      let tx = mx + 14, ty = my - 10;
+      if (tx + 250 > r.width) tx = mx - 255;
+      if (ty + 60 > r.height) ty = my - 64;
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+    });
+    canvas.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+
+    indexSel.addEventListener("change", () => {
+      widget.config.index = indexSel.value;
+      widget.config.sector = "Todos";
+      resetView(); layoutW = 0;
+      rebuildSectorSel();
+      saveHubState();
+      fetchAll();
+    });
+    sectorSel.addEventListener("change", () => {
+      widget.config.sector = sectorSel.value;
+      resetView(); layoutW = 0;
+      saveHubState();
+      draw();
+    });
+    [indexSel, sectorSel].forEach(el => el.addEventListener("mousedown", e => e.stopPropagation()));
+
+    const ro = new ResizeObserver(() => { layoutW = 0; draw(); });
+    ro.observe(wrap);
+
+    ref.refresh = fetchAll;
+    ref.onResize = () => { layoutW = 0; draw(); };
+    ref.cleanup = () => {
+      ro.disconnect();
+      document.removeEventListener("mousemove", onPanMove);
+      document.removeEventListener("mouseup", onPanUp);
+    };
+
+    fetchAll();
+  }
+
+  // Portfolio summary widget
+  function renderPortfolioWidget(widget, body, ref) {
+    if (!widget.config) widget.config = {};
+    body.classList.add("hw-portfolio-body");
+    const wid = widget.id;
+
+    // ── Header row: label + selector ────────────────────────────────
+    const headerRow = document.createElement("div");
+    headerRow.className = "hw-pb-header";
+    const balanceLabel = document.createElement("span");
+    balanceLabel.className = "hw-pb-label";
+    balanceLabel.textContent = "Balance";
+    const sel = document.createElement("select");
+    sel.className = "hw-pb-sel";
+    sel.addEventListener("mousedown", e => e.stopPropagation());
+    sel.addEventListener("change", () => {
+      widget.config.portfolioId = sel.value || null;
+      saveHubState();
+      renderPortfolioData();
+    });
+    headerRow.appendChild(balanceLabel);
+    headerRow.appendChild(sel);
+    body.appendChild(headerRow);
+
+    // ── Amount + return row ──────────────────────────────────────────
+    const amountRow = document.createElement("div");
+    amountRow.className = "hw-pb-amount-row";
+    amountRow.innerHTML = `
+      <span class="hw-pb-amount" id="hwp-value-${wid}">—</span>
+      <span class="hw-pb-return" id="hwp-return-${wid}"></span>`;
+    body.appendChild(amountRow);
+
+    // ── Segmented bar ────────────────────────────────────────────────
+    const bar = document.createElement("div");
+    bar.className = "hw-pb-bar";
+    body.appendChild(bar);
+
+    // ── Ticker grid ──────────────────────────────────────────────────
+    const grid = document.createElement("div");
+    grid.className = "hw-pb-grid";
+    body.appendChild(grid);
+
+    function populateSelector() {
+      const portfolios = getPortfolios();
+      sel.innerHTML = portfolios.length
+        ? portfolios.map(p => `<option value="${p.id}">${p.name}</option>`).join("")
+        : `<option value="">Sin portafolios</option>`;
+      if (widget.config.portfolioId && portfolios.find(p => p.id === widget.config.portfolioId)) {
+        sel.value = widget.config.portfolioId;
+      } else if (portfolios.length) {
+        sel.value = portfolios[0].id;
+        widget.config.portfolioId = portfolios[0].id;
+        saveHubState();
+      }
+    }
+
+    function renderPortfolioData() {
+      const portfolioId = widget.config.portfolioId;
+      const portfolio = portfolioId ? getPortfolios().find(p => p.id === portfolioId) : null;
+      const valueEl = document.getElementById(`hwp-value-${wid}`);
+      const retEl = document.getElementById(`hwp-return-${wid}`);
+
+      if (!portfolio) {
+        if (valueEl) valueEl.textContent = "—";
+        if (retEl) { retEl.textContent = ""; retEl.className = "hw-pb-return"; }
+        bar.innerHTML = `<div class="hw-pb-bar-seg" style="flex:1;background:rgba(255,255,255,0.06)"></div>`;
+        grid.innerHTML = `<span class="hw-pb-empty">Sin portafolio</span>`;
+        return;
+      }
+
+      const positions = portfolio.positions || [];
+      const currency = portfolio.currency || "USD";
+      const { totalInvested } = calcPortfolioTotals(positions, currency);
+      const cashBalance = portfolio.cashBalance || 0;
+
+      // Current value + return
+      let totalCurrentValue = 0, totalCostPriced = 0, hasAnyPrice = false;
+      positions.forEach(pos => {
+        const price = getCachedPrice(pos.ticker);
+        const posCur = getPosCurrency(pos, currency);
+        if (price !== null) {
+          hasAnyPrice = true;
+          totalCurrentValue += convertAmount(price * (pos.quantity || 0), posCur, currency) ?? (price * (pos.quantity || 0));
+          totalCostPriced += convertAmount(calcPositionTotals(pos).total, posCur, currency) ?? calcPositionTotals(pos).total;
+        }
+      });
+      const displayCurrentValue = (hasAnyPrice ? totalCurrentValue : 0) + cashBalance;
+      if (valueEl) valueEl.textContent = (hasAnyPrice || cashBalance > 0) ? formatCurrency(displayCurrentValue, currency) : formatCurrency(totalInvested, currency);
+
+      const realizedPnL = portfolio.realizedPnL !== undefined ? portfolio.realizedPnL : reconstructRealizedPnL(portfolio);
+      const unrealizedPnL = hasAnyPrice ? totalCurrentValue - totalCostPriced : 0;
+      const returnAmt = hasAnyPrice ? unrealizedPnL + realizedPnL : null;
+      const returnPct = returnAmt !== null && displayCurrentValue > 0 ? (returnAmt / displayCurrentValue * 100) : null;
+      if (retEl) {
+        if (returnPct !== null) {
+          const sign = returnPct >= 0 ? "+" : "";
+          retEl.textContent = sign + returnPct.toFixed(2) + "%";
+          retEl.className = "hw-pb-return " + (returnPct >= 0 ? "pos" : "neg");
+        } else {
+          retEl.textContent = ""; retEl.className = "hw-pb-return";
+        }
+      }
+
+      // Build segments from invested totals
+      const cash = cashBalance || 0;
+      const grandTotal = totalInvested + cash;
+
+      if (!positions.length && cash <= 0) {
+        bar.innerHTML = `<div class="hw-pb-bar-seg" style="flex:1;background:rgba(255,255,255,0.06)"></div>`;
+        grid.innerHTML = `<span class="hw-pb-empty">Sin posiciones</span>`;
+        return;
+      }
+
+      // Segmented bar
+      const segs = positions.map((pos, i) => {
+        const t = calcPositionTotals(pos);
+        const posCur = getPosCurrency(pos, currency);
+        const posTotal = convertAmount(t.total, posCur, currency) ?? t.total;
+        const pct = grandTotal > 0 ? posTotal / grandTotal : 0;
+        return { ticker: pos.ticker, pct, color: CHART_COLORS[i % CHART_COLORS.length] };
+      });
+      if (cash > 0) segs.push({ ticker: "Cash", pct: grandTotal > 0 ? cash / grandTotal : 0, color: "#4ade80" });
+
+      const SMALL_THRESHOLD = 0.05; // < 5% → tooltip only, no label
+
+      // Tooltip element (shared)
+      let tooltip = bar.querySelector(".hw-pb-tip");
+      if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.className = "hw-pb-tip";
+        bar.parentElement.style.position = "relative";
+        bar.parentElement.appendChild(tooltip);
+      }
+
+      bar.innerHTML = "";
+      segs.forEach(s => {
+        const seg = document.createElement("div");
+        seg.className = "hw-pb-bar-seg";
+        seg.style.flex = s.pct.toFixed(4);
+        seg.style.background = s.color;
+        seg.addEventListener("mouseenter", e => {
+          tooltip.textContent = `${s.ticker}  ${(s.pct * 100).toFixed(1)}%`;
+          tooltip.style.color = s.color;
+          tooltip.classList.add("visible");
+          const barRect = bar.getBoundingClientRect();
+          const segRect = seg.getBoundingClientRect();
+          const cx = segRect.left + segRect.width / 2 - barRect.left;
+          tooltip.style.left = Math.min(Math.max(cx, 30), bar.clientWidth - 30) + "px";
+        });
+        seg.addEventListener("mouseleave", () => tooltip.classList.remove("visible"));
+        bar.appendChild(seg);
+      });
+
+      // Ticker grid — hide items below threshold (they're visible via bar tooltip)
+      grid.innerHTML = segs
+        .filter(s => s.pct >= SMALL_THRESHOLD)
+        .map(s => `<div class="hw-pb-grid-item">
+          <span class="hw-pb-grid-ticker">${s.ticker}</span>
+          <span class="hw-pb-grid-pct" style="color:${s.color}">${(s.pct * 100).toFixed(1)}%</span>
+        </div>`).join("");
+    }
+
+    async function refresh() {
+      // Sync from Firestore first if local is empty or stale
+      const localEmpty = !getPortfolios().length;
+      if (localEmpty) {
+        const synced = await syncPortfoliosFromCloud();
+        if (synced) populateSelector();
+      }
+      renderPortfolioData();
+      const portfolio = widget.config.portfolioId ? getPortfolios().find(p => p.id === widget.config.portfolioId) : null;
+      if (!portfolio || !portfolio.positions?.length) return;
+      const tickers = [...new Set(portfolio.positions.map(p => p.ticker))];
+      const cache = getPriceCache();
+      tickers.forEach(t => { if (cache[t]) cache[t].ts = 0; });
+      savePriceCache(cache);
+      const posCurrencies = portfolio.positions.map(p => getPosCurrency(p, portfolio.currency || "USD"));
+      await Promise.all([fetchPricesBatch(tickers), fetchExchangeRates(posCurrencies, portfolio.currency || "USD")]);
+      renderPortfolioData();
+    }
+
+    populateSelector();
+    renderPortfolioData();
+
+    // Wait for Firebase auth to resolve, then sync portfolios from Firestore
+    async function initCloudSync() {
+      const firebaseAuth = window.BlackPortfolioAuth?.firebaseAuth;
+      if (!firebaseAuth) return;
+
+      const doSync = async () => {
+        const synced = await syncPortfoliosFromCloud();
+        if (synced) populateSelector();
+        renderPortfolioData();
+        const portfolio = widget.config.portfolioId ? getPortfolios().find(p => p.id === widget.config.portfolioId) : null;
+        if (!portfolio?.positions?.length) return;
+        const tickers = [...new Set(portfolio.positions.map(p => p.ticker))];
+        const posCurrencies = portfolio.positions.map(p => getPosCurrency(p, portfolio.currency || "USD"));
+        Promise.all([fetchPricesBatch(tickers), fetchExchangeRates(posCurrencies, portfolio.currency || "USD")])
+          .then(() => renderPortfolioData());
+      };
+
+      // If user is already resolved, run immediately; otherwise wait for auth state
+      if (firebaseAuth.currentUser) {
+        doSync();
+      } else {
+        const unsub = firebaseAuth.onAuthStateChanged(user => {
+          unsub();
+          if (user) doSync();
+        });
+        ref._authUnsub = unsub;
+      }
+    }
+    initCloudSync();
+
+    const _origCleanup = ref.cleanup;
+    ref.cleanup = () => {
+      if (ref._authUnsub) try { ref._authUnsub(); } catch {}
+      if (_origCleanup) _origCleanup();
+    };
+
+    ref.refresh = refresh;
+  }
+
   // ── Toolbar actions ─────────────────────────────────────────────────────
   exportBtn.addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
@@ -6957,4 +9066,33 @@ changePasswordForm.addEventListener("submit", async e => {
   });
 
   renderAll();
+
+  // Sync hub state from Firestore after Firebase auth resolves
+  (async () => {
+    const firebaseAuth = window.BlackPortfolioAuth?.firebaseAuth;
+    if (!firebaseAuth) return;
+    const doSync = async () => {
+      const synced = await syncHubStateFromCloud();
+      if (synced) renderAll();
+    };
+    if (firebaseAuth.currentUser) {
+      doSync();
+    } else {
+      firebaseAuth.onAuthStateChanged(user => { if (user) doSync(); });
+    }
+  })();
+})();
+
+// ── KPI info-button: tap/click toggle for touch devices ──────────────────────
+(function initKpiTooltips() {
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".kpi-info-btn");
+    document.querySelectorAll(".kpi-info-btn.is-active").forEach(b => {
+      if (b !== btn) b.classList.remove("is-active");
+    });
+    if (btn) {
+      btn.classList.toggle("is-active");
+      e.stopPropagation();
+    }
+  });
 })();
