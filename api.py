@@ -1075,12 +1075,7 @@ def seasonality(request: Request, symbol: str):
 @app.get("/api/chart/{symbol}")
 @limiter.limit("30/minute")
 def chart(request: Request, symbol: str, range: str = "1d", interval: str = "5m"):
-    cache_key = f"{symbol}:{range}:{interval}"
-    cached = _CHART_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-
-    # Binance route for crypto
+    # Crypto: separate CoinGecko cache — never serve stale Yahoo Finance fallback
     if _is_crypto(symbol):
         cg_key = f"cg:{symbol}:{range}"
         cg_cached = _CHART_CACHE.get(cg_key)
@@ -1092,8 +1087,43 @@ def chart(request: Request, symbol: str, range: str = "1d", interval: str = "5m"
                 data = _coingecko_ohlc_to_yahoo(candles, symbol)
                 _CHART_CACHE.set(cg_key, data)
                 return data
+        except Exception as _cg_err:
+            import logging as _log
+            _log.warning("CoinGecko fallback for %s: %s", symbol, _cg_err)
+        # CoinGecko unavailable — fetch Yahoo Finance but DON'T cache so next request retries CG
+        _RANGE_SECONDS_CG = {
+            "1d": 86400, "5d": 432000, "1mo": 2592000, "3mo": 7776000,
+            "6mo": 15552000, "1y": 31536000, "2y": 63072000, "5y": 157680000,
+            "10y": 315360000, "30y": 946080000,
+        }
+        now_cg = int(_time_module.time())
+        if range in _RANGE_SECONDS_CG:
+            p1_cg = now_cg - _RANGE_SECONDS_CG[range]
+            url_cg = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+                      f"?period1={p1_cg}&period2={now_cg}&interval={interval}"
+                      f"&includePrePost=false&events=div%2Csplits")
+        else:
+            url_cg = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+                      f"?range={range}&interval={interval}"
+                      f"&includePrePost=false&events=div%2Csplits")
+        res_cg = _HTTP_SESSION.get(url_cg)
+        if res_cg.status_code != 200:
+            raise HTTPException(status_code=res_cg.status_code, detail="Error de Yahoo Finance")
+        yf_data = res_cg.json()
+        # Override "CCC" so UI always shows "Crypto" even on Yahoo Finance fallback
+        try:
+            for r in yf_data.get("chart", {}).get("result", []):
+                if r.get("meta", {}).get("fullExchangeName") == "CCC":
+                    r["meta"]["fullExchangeName"] = "Crypto"
+                    r["meta"]["exchangeName"] = "Crypto"
         except Exception:
-            pass  # fallback to Yahoo Finance
+            pass
+        return yf_data  # not cached — forces CoinGecko retry on next request
+
+    cache_key = f"{symbol}:{range}:{interval}"
+    cached = _CHART_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
 
     _RANGE_SECONDS = {
         "1d": 86400, "5d": 432000, "1mo": 2592000, "3mo": 7776000,
