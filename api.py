@@ -256,6 +256,35 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
+@app.get("/api/debug/binance")
+def debug_binance():
+    """Temporal: verifica conectividad con Binance desde Railway."""
+    import time as _t
+    results = {}
+    for sym in ["BTCUSDT", "BNBUSDT"]:
+        try:
+            r = _HTTP_SESSION.get(
+                f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}",
+                timeout=8,
+            )
+            results[sym] = {"status": r.status_code, "ok": r.status_code == 200,
+                            "price": r.json().get("lastPrice") if r.status_code == 200 else None,
+                            "error": None}
+        except Exception as e:
+            results[sym] = {"status": None, "ok": False, "price": None, "error": str(e)}
+    # Also test klines
+    try:
+        r2 = _HTTP_SESSION.get(
+            "https://api.binance.com/api/v3/klines",
+            params={"symbol":"BTCUSDT","interval":"1d","limit":3},
+            timeout=8,
+        )
+        results["klines_test"] = {"status": r2.status_code, "ok": r2.status_code == 200,
+                                   "candles": len(r2.json()) if r2.status_code == 200 else 0}
+    except Exception as e:
+        results["klines_test"] = {"status": None, "ok": False, "error": str(e)}
+    return results
+
 @app.get("/api/search")
 @limiter.limit("60/minute")
 def search(request: Request, q: str):
