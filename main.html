@@ -216,6 +216,25 @@
           </div>
 
           <div class="tracker-kpi-grid">
+            <!-- ── Hero row: 2 primary KPIs ─────────────────────────────── -->
+            <div class="summary-item tracker-kpi-hero">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Precio de mercado actual de cada posición multiplicado por la cantidad de acciones. Se actualiza al presionar "Actualizar precios".</span>
+              </div>
+              <span>Valor actual</span>
+              <strong id="dashCurrentValue">—</strong>
+            </div>
+            <div class="summary-item tracker-kpi-hero">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Valor actual del portafolio menos el total invertido (compras + comisiones + IVA). Puede ser negativo si el mercado bajó.</span>
+              </div>
+              <span>Retorno total</span>
+              <strong id="dashReturnAmt">—</strong>
+              <em id="dashReturnPct">—</em>
+            </div>
+            <!-- ── Secondary row: 6 smaller KPIs ─────────────────────────── -->
             <div class="summary-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
@@ -226,23 +245,9 @@
             <div class="summary-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
-                <span class="kpi-tooltip">Precio de mercado actual de cada posición multiplicado por la cantidad de acciones. Se actualiza al presionar "Actualizar precios".</span>
+                <span class="kpi-tooltip">Tasa interna de retorno anualizada (XIRR) que pondera el momento exacto de cada flujo: compras, ventas y dividendos. Más precisa que el retorno simple cuando hay múltiples aportes.</span>
               </div>
-              <span>Valor actual</span><strong id="dashCurrentValue">—</strong>
-            </div>
-            <div class="summary-item">
-              <div class="kpi-info-wrap">
-                <button class="kpi-info-btn" aria-label="Información">?</button>
-                <span class="kpi-tooltip">Valor actual del portafolio menos el total invertido (compras + comisiones + IVA). Puede ser negativo si el mercado bajó.</span>
-              </div>
-              <span>Retorno total</span><strong id="dashReturnAmt">—</strong>
-            </div>
-            <div class="summary-item">
-              <div class="kpi-info-wrap">
-                <button class="kpi-info-btn" aria-label="Información">?</button>
-                <span class="kpi-tooltip">Retorno total expresado como porcentaje del dinero invertido: (Valor actual − Total invertido) ÷ Total invertido × 100.</span>
-              </div>
-              <span>Retorno %</span><strong id="dashReturnPct">—</strong>
+              <span>XIRR anual</span><strong id="dashXirr">—</strong>
             </div>
             <div class="summary-item">
               <div class="kpi-info-wrap">
@@ -256,7 +261,7 @@
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Suma de las comisiones de corretaje pagadas en todas las transacciones de compra registradas.</span>
               </div>
-              <span>Comisiones totales</span><strong id="dashTotalCommissions">$0.00</strong>
+              <span>Comisiones</span><strong id="dashTotalCommissions">$0.00</strong>
             </div>
             <div class="summary-item">
               <div class="kpi-info-wrap">
@@ -281,13 +286,19 @@
           <!-- ── Tab nav ──────────────────────────────────────────────────── -->
           <div class="tracker-tab-nav">
             <button class="tracker-tab-btn active" type="button" data-tab="summary">Resumen</button>
+            <span class="tab-group-sep" aria-hidden="true"></span>
+            <span class="tab-group-label" aria-hidden="true">Análisis</span>
             <button class="tracker-tab-btn" type="button" data-tab="desempeno">Desempeño</button>
-            <button class="tracker-tab-btn" type="button" data-tab="transacciones">Transacciones</button>
-            <button class="tracker-tab-btn" type="button" data-tab="proyeccion">Proyección</button>
-            <button class="tracker-tab-btn" type="button" data-tab="dividendos">Dividendos</button>
-            <button class="tracker-tab-btn" type="button" data-tab="rebalanceo">Rebalanceo</button>
             <button class="tracker-tab-btn" type="button" data-tab="correlacion">Correlación</button>
+            <button class="tracker-tab-btn" type="button" data-tab="rebalanceo">Rebalanceo</button>
+            <span class="tab-group-sep" aria-hidden="true"></span>
+            <span class="tab-group-label" aria-hidden="true">Proyección</span>
+            <button class="tracker-tab-btn" type="button" data-tab="proyeccion">Monte Carlo</button>
             <button class="tracker-tab-btn" type="button" data-tab="whatif">What-If</button>
+            <span class="tab-group-sep" aria-hidden="true"></span>
+            <span class="tab-group-label" aria-hidden="true">Movimientos</span>
+            <button class="tracker-tab-btn" type="button" data-tab="transacciones">Transacciones</button>
+            <button class="tracker-tab-btn" type="button" data-tab="dividendos">Dividendos</button>
           </div>
 
           <!-- ── Tab: Summary ─────────────────────────────────────────────── -->
@@ -345,10 +356,11 @@
                 <button id="addPositionBtn" class="button primary" type="button">+ Agregar posicion</button>
               </div>
               <div id="positionsTableShell" class="tracker-table-shell">
-                <table class="tracker-table">
+                <table class="tracker-table tracker-table--positions">
                   <thead>
                     <tr>
                       <th>Ticker</th>
+                      <th class="th-sparkline">30 días</th>
                       <th>Fecha</th>
                       <th>Precio prom.</th>
                       <th>Precio actual</th>

@@ -2215,6 +2215,9 @@ body.light-mode .seas-neg { color: #d93a52; }
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
+  .tracker-kpi-hero {
+    grid-column: span 2;
+  }
 
   /* Refresh prices button full-width */
   .tracker-price-status-bar {
@@ -3410,9 +3413,84 @@ body.light-mode .perf-date-pill {
 
 .tracker-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 20px;
+}
+
+.tracker-kpi-hero {
+  grid-column: span 3;
+}
+
+.tracker-kpi-hero strong {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.tracker-kpi-hero em {
+  display: block;
+  font-style: normal;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 7px;
+  opacity: 0.85;
+}
+
+/* Flash animation on KPI value update */
+@keyframes kpiFlashPos {
+  0%   { background-color: transparent; }
+  25%  { background-color: rgba(50, 214, 162, 0.14); }
+  100% { background-color: transparent; }
+}
+@keyframes kpiFlashNeg {
+  0%   { background-color: transparent; }
+  25%  { background-color: rgba(255, 107, 129, 0.14); }
+  100% { background-color: transparent; }
+}
+.kpi-flash-pos { animation: kpiFlashPos 0.75s ease-out; border-radius: 18px; }
+.kpi-flash-neg { animation: kpiFlashNeg 0.75s ease-out; border-radius: 18px; }
+
+/* Skeleton shimmer for price-loading cells */
+@keyframes skeletonShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.is-loading-prices .muted-val {
+  display: inline-block;
+  min-width: 56px;
+  height: 13px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.05) 25%,
+    rgba(255,255,255,0.13) 50%,
+    rgba(255,255,255,0.05) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s infinite;
+  border-radius: 4px;
+  color: transparent;
+  vertical-align: middle;
+}
+
+/* Tab group separators and labels */
+.tab-group-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 3px;
+  align-self: center;
+  flex-shrink: 0;
+}
+.tab-group-label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgba(255, 255, 255, 0.22);
+  padding: 0 3px;
+  align-self: center;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tracker-main-grid {
@@ -3471,6 +3549,79 @@ body.light-mode .perf-date-pill {
 .tracker-positions-section {
   margin-top: 0;
 }
+
+/* ── Sparklines ──────────────────────────────────────────────────────────── */
+.td-sparkline {
+  padding: 10px 12px !important;
+  width: 96px;
+  min-width: 96px;
+}
+.th-sparkline {
+  width: 96px;
+}
+.pos-sparkline {
+  display: block;
+}
+
+/* ── Position expand (lots drill-down) ───────────────────────────────────── */
+.pos-expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-right: 5px;
+  vertical-align: middle;
+  color: var(--muted);
+  opacity: 0.45;
+  transition: opacity 0.15s;
+  line-height: 0;
+}
+.pos-expand-btn:hover { opacity: 1; }
+.pos-expand-icon {
+  transition: transform 0.2s ease;
+  display: block;
+}
+.pos-expand-btn.is-expanded .pos-expand-icon {
+  transform: rotate(90deg);
+}
+
+.pos-lots-row > td { padding: 0 !important; border-bottom: none; }
+.pos-lots-cell { padding: 0 !important; }
+.pos-lots-inner {
+  padding: 0 0 0 40px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.pos-lots-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 0;
+  background: rgba(255,255,255,0.015);
+}
+.pos-lots-table th,
+.pos-lots-table td {
+  padding: 9px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: left;
+}
+.pos-lots-table th { font-weight: 600; font-size: 0.75rem; }
+.pos-lots-table tbody tr:last-child td { border-bottom: none; }
+
+.lot-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.lot-type-compra   { background: rgba(74,222,128,0.1);  color: #4ade80; }
+.lot-type-venta    { background: rgba(255,107,129,0.1); color: #ff6b81; }
+.lot-type-dividendo{ background: rgba(111,134,255,0.1); color: #7c9aff; }
+
+/* positions table needs wider min-width for the sparkline column */
+.tracker-table--positions { min-width: 900px; }
 
 .pos-ticker-dot {
   display: inline-block;
@@ -3763,7 +3914,11 @@ body.light-mode .perf-date-pill {
 
 @media (max-width: 860px) {
   .tracker-kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .tracker-kpi-hero {
+    grid-column: span 2;
   }
 
   .tracker-main-grid {
@@ -3779,6 +3934,10 @@ body.light-mode .perf-date-pill {
 @media (max-width: 560px) {
   .tracker-kpi-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .tracker-kpi-hero {
+    grid-column: span 2;
   }
 
   .portfolio-cards-grid {

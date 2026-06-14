@@ -4985,6 +4985,113 @@ async function renderPortfolioDashboard() {
   }
 }
 
+// ── XIRR (Newton-Raphson) ──────────────────────────────────────────────────
+function _xirrNpv(amounts, yrs, rate) {
+  let npv = 0, dnpv = 0;
+  for (let j = 0; j < amounts.length; j++) {
+    const f = Math.pow(1 + rate, yrs[j]);
+    if (!isFinite(f) || f === 0) return { npv: NaN, dnpv: NaN };
+    npv  += amounts[j] / f;
+    dnpv -= yrs[j] * amounts[j] / (f * (1 + rate));
+  }
+  return { npv, dnpv };
+}
+
+function calcXirr(cashFlows) {
+  if (!cashFlows || cashFlows.length < 2) return null;
+  if (!cashFlows.some(f => f.amount < 0) || !cashFlows.some(f => f.amount > 0)) return null;
+  const t0      = cashFlows[0].date.getTime();
+  const amounts = cashFlows.map(f => f.amount);
+  const yrs     = cashFlows.map(f => (f.date.getTime() - t0) / (365.25 * 864e5));
+  let rate = 0.1;
+  for (let i = 0; i < 100; i++) {
+    const { npv, dnpv } = _xirrNpv(amounts, yrs, rate);
+    if (!isFinite(npv) || Math.abs(dnpv) < 1e-12) return null;
+    const delta = npv / dnpv;
+    rate -= delta;
+    if (Math.abs(delta) < 1e-7) return isFinite(rate) && rate > -1 ? rate : null;
+  }
+  return null;
+}
+
+function buildXirrFlows(portfolio, currentValue) {
+  const txs = (portfolio.transactions || [])
+    .filter(t => t.date && t.net != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!txs.length || currentValue <= 0) return null;
+  const flows = txs.map(tx => ({
+    amount: tx.type === "COMPRA" ? -Math.abs(tx.net) : Math.abs(tx.net),
+    date: new Date(tx.date)
+  }));
+  flows.push({ amount: currentValue, date: new Date() });
+  return flows;
+}
+
+// ── Sparklines ─────────────────────────────────────────────────────────────
+const _sparklineCache = {};
+
+async function drawAllSparklines(positions) {
+  const tickers = [...new Set(positions.map(p => p.ticker))];
+  await Promise.all(tickers.map(async (ticker) => {
+    const canvases = [...document.querySelectorAll(".pos-sparkline")].filter(c => c.dataset.ticker === ticker);
+    if (!canvases.length) return;
+    let closes = _sparklineCache[ticker];
+    if (!closes) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/chart/${encodeURIComponent(ticker)}?range=1mo&interval=1d`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const result = data?.chart?.result?.[0];
+        if (!result) return;
+        const raw = result.indicators?.quote?.[0]?.close || [];
+        closes = raw.filter(v => v !== null && v !== undefined && isFinite(v));
+        if (closes.length >= 2) _sparklineCache[ticker] = closes;
+        else return;
+      } catch { return; }
+    }
+    canvases.forEach(c => _drawSparkline(c, closes));
+  }));
+}
+
+function _drawSparkline(canvas, values) {
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const min  = Math.min(...values);
+  const max  = Math.max(...values);
+  const rng  = max - min || 1;
+  const isUp = values[values.length - 1] >= values[0];
+  const col  = isUp ? "#32d6a2" : "#ff6b81";
+  const pts  = values.map((v, i) => ({
+    x: (i / (values.length - 1)) * w,
+    y: h - ((v - min) / rng) * (h - 4) - 2
+  }));
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, h);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length - 1].x, h);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, isUp ? "rgba(50,214,162,0.2)" : "rgba(255,107,129,0.2)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = col;
+  ctx.lineWidth   = 1.5;
+  ctx.lineJoin    = "round";
+  ctx.stroke();
+}
+
+// ── KPI flash animation ─────────────────────────────────────────────────────
+function flashKpi(el, isPositive) {
+  if (!el) return;
+  el.classList.remove("kpi-flash-pos", "kpi-flash-neg");
+  void el.offsetWidth;
+  el.classList.add(isPositive ? "kpi-flash-pos" : "kpi-flash-neg");
+}
+
 function _doRenderDashboard(portfolio) {
   const positions = portfolio.positions || [];
   const currency = portfolio.currency || "USD";
@@ -5035,13 +5142,30 @@ function _doRenderDashboard(portfolio) {
     retAmtEl.className = returnAmt >= 0 ? "return-pos" : "return-neg";
     retPctEl.textContent = sign + returnPct.toFixed(2) + "%";
     retPctEl.className = returnPct >= 0 ? "return-pos" : "return-neg";
+    if (hasAnyPrice) flashKpi(retAmtEl, returnAmt >= 0);
   } else {
     retAmtEl.textContent = "—"; retAmtEl.className = "";
     retPctEl.textContent = "—"; retPctEl.className = "";
   }
 
+  // XIRR
+  const xirrEl = document.getElementById("dashXirr");
+  if (xirrEl) {
+    const flows = buildXirrFlows(portfolio, displayCurrentValue);
+    const xirrRate = flows ? calcXirr(flows) : null;
+    if (xirrRate !== null) {
+      const sign2 = xirrRate >= 0 ? "+" : "";
+      xirrEl.textContent = sign2 + (xirrRate * 100).toFixed(2) + "%";
+      xirrEl.className = xirrRate >= 0 ? "return-pos" : "return-neg";
+    } else {
+      xirrEl.textContent = "—";
+      xirrEl.className = "";
+    }
+  }
+
   renderSummaryTable(positions, totalInvested, currency, cashBalance);
-  renderPositionsTable(positions, totalInvested, currency);
+  renderPositionsTable(positions, totalInvested, currency, portfolio.transactions || []);
+  if (positions.length) drawAllSparklines(positions);
   drawDonutChart(document.getElementById("portfolioDonutChart"), positions, totalInvested, currency, cashBalance);
   renderDonutLegend(positions, totalInvested, currency, cashBalance);
   drawHoldingsBarChart(document.getElementById("holdingsBarChart"), positions, currency);
@@ -5111,7 +5235,7 @@ function renderSummaryTable(positions, totalInvested, currency, cashBalance) {
   tbody.innerHTML = rows.join("");
 }
 
-function renderPositionsTable(positions, totalInvested, currency) {
+function renderPositionsTable(positions, totalInvested, currency, transactions) {
   const tbody = document.getElementById("positionsTableBody");
   const tableShell = document.getElementById("positionsTableShell");
   const emptyMsg = document.getElementById("noPositionsMsg");
@@ -5123,6 +5247,7 @@ function renderPositionsTable(positions, totalInvested, currency) {
   }
   tableShell.classList.remove("hidden");
   emptyMsg.classList.add("hidden");
+  tableShell.classList.add("is-loading-prices");
 
   tbody.innerHTML = positions.map((pos, i) => {
     const t = calcPositionTotals(pos);
@@ -5143,21 +5268,57 @@ function renderPositionsTable(positions, totalInvested, currency) {
       retCell = `<span class="${retAmt >= 0 ? "return-pos" : "return-neg"}">${sign}${retPct.toFixed(2)}%<br><small>${sign}${formatCurrency(retAmt, currency)}</small></span>`;
     }
     const currTag = posCur !== currency ? ` <small class="fx-tag">${posCur}</small>` : "";
-    return `<tr>
-      <td><span class="pos-ticker-dot" style="background:${color}"></span><strong>${pos.ticker}</strong>${currTag}</td>
+
+    // Lots sub-rows from transaction history
+    const txs = (transactions || [])
+      .filter(tx => tx.ticker === pos.ticker)
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const lotsHtml = txs.length ? `<tr class="pos-lots-row" data-lots-for="${pos.id}" style="display:none">
+      <td colspan="10" class="pos-lots-cell"><div class="pos-lots-inner">
+        <table class="pos-lots-table">
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Precio</th><th>Total neto</th></tr></thead>
+          <tbody>${txs.map(tx => {
+            const d = tx.date ? new Date(tx.date.includes("T") ? tx.date : tx.date + "T12:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+            const tc = tx.type === "COMPRA" ? "compra" : tx.type === "VENTA" ? "venta" : "dividendo";
+            return `<tr><td>${d}</td><td><span class="lot-type-badge lot-type-${tc}">${tx.type}</span></td><td>${parseFloat((tx.quantity || 0).toFixed(5))}</td><td>${formatCurrency(tx.price || 0, tx.currency || posCur)}</td><td>${formatCurrency(Math.abs(tx.net || 0), tx.currency || posCur)}</td></tr>`;
+          }).join("")}</tbody>
+        </table>
+      </div></td></tr>` : "";
+
+    return `<tr class="pos-row">
+      <td>
+        ${txs.length ? `<button class="pos-expand-btn" type="button" data-lots-for="${pos.id}" aria-label="Ver lotes"><svg class="pos-expand-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>` : ""}
+        <span class="pos-ticker-dot" style="background:${color}"></span><strong>${pos.ticker}</strong>${currTag}
+      </td>
+      <td class="td-sparkline"><canvas class="pos-sparkline" data-ticker="${pos.ticker}" width="80" height="28"></canvas></td>
       <td>${dateStr}</td>
       <td>${formatCurrency(pos.avgPrice, posCur)}</td>
       <td>${currentPrice !== null ? formatCurrency(currentPrice, posCur) : '<span class="muted-val">…</span>'}</td>
       <td>${parseFloat(pos.quantity.toFixed(5))}</td>
       <td>${formatCurrency(costConverted, currency)}</td>
-      <td>${currentValue !== null ? formatCurrency(currentValue, currency) : "—"}</td>
+      <td>${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
       <td>${retCell}</td>
       <td class="pos-actions-cell">
         <button class="pos-withdraw-btn" type="button" data-pos-id="${pos.id}" title="Retirar posicion">Retirar</button>
         <button class="pos-delete-btn" type="button" data-pos-id="${pos.id}" title="Eliminar">✕</button>
       </td>
-    </tr>`;
+    </tr>${lotsHtml}`;
   }).join("");
+
+  // Remove skeleton once prices are in the DOM
+  if (positions.some(p => getCachedPrice(p.ticker) !== null)) {
+    tableShell.classList.remove("is-loading-prices");
+  }
+
+  tbody.querySelectorAll(".pos-expand-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const lotsRow = tbody.querySelector(`[data-lots-for="${btn.dataset.lotsFor}"]`);
+      if (!lotsRow) return;
+      const open = lotsRow.style.display !== "none";
+      lotsRow.style.display = open ? "none" : "";
+      btn.classList.toggle("is-expanded", !open);
+    });
+  });
 
   tbody.querySelectorAll(".pos-withdraw-btn").forEach((btn) => {
     btn.addEventListener("click", () => openWithdrawModal(btn.dataset.posId));
