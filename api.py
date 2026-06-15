@@ -12,6 +12,7 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import os
+import json
 import stripe
 import time as _time_module
 
@@ -1234,6 +1235,83 @@ async def stripe_create_session(request: Request, body: CheckoutRequest):
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ── AI Insights (OpenRouter) ──────────────────────────────────────────────────
+# Proxy server-side: la API key NUNCA llega al navegador. Configúrala en Railway:
+#   OPENROUTER_API_KEY  (obligatoria)
+#   OPENROUTER_MODEL    (opcional) — cadena de modelos separada por comas; se intenta
+#                       en orden hasta que uno responda. Por defecto prueba el modelo
+#                       gratuito y, si está saturado (429), cae al de pago equivalente
+#                       (≈ $0.00006 por reporte). Así el resumen casi siempre aparece.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL   = os.environ.get(
+    "OPENROUTER_MODEL",
+    "google/gemma-4-26b-a4b-it:free,google/gemma-4-26b-a4b-it",
+)
+
+class InsightsRequest(BaseModel):
+    metrics: dict
+    lang: str = "es"
+
+def _openrouter_chat(models, messages):
+    """Intenta cada modelo en orden; devuelve (texto, modelo_usado) o (None, detalle_error)."""
+    last_detail = "sin modelos configurados"
+    for model in models:
+        try:
+            r = _HTTP_SESSION.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "HTTP-Referer": "https://portify-6467f.web.app",
+                    "X-Title": "BlackPortfolio",
+                },
+                json={"model": model, "messages": messages,
+                      "temperature": 0.4, "max_tokens": 800},
+                timeout=45,
+            )
+        except requests.RequestException as e:
+            last_detail = f"{model}: red ({e})"
+            continue
+        if r.status_code == 200:
+            text = (r.json().get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            if text:
+                return text, model
+            last_detail = f"{model}: respuesta vacía"
+            continue
+        # 429 (saturado), 404 (no disponible), 5xx… → probar el siguiente modelo de la cadena
+        last_detail = f"{model}: HTTP {r.status_code} {r.text[:160]}"
+    return None, last_detail
+
+@app.post("/api/ai/insights")
+@limiter.limit("10/minute")
+def ai_insights(request: Request, body: InsightsRequest):
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
+
+    models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
+    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    system_msg = (
+        "Eres un analista financiero senior, objetivo y prudente. "
+        "No das recomendaciones personalizadas de compra/venta ni garantías de rentabilidad; "
+        "ofreces observaciones educativas sobre riesgo, diversificación y estructura del portafolio."
+    )
+    user_msg = (
+        f"Analiza el siguiente portafolio y entrega entre 3 y 5 insights accionables en {lang_name}, "
+        "como viñetas Markdown breves (una frase cada una). "
+        "Cubre concentración/diversificación, riesgo (volatilidad, drawdown), "
+        "desempeño (retorno, XIRR, Sharpe) y, si aplica, señales de rebalanceo. "
+        "Sé concreto y apóyate en los números provistos. No inventes datos que no estén.\n\n"
+        f"Datos del portafolio (JSON):\n{json.dumps(body.metrics, ensure_ascii=False)}"
+    )
+
+    text, info = _openrouter_chat(models, [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg},
+    ])
+    if not text:
+        raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
+    return {"insights": text, "model": info}
+
 
 # Servir estáticos solo en local — en Railway lo hace Firebase Hosting
 static_dir = os.path.dirname(os.path.abspath(__file__))
