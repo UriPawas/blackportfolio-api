@@ -2405,7 +2405,7 @@ async function renderFngGauge() {
     const entry = json?.data?.[0];
     const value = parseInt(entry?.value, 10);
     if (!Number.isFinite(value)) throw new Error("no value");
-    const label = entry.value_classification || "";
+    const label = entry.value_classification || "—";
     const angle = (value / 100) * 180;
     const color = value < 25 ? "#ff4d6a" : value < 45 ? "#ffb347" : value < 55 ? "#e8e8e8" : value < 75 ? "#9be37a" : "#00c894";
     el.innerHTML = `
@@ -2420,8 +2420,13 @@ async function renderFngGauge() {
         <span class="fng-gauge-value" style="color:${color}">${value}</span>
         <span class="fng-gauge-text">${label}</span>
       </div>`;
-  } catch {
-    el.innerHTML = "";
+  } catch (err) {
+    console.error("FNG gauge error:", err);
+    el.innerHTML = `
+      <div class="fng-gauge-label">
+        <span class="fng-gauge-value" style="color:#999">—</span>
+        <span class="fng-gauge-text">F&amp;G</span>
+      </div>`;
   }
 }
 function startMarketOverviewRefresh() {
@@ -6577,7 +6582,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
 
   tbody.querySelectorAll(".pos-expand-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const lotsRow = tbody.querySelector(`[data-lots-for="${btn.dataset.lotsFor}"]`);
+      const lotsRow = tbody.querySelector(`tr.pos-lots-row[data-lots-for="${btn.dataset.lotsFor}"]`);
       if (!lotsRow) return;
       const open = lotsRow.style.display !== "none";
       lotsRow.style.display = open ? "none" : "";
