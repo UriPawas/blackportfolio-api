@@ -907,6 +907,40 @@
           </div>
         </div>
 
+        <!-- ── Modal: Reporte por rango de fechas ─────────────────────── -->
+        <div id="reportRangeModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal">
+            <div class="tracker-modal-header">
+              <h3>Reporte por rango de fechas</h3>
+              <button id="closeReportRangeBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="reportRangeForm" class="dashboard-form">
+              <p class="form-hint" style="margin-bottom:.6rem">Todo el reporte (valor, posiciones, métricas y gráficos) se reconstruye con los precios de cierre históricos del rango seleccionado.</p>
+              <div class="form-row">
+                <label>Periodo rápido</label>
+                <div id="reportPresets" class="report-preset-row" style="display:flex;gap:.4rem;flex-wrap:wrap">
+                  <button type="button" class="button ghost report-preset" data-preset="1mo">1M</button>
+                  <button type="button" class="button ghost report-preset" data-preset="3mo">3M</button>
+                  <button type="button" class="button ghost report-preset" data-preset="6mo">6M</button>
+                  <button type="button" class="button ghost report-preset" data-preset="ytd">YTD</button>
+                  <button type="button" class="button ghost report-preset" data-preset="1y">1A</button>
+                  <button type="button" class="button ghost report-preset" data-preset="all">Todo</button>
+                </div>
+              </div>
+              <div class="form-row">
+                <label for="reportFromInput">Desde</label>
+                <input id="reportFromInput" type="date" required>
+              </div>
+              <div class="form-row">
+                <label for="reportToInput">Hasta</label>
+                <input id="reportToInput" type="date" required>
+              </div>
+              <div id="reportRangeError" class="form-hint hidden" style="color:#d94040"></div>
+              <button class="button primary" type="submit">Generar reporte</button>
+            </form>
+          </div>
+        </div>
+
       </section>
 
       <!-- ══════════════════ SECCIÓN MARKOWITZ ══════════════════ -->
@@ -1388,7 +1422,11 @@
       <!-- ═══════════════════════════════════════════════════════ -->
 
       <section id="section-markets" class="dashboard-section">
-        <div id="marketOverviewBar" class="market-overview-bar"></div>
+        <div class="market-overview-row">
+          <div id="marketOverviewBar" class="market-overview-bar"></div>
+          <div id="fngGauge" class="fng-gauge" title="Fear &amp; Greed Index (cripto)"></div>
+          <span id="marketUpdated" class="market-updated" title="Última actualización"></span>
+        </div>
         <div class="market-workspace">
           <aside class="market-wl-sidebar" id="marketWlSidebar">
             <div class="market-wl-head">
@@ -1422,24 +1460,18 @@
 
             <div class="market-divider"></div>
 
-            <div class="market-menu-group">
-              <button id="rangeMenuButton" class="market-menu-button" type="button" data-menu-target="rangeMenu">
-                <span id="rangeMenuLabel">D</span>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-              </button>
-              <div id="rangeMenu" class="market-menu hidden">
-                <button class="market-menu-item" type="button" data-range="HOY">HOY</button>
-                <button class="market-menu-item" type="button" data-range="5D">5D</button>
-                <button class="market-menu-item" type="button" data-range="1D">1D</button>
-                <button class="market-menu-item" type="button" data-range="1W">1W</button>
-                <button class="market-menu-item" type="button" data-range="1M">1M</button>
-                <button class="market-menu-item" type="button" data-range="3M">3M</button>
-                <button class="market-menu-item" type="button" data-range="6M">6M</button>
-                <button class="market-menu-item" type="button" data-range="1Y">1Y</button>
-                <button class="market-menu-item" type="button" data-range="2Y">2Y</button>
-                <button class="market-menu-item" type="button" data-range="5Y">5Y</button>
-                <button class="market-menu-item" type="button" data-range="MAX">MAX</button>
-              </div>
+            <div id="rangeSegmented" class="market-range-seg" role="group" aria-label="Rango de tiempo">
+              <button class="market-range-btn" type="button" data-range="HOY">HOY</button>
+              <button class="market-range-btn" type="button" data-range="1D">1D</button>
+              <button class="market-range-btn" type="button" data-range="5D">5D</button>
+              <button class="market-range-btn" type="button" data-range="1W">1W</button>
+              <button class="market-range-btn" type="button" data-range="1M">1M</button>
+              <button class="market-range-btn" type="button" data-range="3M">3M</button>
+              <button class="market-range-btn" type="button" data-range="6M">6M</button>
+              <button class="market-range-btn" type="button" data-range="1Y">1Y</button>
+              <button class="market-range-btn" type="button" data-range="2Y">2Y</button>
+              <button class="market-range-btn" type="button" data-range="5Y">5Y</button>
+              <button class="market-range-btn" type="button" data-range="MAX">MAX</button>
             </div>
 
             <div class="market-divider"></div>
@@ -1481,7 +1513,7 @@
                   </button>
                 </div>
 
-                <div class="indicator-section">
+                <div class="indicator-section" data-cat="ma">
                   <div class="indicator-section-label">Medias móviles</div>
                   <label class="indicator-row" data-ind="sma20">
                     <input type="checkbox" value="sma20" class="ind-cb">
@@ -1521,7 +1553,29 @@
                   </label>
                 </div>
 
-                <div class="indicator-section">
+                <div class="indicator-section" data-cat="trend">
+                  <div class="indicator-section-label">Tendencia avanzada</div>
+                  <label class="indicator-row" data-ind="ichimoku">
+                    <input type="checkbox" value="ichimoku" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#00c894"></span>
+                    <div class="ind-info"><span class="ind-name">Ichimoku Cloud</span><span class="ind-desc">Tenkan/Kijun/Senkou · nube de tendencia</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="supertrend">
+                    <input type="checkbox" value="supertrend" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#00c894"></span>
+                    <div class="ind-info"><span class="ind-name">SuperTrend</span><span class="ind-desc">ATR (10,3) · señales de tendencia</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="pivots">
+                    <input type="checkbox" value="pivots" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5b84c"></span>
+                    <div class="ind-info"><span class="ind-name">Pivot Points</span><span class="ind-desc">PP, R1/R2, S1/S2 · soportes y resistencias</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                </div>
+
+                <div class="indicator-section" data-cat="bands">
                   <div class="indicator-section-label">Bandas / Canales</div>
                   <label class="indicator-row" data-ind="bb">
                     <input type="checkbox" value="bb" class="ind-cb">
@@ -1537,7 +1591,7 @@
                   </label>
                 </div>
 
-                <div class="indicator-section">
+                <div class="indicator-section" data-cat="osc">
                   <div class="indicator-section-label">Osciladores</div>
                   <label class="indicator-row" data-ind="rsi">
                     <input type="checkbox" value="rsi" class="ind-cb">
@@ -1575,9 +1629,27 @@
                     <div class="ind-info"><span class="ind-name">Momentum (10)</span><span class="ind-desc">Velocidad del cambio de precio</span></div>
                     <span class="ind-badge">✓</span>
                   </label>
+                  <label class="indicator-row" data-ind="adx">
+                    <input type="checkbox" value="adx" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5a623"></span>
+                    <div class="ind-info"><span class="ind-name">ADX / DMI</span><span class="ind-desc">Fuerza de tendencia · +DI / -DI</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="willr">
+                    <input type="checkbox" value="willr" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#39d0ff"></span>
+                    <div class="ind-info"><span class="ind-name">Williams %R</span><span class="ind-desc">Sobrecompra/venta · 14 periodos</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="roc">
+                    <input type="checkbox" value="roc" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5a623"></span>
+                    <div class="ind-info"><span class="ind-name">ROC (12)</span><span class="ind-desc">Tasa de cambio porcentual</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
                 </div>
 
-                <div class="indicator-section">
+                <div class="indicator-section" data-cat="price">
                   <div class="indicator-section-label">Precio</div>
                   <label class="indicator-row" data-ind="gaps">
                     <input type="checkbox" value="gaps" class="ind-cb">
@@ -1599,7 +1671,7 @@
                   </label>
                 </div>
 
-                <div class="indicator-section">
+                <div class="indicator-section" data-cat="vol">
                   <div class="indicator-section-label">Volumen</div>
                   <label class="indicator-row" data-ind="vol">
                     <input type="checkbox" value="vol" class="ind-cb">
@@ -1613,16 +1685,38 @@
                     <div class="ind-info"><span class="ind-name">Volume Profile</span><span class="ind-desc">Distribución por nivel de precio</span></div>
                     <span class="ind-badge">✓</span>
                   </label>
+                  <label class="indicator-row" data-ind="obv">
+                    <input type="checkbox" value="obv" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#6f86ff"></span>
+                    <div class="ind-info"><span class="ind-name">OBV</span><span class="ind-desc">On-Balance Volume · acumulación/distribución</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="mfi">
+                    <input type="checkbox" value="mfi" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#c084fc"></span>
+                    <div class="ind-info"><span class="ind-name">MFI (14)</span><span class="ind-desc">Money Flow Index · volumen + precio</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
                 </div>
               </div>
             </div>
-            <div class="market-divider"></div>
-            <button id="compareToggleBtn" class="market-menu-button compare-toggle-btn" type="button" title="Comparar símbolos">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><polyline points="17 6 21 6 21 10"/><line x1="3" y1="6" x2="21" y2="6"/><polyline points="7 18 3 18 3 14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
-              <span>Comparar</span>
-            </button>
             <div class="market-toolbar-spacer"></div>
-            <button id="companyInfoButton" class="market-info-button" type="button">Más info</button>
+
+            <div class="market-menu-group">
+              <button id="moreActionsButton" class="market-menu-button icon-button" type="button" data-menu-target="moreActionsMenu" title="Más acciones" aria-label="Más acciones">
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+              </button>
+              <div id="moreActionsMenu" class="market-menu hidden">
+                <button id="compareToggleBtn" class="market-menu-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><polyline points="17 6 21 6 21 10"/><line x1="3" y1="6" x2="21" y2="6"/><polyline points="7 18 3 18 3 14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+                  <span>Comparar</span>
+                </button>
+                <button id="companyInfoButton" class="market-menu-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/></svg>
+                  <span>Más info</span>
+                </button>
+              </div>
+            </div>
           </div>
           <div id="compareBar" class="market-compare-bar hidden">
             <span class="compare-bar-label">Comparar con:</span>
@@ -1637,6 +1731,7 @@
               <div class="chart-header-left">
                 <strong id="chartSymbolLabel">TTWO</strong>
                 <span id="chartMetaLabel">Cargando datos de Yahoo Finance...</span>
+                <span id="crosshairOhlc" class="crosshair-ohlc"></span>
               </div>
               <div class="chart-header-right">
                 <span id="chartPriceLabel" class="chart-price-label">--</span>
@@ -1757,6 +1852,13 @@
             </div>
           </div>
           </div><!-- /market-main-col -->
+
+          <aside class="market-stats-rail" id="marketStatsRail">
+            <div class="stats-rail-head">Estadísticas clave</div>
+            <div id="marketStatsRailBody" class="stats-rail-body">
+              <p class="stats-rail-empty">Cargando…</p>
+            </div>
+          </aside>
         </div>
 
         <div id="tickerNewsSection" class="ticker-news-section hidden">
@@ -2218,7 +2320,7 @@
   <script src="auth.js?v=6"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=2"></script>
+  <script src="main.js?v=3"></script>
   <script src="markowitz.js"></script>
   <script src="analyzer.js"></script>
   <script src="topdown.js"></script>

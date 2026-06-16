@@ -1266,7 +1266,7 @@ def _openrouter_chat(models, messages):
                     "X-Title": "BlackPortfolio",
                 },
                 json={"model": model, "messages": messages,
-                      "temperature": 0.4, "max_tokens": 800},
+                      "temperature": 0.4, "max_tokens": 1500},
                 timeout=45,
             )
         except requests.RequestException as e:
@@ -1291,16 +1291,23 @@ def ai_insights(request: Request, body: InsightsRequest):
     models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
-        "Eres un analista financiero senior, objetivo y prudente. "
+        "Eres un analista financiero senior (CFA), objetivo y prudente, que redacta el análisis "
+        "de un reporte profesional para un gestor de inversión. "
         "No das recomendaciones personalizadas de compra/venta ni garantías de rentabilidad; "
-        "ofreces observaciones educativas sobre riesgo, diversificación y estructura del portafolio."
+        "ofreces observaciones educativas y accionables sobre riesgo, diversificación, atribución "
+        "y estructura del portafolio. Te apoyas SIEMPRE en los números provistos y citas cifras "
+        "concretas. No inventes datos que no estén en el JSON."
     )
     user_msg = (
-        f"Analiza el siguiente portafolio y entrega entre 3 y 5 insights accionables en {lang_name}, "
-        "como viñetas Markdown breves (una frase cada una). "
-        "Cubre concentración/diversificación, riesgo (volatilidad, drawdown), "
-        "desempeño (retorno, XIRR, Sharpe) y, si aplica, señales de rebalanceo. "
-        "Sé concreto y apóyate en los números provistos. No inventes datos que no estén.\n\n"
+        f"Analiza el siguiente portafolio y redacta el análisis en {lang_name}, en Markdown, "
+        "organizado EXACTAMENTE en estas secciones con encabezado '## ':\n"
+        "## Tesis y diagnóstico — 2-3 frases sobre el estado general (retorno, riesgo, perfil).\n"
+        "## Atribución de resultados — qué posiciones aportaron o restaron más al retorno (usa los datos de 'atribucion').\n"
+        "## Riesgos clave — concentración, volatilidad, drawdown, divisa; nombra la posición/sector causante.\n"
+        "## Desempeño vs benchmark — compara retorno, exceso (alpha) y tracking error si hay datos.\n"
+        "## Acciones de rebalanceo sugeridas — 2-3 viñetas concretas (sobreponderar/reducir y por qué), en términos educativos, sin órdenes de compra/venta personalizadas.\n\n"
+        "Cada sección: 1-3 viñetas breves con cifras. Sé concreto, profesional y conciso. "
+        "Omite una sección solo si no hay datos para ella.\n\n"
         f"Datos del portafolio (JSON):\n{json.dumps(body.metrics, ensure_ascii=False)}"
     )
 

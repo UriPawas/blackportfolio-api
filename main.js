@@ -19,8 +19,7 @@ const tickerInput = document.getElementById("tickerInput");
 const applyTickerButton = document.getElementById("applyTickerButton");
 const tickerSuggestions = document.getElementById("tickerSuggestions");
 const saveTickerButton = document.getElementById("saveTickerButton");
-const rangeMenuButton = document.getElementById("rangeMenuButton");
-const rangeMenuLabel = document.getElementById("rangeMenuLabel");
+const rangeSegmented = document.getElementById("rangeSegmented");
 const chartTypeMenuButton = document.getElementById("chartTypeMenuButton");
 const chartTypeButtonIcon = document.getElementById("chartTypeButtonIcon");
 const indicatorMenuButton = document.getElementById("indicatorMenuButton");
@@ -119,10 +118,24 @@ const indicatorDefinitions = {
   psar:   { label: "SAR Parabólico", type: "psar", step: 0.02, max: 0.2,
             colors: { up: "#32d6a2", down: "#ff6b81" } },
   fiboext:{ label: "Fib. Extensión", type: "fiboext", lookback: 60,
-            color: "#f5b84c" }
+            color: "#f5b84c" },
+  ichimoku: { label: "Ichimoku Cloud", type: "ichimoku", tenkan: 9, kijun: 26, senkou: 52,
+            colors: { tenkan: "#39d0ff", kijun: "#ff6b8a", spanA: "#00c894", spanB: "#ff8c42",
+                      cloudUp: "rgba(0,200,148,0.14)", cloudDown: "rgba(255,107,138,0.14)", chikou: "#c0a0ff" } },
+  supertrend: { label: "SuperTrend", type: "supertrend", period: 10, mult: 3,
+            colors: { up: "#00c894", down: "#ff4d6a" } },
+  pivots: { label: "Pivot Points", type: "pivots",
+            colors: { pp: "#f5b84c", r: "#ff6b8a", s: "#00c894" } },
+  adx:    { label: "ADX / DMI", type: "panel", panelType: "adx", period: 14,
+            colors: { adx: "#f5a623", plusDi: "#00c894", minusDi: "#ff4d6a" } },
+  obv:    { label: "OBV", type: "panel", panelType: "obv", color: "#6f86ff" },
+  mfi:    { label: "MFI (14)", type: "panel", panelType: "mfi", period: 14, color: "#c084fc" },
+  willr:  { label: "Williams %R", type: "panel", panelType: "willr", period: 14, color: "#39d0ff" },
+  roc:    { label: "ROC (12)", type: "panel", panelType: "roc", period: 12, color: "#f5a623" }
 };
 
-const PANEL_HEIGHTS = { vol: 0.13, rsi: 0.17, macd: 0.19, stoch: 0.15, cci: 0.15, atr: 0.13, momentum: 0.15 };
+const PANEL_HEIGHTS = { vol: 0.13, rsi: 0.17, macd: 0.19, stoch: 0.15, cci: 0.15, atr: 0.13, momentum: 0.15,
+  adx: 0.16, obv: 0.13, mfi: 0.15, willr: 0.15, roc: 0.15 };
 const PANEL_GAP = 0.01;
 
 // ── Plan restriction system ───────────────────────────────────────────────────
@@ -149,7 +162,8 @@ const PLAN_LIMITS = {
     sections: ["home", "tracker", "markets", "settings"],
     ranges: ["1D", "1W", "1M", "3M", "6M", "1Y", "2Y"],
     chartTypes: _ALL_CHART_TYPES,
-    indicators: ["sma20", "ema20", "ema50", "sma50", "sma200", "bb", "rsi", "macd", "vol"],
+    indicators: ["sma20", "ema20", "ema50", "sma50", "sma200", "bb", "rsi", "macd", "vol",
+      "ichimoku", "supertrend", "pivots", "adx", "obv", "mfi", "willr", "roc"],
     maxIndicators: 5,
     maxPortfolios: 3
   },
@@ -217,7 +231,7 @@ function applyPlanRestrictions(session) {
   });
 
   // Range buttons
-  document.querySelectorAll("#rangeMenu .market-menu-item[data-range]").forEach((btn) => {
+  document.querySelectorAll("#rangeSegmented [data-range]").forEach((btn) => {
     const locked = limits.ranges !== null && !limits.ranges.includes(btn.dataset.range);
     btn.disabled = locked;
     btn.classList.toggle("menu-item-locked", locked);
@@ -298,6 +312,7 @@ let mainSeries;
 let indicatorSeries = [];
 let vpPrimitive = null;
 let gapsPrimitive = null;
+let ichimokuCloudPrimitive = null;
 let fiboPriceLines = [];
 let lastCandles = [];
 let lastHighs = [];
@@ -315,6 +330,8 @@ let lastSuggestions = [];
 let _compareSeriesArr = [];
 let _mktPriceTimer = null;
 let _mktWlTimer = null;
+let _mktOverviewTimer = null;
+let _fngTimer = null;
 
 function getSessionOrRedirect() {
   window.BlackPortfolioAuth.ensureDemoUser();
@@ -384,6 +401,7 @@ function activateSection(sectionId) {
     if (drawingEngine && marketState.symbol) saveDrawingsForSymbol(marketState.symbol);
     stopMarketPriceRefresh();
     stopMarketWlRefresh();
+    stopMarketOverviewRefresh();
   }
 
   activeSection = sectionId;
@@ -507,7 +525,9 @@ function syncIndicatorRows() {
 
 function renderMarketToolbar() {
   tickerInput.value = marketState.symbol;
-  rangeMenuLabel.textContent = rangeConfigs[marketState.range]?.label ?? "1D";
+  document.querySelectorAll("#rangeSegmented [data-range]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.range === marketState.range);
+  });
   chartTypeButtonIcon.innerHTML = chartTypeIcons[marketState.chartType] ?? chartTypeIcons.candlestick;
   saveTickerButton.classList.toggle("active", marketState.favorites.includes(marketState.symbol));
   saveTickerButton.title = marketState.favorites.includes(marketState.symbol)
@@ -739,16 +759,20 @@ async function loadTickerNews(symbol) {
   const title = document.getElementById("tickerNewsTitle");
   if (!section || !list) return;
 
-  section.classList.add("hidden");
   list.innerHTML = "";
+  title.textContent = `Noticias · ${symbol}`;
+  section.classList.remove("hidden");
+
+  const showEmpty = (msg) => {
+    list.innerHTML = `<p class="ticker-news-empty">${msg}</p>`;
+  };
 
   try {
     const res = await fetch(`${API_BASE_URL}/news/${encodeURIComponent(symbol)}`);
-    if (!res.ok) return;
+    if (!res.ok) { showEmpty(`No se pudieron cargar noticias para ${symbol}.`); return; }
     const { news } = await res.json();
-    if (!news || news.length === 0) return;
+    if (!news || news.length === 0) { showEmpty(`Sin noticias recientes para ${symbol}.`); return; }
 
-    title.textContent = `Noticias · ${symbol}`;
     news.forEach(item => {
       const card = document.createElement("a");
       card.className = "news-card";
@@ -773,9 +797,8 @@ async function loadTickerNews(symbol) {
       list.appendChild(card);
     });
 
-    section.classList.remove("hidden");
   } catch (_) {
-    /* silently ignore — no news is fine */
+    showEmpty(`No se pudieron cargar noticias para ${symbol}.`);
   }
 }
 
@@ -845,7 +868,39 @@ function ensureChart() {
     handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true }
   });
 
+  tvChart.subscribeCrosshairMove(handleCrosshairMove);
+
   return true;
+}
+
+function handleCrosshairMove(param) {
+  const ohlcEl = document.getElementById("crosshairOhlc");
+  if (!param || !param.time || !lastCandles.length) {
+    if (ohlcEl) ohlcEl.innerHTML = "";
+    renderIndicatorLegend();
+    return;
+  }
+  const candle = lastCandles.find(c => c.time === param.time);
+  if (candle && ohlcEl) {
+    const isUp = candle.close >= candle.open;
+    const cls = isUp ? "pos" : "neg";
+    const vol = lastVolumes.find(v => v.time === param.time)?.value;
+    ohlcEl.innerHTML =
+      `<span>O <b class="${cls}">${fmtVal(candle.open)}</b></span>` +
+      `<span>H <b class="${cls}">${fmtVal(candle.high)}</b></span>` +
+      `<span>L <b class="${cls}">${fmtVal(candle.low)}</b></span>` +
+      `<span>C <b class="${cls}">${fmtVal(candle.close)}</b></span>` +
+      (vol != null ? `<span>Vol <b>${formatCompactNumber(vol)}</b></span>` : "");
+  }
+  renderIndicatorLegend(param.time);
+}
+
+function formatCompactNumber(n) {
+  if (!isFinite(n)) return "—";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(2) + "K";
+  return String(n);
 }
 
 function resizeChart() {
@@ -1039,6 +1094,10 @@ function clearIndicatorSeries() {
     if (gapsPrimitive && mainSeries) {
       try { mainSeries.detachPrimitive(gapsPrimitive); } catch (_) {}
       gapsPrimitive = null;
+    }
+    if (ichimokuCloudPrimitive && mainSeries) {
+      try { mainSeries.detachPrimitive(ichimokuCloudPrimitive); } catch (_) {}
+      ichimokuCloudPrimitive = null;
     }
     if (fiboPriceLines.length && mainSeries) {
       fiboPriceLines.forEach((pl) => { try { mainSeries.removePriceLine(pl); } catch (_) {} });
@@ -1356,6 +1415,181 @@ function computeCCI(highs, lows, closes, period = 20) {
   return result;
 }
 
+function computeADX(highs, lows, closes, period = 14) {
+  const n = closes.length;
+  if (n < period + 1) return { adx: [], plusDi: [], minusDi: [] };
+  const trs = [], plusDms = [], minusDms = [];
+  for (let i = 1; i < n; i++) {
+    const h = highs[i].value, l = lows[i].value, ph = highs[i - 1].value, pl = lows[i - 1].value, pc = closes[i - 1].value;
+    trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+    const upMove = h - ph, downMove = pl - l;
+    plusDms.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusDms.push(downMove > upMove && downMove > 0 ? downMove : 0);
+  }
+  const smooth = (arr) => {
+    const out = [];
+    let sum = arr.slice(0, period).reduce((a, b) => a + b, 0);
+    out.push(sum);
+    for (let i = period; i < arr.length; i++) {
+      sum = sum - sum / period + arr[i];
+      out.push(sum);
+    }
+    return out;
+  };
+  const trSm = smooth(trs), plusSm = smooth(plusDms), minusSm = smooth(minusDms);
+  const plusDi = [], minusDi = [], dx = [];
+  for (let i = 0; i < trSm.length; i++) {
+    const time = closes[i + period].time;
+    const pDi = trSm[i] === 0 ? 0 : (plusSm[i] / trSm[i]) * 100;
+    const mDi = trSm[i] === 0 ? 0 : (minusSm[i] / trSm[i]) * 100;
+    plusDi.push({ time, value: pDi });
+    minusDi.push({ time, value: mDi });
+    const sum = pDi + mDi;
+    dx.push({ time, value: sum === 0 ? 0 : Math.abs(pDi - mDi) / sum * 100 });
+  }
+  const adx = computeSMA(dx, period);
+  return { adx, plusDi, minusDi };
+}
+
+function computeOBV(closes, volumes) {
+  const result = [];
+  let obv = 0;
+  closes.forEach((c, i) => {
+    if (i > 0) {
+      const vol = volumes[i]?.value ?? 0;
+      if (c.value > closes[i - 1].value) obv += vol;
+      else if (c.value < closes[i - 1].value) obv -= vol;
+    }
+    result.push({ time: c.time, value: obv });
+  });
+  return result;
+}
+
+function computeMFI(highs, lows, closes, volumes, period = 14) {
+  const n = closes.length;
+  const tps = closes.map((c, i) => (highs[i].value + lows[i].value + c.value) / 3);
+  const result = [];
+  for (let i = period; i < n; i++) {
+    let posFlow = 0, negFlow = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const vol = volumes[j]?.value ?? 0;
+      const flow = tps[j] * vol;
+      if (tps[j] > tps[j - 1]) posFlow += flow;
+      else if (tps[j] < tps[j - 1]) negFlow += flow;
+    }
+    const mr = negFlow === 0 ? 100 : posFlow / negFlow;
+    result.push({ time: closes[i].time, value: negFlow === 0 ? 100 : 100 - 100 / (1 + mr) });
+  }
+  return result;
+}
+
+function computeWilliamsR(highs, lows, closes, period = 14) {
+  const result = [];
+  for (let i = period - 1; i < closes.length; i++) {
+    const hs = highs.slice(i - period + 1, i + 1).map(v => v.value);
+    const ls = lows.slice(i - period + 1, i + 1).map(v => v.value);
+    const hh = Math.max(...hs), ll = Math.min(...ls);
+    const range = hh - ll;
+    result.push({ time: closes[i].time, value: range === 0 ? -50 : ((hh - closes[i].value) / range) * -100 });
+  }
+  return result;
+}
+
+function computeROC(closes, period = 12) {
+  const result = [];
+  for (let i = period; i < closes.length; i++) {
+    const prev = closes[i - period].value;
+    result.push({ time: closes[i].time, value: prev === 0 ? 0 : ((closes[i].value - prev) / prev) * 100 });
+  }
+  return result;
+}
+
+function computeSuperTrend(candles, period = 10, mult = 3) {
+  const n = candles.length;
+  if (n < period + 1) return [];
+  const closesArr = candles.map(c => ({ time: c.time, value: c.close }));
+  const highsArr = candles.map(c => ({ time: c.time, value: c.high }));
+  const lowsArr = candles.map(c => ({ time: c.time, value: c.low }));
+  const atr = computeATR(highsArr, lowsArr, closesArr, period);
+  const atrMap = new Map(atr.map(p => [p.time, p.value]));
+  const result = [];
+  let prevUpperBand = null, prevLowerBand = null, prevSt = null, trend = 1;
+  for (let i = 0; i < n; i++) {
+    const c = candles[i];
+    const a = atrMap.get(c.time);
+    if (a === undefined) continue;
+    const mid = (c.high + c.low) / 2;
+    let upperBand = mid + mult * a;
+    let lowerBand = mid - mult * a;
+    if (prevUpperBand !== null) {
+      upperBand = (upperBand < prevUpperBand || candles[i - 1].close > prevUpperBand) ? upperBand : prevUpperBand;
+      lowerBand = (lowerBand > prevLowerBand || candles[i - 1].close < prevLowerBand) ? lowerBand : prevLowerBand;
+    }
+    if (prevSt === null) {
+      trend = c.close <= upperBand ? -1 : 1;
+    } else if (trend === 1 && c.close < lowerBand) {
+      trend = -1;
+    } else if (trend === -1 && c.close > upperBand) {
+      trend = 1;
+    }
+    const value = trend === 1 ? lowerBand : upperBand;
+    result.push({ time: c.time, value, trend });
+    prevUpperBand = upperBand; prevLowerBand = lowerBand; prevSt = value;
+  }
+  return result;
+}
+
+function computeIchimoku(candles, tenkanP = 9, kijunP = 26, senkouP = 52) {
+  const n = candles.length;
+  const donchian = (period, idx) => {
+    const start = Math.max(0, idx - period + 1);
+    const slice = candles.slice(start, idx + 1);
+    if (!slice.length) return null;
+    const hh = Math.max(...slice.map(c => c.high));
+    const ll = Math.min(...slice.map(c => c.low));
+    return (hh + ll) / 2;
+  };
+  const tenkan = [], kijun = [], spanA = [], spanB = [], chikou = [];
+  for (let i = 0; i < n; i++) {
+    const t = donchian(tenkanP, i);
+    const k = donchian(kijunP, i);
+    if (t !== null && i >= tenkanP - 1) tenkan.push({ time: candles[i].time, value: t });
+    if (k !== null && i >= kijunP - 1) kijun.push({ time: candles[i].time, value: k });
+  }
+  const tenkanMap = new Map(tenkan.map(p => [p.time, p.value]));
+  const kijunMap = new Map(kijun.map(p => [p.time, p.value]));
+  for (let i = 0; i < n; i++) {
+    const t = tenkanMap.get(candles[i].time);
+    const k = kijunMap.get(candles[i].time);
+    if (t !== undefined && k !== undefined) {
+      const shiftIdx = i + kijunP;
+      const futureTime = shiftIdx < n ? candles[shiftIdx].time : candles[i].time + (kijunP * 86400);
+      spanA.push({ time: futureTime, value: (t + k) / 2 });
+    }
+    const sb = donchian(senkouP, i);
+    if (sb !== null && i >= senkouP - 1) {
+      const shiftIdx = i + kijunP;
+      const futureTime = shiftIdx < n ? candles[shiftIdx].time : candles[i].time + (kijunP * 86400);
+      spanB.push({ time: futureTime, value: sb });
+    }
+    if (i >= kijunP) chikou.push({ time: candles[i - kijunP].time, value: candles[i].close });
+  }
+  return { tenkan, kijun, spanA, spanB, chikou };
+}
+
+function computePivotPoints(candles) {
+  if (candles.length < 2) return [];
+  const result = [];
+  for (let i = 1; i < candles.length; i++) {
+    const prev = candles[i - 1];
+    const pp = (prev.high + prev.low + prev.close) / 3;
+    const r1 = 2 * pp - prev.low, s1 = 2 * pp - prev.high;
+    const r2 = pp + (prev.high - prev.low), s2 = pp - (prev.high - prev.low);
+    result.push({ time: candles[i].time, pp, r1, r2, s1, s2 });
+  }
+  return result;
+}
+
 function addPanelLineSeries(scaleId, pos, opts) {
   const s = tvChart.addLineSeries({ priceScaleId: scaleId, priceLineVisible: false, lastValueVisible: false, ...opts });
   s.priceScale().applyOptions({ scaleMargins: pos, borderVisible: false });
@@ -1467,6 +1701,198 @@ function renderATRPanel(highs, lows, closes, pos, cfg) {
   computedIndicatorData.atr = data;
 }
 
+function renderADXPanel(highs, lows, closes, pos, cfg) {
+  const period = cfg.period ?? 14;
+  const { adx, plusDi, minusDi } = computeADX(highs, lows, closes, period);
+  if (!adx.length) return;
+  const c = cfg.colors || indicatorDefinitions.adx.colors;
+  addPanelLineSeries("adx", pos, { color: c.adx, lineWidth: 1.5, lastValueVisible: true }).setData(adx);
+  addPanelLineSeries("adx", pos, { color: c.plusDi, lineWidth: 1 }).setData(plusDi);
+  addPanelLineSeries("adx", pos, { color: c.minusDi, lineWidth: 1 }).setData(minusDi);
+  computedIndicatorData.adx = { adx, plusDi, minusDi };
+}
+
+function renderOBVPanel(closes, volumes, pos, cfg) {
+  const data = computeOBV(closes, volumes);
+  if (!data.length) return;
+  const color = cfg.color ?? indicatorDefinitions.obv.color;
+  addPanelLineSeries("obv", pos, { color, lineWidth: 1.5, lastValueVisible: true }).setData(data);
+  computedIndicatorData.obv = data;
+}
+
+function renderMFIPanel(highs, lows, closes, volumes, pos, cfg) {
+  const period = cfg.period ?? 14;
+  const data = computeMFI(highs, lows, closes, volumes, period);
+  if (!data.length) return;
+  const color = cfg.color ?? indicatorDefinitions.mfi.color;
+  addPanelLineSeries("mfi", pos, { color, lineWidth: 1.5, lastValueVisible: true }).setData(data);
+  addPanelLineSeries("mfi", pos, { color: "rgba(255,107,129,0.45)", lineWidth: 1, lineStyle: 2 })
+    .setData(data.map(p => ({ time: p.time, value: 80 })));
+  addPanelLineSeries("mfi", pos, { color: "rgba(50,214,162,0.45)", lineWidth: 1, lineStyle: 2 })
+    .setData(data.map(p => ({ time: p.time, value: 20 })));
+  computedIndicatorData.mfi = data;
+}
+
+function renderWillRPanel(highs, lows, closes, pos, cfg) {
+  const period = cfg.period ?? 14;
+  const data = computeWilliamsR(highs, lows, closes, period);
+  if (!data.length) return;
+  const color = cfg.color ?? indicatorDefinitions.willr.color;
+  addPanelLineSeries("willr", pos, { color, lineWidth: 1.5, lastValueVisible: true }).setData(data);
+  addPanelLineSeries("willr", pos, { color: "rgba(255,107,129,0.45)", lineWidth: 1, lineStyle: 2 })
+    .setData(data.map(p => ({ time: p.time, value: -20 })));
+  addPanelLineSeries("willr", pos, { color: "rgba(50,214,162,0.45)", lineWidth: 1, lineStyle: 2 })
+    .setData(data.map(p => ({ time: p.time, value: -80 })));
+  computedIndicatorData.willr = data;
+}
+
+function renderROCPanel(closes, pos, cfg) {
+  const period = cfg.period ?? 12;
+  const data = computeROC(closes, period);
+  if (!data.length) return;
+  const color = cfg.color ?? indicatorDefinitions.roc.color;
+  addPanelLineSeries("roc", pos, { color, lineWidth: 1.5, lastValueVisible: true }).setData(data);
+  addPanelLineSeries("roc", pos, { color: "rgba(255,255,255,0.12)", lineWidth: 1 })
+    .setData(data.map(p => ({ time: p.time, value: 0 })));
+  computedIndicatorData.roc = data;
+}
+
+function renderSuperTrend(cfg) {
+  if (!lastCandles.length) return;
+  const period = cfg.period ?? 10, mult = cfg.mult ?? 3;
+  const data = computeSuperTrend(lastCandles, period, mult);
+  if (!data.length) return;
+  const c = cfg.colors || indicatorDefinitions.supertrend.colors;
+  const upData = data.map(p => p.trend === 1 ? { time: p.time, value: p.value } : { time: p.time });
+  const dnData = data.map(p => p.trend === -1 ? { time: p.time, value: p.value } : { time: p.time });
+  const sUp = tvChart.addLineSeries({ color: c.up, lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+  const sDn = tvChart.addLineSeries({ color: c.down, lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+  sUp.setData(upData); sDn.setData(dnData);
+  indicatorSeries.push(sUp, sDn);
+  computedIndicatorData.supertrend = data;
+}
+
+// ── Ichimoku Cloud fill primitive ────────────────────────────────────────────
+class IchimokuCloudRenderer {
+  constructor() { this._data = null; }
+  setData(data) { this._data = data; }
+  draw(target) {
+    if (!this._data || !this._data.spanA.length) return;
+    const { spanA, spanB, series, colorUp, colorDown } = this._data;
+    const bMap = new Map(spanB.map(p => [p.time, p.value]));
+    target.useMediaCoordinateSpace(({ context: ctx }) => {
+      let i = 0;
+      while (i < spanA.length) {
+        let j = i;
+        const segUp = spanA[i].value >= (bMap.get(spanA[i].time) ?? spanA[i].value);
+        while (j < spanA.length) {
+          const bv = bMap.get(spanA[j].time);
+          if (bv === undefined) break;
+          const isUp = spanA[j].value >= bv;
+          if (isUp !== segUp) break;
+          j++;
+        }
+        const seg = spanA.slice(i, j);
+        if (seg.length > 1) {
+          ctx.beginPath();
+          let started = false;
+          seg.forEach((p) => {
+            const x = tvChart.timeScale().timeToCoordinate(p.time);
+            const y = series.priceToCoordinate(p.value);
+            if (x === null || y === null) return;
+            if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+          });
+          for (let k = seg.length - 1; k >= 0; k--) {
+            const bv = bMap.get(seg[k].time);
+            const x = tvChart.timeScale().timeToCoordinate(seg[k].time);
+            const y = bv !== undefined ? series.priceToCoordinate(bv) : null;
+            if (x === null || y === null) continue;
+            ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = segUp ? colorUp : colorDown;
+          ctx.fill();
+        }
+        i = j > i ? j : i + 1;
+      }
+    });
+  }
+}
+class IchimokuCloudPaneView {
+  constructor() { this._renderer = new IchimokuCloudRenderer(); }
+  renderer() { return this._renderer; }
+  zOrder() { return "bottom"; }
+  update(data) { this._renderer.setData(data); }
+}
+class IchimokuCloudPrimitive {
+  constructor(spanA, spanB, options = {}) {
+    this._spanA = spanA;
+    this._spanB = spanB;
+    this._opts = { colorUp: "rgba(0,200,148,0.14)", colorDown: "rgba(255,107,138,0.14)", ...options };
+    this._series = null;
+    this._paneView = new IchimokuCloudPaneView();
+  }
+  attached({ series }) { this._series = series; this._build(); }
+  detached() { this._series = null; this._paneView.update(null); }
+  updateAllViews() { this._build(); }
+  paneViews() { return [this._paneView]; }
+  _build() {
+    if (!this._series) return;
+    this._paneView.update({ spanA: this._spanA, spanB: this._spanB, series: this._series,
+      colorUp: this._opts.colorUp, colorDown: this._opts.colorDown });
+  }
+}
+
+function renderIchimoku(cfg) {
+  if (!lastCandles.length) return;
+  const { tenkan: tP = 9, kijun: kP = 26, senkou: sP = 52 } = cfg;
+  const { tenkan, kijun, spanA, spanB, chikou } = computeIchimoku(lastCandles, tP, kP, sP);
+  const c = cfg.colors || indicatorDefinitions.ichimoku.colors;
+  if (tenkan.length) {
+    const s = tvChart.addLineSeries({ color: c.tenkan, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+    s.setData(tenkan); indicatorSeries.push(s);
+  }
+  if (kijun.length) {
+    const s = tvChart.addLineSeries({ color: c.kijun, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+    s.setData(kijun); indicatorSeries.push(s);
+  }
+  if (chikou.length) {
+    const s = tvChart.addLineSeries({ color: c.chikou, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+    s.setData(chikou); indicatorSeries.push(s);
+  }
+  if (spanA.length) {
+    const sA = tvChart.addLineSeries({ color: c.spanA, lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    sA.setData(spanA); indicatorSeries.push(sA);
+  }
+  if (spanB.length) {
+    const sB = tvChart.addLineSeries({ color: c.spanB, lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    sB.setData(spanB); indicatorSeries.push(sB);
+  }
+  if (spanA.length && spanB.length && mainSeries) {
+    ichimokuCloudPrimitive = new IchimokuCloudPrimitive(spanA, spanB, { colorUp: c.cloudUp, colorDown: c.cloudDown });
+    mainSeries.attachPrimitive(ichimokuCloudPrimitive);
+  }
+  computedIndicatorData.ichimoku = { tenkan, kijun, spanA, spanB, chikou };
+}
+
+function renderPivots(cfg) {
+  if (!lastCandles.length || !mainSeries) return;
+  const data = computePivotPoints(lastCandles);
+  if (!data.length) return;
+  const last = data[data.length - 1];
+  const c = cfg.colors || indicatorDefinitions.pivots.colors;
+  const lvls = [
+    { price: last.r2, color: c.r, title: "R2" }, { price: last.r1, color: c.r, title: "R1" },
+    { price: last.pp,  color: c.pp, title: "PP" },
+    { price: last.s1, color: c.s, title: "S1" }, { price: last.s2, color: c.s, title: "S2" }
+  ];
+  lvls.forEach(({ price, color, title }) => {
+    const pl = mainSeries.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title });
+    fiboPriceLines.push(pl);
+  });
+  computedIndicatorData.pivots = last;
+}
+
 function getIndicatorCfg(key) {
   return { ...indicatorDefinitions[key], ...(marketState.indicatorSettings?.[key] ?? {}) };
 }
@@ -1545,6 +1971,18 @@ function renderIndicators(closeData, volumeData) {
       computedIndicatorData[key] = sar;
       return;
     }
+    if (def.type === "supertrend") {
+      renderSuperTrend(cfg);
+      return;
+    }
+    if (def.type === "ichimoku") {
+      renderIchimoku(cfg);
+      return;
+    }
+    if (def.type === "pivots") {
+      renderPivots(cfg);
+      return;
+    }
     if (def.type === "fiboext") {
       if (!lastCandles.length) return;
       const fib = computeAutoFibExtension(lastCandles, cfg.lookback ?? 60);
@@ -1592,6 +2030,11 @@ function renderIndicators(closeData, volumeData) {
     else if (key === "cci")   renderCCIPanel(lastHighs, lastLows, closeData, pos, cfg);
     else if (key === "atr")   renderATRPanel(lastHighs, lastLows, closeData, pos, cfg);
     else if (key === "momentum") renderMomentumPanel(closeData, pos);
+    else if (key === "adx")   renderADXPanel(lastHighs, lastLows, closeData, pos, cfg);
+    else if (key === "obv")   renderOBVPanel(closeData, volumeData, pos, cfg);
+    else if (key === "mfi")   renderMFIPanel(lastHighs, lastLows, closeData, volumeData, pos, cfg);
+    else if (key === "willr") renderWillRPanel(lastHighs, lastLows, closeData, pos, cfg);
+    else if (key === "roc")   renderROCPanel(closeData, pos, cfg);
   });
 
   renderIndicatorLegend();
@@ -1732,6 +2175,7 @@ async function loadMarketChart() {
     loadCompareSeries();
     loadChartEvents(symbol);
     startMarketPriceRefresh();
+    renderStatsRail(symbol);
   } catch (error) {
     if (error.name === "AbortError") {
       return;
@@ -1875,6 +2319,35 @@ const MKT_OVERVIEW_INDICES = [
   { sym: "BTC-USD", label: "Bitcoin"   },
   { sym: "^MXX",    label: "IPC MX"   },
 ];
+const _mktOverviewSparkCache = {};
+const MKT_SPARK_TTL = 10 * 60 * 1000;
+function sparklinePoints(closes) {
+  if (!closes || closes.length < 2) return null;
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const span = max - min || 1;
+  const w = 64, h = 22;
+  return closes.map((v, i) => {
+    const x = (i / (closes.length - 1)) * w;
+    const y = h - ((v - min) / span) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+}
+async function fetchSparkline(sym) {
+  const cached = _mktOverviewSparkCache[sym];
+  if (cached && Date.now() - cached.ts < MKT_SPARK_TTL) return cached.closes;
+  try {
+    const res = await fetch(getYahooChartUrl(sym, { range: "1mo", interval: "1d" }));
+    if (!res.ok) throw new Error("bad response");
+    const data = await res.json();
+    const r = data?.chart?.result?.[0];
+    const closes = (r?.indicators?.quote?.[0]?.close ?? []).filter(v => typeof v === "number");
+    _mktOverviewSparkCache[sym] = { closes, ts: Date.now() };
+    return closes;
+  } catch {
+    return cached?.closes ?? null;
+  }
+}
 async function renderMarketOverviewBar() {
   const bar = document.getElementById("marketOverviewBar");
   if (!bar) return;
@@ -1884,6 +2357,7 @@ async function renderMarketOverviewBar() {
       <span class="mkt-index-label">${label}</span>
       <span class="mkt-index-price" id="mio-${id}">…</span>
       <span class="mkt-index-chg"   id="mic-${id}">…</span>
+      <svg class="mkt-index-spark" id="mis-${id}" viewBox="0 0 64 22" preserveAspectRatio="none"><polyline points=""/></svg>
     </button>`;
   }).join("");
   bar.querySelectorAll(".mkt-index-tile").forEach(btn => {
@@ -1905,6 +2379,92 @@ async function renderMarketOverviewBar() {
       cEl.className   = `mkt-index-chg ${pct >= 0 ? "pos" : "neg"}`;
     } else { cEl.textContent = "—"; }
   });
+  MKT_OVERVIEW_INDICES.forEach(async ({ sym }) => {
+    const id = sym.replace(/[^a-z0-9]/gi, "_");
+    const svg = document.getElementById(`mis-${id}`);
+    if (!svg) return;
+    const closes = await fetchSparkline(sym);
+    const poly = svg.querySelector("polyline");
+    if (!poly || !closes || closes.length < 2) return;
+    poly.setAttribute("points", sparklinePoints(closes));
+    poly.setAttribute("class", closes[closes.length - 1] >= closes[0] ? "pos" : "neg");
+  });
+  const upd = document.getElementById("marketUpdated");
+  if (upd) {
+    const t = new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    upd.textContent = `Actualizado ${t}`;
+  }
+}
+async function renderFngGauge() {
+  const el = document.getElementById("fngGauge");
+  if (!el) return;
+  try {
+    const res = await fetch("https://api.alternative.me/fng/?limit=1");
+    if (!res.ok) throw new Error("bad response");
+    const json = await res.json();
+    const entry = json?.data?.[0];
+    const value = parseInt(entry?.value, 10);
+    if (!Number.isFinite(value)) throw new Error("no value");
+    const label = entry.value_classification || "";
+    const angle = (value / 100) * 180;
+    const color = value < 25 ? "#ff4d6a" : value < 45 ? "#ffb347" : value < 55 ? "#e8e8e8" : value < 75 ? "#9be37a" : "#00c894";
+    el.innerHTML = `
+      <svg viewBox="0 0 100 56" class="fng-gauge-svg">
+        <path d="M8 52 A42 42 0 0 1 92 52" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="8" stroke-linecap="round"/>
+        <path d="M8 52 A42 42 0 0 1 92 52" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round"
+          stroke-dasharray="${(angle / 180) * 132} 132"/>
+        <line x1="50" y1="52" x2="${50 + 34 * Math.cos(Math.PI - (angle * Math.PI / 180))}" y2="${52 - 34 * Math.sin(Math.PI - (angle * Math.PI / 180))}" stroke="#fff" stroke-width="2"/>
+        <circle cx="50" cy="52" r="3" fill="#fff"/>
+      </svg>
+      <div class="fng-gauge-label">
+        <span class="fng-gauge-value" style="color:${color}">${value}</span>
+        <span class="fng-gauge-text">${label}</span>
+      </div>`;
+  } catch {
+    el.innerHTML = "";
+  }
+}
+function startMarketOverviewRefresh() {
+  if (_mktOverviewTimer) clearInterval(_mktOverviewTimer);
+  renderMarketOverviewBar();
+  renderFngGauge();
+  _mktOverviewTimer = setInterval(renderMarketOverviewBar, 60000);
+  if (_fngTimer) clearInterval(_fngTimer);
+  _fngTimer = setInterval(renderFngGauge, 5 * 60000);
+}
+function stopMarketOverviewRefresh() {
+  if (_mktOverviewTimer) { clearInterval(_mktOverviewTimer); _mktOverviewTimer = null; }
+  if (_fngTimer) { clearInterval(_fngTimer); _fngTimer = null; }
+}
+
+// ── Stats Rail ───────────────────────────────────────────────────────────────
+async function renderStatsRail(symbol) {
+  const body = document.getElementById("marketStatsRailBody");
+  if (!body) return;
+  body.innerHTML = '<p class="stats-rail-empty">Cargando…</p>';
+  try {
+    const res = await fetch(`${API_BASE_URL}/info/${encodeURIComponent(symbol)}`);
+    if (!res.ok) throw new Error("no data");
+    const data = await res.json();
+    const yieldRaw = data.dividendYield;
+    const yieldPct = yieldRaw != null && !isNaN(yieldRaw) ? (yieldRaw > 1 ? yieldRaw : yieldRaw * 100) : null;
+    const items = [
+      { label: "Cap. Mercado", value: formatLargeNumber(data.marketCap) },
+      { label: "P/E Ratio", value: data.trailingPE != null ? data.trailingPE.toFixed(2) : "—" },
+      { label: "Beta", value: data.beta != null ? data.beta.toFixed(2) : "—" },
+      { label: "Máx. 52S", value: formatPrice(data.fiftyTwoWeekHigh, data.currency) },
+      { label: "Mín. 52S", value: formatPrice(data.fiftyTwoWeekLow, data.currency) },
+      { label: "Vol. Promedio", value: formatLargeNumber(data.averageVolume) },
+      { label: "Div. Yield", value: yieldPct != null ? `${yieldPct.toFixed(2)}%` : "—" },
+    ];
+    body.innerHTML = items.map(it => `
+      <div class="stats-rail-item">
+        <span class="stats-rail-label">${it.label}</span>
+        <span class="stats-rail-value">${it.value}</span>
+      </div>`).join("");
+  } catch {
+    body.innerHTML = '<p class="stats-rail-empty">Sin datos disponibles.</p>';
+  }
 }
 
 // ── Compare Series ────────────────────────────────────────────────────────────
@@ -1938,6 +2498,9 @@ async function loadCompareSeries() {
 
   if (!syms.length || isIntraday) {
     try { tvChart.priceScale("right").applyOptions({ mode: 0 }); } catch {}
+    if (syms.length && isIntraday) {
+      showPlanToast("La comparación no está disponible en rangos intradía (HOY/5D).");
+    }
     return;
   }
 
@@ -2112,6 +2675,7 @@ function attachMarketListeners() {
     const isOpen = !bar.classList.contains("hidden");
     bar.classList.toggle("hidden", isOpen);
     document.getElementById("compareToggleBtn").classList.toggle("active", !isOpen);
+    closeMenus();
   });
   document.getElementById("compareCloseBtn")?.addEventListener("click", () => {
     document.getElementById("compareBar")?.classList.add("hidden");
@@ -2151,7 +2715,7 @@ function attachMarketListeners() {
 function initializeMarketModule() {
   if (marketInitialized) {
     startMarketWlRefresh();
-    renderMarketOverviewBar();
+    startMarketOverviewRefresh();
     return;
   }
 
@@ -2162,7 +2726,7 @@ function initializeMarketModule() {
   loadMarketChart();
   loadTickerNews(marketState.symbol);
   startMarketWlRefresh();
-  renderMarketOverviewBar();
+  startMarketOverviewRefresh();
   marketInitialized = true;
 }
 
@@ -2173,6 +2737,17 @@ function getLastVal(arr) {
   return last?.value ?? null;
 }
 
+function getValAt(arr, time) {
+  if (!arr || !arr.length) return null;
+  if (time == null) return getLastVal(arr);
+  let lo = 0, hi = arr.length - 1, ans = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid].time <= time) { ans = arr[mid]; lo = mid + 1; } else hi = mid - 1;
+  }
+  return ans ? ans.value : null;
+}
+
 function fmtVal(v, decimals = 2) {
   if (v === null || v === undefined || !isFinite(v)) return "—";
   return v.toFixed(decimals);
@@ -2180,21 +2755,30 @@ function fmtVal(v, decimals = 2) {
 
 function getIndicatorDisplayColor(key) {
   const cfg = getIndicatorCfg(key);
-  if (cfg.colors) return cfg.colors.mid ?? cfg.colors.macd ?? cfg.colors.k ?? Object.values(cfg.colors)[0];
+  if (cfg.colors) return cfg.colors.mid ?? cfg.colors.macd ?? cfg.colors.k ?? cfg.colors.adx ?? cfg.colors.tenkan ?? cfg.colors.pp ?? cfg.colors.up ?? Object.values(cfg.colors)[0];
   return cfg.color ?? "#6f86ff";
 }
 
-function getIndicatorLegendValue(key) {
+function getIndicatorLegendValue(key, atTime) {
   const data = computedIndicatorData[key];
   if (!data) return "—";
-  if (Array.isArray(data)) return fmtVal(getLastVal(data));
-  if (data.upper) return `↑${fmtVal(getLastVal(data.upper))} ${fmtVal(getLastVal(data.mid))} ↓${fmtVal(getLastVal(data.lower))}`;
-  if (data.macdLine) return `${fmtVal(getLastVal(data.macdLine))} · ${fmtVal(getLastVal(data.signalLine))}`;
-  if (data.k) return `K:${fmtVal(getLastVal(data.k))} D:${fmtVal(getLastVal(data.d))}`;
+  if (Array.isArray(data)) {
+    if (atTime == null) {
+      const last = data[data.length - 1];
+      if (last && last.trend !== undefined) return `${fmtVal(last.value)} ${last.trend === 1 ? "↑" : "↓"}`;
+    }
+    return fmtVal(getValAt(data, atTime));
+  }
+  if (data.upper) return `↑${fmtVal(getValAt(data.upper, atTime))} ${fmtVal(getValAt(data.mid, atTime))} ↓${fmtVal(getValAt(data.lower, atTime))}`;
+  if (data.macdLine) return `${fmtVal(getValAt(data.macdLine, atTime))} · ${fmtVal(getValAt(data.signalLine, atTime))}`;
+  if (data.k) return `K:${fmtVal(getValAt(data.k, atTime))} D:${fmtVal(getValAt(data.d, atTime))}`;
+  if (data.adx) return `ADX:${fmtVal(getValAt(data.adx, atTime))} +DI:${fmtVal(getValAt(data.plusDi, atTime))} -DI:${fmtVal(getValAt(data.minusDi, atTime))}`;
+  if (data.tenkan) return `T:${fmtVal(getValAt(data.tenkan, atTime))} K:${fmtVal(getValAt(data.kijun, atTime))}`;
+  if (data.pp !== undefined) return `PP:${fmtVal(data.pp)} R1:${fmtVal(data.r1)} S1:${fmtVal(data.s1)}`;
   return "—";
 }
 
-function renderIndicatorLegend(timeIndex) {
+function renderIndicatorLegend(crosshairTime) {
   const legend = document.getElementById("indicatorLegend");
   if (!legend) return;
   const active = marketState.indicators.filter(k => k !== "vp");
@@ -2203,8 +2787,9 @@ function renderIndicatorLegend(timeIndex) {
   legend.innerHTML = active.map(key => {
     const cfg = getIndicatorCfg(key);
     const color = getIndicatorDisplayColor(key);
-    const val = timeIndex != null ? "—" : getIndicatorLegendValue(key);
-    return `<div class="ind-leg-item" data-key="${key}">
+    const val = getIndicatorLegendValue(key, crosshairTime);
+    const chipAccent = color.startsWith("#") ? `${color}55` : color;
+    return `<div class="ind-leg-item" data-key="${key}" style="--chip-accent:${chipAccent}">
       <span class="ind-leg-dot" style="background:${color}"></span>
       <span class="ind-leg-name">${cfg.label}</span>
       <span class="ind-leg-val">${val}</span>
@@ -2254,13 +2839,20 @@ function buildSettingsFields(key) {
   if (def.step !== undefined)     rows.push(field("Paso (AF)", `<input class="ind-sf-num" type="number" name="step" value="${cfg.step}" min="0.001" max="0.5" step="0.01">`));
   if (def.max !== undefined)      rows.push(field("AF máximo", `<input class="ind-sf-num" type="number" name="max" value="${cfg.max}" min="0.05" max="1" step="0.05">`));
   if (def.lookback !== undefined) rows.push(field("Ventana (barras)", numInput("lookback", cfg.lookback, 5, 500)));
+  if (def.tenkan !== undefined)   rows.push(field("Tenkan-sen", numInput("tenkan", cfg.tenkan, 2, 100)));
+  if (def.kijun !== undefined)    rows.push(field("Kijun-sen", numInput("kijun", cfg.kijun, 2, 200)));
+  if (def.senkou !== undefined)   rows.push(field("Senkou Span B", numInput("senkou", cfg.senkou, 2, 400)));
 
   // Colors
   if (def.colors) {
     Object.entries(cfg.colors || def.colors).forEach(([cKey, cVal]) => {
       const labels = { upper:"Color superior", lower:"Color inferior", mid:"Color medio",
                        macd:"Color MACD", signal:"Color señal", histUp:"Histograma +", histDown:"Histograma −",
-                       k:"Color %K", d:"Color %D", up:"Color alcista", down:"Color bajista" };
+                       k:"Color %K", d:"Color %D", up:"Color alcista", down:"Color bajista",
+                       tenkan:"Tenkan-sen", kijun:"Kijun-sen", spanA:"Senkou A", spanB:"Senkou B",
+                       cloudUp:"Nube alcista", cloudDown:"Nube bajista", chikou:"Chikou Span",
+                       adx:"Color ADX", plusDi:"Color +DI", minusDi:"Color -DI",
+                       pp:"Color pivote", r:"Color resistencia", s:"Color soporte" };
       rows.push(field(labels[cKey] ?? cKey, colorInput("color_" + cKey, cVal)));
     });
   } else if (def.color !== undefined) {
@@ -3962,8 +4554,10 @@ function toggleCompanyInfo() {
   companyInfoVisible = !companyInfoVisible;
 
   panel.classList.toggle("hidden", !companyInfoVisible);
-  btn.textContent = companyInfoVisible ? "Gráfico" : "Más info";
+  const lbl = btn.querySelector("span") || btn;
+  lbl.textContent = companyInfoVisible ? "Gráfico" : "Más info";
   btn.classList.toggle("active", companyInfoVisible);
+  closeMenus();
 
   if (companyInfoVisible) {
     loadCompanyInfo(marketState.symbol);
@@ -4066,6 +4660,7 @@ let mcYears = 10;
 let mcRafId = null;
 let _lastPortfolioCurrentValue = null;
 let perfMetricsData = null;
+let perfReportData = null; // series + extras para el reporte PDF (curva, benchmark, drawdown)
 let perfVarHorizon = "daily"; // "daily" | "annual"
 let perfRfr = { rate: 9.0, label: "Tasa libre de riesgo (fallback)", date: null, source: "fallback" };
 let perfRfrFetched = false;
@@ -4336,41 +4931,448 @@ function _pdfBuildAllocationSVG(posData, totalCurrentValue) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${bars}</svg>`;
 }
 
-function exportPortfolioPDF() {
+async function fetchAIInsights(metrics, lang) {
+  const res = await fetch(`${API_BASE_URL}/ai/insights`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ metrics, lang: lang || "es" }),
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  return { text: (data.insights || "").trim(), model: data.model || "" };
+}
+
+// Convierte markdown (encabezados ##, viñetas, **negritas**) a HTML seguro para el reporte.
+// Tolera tanto el formato antiguo (solo viñetas) como el nuevo (secciones con encabezados).
+function _mdToBulletsHtml(md) {
+  const esc  = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const bold = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  const lines = md.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let html = "", openUl = false;
+  const closeUl = () => { if (openUl) { html += "</ul>"; openUl = false; } };
+  lines.forEach(l => {
+    const h  = l.match(/^#{2,4}\s+(.*)$/);
+    const li = l.match(/^([-*•]|\d+\.)\s+(.*)$/);
+    if (h) {
+      closeUl();
+      html += `<div class="ai-h">${bold(h[1].replace(/[:：]\s*$/, ""))}</div>`;
+    } else if (li) {
+      if (!openUl) { html += `<ul style="margin:4px 0 0;padding-left:18px;line-height:1.65">`; openUl = true; }
+      html += `<li>${bold(li[2])}</li>`;
+    } else {
+      closeUl();
+      html += `<p style="margin:0 0 8px">${bold(l)}</p>`;
+    }
+  });
+  closeUl();
+  return html || `<p>${bold(md)}</p>`;
+}
+
+// Separa el análisis de IA (markdown con encabezados ##) en secciones temáticas
+// para intercalarlas junto a los gráficos relevantes. Tolera el formato antiguo
+// (sin encabezados) devolviéndolo como { general }.
+function _parseAISections(md) {
+  if (!md || !md.trim()) return {};
+  const lines = md.split(/\r?\n/);
+  const blocks = []; let cur = null;
+  lines.forEach(l => {
+    const h = l.match(/^#{2,4}\s+(.*)$/);
+    if (h) { cur = { title: h[1].trim(), body: [] }; blocks.push(cur); }
+    else { if (!cur) { cur = { title: "", body: [] }; blocks.push(cur); } cur.body.push(l); }
+  });
+  const keyFor = t => {
+    const s = (t || "").toLowerCase();
+    if (/tesis|diagn[oó]stico/.test(s)) return "tesis";
+    if (/atribuci[oó]n|resultado/.test(s)) return "atribucion";
+    if (/riesgo/.test(s)) return "riesgos";
+    if (/benchmark|desempe[ñn]o/.test(s)) return "benchmark";
+    if (/rebalanc|acci[oó]n|recomend/.test(s)) return "rebalanceo";
+    return "general";
+  };
+  const map = {}; let anyKeyed = false;
+  blocks.forEach(b => {
+    const body = b.body.join("\n").trim();
+    if (!body && !b.title) return;
+    const k = b.title ? keyFor(b.title) : "general";
+    if (k !== "general") anyKeyed = true;
+    map[k] = (map[k] || "") + _mdToBulletsHtml(body || b.title);
+  });
+  // Sin encabezados reconocibles → todo como bloque general
+  if (!anyKeyed) return { general: _mdToBulletsHtml(md) };
+  return map;
+}
+
+// ── Gráficos SVG para el reporte PDF ───────────────────────────────────────────
+
+// Barras horizontales genéricas (sector, región, divisa). rows: [{label, value, pct}]
+function _pdfBuildBarsSVG(rows, opts = {}) {
+  if (!rows.length) return "";
+  const COLORS = ["#6f86ff","#a78bfa","#34d399","#f59e0b","#f87171","#38bdf8","#fb923c","#e879f9","#4ade80","#94a3b8"];
+  const barH = 20, gap = 8, labelW = opts.labelW || 96, chartW = 300, pctW = 50;
+  const svgW = labelW + chartW + pctW + 10;
+  const svgH = rows.length * (barH + gap);
+  const maxPct = Math.max(...rows.map(r => r.pct)) || 1;
+  const bars = rows.map((r, i) => {
+    const barW = Math.max(3, (r.pct / maxPct) * chartW);
+    const y = i * (barH + gap);
+    const color = r.color || COLORS[i % COLORS.length];
+    const label = String(r.label || "").substring(0, 16);
+    return `<text x="0" y="${y + barH * 0.72}" font-size="10.5" fill="#222" font-weight="600" font-family="Segoe UI,Arial,sans-serif">${label}</text><rect x="${labelW}" y="${y + 2}" width="${barW}" height="${barH - 4}" fill="${color}" rx="3" opacity="0.9"/><text x="${labelW + barW + 6}" y="${y + barH * 0.72}" font-size="10.5" fill="#555" font-family="Segoe UI,Arial,sans-serif">${r.pct.toFixed(1)}%</text>`;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${bars}</svg>`;
+}
+
+// Curva de valor acumulado: portafolio vs benchmark. series: [{date, value(%)}]
+function _pdfBuildLineSVG(port, bench, portLabel, benchLabel) {
+  if (!port || port.length < 2) return "";
+  const W = 520, H = 200, padL = 42, padR = 12, padT = 14, padB = 24;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const all = port.map(p => p.value).concat((bench || []).map(b => b.value));
+  let lo = Math.min(...all, 0), hi = Math.max(...all, 0);
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const x = i => padL + (i / (port.length - 1)) * innerW;
+  const y = v => padT + (1 - (v - lo) / (hi - lo)) * innerH;
+  const pathFrom = arr => arr.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join("");
+  const zeroY = y(0);
+  // Gridlines: 0%, max, min
+  const grid = [hi, (hi + lo) / 2, lo].map(v =>
+    `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}" stroke="#eef0f8" stroke-width="1"/><text x="${padL - 5}" y="${(y(v) + 3).toFixed(1)}" font-size="8.5" fill="#aaa" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">${v >= 0 ? "+" : ""}${v.toFixed(0)}%</text>`
+  ).join("");
+  const benchPath = bench && bench.length > 1
+    ? `<path d="${pathFrom(bench)}" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="4 3"/>` : "";
+  const lastP = port[port.length - 1].value;
+  const portColor = lastP >= 0 ? "#00a870" : "#d94040";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    ${grid}
+    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W - padR}" y2="${zeroY.toFixed(1)}" stroke="#d8dcec" stroke-width="1"/>
+    ${benchPath}
+    <path d="${pathFrom(port)}" fill="none" stroke="${portColor}" stroke-width="2.2"/>
+    <g font-family="Segoe UI,Arial,sans-serif" font-size="9.5">
+      <rect x="${padL + 4}" y="${padT + 2}" width="10" height="10" fill="${portColor}" rx="2"/><text x="${padL + 18}" y="${padT + 11}" fill="#444">${portLabel} (${lastP >= 0 ? "+" : ""}${lastP.toFixed(1)}%)</text>
+      ${bench && bench.length > 1 ? `<rect x="${padL + 4}" y="${padT + 16}" width="10" height="10" fill="#94a3b8" rx="2"/><text x="${padL + 18}" y="${padT + 25}" fill="#444">${benchLabel} (${bench[bench.length-1].value >= 0 ? "+" : ""}${bench[bench.length-1].value.toFixed(1)}%)</text>` : ""}
+    </g>
+  </svg>`;
+}
+
+// Curva de drawdown (underwater). dailyReturns: [r,...]
+function _pdfBuildDrawdownSVG(dailyReturns) {
+  if (!dailyReturns || dailyReturns.length < 2) return "";
+  let cum = 1, peak = 1; const dd = [];
+  dailyReturns.forEach(r => { cum *= (1 + r); if (cum > peak) peak = cum; dd.push(-(peak - cum) / peak * 100); });
+  const W = 520, H = 130, padL = 42, padR = 12, padT = 10, padB = 18;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const lo = Math.min(...dd, 0), hi = 0;
+  const x = i => padL + (i / (dd.length - 1)) * innerW;
+  const y = v => padT + (1 - (v - lo) / (hi - lo || 1)) * innerH;
+  const path = dd.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  const area = `M${x(0).toFixed(1)},${y(0).toFixed(1)} ${path.replace(/^M/, "L")} L${x(dd.length-1).toFixed(1)},${y(0).toFixed(1)} Z`;
+  const minDD = lo;
+  const grid = [0, lo / 2, lo].map(v =>
+    `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}" stroke="#f3eef0" stroke-width="1"/><text x="${padL - 5}" y="${(y(v) + 3).toFixed(1)}" font-size="8.5" fill="#bbb" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">${v.toFixed(0)}%</text>`
+  ).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    ${grid}
+    <path d="${area}" fill="#d94040" opacity="0.12"/>
+    <path d="${path}" fill="none" stroke="#d94040" stroke-width="1.8"/>
+    <text x="${W - padR}" y="${padT + 9}" font-size="9" fill="#d94040" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">Drawdown máx: ${minDD.toFixed(1)}%</text>
+  </svg>`;
+}
+
+// Barras de contribución al P&L (positivas/negativas). rows: [{ticker, value}]
+function _pdfBuildContribSVG(rows) {
+  if (!rows.length) return "";
+  const barH = 18, gap = 8, labelW = 70, axisX = labelW + 130, half = 120;
+  const svgW = labelW + 260, svgH = rows.length * (barH + gap);
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.value))) || 1;
+  const bars = rows.map((r, i) => {
+    const y = i * (barH + gap);
+    const w = Math.max(1, Math.abs(r.value) / maxAbs * half);
+    const pos = r.value >= 0;
+    const rx = pos ? axisX : axisX - w;
+    const color = pos ? "#00a870" : "#d94040";
+    const valTxt = (pos ? "+" : "") + r.value.toFixed(2) + " pp";
+    const tx = pos ? rx + w + 5 : rx - 5;
+    const anchor = pos ? "start" : "end";
+    return `<text x="0" y="${y + barH * 0.72}" font-size="10.5" fill="#222" font-weight="600" font-family="Segoe UI,Arial,sans-serif">${(r.ticker||"").substring(0,9)}</text><rect x="${rx.toFixed(1)}" y="${y + 2}" width="${w.toFixed(1)}" height="${barH - 4}" fill="${color}" rx="2" opacity="0.9"/><text x="${tx.toFixed(1)}" y="${y + barH * 0.72}" font-size="9.5" fill="${color}" text-anchor="${anchor}" font-family="Segoe UI,Arial,sans-serif">${valTxt}</text>`;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}"><line x1="${axisX}" y1="0" x2="${axisX}" y2="${svgH}" stroke="#d8dcec" stroke-width="1"/>${bars}</svg>`;
+}
+
+// Fecha más antigua del portafolio (compra/transacción) en formato YYYY-MM-DD.
+function _portfolioEarliestDate(portfolio) {
+  const dates = [];
+  (portfolio.positions || []).forEach(p => { if (p.purchaseDate) dates.push(String(p.purchaseDate).slice(0, 10)); });
+  (portfolio.transactions || []).forEach(t => { if (t.date) { try { dates.push(new Date(t.date).toISOString().slice(0, 10)); } catch {} } });
+  return dates.length ? dates.sort()[0] : null;
+}
+
+function openReportRangeModal() {
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
+  const modal = document.getElementById("reportRangeModal");
+  const fromI = document.getElementById("reportFromInput");
+  const toI   = document.getElementById("reportToInput");
+  const err   = document.getElementById("reportRangeError");
+  if (!modal || !fromI || !toI) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const earliest = _portfolioEarliestDate(portfolio) || today;
+  fromI.min = earliest; fromI.max = today;
+  toI.min = earliest;   toI.max = today;
+  if (!fromI.value) fromI.value = earliest;
+  if (!toI.value)   toI.value = today;
+  err?.classList.add("hidden");
+  modal.classList.remove("hidden");
+}
+
+let _reportModalWired = false;
+function _wireReportRangeModal() {
+  if (_reportModalWired) return;
+  const modal = document.getElementById("reportRangeModal");
+  if (!modal) return;
+  _reportModalWired = true;
+  const fromI = document.getElementById("reportFromInput");
+  const toI   = document.getElementById("reportToInput");
+  const err   = document.getElementById("reportRangeError");
+  const close = () => modal.classList.add("hidden");
+  document.getElementById("closeReportRangeBtn")?.addEventListener("click", close);
+  modal.addEventListener("click", e => { if (e.target === modal) close(); });
+
+  document.getElementById("reportPresets")?.addEventListener("click", e => {
+    const b = e.target.closest(".report-preset"); if (!b) return;
+    e.preventDefault();
+    const preset = b.dataset.preset;
+    const today = new Date();
+    const end = today.toISOString().slice(0, 10);
+    const d = new Date(today);
+    let start;
+    if (preset === "1mo")      { d.setMonth(d.getMonth() - 1); start = d.toISOString().slice(0, 10); }
+    else if (preset === "3mo") { d.setMonth(d.getMonth() - 3); start = d.toISOString().slice(0, 10); }
+    else if (preset === "6mo") { d.setMonth(d.getMonth() - 6); start = d.toISOString().slice(0, 10); }
+    else if (preset === "1y")  { d.setFullYear(d.getFullYear() - 1); start = d.toISOString().slice(0, 10); }
+    else if (preset === "ytd") { start = today.getFullYear() + "-01-01"; }
+    else { // all
+      const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
+      start = (portfolio && _portfolioEarliestDate(portfolio)) || fromI.min || end;
+    }
+    if (fromI.min && start < fromI.min) start = fromI.min;
+    fromI.value = start; toI.value = end;
+    err?.classList.add("hidden");
+  });
+
+  document.getElementById("reportRangeForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const start = fromI.value, end = toI.value;
+    if (!start || !end) return;
+    if (start > end) { if (err) { err.textContent = "La fecha 'Desde' debe ser anterior a 'Hasta'."; err.classList.remove("hidden"); } return; }
+    err?.classList.add("hidden");
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const _t = submitBtn ? submitBtn.textContent : "";
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Generando…"; }
+    try { await exportPortfolioPDF(start, end); close(); }
+    finally { if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = _t; } }
+  });
+}
+
+// Reconstruye el portafolio a un rango de fechas histórico: tenencias, precios de
+// cierre, valor, P&L, métricas y series — todo "as of" [startStr, endStr].
+async function computeHistoricalReport(portfolio, startStr, endStr) {
+  const currency = portfolio.currency || "USD";
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isEndToday = endStr >= todayStr;
+  const allLots = buildAllPositionHistory(portfolio); // {ticker, avgPrice, quantity, currency, purchaseDate, sellDate}
+  const tickers = [...new Set(allLots.map(l => l.ticker))];
+
+  // Rango de descarga que cubra startStr
+  const spanDays = Math.max(1, (Date.now() - new Date(startStr).getTime()) / 86400000);
+  const range = spanDays <= 32 ? "3mo" : spanDays <= 95 ? "6mo" : spanDays <= 250 ? "1y"
+              : spanDays <= 500 ? "2y" : spanDays <= 1300 ? "5y" : "max";
+  const interval = spanDays <= 500 ? "1d" : "1wk";
+
+  // Asegurar tipos de cambio en caché (usa los más recientes como aproximación)
+  await fetchExchangeRates(allLots.map(l => l.currency), currency);
+
+  const benchSym = portfolio.benchmark && portfolio.benchmark !== "none" ? portfolio.benchmark : null;
+  const [histArr, benchHist] = await Promise.all([
+    Promise.all(tickers.map(t => fetchHistoricalCloses(t, range, interval).then(h => ({ t, h })))),
+    benchSym ? fetchHistoricalCloses(benchSym, range, interval) : Promise.resolve([]),
+  ]);
+
+  const dateMap = {}, sortedDates = {};
+  histArr.forEach(({ t, h }) => {
+    dateMap[t] = {};
+    h.forEach(d => { dateMap[t][new Date(d.ts).toISOString().slice(0, 10)] = d.close; });
+    sortedDates[t] = Object.keys(dateMap[t]).sort();
+  });
+  // Último cierre en o antes de `day`
+  const priceAsOf = (t, day) => {
+    const ds = sortedDates[t]; if (!ds || !ds.length) return null;
+    let lo = 0, hi = ds.length - 1, res = null;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (ds[mid] <= day) { res = ds[mid]; lo = mid + 1; } else hi = mid - 1; }
+    return res ? dateMap[t][res] : null;
+  };
+  const benchMap = {}; benchHist.forEach(d => { benchMap[new Date(d.ts).toISOString().slice(0, 10)] = d.close; });
+  const benchDates = Object.keys(benchMap).sort();
+  const benchAsOf = day => {
+    if (!benchDates.length) return null;
+    let lo = 0, hi = benchDates.length - 1, res = null;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (benchDates[mid] <= day) { res = benchDates[mid]; lo = mid + 1; } else hi = mid - 1; }
+    return res ? benchMap[res] : null;
+  };
+
+  // ── Tenencias AL endStr (qty + costo por ticker) ──────────────────────────
+  const heldAtEnd = allLots.filter(l => (l.purchaseDate || "0000-00-00") <= endStr && (!l.sellDate || l.sellDate > endStr));
+  const byTicker = {};
+  heldAtEnd.forEach(l => {
+    const b = byTicker[l.ticker] || (byTicker[l.ticker] = { ticker: l.ticker, qty: 0, cost: 0, currency: l.currency, earliest: l.purchaseDate || endStr });
+    b.qty += l.quantity;
+    b.cost += (l.avgPrice || 0) * l.quantity; // costo en divisa del lote
+    if ((l.purchaseDate || "9999") < b.earliest) b.earliest = l.purchaseDate || b.earliest;
+  });
+
+  let totalValueEnd = 0, totalCostEnd = 0;
+  const missingPrices = [];
+  const posData = Object.values(byTicker).map(b => {
+    const priceEnd = priceAsOf(b.ticker, endStr);
+    if (priceEnd === null) missingPrices.push(b.ticker);
+    const valLocal = priceEnd !== null ? priceEnd * b.qty : null;
+    const valPf = valLocal !== null ? (convertAmount(valLocal, b.currency, currency) ?? valLocal) : null;
+    const costPf = convertAmount(b.cost, b.currency, currency) ?? b.cost;
+    const pnlAmt = valPf !== null ? valPf - costPf : null;
+    const pnlPct = pnlAmt !== null && costPf > 0 ? pnlAmt / costPf * 100 : null;
+    // P&L del periodo: precio en max(start, fecha de entrada) → end
+    const refDay = b.earliest > startStr ? b.earliest : startStr;
+    const priceRef = priceAsOf(b.ticker, refDay);
+    let periodPnl = null;
+    if (priceEnd !== null && priceRef !== null) {
+      const gainLocal = (priceEnd - priceRef) * b.qty;
+      periodPnl = convertAmount(gainLocal, b.currency, currency) ?? gainLocal;
+    }
+    if (valPf !== null) totalValueEnd += valPf;
+    totalCostEnd += costPf;
+    return {
+      pos: { ticker: b.ticker, quantity: b.qty, avgPrice: b.qty > 0 ? b.cost / b.qty : 0, currency: b.currency, commissionPercent: 0, purchaseDate: b.earliest },
+      currency: b.currency, priceEnd, currentValuePf: valPf, costInPf: costPf, pnlAmt, pnlPct, periodPnl,
+    };
+  });
+  const cashAtEnd = isEndToday ? (portfolio.cashBalance || 0) : 0;
+  totalValueEnd += cashAtEnd;
+
+  // ── Serie de retornos ponderados por costo dentro de [start,end] ──────────
+  const activeInWindow = allLots.filter(l => (l.purchaseDate || "0000-00-00") <= endStr && (!l.sellDate || l.sellDate >= startStr));
+  let totalAllCost = 0;
+  activeInWindow.forEach(l => { const c = convertAmount((l.avgPrice || 0) * l.quantity, l.currency, currency) ?? ((l.avgPrice || 0) * l.quantity); l._cost = c; totalAllCost += c; });
+  activeInWindow.forEach(l => { l._weight = totalAllCost > 0 ? l._cost / totalAllCost : 0; });
+
+  const dateSet = new Set();
+  tickers.forEach(t => (sortedDates[t] || []).forEach(d => { if (d >= startStr && d <= endStr) dateSet.add(d); }));
+  const windowDates = [...dateSet].sort();
+
+  const dailyReturns = [], equityCurve = [], benchCurve = [], benchDaily = [];
+  let cum = 0, cumB = 0;
+  for (let i = 1; i < windowDates.length; i++) {
+    const d0 = windowDates[i - 1], d1 = windowDates[i];
+    let r = 0;
+    activeInWindow.forEach(l => {
+      const act = (l.purchaseDate || "0000-00-00") <= d1 && (!l.sellDate || d1 <= l.sellDate);
+      if (!act) return;
+      const c0 = priceAsOf(l.ticker, d0), c1 = priceAsOf(l.ticker, d1);
+      if (c0 && c1 && c0 > 0) r += l._weight * (c1 - c0) / c0;
+    });
+    dailyReturns.push(r);
+    cum = (1 + cum / 100) * (1 + r) * 100 - 100;
+    equityCurve.push({ date: d1.slice(5), value: cum });
+    const b0 = benchAsOf(d0), b1 = benchAsOf(d1);
+    if (b0 && b1 && b0 > 0) { const br = (b1 - b0) / b0; benchDaily.push(br); cumB = (1 + cumB / 100) * (1 + br) * 100 - 100; }
+    else benchDaily.push(0);
+    benchCurve.push({ date: d1.slice(5), value: cumB });
+  }
+
+  // ── Métricas del periodo ──────────────────────────────────────────────────
+  const m = calcMetrics(dailyReturns, perfCurrentConf);
+  const maxDD = calcMaxDrawdown(dailyReturns);
+  const beta = benchHist.length > 1 && benchDaily.length >= 2 ? calcBeta(dailyReturns, benchDaily) : null;
+  let sortino = null;
+  if (dailyReturns.length >= 2) {
+    const daily_rfr = (perfRfr.rate / 100) / 252;
+    const negR = dailyReturns.filter(x => x < daily_rfr);
+    if (negR.length) {
+      const dd = Math.sqrt(negR.reduce((s, x) => s + (x - daily_rfr) ** 2, 0) / negR.length);
+      const mean = dailyReturns.reduce((s, x) => s + x, 0) / dailyReturns.length;
+      sortino = dd > 0 ? (mean - daily_rfr) / dd * Math.sqrt(252) : 0;
+    }
+  }
+  const periodReturnPct = equityCurve.length ? equityCurve[equityCurve.length - 1].value : null;
+  const years = Math.max(0.0001, (new Date(endStr) - new Date(startStr)) / (1000 * 60 * 60 * 24 * 365.25));
+  const cagrPct = (periodReturnPct !== null && years > 0.02) ? (Math.pow(1 + periodReturnPct / 100, 1 / years) - 1) * 100 : null;
+
+  // ── Transacciones, comisiones y dividendos del periodo ────────────────────
+  const _day = tx => { try { return new Date(tx.date).toISOString().slice(0, 10); } catch { return ""; } };
+  const allTx = (portfolio.transactions || []).filter(tx => tx.date);
+  const txInWindow = allTx.filter(tx => { const d = _day(tx); return d >= startStr && d <= endStr; })
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const totalComm = txInWindow.filter(tx => tx.type === "COMPRA" || tx.type === "VENTA")
+    .reduce((s, tx) => s + (convertAmount(tx.commCost || 0, tx.currency || currency, currency) ?? (tx.commCost || 0)), 0);
+  const dividends = txInWindow.filter(tx => tx.type === "DIVIDENDO");
+  const totalDividends = dividends.reduce((s, tx) => s + (convertAmount(tx.net || 0, tx.currency || currency, currency) ?? (tx.net || 0)), 0);
+
+  // Exposición por divisa (al end)
+  const fxExposure = {};
+  posData.forEach(d => { if (d.currentValuePf !== null) fxExposure[d.currency] = (fxExposure[d.currency] || 0) + d.currentValuePf; });
+
+  return {
+    currency, startStr, endStr, isEndToday, todayStr,
+    posData, totalValueEnd, totalCostEnd, cashAtEnd,
+    metrics: { sharpe: m.sharpe, volatility: m.volatility, var: m.var, beta, maxDD, sortino },
+    equityCurve, benchCurve, dailyReturns, benchDaily,
+    benchmarkLabel: (typeof BENCHMARKS !== "undefined" && BENCHMARKS[portfolio.benchmark]) || benchSym || "Benchmark",
+    sessions: windowDates.length, periodReturnPct, cagrPct,
+    txInWindow, totalTxCount: allTx.length, totalComm, dividends, totalDividends,
+    missingPrices, fxExposure,
+  };
+}
+
+async function exportPortfolioPDF(startStr, endStr) {
+  const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
+  if (!portfolio) return;
+
+  // Abrir la ventana YA (dentro del gesto del click) para evitar el bloqueo de popups.
+  const win = window.open("", "_blank");
+  if (!win) { alert("Permite ventanas emergentes para exportar el PDF."); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generando reporte…</title><style>body{font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#444}.sp{width:34px;height:34px;border:3px solid #e6e8f5;border-top-color:#6f86ff;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 14px}@keyframes r{to{transform:rotate(360deg)}}</style></head><body><div style="text-align:center"><div class="sp"></div><div>Generando reporte con análisis de IA…</div></div></body></html>');
 
   const currency = portfolio.currency || "USD";
   const today    = new Date().toLocaleDateString("es-MX", { year:"numeric", month:"long", day:"numeric" });
 
-  // KPIs from DOM
-  const totalInvestedTxt = document.getElementById("dashTotalInvested")?.textContent || "—";
-  const currentValueTxt  = document.getElementById("dashCurrentValue")?.textContent  || "—";
-  const returnAmtTxt     = document.getElementById("dashReturnAmt")?.textContent     || "—";
-  const returnPctTxt     = document.getElementById("dashReturnPct")?.textContent     || "—";
-  const benchmark        = document.getElementById("dashBenchmark")?.textContent     || "—";
-  const sharpe           = document.getElementById("sharpeValue")?.textContent       || "—";
-  const volatility       = document.getElementById("volatilityValue")?.textContent   || "—";
-  const varVal           = document.getElementById("varValue")?.textContent          || "—";
-  const beta             = document.getElementById("betaValue")?.textContent         || "—";
-  const maxDrawdown      = document.getElementById("maxDrawdownValue")?.textContent  || "—";
+  // Reconstrucción histórica del portafolio al rango [startStr, endStr]
+  let data;
+  try {
+    data = await computeHistoricalReport(portfolio, startStr, endStr);
+  } catch (e) {
+    win.document.body.innerHTML = '<div style="font-family:Segoe UI,Arial;padding:40px;color:#a44;text-align:center">No se pudo generar el reporte.<br><small>' + ((e && e.message) || e) + '</small></div>';
+    return;
+  }
 
-  // Per-position P&L and weights
-  const positions = (portfolio.positions || []).filter(p => (p.quantity || 0) > 0);
-  let totalCurrentValue = 0;
-  const posData = positions.map(pos => {
-    const { total: costTotal } = calcPositionTotals(pos);
-    const posCur = getPosCurrency(pos, currency);
-    const price = getCachedPrice(pos.ticker);
-    const curValLocal = price !== null ? price * (pos.quantity || 0) : null;
-    const curValPf    = curValLocal !== null ? (convertAmount(curValLocal, posCur, currency) ?? curValLocal) : null;
-    const costInPf    = convertAmount(costTotal, posCur, currency) ?? costTotal;
-    const pnlAmt = curValPf !== null ? curValPf - costInPf : null;
-    const pnlPct = pnlAmt !== null && costInPf > 0 ? (pnlAmt / costInPf * 100) : null;
-    if (curValPf !== null) totalCurrentValue += curValPf;
-    return { pos, costTotal, costInPf, currentValuePf: curValPf, pnlAmt, pnlPct };
-  });
-  totalCurrentValue += (portfolio.cashBalance || 0);
+  const benchmark = data.benchmarkLabel;
+  const positions = data.posData;          // tenencias reconstruidas al endStr
+  const posData = data.posData;
+  const totalCurrentValue = data.totalValueEnd;
+  const fmtPct2 = v => (v === null || v === undefined) ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+
+  // KPIs (al rango de fechas)
+  const totalInvestedTxt = formatCurrency(data.totalCostEnd, currency);
+  const currentValueTxt  = formatCurrency(data.totalValueEnd, currency);
+  const _retAmt = data.totalValueEnd - data.totalCostEnd;
+  const returnAmtTxt = (_retAmt >= 0 ? "+" : "") + formatCurrency(_retAmt, currency);
+  const returnPctTxt = data.totalCostEnd > 0 ? fmtPct2(_retAmt / data.totalCostEnd * 100) : "—";
+
+  // Métricas del periodo (como texto)
+  const sharpe      = data.metrics.sharpe     !== null ? data.metrics.sharpe.toFixed(2)        : "—";
+  const sortinoText = data.metrics.sortino    !== null ? data.metrics.sortino.toFixed(2)       : "—";
+  const volatility  = data.metrics.volatility !== null ? data.metrics.volatility.toFixed(1) + "%" : "—";
+  const varVal      = data.metrics.var        !== null ? "-" + Math.abs(data.metrics.var).toFixed(2) + "%" : "—";
+  const beta        = data.metrics.beta       !== null ? data.metrics.beta.toFixed(2)          : "—";
+  const maxDrawdown = data.metrics.maxDD      !== null ? "-" + data.metrics.maxDD.toFixed(2) + "%" : "—";
 
   const posRows = posData.map(({ pos, currentValuePf, pnlAmt, pnlPct }) => {
     const weight = totalCurrentValue > 0 && currentValuePf !== null ? (currentValuePf / totalCurrentValue * 100) : null;
@@ -4379,45 +5381,25 @@ function exportPortfolioPDF() {
       <td><strong>${pos.ticker}</strong></td>
       <td>${getPosCurrency(pos, currency)}</td>
       <td>${(pos.avgPrice || 0).toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:4 })}</td>
-      <td>${pos.quantity}</td>
+      <td>${(pos.quantity || 0).toLocaleString("es-MX", { maximumFractionDigits:4 })}</td>
       <td style="color:${pnlColor};font-weight:600">${pnlAmt !== null ? (pnlAmt >= 0 ? "+" : "") + formatCurrency(pnlAmt, currency) : "—"}</td>
       <td style="color:${pnlColor};font-weight:600">${pnlPct !== null ? (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%" : "—"}</td>
       <td>${weight !== null ? weight.toFixed(1) + "%" : "—"}</td>
-      <td>${pos.commissionPercent ? pos.commissionPercent.toFixed(2) + "%" : "0%"}</td>
       <td>${pos.purchaseDate ? new Date(pos.purchaseDate).toLocaleDateString("es-MX") : "—"}</td>
     </tr>`;
   }).join("");
 
-  // Allocation SVG (top 8 by value)
+  // Allocation SVG (top 8 por valor)
   const sortedForChart = [...posData]
     .filter(d => d.currentValuePf !== null && d.currentValuePf > 0)
     .sort((a, b) => b.currentValuePf - a.currentValuePf)
     .slice(0, 8);
   const svgChart = _pdfBuildAllocationSVG(sortedForChart, totalCurrentValue);
 
-  // Commissions
-  const { totalComm } = calcPortfolioTotals(positions, currency);
+  const totalComm = data.totalComm;
+  const cagrText = data.cagrPct !== null ? (data.cagrPct >= 0 ? "+" : "") + data.cagrPct.toFixed(2) + "%" : "—";
 
-  // CAGR
-  const allTxDates = (portfolio.transactions || []).filter(tx => tx.date).map(tx => tx.date);
-  let cagrText = "—";
-  if (allTxDates.length && totalCurrentValue > 0) {
-    const firstDate = new Date(allTxDates.reduce((a, b) => a < b ? a : b));
-    const { totalInvested } = calcPortfolioTotals(positions, currency);
-    const years = (Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-    if (years > 0.01 && totalInvested > 0) {
-      const cagr = (Math.pow(totalCurrentValue / totalInvested, 1 / years) - 1) * 100;
-      cagrText = (cagr >= 0 ? "+" : "") + cagr.toFixed(2) + "%";
-    }
-  }
-
-  // Currency exposure
-  const fxExposure = {};
-  posData.forEach(({ pos, currentValuePf }) => {
-    if (currentValuePf === null) return;
-    const c = getPosCurrency(pos, currency);
-    fxExposure[c] = (fxExposure[c] || 0) + currentValuePf;
-  });
+  const fxExposure = data.fxExposure;
   const fxRows = Object.entries(fxExposure)
     .sort((a, b) => b[1] - a[1])
     .map(([cur, val]) => {
@@ -4425,30 +5407,118 @@ function exportPortfolioPDF() {
       return `<tr><td><strong>${cur}</strong></td><td>${formatCurrency(val, currency)}</td><td>${pct}%</td></tr>`;
     }).join("");
 
-  // Dividends
-  const dividendTxs = (portfolio.transactions || []).filter(tx => tx.type === "DIVIDENDO");
-  const totalDividends = dividendTxs.reduce((s, tx) => s + (tx.net || 0), 0);
+  const dividendTxs = data.dividends;
+  const totalDividends = data.totalDividends;
 
-  // Sortino
-  let sortinoText = "—";
-  if (perfDailyReturns && perfDailyReturns.length >= 2) {
-    const daily_rfr = (perfRfr.rate / 100) / 252;
-    const negR = perfDailyReturns.filter(r => r < daily_rfr);
-    if (negR.length > 0) {
-      const downDev = Math.sqrt(negR.reduce((s, r) => s + (r - daily_rfr) ** 2, 0) / negR.length);
-      const mean = perfDailyReturns.reduce((s, r) => s + r, 0) / perfDailyReturns.length;
-      const sortino = downDev > 0 ? (mean - daily_rfr) / downDev * Math.sqrt(252) : 0;
-      sortinoText = sortino.toFixed(2);
+  // ── Analítica avanzada para el reporte ────────────────────────────────────
+  const _num = s => { const n = parseFloat(String(s).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? null : n; };
+  const totInvNum = data.totalCostEnd;
+
+  // #3 Atribución de resultados — contribución de cada posición al retorno del periodo (en pp)
+  const attribAll = posData
+    .filter(d => (d.periodPnl ?? d.pnlAmt) !== null)
+    .map(d => {
+      const gain = d.periodPnl ?? d.pnlAmt;
+      return { ticker: d.pos.ticker, pnlAmt: gain, pp: totInvNum > 0 ? (gain / totInvNum * 100) : 0 };
+    })
+    .sort((a, b) => b.pp - a.pp);
+  const attribTop = attribAll.slice(0, 5);
+  const attribBottom = attribAll.slice(-5).filter(d => d.pp < 0 && !attribTop.includes(d));
+  const attribChartRows = [...attribTop, ...attribBottom]
+    .filter((d, i, arr) => arr.indexOf(d) === i)
+    .sort((a, b) => b.pp - a.pp);
+  const attribSVG = _pdfBuildContribSVG(attribChartRows.map(d => ({ ticker: d.ticker, value: d.pp })));
+
+  // #4 Concentración y diversificación
+  const weights = posData
+    .filter(d => d.currentValuePf !== null && d.currentValuePf > 0)
+    .map(d => ({ ticker: d.pos.ticker, w: d.currentValuePf / totalCurrentValue }));
+  const hhi = weights.reduce((s, x) => s + x.w * x.w, 0);
+  const effN = hhi > 0 ? 1 / hhi : 0;
+  const sortedW = [...weights].sort((a, b) => b.w - a.w);
+  const top3W = sortedW.slice(0, 3).reduce((s, x) => s + x.w, 0) * 100;
+  const maxW = sortedW.length ? sortedW[0].w * 100 : 0;
+  const concLabel = hhi > 0.25 ? "alta" : hhi > 0.15 ? "moderada" : "baja";
+  // Sector / región por valor actual
+  const _bucketBy = (fn) => {
+    const b = {};
+    posData.forEach(d => { if (d.currentValuePf > 0) { const k = fn(d.pos.ticker); b[k] = (b[k] || 0) + d.currentValuePf; } });
+    if ((portfolio.cashBalance || 0) > 0) b["Cash"] = (b["Cash"] || 0) + portfolio.cashBalance;
+    return Object.entries(b).sort((a, b2) => b2[1] - a[1])
+      .map(([label, value]) => ({ label, value, pct: totalCurrentValue > 0 ? value / totalCurrentValue * 100 : 0 }));
+  };
+  const sectorRows = _bucketBy(getTickerSector);
+  const geoRows = _bucketBy(getTickerGeo);
+  const sectorSVG = _pdfBuildBarsSVG(sectorRows);
+  const geoSVG = _pdfBuildBarsSVG(geoRows);
+  const concAlerts = [];
+  if (maxW > 25) concAlerts.push(`La mayor posición (${sortedW[0].ticker}) representa ${maxW.toFixed(1)}% del portafolio — riesgo de concentración.`);
+  if (top3W > 60) concAlerts.push(`Las 3 mayores posiciones suman ${top3W.toFixed(1)}% — diversificación limitada.`);
+  if (sectorRows.length && sectorRows[0].pct > 40 && sectorRows[0].label !== "Cash") concAlerts.push(`Sobreexposición a "${sectorRows[0].label}" (${sectorRows[0].pct.toFixed(1)}%).`);
+
+  // #5 Comparación vs benchmark (series reconstruidas al rango por el motor)
+  let benchCompare = null, eqSVG = "", ddSVG = "", benchMetricsHtml = "", perfSessions = 0;
+  if (data.equityCurve && data.equityCurve.length > 1) {
+    const eq = data.equityCurve;
+    const bm = data.benchCurve || [];
+    const portRet = eq[eq.length - 1].value;
+    const hasBench = bm.length > 1 && bm.some(p => p.value !== 0);
+    const benchRet = hasBench ? bm[bm.length - 1].value : null;
+    const active = hasBench ? portRet - benchRet : null;
+    let trackingError = null;
+    if (hasBench && data.benchDaily && data.benchDaily.length > 1) {
+      const dp = data.dailyReturns, db = data.benchDaily;
+      const n = Math.min(dp.length, db.length);
+      const diff = []; for (let i = 0; i < n; i++) diff.push(dp[i] - db[i]);
+      const m = diff.reduce((s, r) => s + r, 0) / n;
+      const v = diff.reduce((s, r) => s + (r - m) ** 2, 0) / Math.max(1, n - 1);
+      trackingError = Math.sqrt(v) * Math.sqrt(252) * 100;
     }
+    perfSessions = data.sessions || 0;
+    benchCompare = { portRet, benchRet, active, trackingError, beta: data.metrics.beta, label: data.benchmarkLabel };
+    eqSVG = _pdfBuildLineSVG(eq, hasBench ? bm : [], "Portafolio", data.benchmarkLabel || "Benchmark");
+    ddSVG = _pdfBuildDrawdownSVG(data.dailyReturns);
+    const cell = (lbl, val, color) => `<div class="metric"><span>${lbl}</span><strong${color ? ` style="color:${color}"` : ""}>${val}</strong></div>`;
+    const fmtPct = v => v === null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+    benchMetricsHtml = `<div class="metrics m4">
+    ${cell("Retorno portafolio", fmtPct(portRet), portRet >= 0 ? "#00a870" : "#d94040")}
+    ${cell("Retorno benchmark", fmtPct(benchRet))}
+    ${cell("Exceso (alpha activo)", fmtPct(active), active === null ? "" : active >= 0 ? "#00a870" : "#d94040")}
+    ${cell("Tracking error", trackingError === null ? "—" : trackingError.toFixed(2) + "%")}
+  </div>`;
   }
+
+  // #7 Riesgo interpretado en lenguaje de cliente
+  const _sh = _num(sharpe), _vol = _num(volatility), _var = _num(varVal), _mdd = _num(maxDrawdown), _bt = _num(beta);
+  const riskBullets = [];
+  if (_var !== null) {
+    const varAmt = totalCurrentValue > 0 ? formatCurrency(Math.abs(_var) / 100 * totalCurrentValue, currency) : "—";
+    riskBullets.push(`**VaR 95%:** en un mal día (1 de cada 20) el portafolio podría perder hasta ~<strong>${Math.abs(_var).toFixed(2)}%</strong> (≈ ${varAmt}).`);
+  }
+  if (_mdd !== null) riskBullets.push(`**Máxima caída histórica:** desde su punto más alto el portafolio llegó a caer <strong>${Math.abs(_mdd).toFixed(2)}%</strong>; mide la peor racha sufrida.`);
+  if (_vol !== null) riskBullets.push(`**Volatilidad:** ${_vol.toFixed(1)}% anual — ${_vol > 25 ? "alta, esperar oscilaciones amplias" : _vol > 15 ? "moderada" : "contenida"}.`);
+  if (_sh !== null) riskBullets.push(`**Sharpe ${_sh.toFixed(2)}:** ${_sh > 1 ? "buen retorno por unidad de riesgo" : _sh > 0 ? "retorno ajustado al riesgo modesto" : "el retorno no compensó el riesgo asumido"}.`);
+  if (_bt !== null) riskBullets.push(`**Beta ${_bt.toFixed(2)}:** el portafolio se mueve ${_bt > 1.1 ? "más" : _bt < 0.9 ? "menos" : "en línea"} que el mercado de referencia.`);
+  const riskInterpHtml = riskBullets.length
+    ? `<div class="callout"><div class="callout-h">¿Qué significan estas métricas?</div>${_mdToBulletsHtml(riskBullets.map(b => "- " + b).join("\n"))}</div>`
+    : "";
 
   // Executive summary
   const sharpeNum = parseFloat(sharpe);
   const riskLabel = isNaN(sharpeNum) ? "sin datos" : sharpeNum > 1 ? "buena" : sharpeNum > 0 ? "moderada" : "baja";
   const execSummary = `Portafolio <strong>${portfolio.name}</strong> con <strong>${positions.length}</strong> posición${positions.length !== 1 ? "es" : ""} activa${positions.length !== 1 ? "s" : ""} en ${currency}. Retorno total: <strong>${returnAmtTxt} (${returnPctTxt})</strong>. CAGR estimado: <strong>${cagrText}</strong>. Relación riesgo/retorno <strong>${riskLabel}</strong> · Sharpe ${sharpe} · Sortino ${sortinoText}.`;
 
-  // Transactions
-  const txs    = (portfolio.transactions || []).slice(0, 40);
+  // ── #8 Periodo del reporte (del rango seleccionado) ────────────────────────
+  const _fmtD = d => { try { return new Date(d + "T00:00:00").toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" }); } catch { return d; } };
+  const periodLabel = `${_fmtD(data.startStr)} – ${_fmtD(data.endStr)}`;
+
+  // ── #11 Frescura / vigencia de los datos ───────────────────────────────────
+  const dataAsOf = `cierre del ${_fmtD(data.endStr)}${data.isEndToday ? " (más reciente)" : ""}`;
+  const missingPrices = data.missingPrices || [];
+
+  // ── #8 Transacciones del periodo ───────────────────────────────────────────
+  const txs = data.txInWindow.slice(0, 80);
+  const totalTxCount = data.totalTxCount;
   const txRows = txs.map(tx => {
     const date = new Date(tx.date).toLocaleDateString("es-MX");
     const typeColor = tx.type === "COMPRA" ? "#00a870" : tx.type === "DIVIDENDO" ? "#d4890a" : "#d94040";
@@ -4462,6 +5532,68 @@ function exportPortfolioPDF() {
       <td>${(tx.net || 0).toFixed(2)}</td>
     </tr>`;
   }).join("");
+  const txCaption = `${txs.length} en el periodo${data.txInWindow.length > txs.length ? ` (de ${data.txInWindow.length})` : ""} · ${totalTxCount} históricas`;
+
+  // ── Insights con IA (OpenRouter vía backend de Railway) ────────────────────
+  const aiMetrics = {
+    portafolio: portfolio.name,
+    moneda: currency,
+    periodo_reporte: periodLabel,
+    retorno_periodo_pct: data.periodReturnPct !== null ? +data.periodReturnPct.toFixed(2) : null,
+    posiciones_activas: positions.length,
+    total_invertido: totalInvestedTxt,
+    valor_actual: currentValueTxt,
+    retorno: `${returnAmtTxt} (${returnPctTxt})`,
+    cagr_estimado: cagrText,
+    sharpe, sortino: sortinoText, volatilidad: volatility,
+    var_95: varVal, beta, max_drawdown: maxDrawdown, benchmark,
+    comisiones_totales: formatCurrency(totalComm, currency),
+    dividendos_cobrados: dividendTxs.length ? formatCurrency(totalDividends, currency) : "0",
+    posiciones: posData
+      .filter(d => d.currentValuePf !== null)
+      .sort((a, b) => (b.currentValuePf || 0) - (a.currentValuePf || 0))
+      .slice(0, 15)
+      .map(d => ({
+        ticker: d.pos.ticker,
+        peso_pct: totalCurrentValue > 0 ? +(d.currentValuePf / totalCurrentValue * 100).toFixed(1) : null,
+        pnl_pct: d.pnlPct !== null ? +d.pnlPct.toFixed(2) : null,
+        divisa: getPosCurrency(d.pos, currency),
+      })),
+    exposicion_divisa: Object.entries(fxExposure).map(([cur, val]) => ({
+      divisa: cur,
+      peso_pct: totalCurrentValue > 0 ? +(val / totalCurrentValue * 100).toFixed(1) : null,
+    })),
+    concentracion: {
+      hhi: +hhi.toFixed(3),
+      nivel: concLabel,
+      holdings_efectivos: +effN.toFixed(1),
+      top3_peso_pct: +top3W.toFixed(1),
+      mayor_posicion_pct: +maxW.toFixed(1),
+    },
+    exposicion_sector: sectorRows.slice(0, 8).map(r => ({ sector: r.label, peso_pct: +r.pct.toFixed(1) })),
+    exposicion_region: geoRows.slice(0, 8).map(r => ({ region: r.label, peso_pct: +r.pct.toFixed(1) })),
+    atribucion: {
+      mayores_contribuidores: attribAll.slice(0, 3).map(d => ({ ticker: d.ticker, contribucion_pp: +d.pp.toFixed(2) })),
+      mayores_detractores: attribAll.slice(-3).filter(d => d.pp < 0).map(d => ({ ticker: d.ticker, contribucion_pp: +d.pp.toFixed(2) })),
+    },
+    comparacion_benchmark: benchCompare ? {
+      retorno_portafolio_pct: +benchCompare.portRet.toFixed(2),
+      retorno_benchmark_pct: benchCompare.benchRet === null ? null : +benchCompare.benchRet.toFixed(2),
+      exceso_pp: benchCompare.active === null ? null : +benchCompare.active.toFixed(2),
+      tracking_error_pct: benchCompare.trackingError === null ? null : +benchCompare.trackingError.toFixed(2),
+      beta: benchCompare.beta === null || benchCompare.beta === undefined ? null : +benchCompare.beta.toFixed(2),
+    } : null,
+  };
+
+  let aiSections = {}, aiModel = "";
+  try {
+    const ai = await fetchAIInsights(aiMetrics, "es");
+    if (ai.text) { aiSections = _parseAISections(ai.text); aiModel = ai.model || ""; }
+  } catch (_) { /* Sin insights: el PDF se genera igual. */ }
+  // Nota de IA intercalable junto a un gráfico/sección
+  const aiNote = (key) => aiSections[key]
+    ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections[key]}</div>` : "";
+  const aiHasAny = Object.keys(aiSections).length > 0;
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -4469,114 +5601,245 @@ function exportPortfolioPDF() {
   <meta charset="UTF-8">
   <title>Reporte — ${portfolio.name}</title>
   <style>
+    :root{
+      --ink:#1b1f2e; --muted:#6b7280; --faint:#9aa1b2;
+      --pri:#5b6ef5; --pri-dk:#4453d6; --soft:#f6f7fb; --soft2:#eef1fb;
+      --border:#e6e9f4; --green:#00a870; --red:#d94040; --amber:#f5b84c;
+    }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;padding:32px 40px;font-size:13px}
-    .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #6f86ff;padding-bottom:16px;margin-bottom:20px}
-    .brand{font-size:24px;font-weight:800;letter-spacing:-0.5px}.brand span{color:#6f86ff}
-    .brand-sub{font-size:11px;color:#888;margin-top:2px;letter-spacing:.4px}
-    .meta{text-align:right;color:#666;font-size:12px;line-height:1.7}
-    .meta strong{display:block;font-size:19px;font-weight:700;color:#111;margin-bottom:2px}
-    .exec{background:#f0f2ff;border-left:4px solid #6f86ff;border-radius:5px;padding:12px 15px;margin-bottom:22px;font-size:12.5px;line-height:1.6;color:#333}
-    .section-title{font-size:11px;font-weight:700;color:#6f86ff;text-transform:uppercase;letter-spacing:.8px;margin:0 0 10px;padding-bottom:5px;border-bottom:1px solid #e8ecff}
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
-    .kpi{background:#f4f5fa;border-radius:9px;padding:12px 14px;border-left:3px solid #6f86ff}
-    .kpi span{font-size:10px;color:#888;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
-    .kpi strong{font-size:16px;font-weight:700}
-    .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:24px}
-    .metric{background:#f9f9fc;border-radius:8px;padding:10px 11px;text-align:center;border:1px solid #eef0f8}
-    .metric span{font-size:9px;color:#999;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
-    .metric strong{font-size:14px;font-weight:700;color:#333}
-    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;align-items:start}
-    .chart-wrap{background:#fafbff;border:1px solid #eef0f8;border-radius:8px;padding:14px 16px}
-    .stats-wrap{display:flex;flex-direction:column;gap:10px}
-    .stat-box{background:#f9f9fc;border:1px solid #eef0f8;border-radius:8px;padding:11px 13px}
-    .stat-box span{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
-    .stat-box strong{font-size:15px;font-weight:700}
-    table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12px}
-    thead th{background:#eef0f8;color:#555;font-size:10px;font-weight:700;text-transform:uppercase;padding:7px 10px;text-align:left;letter-spacing:.3px}
-    tbody td{border-bottom:1px solid #ebebeb;padding:6px 10px}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:var(--ink);padding:30px 38px;font-size:12.5px;line-height:1.45}
+    h1,h2,h3{font-weight:700}
+    /* Cover */
+    .cover{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding:0 0 16px;margin-bottom:6px;border-bottom:3px solid var(--pri)}
+    .brand{font-size:25px;font-weight:800;letter-spacing:-.6px;color:var(--ink)}
+    .brand span{color:var(--pri)}
+    .brand-sub{font-size:10.5px;color:var(--faint);margin-top:3px;letter-spacing:.5px;text-transform:uppercase}
+    .cover-right{text-align:right}
+    .cover-name{font-size:20px;font-weight:800;color:var(--ink);margin-bottom:3px}
+    .cover-meta{font-size:10.5px;color:var(--muted);line-height:1.65}
+    .cover-meta b{color:var(--ink);font-weight:600}
+    /* Freshness ribbon */
+    .ribbon{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--muted);padding:8px 0 0;margin-bottom:18px}
+    .ribbon .pill{background:var(--soft);border:1px solid var(--border);border-radius:20px;padding:3px 11px}
+    .warn{background:#fff3f3;border:1px solid #f3c9c9;color:#a44;border-radius:7px;padding:8px 12px;font-size:10.5px;margin-bottom:16px}
+    /* Sections */
+    .sec{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.6px;margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+    .sec .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:6px;background:var(--pri);color:#fff;font-size:11px;font-weight:800;letter-spacing:0}
+    .sec .hint{margin-left:auto;font-size:9.5px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
+    section{margin-bottom:26px}
+    /* Grids */
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+    .g-perf{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
+    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}
+    /* Text blocks */
+    .exec{background:var(--soft2);border-left:3px solid var(--pri);border-radius:7px;padding:13px 16px;font-size:12.5px;line-height:1.6;color:#2c3142}
+    .ai-note{background:#f7f9ff;border:1px solid #dde4ff;border-left:3px solid var(--pri);border-radius:7px;padding:12px 14px;font-size:11.5px;color:#2a2f45}
+    .ai-note-h{font-size:9.5px;font-weight:800;color:var(--pri-dk);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+    .ai-note ul{margin:2px 0 0;padding-left:16px;line-height:1.55}
+    .callout{background:#fbfcff;border:1px solid var(--border);border-radius:7px;padding:12px 14px;font-size:11.5px;color:#333}
+    .callout-h{font-size:10px;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+    .ai-h{font-size:11px;font-weight:700;color:var(--pri-dk);margin:10px 0 3px}
+    .ai-h:first-child{margin-top:0}
+    /* KPIs / metrics */
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .kpi{background:linear-gradient(180deg,#f8f9ff,#f3f5fc);border:1px solid var(--border);border-radius:9px;padding:13px 15px;border-top:3px solid var(--pri)}
+    .kpi span{font-size:9.5px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+    .kpi strong{font-size:17px;font-weight:800;color:var(--ink)}
+    .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:12px}
+    .metrics.m4{grid-template-columns:repeat(4,1fr)}
+    .metric{background:var(--soft);border:1px solid var(--border);border-radius:8px;padding:10px 8px;text-align:center}
+    .metric span{font-size:8.5px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+    .metric strong{font-size:14px;font-weight:800;color:var(--ink)}
+    /* Charts */
+    .chart{background:#fff;border:1px solid var(--border);border-radius:8px;padding:13px 15px}
+    .chart-h{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600}
+    .chart svg{max-width:100%;height:auto}
+    .cap{font-size:9px;color:var(--faint);margin-top:8px}
+    /* Stats list */
+    .stat-box{background:var(--soft);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:9px}
+    .stat-box span{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+    .stat-box strong{font-size:14px;font-weight:800;color:var(--ink)}
+    /* Tables */
+    table{width:100%;border-collapse:collapse;font-size:11px}
+    thead th{background:var(--soft2);color:#4a5168;font-size:9px;font-weight:700;text-transform:uppercase;padding:7px 9px;text-align:left;letter-spacing:.3px}
+    tbody td{border-bottom:1px solid #edeef4;padding:6px 9px}
     tbody tr:last-child td{border-bottom:none}
-    .disclaimer{background:#fff8e7;border-left:3px solid #f5b84c;border-radius:4px;padding:10px 13px;margin-bottom:20px;font-size:11px;color:#7a6020}
-    .footer{margin-top:18px;padding-top:12px;border-top:1px solid #e8e8e8;font-size:10px;color:#bbb;display:flex;justify-content:space-between;align-items:center}
+    /* Glossary */
+    .gloss{columns:2;column-gap:24px;font-size:10.5px;color:#444}
+    .gloss div{break-inside:avoid;margin-bottom:8px}
+    .gloss b{color:var(--ink)}
+    .disclaimer{background:#fff8e7;border-left:3px solid var(--amber);border-radius:6px;padding:10px 13px;margin-bottom:16px;font-size:10.5px;color:#7a6020}
+    .alerts{background:#fff3f3;border:1px solid #f3c9c9;border-left:3px solid var(--red);border-radius:7px;padding:9px 13px;font-size:10.5px;color:#a44;margin-bottom:12px;line-height:1.7}
+    .footer{margin-top:8px;padding-top:11px;border-top:1px solid var(--border);font-size:9.5px;color:var(--faint);display:flex;justify-content:space-between;align-items:center}
     @media print{
-      body{padding:20px}
-      .hdr,.kpis,.metrics,.two-col{page-break-inside:avoid}
-      .section-title{page-break-after:avoid}
+      body{padding:18px 22px}
+      section,.kpis,.metrics,.g2,.g-perf,.g3,.chart,.kpi,.metric{page-break-inside:avoid}
+      .sec{page-break-after:avoid}
       table{page-break-inside:auto}
-      tr{page-break-inside:avoid;page-break-after:auto}
+      tr{page-break-inside:avoid}
+      thead{display:table-header-group}
     }
   </style>
 </head>
 <body>
-  <div class="hdr">
+  <header class="cover">
     <div>
       <div class="brand"><span>B</span>lackPortfolio</div>
-      <div class="brand-sub">Reporte de Portafolio · Para uso del asesor</div>
+      <div class="brand-sub">Reporte de portafolio · Para uso del asesor</div>
     </div>
-    <div class="meta">
-      <strong>${portfolio.name}</strong>
-      <span>Benchmark: ${benchmark} &nbsp;·&nbsp; Moneda: ${currency}</span>
-      <span>Generado el ${today}</span>
+    <div class="cover-right">
+      <div class="cover-name">${portfolio.name}</div>
+      <div class="cover-meta"><b>Periodo:</b> ${periodLabel}</div>
+      <div class="cover-meta">Benchmark: ${benchmark} &nbsp;·&nbsp; Moneda: ${currency}</div>
+      <div class="cover-meta">Generado el ${today}</div>
     </div>
+  </header>
+  <div class="ribbon">
+    <span class="pill">📅 Periodo: ${periodLabel}</span>
+    <span class="pill">🔄 Valuado al ${dataAsOf}</span>
+    <span class="pill">📊 ${positions.length} posiciones · ${currency}</span>
+    ${!data.isEndToday ? `<span class="pill">🕑 Reconstruido a fecha histórica</span>` : ""}
   </div>
+  ${missingPrices.length ? `<div class="warn">⚠ ${missingPrices.length} posición(es) sin precio de cierre en la fecha (${missingPrices.slice(0,6).join(", ")}${missingPrices.length>6?"…":""}); quedan en "—". Puede deberse a tickers sin histórico disponible para el rango.</div>` : ""}
+  ${!data.isEndToday ? `<div class="warn" style="background:#fff8e7;border-color:#f0d9a8;color:#7a6020">ℹ El saldo en efectivo (Cash) solo se incluye cuando la fecha final es hoy; en reportes históricos el valor refleja únicamente las posiciones.</div>` : ""}
 
-  <div class="exec">${execSummary}</div>
-
-  <div class="section-title">Resumen de valor</div>
-  <div class="kpis">
-    <div class="kpi"><span>Total invertido</span><strong>${totalInvestedTxt}</strong></div>
-    <div class="kpi"><span>Valor actual</span><strong>${currentValueTxt}</strong></div>
-    <div class="kpi"><span>Retorno $</span><strong>${returnAmtTxt}</strong></div>
-    <div class="kpi"><span>Retorno %</span><strong>${returnPctTxt}</strong></div>
-  </div>
-
-  <div class="section-title">Métricas de riesgo y rendimiento</div>
-  <div class="metrics">
-    <div class="metric"><span>Sharpe</span><strong>${sharpe}</strong></div>
-    <div class="metric"><span>Sortino</span><strong>${sortinoText}</strong></div>
-    <div class="metric"><span>Volatilidad</span><strong>${volatility}</strong></div>
-    <div class="metric"><span>VaR (95%)</span><strong>${varVal}</strong></div>
-    <div class="metric"><span>Beta</span><strong>${beta}</strong></div>
-    <div class="metric"><span>Max Drawdown</span><strong>${maxDrawdown}</strong></div>
-  </div>
-
-  <div class="two-col">
-    <div>
-      <div class="section-title">Distribución del portafolio (top ${sortedForChart.length})</div>
-      <div class="chart-wrap">${svgChart || "<span style='color:#aaa;font-size:12px'>Sin precios en caché para graficar</span>"}</div>
+  <!-- 1. Resumen ejecutivo -->
+  <section>
+    <h2 class="sec"><span class="n">1</span>Resumen ejecutivo</h2>
+    <div class="${(aiSections.tesis || aiSections.general) ? "g2" : ""}" style="margin-bottom:16px">
+      <div class="exec">${execSummary}</div>
+      ${aiNote("tesis") || (aiSections.general ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections.general}</div>` : "")}
     </div>
-    <div class="stats-wrap">
-      <div class="stat-box"><span>CAGR estimado</span><strong>${cagrText}</strong></div>
-      <div class="stat-box"><span>Comisiones totales</span><strong>${formatCurrency(totalComm, currency)}</strong></div>
-      ${dividendTxs.length ? `<div class="stat-box"><span>Dividendos cobrados (${dividendTxs.length} pagos)</span><strong>${formatCurrency(totalDividends, currency)}</strong></div>` : ""}
-      ${fxRows ? `<div style="margin-top:6px"><div class="section-title">Exposición por divisa</div><table style="margin:0"><thead><tr><th>Divisa</th><th>Valor (${currency})</th><th>Peso</th></tr></thead><tbody>${fxRows}</tbody></table></div>` : ""}
+    <div class="kpis">
+      <div class="kpi"><span>Total invertido</span><strong>${totalInvestedTxt}</strong></div>
+      <div class="kpi"><span>Valor actual</span><strong>${currentValueTxt}</strong></div>
+      <div class="kpi"><span>Retorno $</span><strong>${returnAmtTxt}</strong></div>
+      <div class="kpi"><span>Retorno %</span><strong>${returnPctTxt}</strong></div>
     </div>
-  </div>
+  </section>
 
-  ${posRows ? `<div class="section-title">Posiciones activas (${positions.length})</div>
-  <table>
-    <thead><tr><th>Ticker</th><th>Divisa</th><th>Precio prom.</th><th>Cantidad</th><th>P&L $</th><th>P&L %</th><th>Peso</th><th>Comisión</th><th>Fecha compra</th></tr></thead>
-    <tbody>${posRows}</tbody>
-  </table>` : ""}
+  <!-- 2. Rendimiento vs benchmark -->
+  <section>
+    <h2 class="sec"><span class="n">2</span>Rendimiento vs benchmark<span class="hint">${perfSessions ? perfSessions + " sesiones · " + periodLabel : periodLabel}</span></h2>
+    ${eqSVG ? `<div class="g-perf">
+      <div class="chart"><div class="chart-h">Valor acumulado · Portafolio vs ${benchCompare?.label || "Benchmark"}</div>${eqSVG}<div class="cap">Retorno compuesto acumulado en el periodo. Línea punteada = benchmark.</div></div>
+      <div>
+        ${benchMetricsHtml}
+        ${aiNote("benchmark")}
+      </div>
+    </div>` : `<div class="callout">No hay suficientes datos de precios históricos para construir la serie en el rango seleccionado. Prueba un rango más amplio o verifica que los tickers tengan histórico disponible.</div>`}
+  </section>
 
-  ${txRows ? `<div class="section-title" style="page-break-before:auto">Historial de transacciones (últimas ${txs.length})</div>
-  <table>
-    <thead><tr><th>Fecha</th><th>Tipo</th><th>Ticker</th><th>Cantidad</th><th>Precio</th><th>Comisión $</th><th>Neto</th></tr></thead>
-    <tbody>${txRows}</tbody>
-  </table>` : ""}
+  <!-- 3. Riesgo -->
+  <section>
+    <h2 class="sec"><span class="n">3</span>Riesgo y volatilidad</h2>
+    <div class="metrics">
+      <div class="metric"><span>Sharpe</span><strong>${sharpe}</strong></div>
+      <div class="metric"><span>Sortino</span><strong>${sortinoText}</strong></div>
+      <div class="metric"><span>Volatilidad</span><strong>${volatility}</strong></div>
+      <div class="metric"><span>VaR (95%)</span><strong>${varVal}</strong></div>
+      <div class="metric"><span>Beta</span><strong>${beta}</strong></div>
+      <div class="metric"><span>Max Drawdown</span><strong>${maxDrawdown}</strong></div>
+    </div>
+    <div class="${ddSVG ? "g2" : ""}">
+      ${ddSVG ? `<div class="chart"><div class="chart-h">Drawdown · caídas desde máximos</div>${ddSVG}</div>` : ""}
+      <div>
+        ${riskInterpHtml}
+        ${aiNote("riesgos")}
+      </div>
+    </div>
+  </section>
 
-  <div class="disclaimer">Este reporte es generado automáticamente con fines informativos. No constituye asesoría de inversión ni recomendación de compra o venta de valores.</div>
+  <!-- 4. Distribución y diversificación -->
+  <section>
+    <h2 class="sec"><span class="n">4</span>Distribución y diversificación</h2>
+    <div class="metrics m4">
+      <div class="metric"><span>Concentración (HHI)</span><strong>${hhi.toFixed(3)} · ${concLabel}</strong></div>
+      <div class="metric"><span>Holdings efectivos</span><strong>${effN.toFixed(1)}</strong></div>
+      <div class="metric"><span>Top 3 (peso)</span><strong>${top3W.toFixed(1)}%</strong></div>
+      <div class="metric"><span>Mayor posición</span><strong>${maxW.toFixed(1)}%</strong></div>
+    </div>
+    ${concAlerts.length ? `<div class="alerts">${concAlerts.map(a => "• " + a).join("<br>")}</div>` : ""}
+    <div class="g2" style="margin-bottom:14px">
+      <div class="chart"><div class="chart-h">Distribución por posición (top ${sortedForChart.length})</div>${svgChart || "<span style='color:#aaa;font-size:11px'>Sin precios en caché para graficar</span>"}</div>
+      <div>
+        <div class="stat-box"><span>CAGR estimado</span><strong>${cagrText}</strong></div>
+        <div class="stat-box"><span>Comisiones totales</span><strong>${formatCurrency(totalComm, currency)}</strong></div>
+        ${dividendTxs.length ? `<div class="stat-box"><span>Dividendos cobrados (${dividendTxs.length} pagos)</span><strong>${formatCurrency(totalDividends, currency)}</strong></div>` : ""}
+      </div>
+    </div>
+    <div class="g3">
+      <div class="chart"><div class="chart-h">Por sector</div>${sectorSVG || "<span style='color:#aaa;font-size:11px'>Sin datos</span>"}</div>
+      <div class="chart"><div class="chart-h">Por región</div>${geoSVG || "<span style='color:#aaa;font-size:11px'>Sin datos</span>"}</div>
+      <div class="chart"><div class="chart-h">Por divisa</div>${fxRows ? `<table style="margin:0"><thead><tr><th>Divisa</th><th>Valor</th><th>Peso</th></tr></thead><tbody>${fxRows}</tbody></table>` : "<span style='color:#aaa;font-size:11px'>—</span>"}</div>
+    </div>
+  </section>
+
+  <!-- 5. Atribución -->
+  ${attribChartRows.length ? `<section>
+    <h2 class="sec"><span class="n">5</span>Atribución de resultados<span class="hint">contribución al retorno, en puntos %</span></h2>
+    <div class="${aiSections.atribucion ? "g-perf" : ""}">
+      <div class="chart">${attribSVG}<div class="cap">Aporte de cada posición al retorno sobre el capital invertido. Verde = sumó, rojo = restó.</div></div>
+      ${aiNote("atribucion")}
+    </div>
+  </section>` : ""}
+
+  <!-- 6. Posiciones -->
+  ${posRows ? `<section>
+    <h2 class="sec"><span class="n">6</span>Posiciones al ${_fmtD(data.endStr)}<span class="hint">${positions.length} posiciones · precios al cierre</span></h2>
+    <table>
+      <thead><tr><th>Ticker</th><th>Divisa</th><th>Costo prom.</th><th>Cantidad</th><th>P&L $</th><th>P&L %</th><th>Peso</th><th>1ª compra</th></tr></thead>
+      <tbody>${posRows}</tbody>
+    </table>
+  </section>` : ""}
+
+  <!-- 7. Transacciones -->
+  ${txRows ? `<section>
+    <h2 class="sec"><span class="n">7</span>Historial de transacciones<span class="hint">${txCaption}</span></h2>
+    <table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Ticker</th><th>Cantidad</th><th>Precio</th><th>Comisión $</th><th>Neto</th></tr></thead>
+      <tbody>${txRows}</tbody>
+    </table>
+  </section>` : ""}
+
+  <!-- 8. Recomendaciones IA -->
+  ${aiSections.rebalanceo ? `<section>
+    <h2 class="sec"><span class="n">8</span>Acciones de rebalanceo sugeridas<span class="hint">generado por IA</span></h2>
+    <div class="ai-note"><div class="ai-note-h">★ Análisis IA · educativo, no es asesoría</div>${aiSections.rebalanceo}</div>
+  </section>` : ""}
+
+  <!-- 9. Glosario y metodología -->
+  <section>
+    <h2 class="sec"><span class="n">${aiSections.rebalanceo ? 9 : 8}</span>Glosario y metodología</h2>
+    <div class="gloss">
+      <div><b>CAGR</b> — tasa de crecimiento anual compuesta del valor del portafolio desde la primera operación.</div>
+      <div><b>Sharpe</b> — retorno por unidad de riesgo total: (retorno − tasa libre de riesgo) ÷ volatilidad. Mayor es mejor.</div>
+      <div><b>Sortino</b> — variante del Sharpe que solo penaliza la volatilidad a la baja (caídas).</div>
+      <div><b>Volatilidad</b> — desviación estándar anualizada de los retornos diarios; mide cuánto oscila el valor.</div>
+      <div><b>VaR 95%</b> — pérdida máxima esperada en el 95% de los días; en 1 de cada 20 días podría superarse.</div>
+      <div><b>Beta</b> — sensibilidad del portafolio frente al benchmark. 1 = se mueve igual; &gt;1 = amplifica.</div>
+      <div><b>Max Drawdown</b> — mayor caída desde un máximo histórico hasta el siguiente mínimo.</div>
+      <div><b>Alpha (exceso)</b> — retorno del portafolio por encima del benchmark en el periodo.</div>
+      <div><b>Tracking error</b> — desviación estándar anualizada de la diferencia portafolio − benchmark.</div>
+      <div><b>HHI</b> — índice de concentración (suma de pesos²). Mayor = más concentrado; &gt;0.25 se considera alto.</div>
+      <div><b>Holdings efectivos</b> — 1 ÷ HHI; número equivalente de posiciones igualmente ponderadas.</div>
+      <div><b>Atribución (pp)</b> — contribución de cada posición al retorno total, en puntos porcentuales sobre el capital invertido.</div>
+    </div>
+    <div style="font-size:9.5px;color:var(--faint);margin-top:10px">Tasa libre de riesgo: ${perfRfr.rate.toFixed(2)}% (${perfRfr.label}). Métricas de riesgo calculadas sobre ${periodLabel}.${aiModel ? ` Secciones marcadas ★ generadas por IA (${aiModel}).` : ""}</div>
+  </section>
+
+  <div class="disclaimer">Este reporte es generado automáticamente con fines informativos. No constituye asesoría de inversión ni recomendación de compra o venta de valores. Las observaciones de IA pueden contener errores; verifica las cifras antes de tomar decisiones.</div>
   <div class="footer">
     <span>BlackPortfolio · blackportfolio.ai</span>
     <span>Generado el ${today}</span>
   </div>
-  <script>window.onload = () => window.print();<\/script>
+  <script>setTimeout(function(){window.focus();window.print();},350);<\/script>
 </body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (win) { win.document.write(html); win.document.close(); }
-  else { alert("Permite ventanas emergentes para exportar el PDF."); }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
 function renderTransactionsTab() {
@@ -4839,6 +6102,7 @@ function showTrackerDashView(portfolioId) {
   activePortfolioId = portfolioId;
   perfTabLoaded = false;
   perfDailyReturns = null;
+  perfReportData = null;
   mcTabLoaded = false;
   _invalidatePriceCache(portfolioId);
   // Reset to Summary tab
@@ -4936,6 +6200,7 @@ async function renderPortfolioDashboard() {
   // Invalidar métricas de desempeño al cambiar posiciones
   perfTabLoaded = false;
   perfDailyReturns = null;
+  perfReportData = null;
 
   _doRenderDashboard(portfolio);
   const tickers = [...new Set((portfolio.positions || []).map((p) => p.ticker))];
@@ -6366,7 +7631,8 @@ function initializeTrackerModule() {
   });
 
   document.getElementById("exportCsvBtn")?.addEventListener("click", exportTransactionsCSV);
-  document.getElementById("exportPdfBtn")?.addEventListener("click", exportPortfolioPDF);
+  document.getElementById("exportPdfBtn")?.addEventListener("click", openReportRangeModal);
+  _wireReportRangeModal();
   document.getElementById("exportPositionsBtn")?.addEventListener("click", exportPositionsCSV);
 
   // ── Watchlist ──────────────────────────────────────────────────────────────
@@ -6418,6 +7684,7 @@ function initializeTrackerModule() {
   document.getElementById("refreshPricesBtn").addEventListener("click", () => {
     perfTabLoaded = false;
     perfDailyReturns = null;
+    perfReportData = null;
     _invalidatePriceCache(activePortfolioId);
     renderPortfolioDashboard();
     // If desempeño tab is active, reload it after prices refresh
@@ -7495,6 +8762,19 @@ async function loadPerformanceTab(portfolio) {
     horizon: perfVarHorizon,
     benchmarkLabel,
     assetBetas,
+  };
+
+  // Persistir series + extras para el reporte PDF
+  perfReportData = {
+    equityCurve: portfolioCumulative,         // [{date:'MM-DD', value: cum %}]
+    benchmarkCurve: benchmarkCumulative,      // [{date:'MM-DD', value: cum %}]
+    returnDates,                               // ['YYYY-MM-DD', ...]
+    dailyPortfolioReturns,
+    dailyBenchmarkReturns,
+    benchmarkLabel,
+    weightedBeta: weightedBeta ?? beta,
+    assetBetas,
+    sessions: returnDates.length,
   };
 
   drawPerfChart(canvas, portfolioCumulative, benchmarkCumulative, returnDates, portfolio.name, benchmarkLabel);
