@@ -12188,7 +12188,7 @@ changePasswordForm.addEventListener("submit", async e => {
       container.innerHTML = '<p class="activity-log-empty">No hay actividad registrada todavía. Se registrará a partir de tu próximo inicio de sesión.</p>';
       return;
     }
-    const rows = entries.map(e => {
+    const rows = entries.slice(-3).map(e => {
       const d = new Date(e.date);
       const dateStr = d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
       const timeStr = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
