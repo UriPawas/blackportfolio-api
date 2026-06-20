@@ -36,3 +36,36 @@ Y cada proveedor base usa un endpoint sugerido:
 
 - Correo: `demo@blackportfolio.ai`
 - Contrasena: `Black2026!`
+
+## Respaldos y restauración (PostgreSQL)
+
+Los respaldos cifrados se generan automáticamente al arrancar la API (`start_backup_scheduler`),
+cada `BACKUP_INTERVAL_HOURS` (def. 24), conservando `BACKUP_RETENTION_COUNT` (def. 30) en el
+bucket de Firebase Storage. Variables requeridas (ya configuradas en Railway):
+`BACKUP_ENCRYPTION_KEY` (Fernet), `FIREBASE_BACKUP_BUCKET`, `BACKUP_INTERVAL_HOURS`,
+`BACKUP_RETENTION_COUNT`, `FIREBASE_SERVICE_ACCOUNT_JSON`.
+
+Crear un respaldo manual:
+
+```bash
+python backup_service.py --force --output-dir backups
+```
+
+Validar un respaldo SIN tocar producción (descifra + verifica checksum + cuenta filas):
+
+```bash
+python restore_service.py --latest                 # el más reciente del bucket
+python restore_service.py --file backups/<archivo>.bpbackup
+```
+
+Restaurar a PostgreSQL (sobreescribe; exige confirmación explícita):
+
+```bash
+python restore_service.py --latest --apply --yes
+```
+
+## Planes y límites (autoritativos en el servidor)
+
+El plan real vive en `app_users.plan` (PostgreSQL), nunca en el cliente. El frontend sólo
+lo muestra; `PUT /api/portfolios` valida portafolios/posiciones contra `PLAN_LIMITS` y los
+parches de perfil descartan `plan`. Cambiar el plan de un usuario: `PUT /api/admin/users/{uid}/plan`.
