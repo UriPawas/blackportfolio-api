@@ -9,7 +9,7 @@
 //   2. Copia el DSN público del proyecto y pégalo en SENTRY_DSN.
 //   3. Despliega. Los errores empezarán a llegar al panel de Sentry.
 (function initFrontendMonitoring() {
-  var SENTRY_DSN = window.SENTRY_DSN || ""; // ← pega aquí el DSN público de Sentry
+  var SENTRY_DSN = window.SENTRY_DSN || "https://5ff9adfb1dc1cac1a41689acce6c6308@o4511600070557696.ingest.us.sentry.io/4511600082026496";
   if (!SENTRY_DSN) return; // sin DSN: no se carga nada (dev/local intactos)
 
   var SENTRY_VERSION = "8.26.0";
