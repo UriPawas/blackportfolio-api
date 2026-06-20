@@ -231,6 +231,9 @@ function renderTable(query) {
 // ── Códigos de beta (Stripe Promotion Codes) ──────────────────────────────────
 const genPromoBtn   = document.getElementById("genPromoBtn");
 const promoCustom   = document.getElementById("promoCustom");
+const promoType     = document.getElementById("promoType");
+const promoPercent  = document.getElementById("promoPercent");
+const promoAmount   = document.getElementById("promoAmount");
 const promoDuration = document.getElementById("promoDuration");
 const promoMsg      = document.getElementById("promo-msg");
 const promoTable    = document.getElementById("promo-table");
@@ -239,10 +242,19 @@ const promoEmpty    = document.getElementById("promo-empty");
 
 let promoCodes = [];
 
+function discountLabel(c) {
+  if (c.amountOff != null) {
+    const cur = (c.currency || "usd").toUpperCase();
+    return `$${(c.amountOff / 100).toFixed(2)} ${cur}`;
+  }
+  return `${c.percentOff != null ? c.percentOff : 100}%`;
+}
+
 function durationLabel(c) {
-  if (c.duration === "repeating") return `100% · ${c.durationInMonths} mes(es)`;
-  if (c.duration === "forever") return "100% · siempre";
-  return "100%";
+  const d = discountLabel(c);
+  if (c.duration === "repeating") return `${d} · ${c.durationInMonths} mes(es)`;
+  if (c.duration === "forever") return `${d} · siempre`;
+  return `${d} · 1 cobro`;
 }
 
 function renderPromoCodes() {
@@ -302,6 +314,9 @@ async function generatePromo() {
       method: "POST",
       body: JSON.stringify({
         code: promoCustom.value.trim(),
+        discountType: promoType.value,
+        percentOff: parseInt(promoPercent.value, 10) || 0,
+        amountOff: parseFloat(promoAmount.value) || 0,
         durationMonths: parseInt(promoDuration.value, 10) || 0
       })
     });
@@ -343,6 +358,12 @@ function copyCode(btn) {
     setTimeout(() => { btn.textContent = orig; }, 1200);
   }).catch(() => {});
 }
+
+promoType?.addEventListener("change", () => {
+  const isAmount = promoType.value === "amount";
+  promoPercent.style.display = isAmount ? "none" : "";
+  promoAmount.style.display  = isAmount ? "" : "none";
+});
 
 genPromoBtn?.addEventListener("click", generatePromo);
 

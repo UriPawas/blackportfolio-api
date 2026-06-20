@@ -244,21 +244,27 @@
     <section class="promo-section">
       <div class="promo-head">
         <div>
-          <h2>Códigos de acceso beta · 100% off</h2>
-          <p>Cada código es único y de un solo uso. El beta tester lo ingresa en "Añadir código de promoción" en el checkout.</p>
+          <h2>Códigos de descuento</h2>
+          <p>Elige el tipo de descuento, su valor y la duración. Cada código es único y de un solo uso. El usuario lo ingresa en "Añadir código de promoción" en el checkout.</p>
         </div>
         <button id="genPromoBtn" class="primary-btn">+ Generar código</button>
       </div>
       <div class="promo-controls">
         <input id="promoCustom" class="promo-input" type="text" placeholder="Código personalizado (opcional)" maxlength="40" />
-        <select id="promoDuration" class="promo-input">
-          <option value="0">Gratis siempre</option>
-          <option value="1">Gratis 1 mes</option>
-          <option value="3">Gratis 3 meses</option>
-          <option value="6">Gratis 6 meses</option>
-          <option value="12">Gratis 12 meses</option>
+        <select id="promoType" class="promo-input">
+          <option value="percent">Porcentaje (%)</option>
+          <option value="amount">Monto fijo (USD)</option>
         </select>
-        <span class="promo-hint">Si lo dejas en blanco se genera uno aleatorio.</span>
+        <input id="promoPercent" class="promo-input" type="number" min="1" max="100" step="1" value="100" placeholder="% descuento" />
+        <input id="promoAmount" class="promo-input" type="number" min="0.5" step="0.5" value="10" placeholder="USD descuento" style="display:none" />
+        <select id="promoDuration" class="promo-input">
+          <option value="0">Siempre</option>
+          <option value="1">1 mes</option>
+          <option value="3">3 meses</option>
+          <option value="6">6 meses</option>
+          <option value="12">12 meses</option>
+        </select>
+        <span class="promo-hint">Si dejas el código en blanco se genera uno aleatorio.</span>
       </div>
       <div id="promo-msg" class="promo-msg"></div>
       <div class="table-wrap">

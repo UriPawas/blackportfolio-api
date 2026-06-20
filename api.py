@@ -87,7 +87,8 @@ def _cache_cleanup_loop():
 
 _cache_cleanup_loop()
 
-# ── Crypto routing vía CoinGecko (Binance da HTTP 451 desde IPs de Railway/US) ─
+# ── Crypto routing: Binance.US (velas finas + volumen) con CoinGecko de respaldo
+#    Binance.com da HTTP 451 desde IPs de Railway/US; Binance.US sí las permite. ─
 
 _CRYPTO_BASE_SYMBOLS = {
     "BTC","ETH","BNB","ADA","XRP","SOL","DOT","DOGE","AVAX","MATIC","LINK",
@@ -183,11 +184,86 @@ def _coingecko_ohlc_to_yahoo(candles: list, symbol: str) -> dict:
         }
     }
 
+# range de Yahoo Finance → (intervalo Binance, nº de velas). limit máx Binance = 1000.
+_RANGE_TO_BINANCE = {
+    "1d":  ("5m", 288),   "5d":  ("15m", 480),  "1mo": ("1h", 720),
+    "3mo": ("4h", 540),   "6mo": ("12h", 360),  "1y":  ("1d", 365),
+    "2y":  ("1d", 730),   "5y":  ("1w", 260),   "10y": ("1w", 520),
+    "30y": ("1M", 360),   "max": ("1M", 1000),
+}
+
+def _binanceus_klines(symbol: str, yf_range: str) -> list:
+    """Velas [openTime, O, H, L, C, volume, ...] desde Binance.US (IPs US permitidas)."""
+    interval, limit = _RANGE_TO_BINANCE.get(yf_range, ("1d", 365))
+    pair = f"{_crypto_base(symbol)}USDT"
+    res = _HTTP_SESSION.get(
+        "https://api.binance.us/api/v3/klines",
+        params={"symbol": pair, "interval": interval, "limit": limit},
+        timeout=12,
+    )
+    res.raise_for_status()
+    return res.json()
+
+def _binance_klines_to_yahoo(klines: list, symbol: str) -> dict:
+    timestamps, opens, highs, lows, closes, volumes = [], [], [], [], [], []
+    for k in klines:
+        timestamps.append(int(k[0]) // 1000)
+        opens.append(float(k[1]))
+        highs.append(float(k[2]))
+        lows.append(float(k[3]))
+        closes.append(float(k[4]))
+        volumes.append(float(k[5]))
+    last = closes[-1] if closes else 0
+    prev = closes[-2] if len(closes) >= 2 else last
+    return {
+        "chart": {
+            "result": [{
+                "meta": {
+                    "symbol": symbol.upper(),
+                    "shortName": symbol.upper(),
+                    "longName": f"{symbol.upper()} / USD",
+                    "currency": "USD",
+                    "fullExchangeName": "Binance",
+                    "exchangeName": "Binance",
+                    "instrumentType": "CRYPTOCURRENCY",
+                    "regularMarketPrice": last,
+                    "previousClose": prev,
+                    "chartPreviousClose": prev,
+                },
+                "timestamp": timestamps,
+                "indicators": {
+                    "quote": [{"open": opens, "high": highs,
+                               "low": lows, "close": closes,
+                               "volume": volumes}]
+                },
+            }],
+            "error": None,
+        }
+    }
+
 def _crypto_price_and_prev(symbol: str):
-    """Precio + prevClose de CoinGecko. Cacheado 30 s."""
+    """Precio + prevClose desde Binance.US (24h ticker). CoinGecko de respaldo. Cacheado 30 s."""
     cached = _BINANCE_PRICE_CACHE.get(symbol)
     if cached:
         return cached["price"], cached["prev"]
+    pair = f"{_crypto_base(symbol)}USDT"
+    try:
+        res = _HTTP_SESSION.get(
+            "https://api.binance.us/api/v3/ticker/24hr",
+            params={"symbol": pair},
+            timeout=8,
+        )
+        res.raise_for_status()
+        d = res.json()
+        price = float(d["lastPrice"])
+        prev  = float(d["openPrice"])   # precio de hace 24 h
+        _BINANCE_PRICE_CACHE.set(symbol, {"price": price, "prev": prev})
+        return price, prev
+    except Exception:
+        return _coingecko_price_and_prev(symbol)
+
+def _coingecko_price_and_prev(symbol: str):
+    """Respaldo: precio + prevClose de CoinGecko."""
     cg_id = _COINGECKO_ID.get(_crypto_base(symbol))
     if not cg_id:
         return None, None
@@ -209,9 +285,36 @@ def _crypto_price_and_prev(symbol: str):
         return None, None
 
 def _crypto_prices_batch(symbols: list) -> dict:
-    """Batch de precios crypto desde CoinGecko."""
+    """Batch de precios crypto desde Binance.US (24h ticker). CoinGecko de respaldo."""
     if not symbols:
         return {}
+    pair_to_sym = {f"{_crypto_base(s)}USDT": s for s in symbols}
+    try:
+        res = _HTTP_SESSION.get(
+            "https://api.binance.us/api/v3/ticker/24hr",
+            params={"symbols": json.dumps(list(pair_to_sym.keys()), separators=(",", ":"))},
+            timeout=10,
+        )
+        res.raise_for_status()
+        result = {}
+        for d in res.json():
+            sym = pair_to_sym.get(d.get("symbol"))
+            if not sym:
+                continue
+            price = float(d["lastPrice"])
+            prev  = float(d["openPrice"])
+            _BINANCE_PRICE_CACHE.set(sym, {"price": price, "prev": prev})
+            result[sym] = {"price": price, "prev": prev}
+        # Símbolos que Binance.US no lista → respaldo CoinGecko
+        missing = [s for s in symbols if s not in result]
+        if missing:
+            result.update(_coingecko_prices_batch(missing))
+        return result
+    except Exception:
+        return _coingecko_prices_batch(symbols)
+
+def _coingecko_prices_batch(symbols: list) -> dict:
+    """Respaldo: batch de precios crypto desde CoinGecko."""
     sym_to_id = {s: _COINGECKO_ID.get(_crypto_base(s)) for s in symbols}
     sym_to_id = {s: cid for s, cid in sym_to_id.items() if cid}
     if not sym_to_id:
@@ -286,10 +389,15 @@ def debug_crypto():
         p, prev = _crypto_price_and_prev(sym)
         results[sym] = {"price": p, "prev": prev, "ok": p is not None}
     try:
-        candles = _coingecko_ohlc("BTC-USD", "1mo")
-        results["ohlc_test"] = {"candles": len(candles), "ok": len(candles) > 0}
+        klines = _binanceus_klines("BTC-USD", "1d")
+        results["binanceus_test"] = {"candles": len(klines), "ok": len(klines) > 0}
     except Exception as e:
-        results["ohlc_test"] = {"candles": 0, "ok": False, "error": str(e)}
+        results["binanceus_test"] = {"candles": 0, "ok": False, "error": str(e)}
+    try:
+        candles = _coingecko_ohlc("BTC-USD", "1mo")
+        results["coingecko_ohlc_test"] = {"candles": len(candles), "ok": len(candles) > 0}
+    except Exception as e:
+        results["coingecko_ohlc_test"] = {"candles": 0, "ok": False, "error": str(e)}
     return results
 
 @app.get("/api/search")
@@ -808,22 +916,34 @@ def admin_set_plan(
     session.commit()
     return {"ok": True, "plan": body.plan}
 
-# ── Cupones de beta (Stripe Promotion Codes) ──────────────────────────────────
-# Un único Coupon de 100% off (por duración); cada código que genera el admin es
-# un Promotion Code ÚNICO con max_redemptions=1 → un solo uso, no se repite.
-# El checkout ya acepta promotion codes (allow_promotion_codes=True), así que el
-# beta tester los teclea en "Añadir código de promoción".
-BETA_COUPON_NAME = "BlackPortfolio Beta — 100% off"
+# ── Cupones / Promotion Codes ─────────────────────────────────────────────────
+# Cada código que genera el admin es un Promotion Code ÚNICO (max_redemptions
+# configurable) sobre un Coupon reutilizable. El admin elige el tipo de descuento
+# (porcentaje o monto fijo en USD), el valor y la duración. El checkout acepta
+# promotion codes (allow_promotion_codes=True): el usuario lo teclea en
+# "Añadir código de promoción".
+#
+# Los Coupons de Stripe son inmutables: reutilizamos uno por (tipo, valor,
+# duración) usando un id determinista con prefijo "bp_". Cada código generado es
+# un Promotion Code distinto, así que dos códigos del mismo descuento no chocan.
 
-def _beta_coupon_id(duration_months: int) -> str:
-    return f"bp_beta_100_{duration_months}m" if duration_months > 0 else "bp_beta_100_forever"
+def _coupon_id(discount_type: str, value: int, duration_months: int) -> str:
+    dur = f"{duration_months}m" if duration_months > 0 else "forever"
+    if discount_type == "amount":
+        return f"bp_amt{value}_usd_{dur}"   # value en centavos USD
+    return f"bp_pct{value}_{dur}"           # value en %
 
-def _get_or_create_beta_coupon(duration_months: int) -> str:
-    coupon_id = _beta_coupon_id(duration_months)
+def _get_or_create_coupon(discount_type: str, value: int, duration_months: int) -> str:
+    coupon_id = _coupon_id(discount_type, value, duration_months)
     try:
         stripe.Coupon.retrieve(coupon_id)
     except stripe.StripeError:
-        params = dict(id=coupon_id, percent_off=100, name=BETA_COUPON_NAME)
+        if discount_type == "amount":
+            params = dict(id=coupon_id, amount_off=value, currency="usd",
+                          name=f"BlackPortfolio -${value/100:.2f} USD")
+        else:
+            params = dict(id=coupon_id, percent_off=value,
+                          name=f"BlackPortfolio -{value}%")
         if duration_months > 0:
             params.update(duration="repeating", duration_in_months=duration_months)
         else:
@@ -834,7 +954,7 @@ def _get_or_create_beta_coupon(duration_months: int) -> str:
 def _gen_promo_code() -> str:
     # Sin caracteres ambiguos (O/0, I/1) para que sea fácil de dictar.
     alphabet = "".join(c for c in (string.ascii_uppercase + string.digits) if c not in "O0I1")
-    return "BETA-" + "".join(secrets.choice(alphabet) for _ in range(8))
+    return "BP-" + "".join(secrets.choice(alphabet) for _ in range(8))
 
 def _to_plain(obj) -> dict:
     """Convierte un objeto Stripe en un dict plano y recursivo. En stripe>=8 los
@@ -864,10 +984,15 @@ def _promo_to_dict(pc) -> dict:
         "duration": cpn.get("duration"),
         "durationInMonths": cpn.get("duration_in_months"),
         "percentOff": cpn.get("percent_off"),
+        "amountOff": cpn.get("amount_off"),
+        "currency": cpn.get("currency"),
     }
 
 class PromoCodeBody(BaseModel):
     code: str = ""
+    discountType: str = "percent"   # "percent" | "amount"
+    percentOff: int = 100
+    amountOff: float = 0            # en USD (dólares); se convierte a centavos
     durationMonths: int = 0
     maxRedemptions: int = 1
 
@@ -877,9 +1002,18 @@ def admin_create_promo_code(body: PromoCodeBody, token: dict = Depends(require_a
         raise HTTPException(status_code=503, detail="Stripe no esta configurado.")
     duration = max(0, int(body.durationMonths or 0))
     max_red = max(1, int(body.maxRedemptions or 1))
+    dtype = "amount" if body.discountType == "amount" else "percent"
+    if dtype == "amount":
+        value = int(round(float(body.amountOff or 0) * 100))
+        if value <= 0:
+            raise HTTPException(status_code=400, detail="El monto de descuento debe ser mayor a 0.")
+    else:
+        value = int(body.percentOff or 0)
+        if value < 1 or value > 100:
+            raise HTTPException(status_code=400, detail="El porcentaje debe estar entre 1 y 100.")
     code = (body.code or "").strip().upper() or _gen_promo_code()
     try:
-        coupon_id = _get_or_create_beta_coupon(duration)
+        coupon_id = _get_or_create_coupon(dtype, value, duration)
         promo = stripe.PromotionCode.create(
             promotion={"type": "coupon", "coupon": coupon_id},
             code=code,
@@ -901,7 +1035,7 @@ def admin_list_promo_codes(token: dict = Depends(require_admin)):
         codes = stripe.PromotionCode.list(limit=100, expand=["data.promotion.coupon"])
         for pc in codes.auto_paging_iter():
             pc = _to_plain(pc)
-            if str(_promo_coupon(pc).get("id") or "").startswith("bp_beta_100"):
+            if str(_promo_coupon(pc).get("id") or "").startswith("bp_"):
                 out.append(_promo_to_dict(pc))
     except stripe.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
@@ -1385,20 +1519,31 @@ def seasonality(request: Request, symbol: str):
 def chart(request: Request, symbol: str, range: str = "1d", interval: str = "5m"):
     # Crypto: separate CoinGecko cache — never serve stale Yahoo Finance fallback
     if _is_crypto(symbol):
-        cg_key = f"cg:{symbol}:{range}"
-        cg_cached = _CHART_CACHE.get(cg_key)
-        if cg_cached is not None:
-            return cg_cached
+        crypto_key = f"crypto:{symbol}:{range}"
+        crypto_cached = _CHART_CACHE.get(crypto_key)
+        if crypto_cached is not None:
+            return crypto_cached
+        # 1) Binance.US — velas finas con volumen real
+        try:
+            klines = _binanceus_klines(symbol, range)
+            if klines:
+                data = _binance_klines_to_yahoo(klines, symbol)
+                _CHART_CACHE.set(crypto_key, data)
+                return data
+        except Exception as _bus_err:
+            import logging as _log
+            _log.warning("Binance.US fallback for %s: %s", symbol, _bus_err)
+        # 2) CoinGecko — respaldo (sin volumen, granularidad gruesa)
         try:
             candles = _coingecko_ohlc(symbol, range)
             if candles:
                 data = _coingecko_ohlc_to_yahoo(candles, symbol)
-                _CHART_CACHE.set(cg_key, data)
+                _CHART_CACHE.set(crypto_key, data)
                 return data
         except Exception as _cg_err:
             import logging as _log
             _log.warning("CoinGecko fallback for %s: %s", symbol, _cg_err)
-        # CoinGecko unavailable — fetch Yahoo Finance but DON'T cache so next request retries CG
+        # 3) Yahoo Finance — último recurso, NO cacheado para reintentar fuentes crypto
         _RANGE_SECONDS_CG = {
             "1d": 86400, "5d": 432000, "1mo": 2592000, "3mo": 7776000,
             "6mo": 15552000, "1y": 31536000, "2y": 63072000, "5y": 157680000,

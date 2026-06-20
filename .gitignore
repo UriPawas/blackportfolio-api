@@ -9,3 +9,6 @@ __pycache__/
 serviceAccount*.json
 .env
 
+# Stripe recovery / backup codes (NUNCA commitear)
+stripe_backup_code.txt
+
