@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -7,7 +7,11 @@ from collections import OrderedDict
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from persistence import install_persistence
+from persistence import (
+    install_persistence, verify_firebase_user, require_2fa, get_session,
+    AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent,
+    normalize_plan, require_plan, upsert_user, utc_now,
+)
 import requests
 import yfinance as yf
 import numpy as np
@@ -16,6 +20,7 @@ import os
 import json
 import stripe
 import time as _time_module
+from backup_service import start_backup_scheduler
 
 # ── HTTP session singleton (connection pool reutilizado entre requests) ────────
 _HTTP_SESSION = requests.Session()
@@ -238,12 +243,13 @@ def _crypto_prices_batch(symbols: list) -> dict:
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "https://portify-6467f.web.app").rstrip("/")
 
 PLAN_PRICES = {
-    "Free":               {"monthly": 0,     "yearly": 0},
-    "Investor":           {"monthly": 2900,  "yearly": 2300},
-    "Advisor Pro":        {"monthly": 7900,  "yearly": 6400},
-    "Institutional Desk": {"monthly": 14900, "yearly": 11900},
+    "Explorer":    {"monthly": 0,     "yearly": 0},
+    "Investor":    {"monthly": 1900,  "yearly": 18000},
+    "Advisor Pro": {"monthly": 5900,  "yearly": 56400},
+    "Wealth Desk": {"monthly": 12900, "yearly": 123600},
 }
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
@@ -257,11 +263,16 @@ app.add_middleware(
         "https://portify-6467f.web.app",
         "https://portify-6467f.firebaseapp.com",
     ],
-    allow_methods=["GET", "POST", "PUT"],
+    allow_methods=["GET", "POST", "PUT", "PATCH"],
     allow_headers=["*"],
 )
 
 install_persistence(app)
+
+
+@app.on_event("startup")
+def initialize_backup_scheduler():
+    start_backup_scheduler()
 
 @app.get("/health")
 def health():
@@ -612,6 +623,190 @@ def prices_batch(request: Request, symbols: str):
         if p is not None:
             result[sym] = {"price": p, "prev": prev}
     return result
+
+# ── Panel de administración ───────────────────────────────────────────────────
+# Solo el/los correos en ADMIN_EMAILS pueden consultar el resumen de portafolios.
+# Por defecto el admin del proyecto (mismo correo que en firestore.rules).
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("ADMIN_EMAILS", "furielpacheco@gmail.com").split(",")
+    if e.strip()
+}
+
+def require_admin(token: dict = Depends(require_2fa)) -> dict:
+    if (token.get("email") or "").lower() not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Acceso restringido a administradores.")
+    return token
+
+def _bulk_price_map(symbols: list) -> dict:
+    """{TICKER: precio_actual} para una lista de tickers (crypto + tradicionales)."""
+    symbols = list({s.strip().upper() for s in symbols if s and s.strip()})
+    out: dict = {}
+    if not symbols:
+        return out
+    crypto = [s for s in symbols if _is_crypto(s)]
+    trad   = [s for s in symbols if not _is_crypto(s)]
+    for sym, d in _crypto_prices_batch(crypto).items():
+        out[sym] = d["price"]
+    if trad:
+        try:
+            df = yf.download(trad, period="5d", interval="1d",
+                             auto_adjust=True, progress=False, threads=True)
+            if not df.empty:
+                if isinstance(df.columns, pd.MultiIndex):
+                    closes = df["Close"]
+                else:
+                    closes = df.rename(columns={"Close": trad[0]})[trad] if len(trad) == 1 else df
+                for sym in trad:
+                    col = sym if sym in closes.columns else sym.upper()
+                    if col in closes.columns:
+                        vals = closes[col].dropna()
+                        if not vals.empty:
+                            out[sym] = float(vals.iloc[-1])
+        except Exception:
+            pass
+    for sym in symbols:
+        if sym not in out:
+            p, _ = _price_and_prev_for_ticker(sym)
+            if p is not None:
+                out[sym] = p
+    return out
+
+@app.get("/api/admin/portfolio-overview")
+def admin_portfolio_overview(token: dict = Depends(require_admin), session=Depends(get_session)):
+    """Por usuario: nº de portafolios, posiciones, valor total y rendimiento (% no realizado
+    sobre el capital invertido en posiciones con precio). El % se aproxima sin conversión de
+    divisa, por lo que portafolios con activos en monedas distintas pueden distorsionarlo."""
+    snapshots = session.query(PortfolioSnapshot).all()
+    users = {u.firebase_uid: u for u in session.query(AppUser).all()}
+
+    tickers = set()
+    for snap in snapshots:
+        for pf in (snap.data or []):
+            for pos in (pf.get("positions") or []):
+                t = (pos.get("ticker") or "").strip().upper()
+                if t and float(pos.get("quantity") or 0) > 0:
+                    tickers.add(t)
+    prices = _bulk_price_map(list(tickers))
+
+    rows = []
+    for snap in snapshots:
+        portfolios = snap.data or []
+        position_count = 0
+        priced_cost = 0.0
+        positions_value = 0.0
+        cash_total = 0.0
+        for pf in portfolios:
+            for pos in (pf.get("positions") or []):
+                qty = float(pos.get("quantity") or 0)
+                if qty <= 0:
+                    continue
+                position_count += 1
+                avg = float(pos.get("avgPrice") or 0)
+                pr = prices.get((pos.get("ticker") or "").strip().upper())
+                if pr is not None and avg > 0:
+                    priced_cost += qty * avg
+                    positions_value += qty * pr
+            cash_total += float(pf.get("cashBalance") or 0)
+        return_pct = ((positions_value - priced_cost) / priced_cost * 100) if priced_cost > 0 else None
+        user = users.get(snap.firebase_uid)
+        rows.append({
+            "uid": snap.firebase_uid,
+            "email": user.email if user else None,
+            "portfolioCount": len(portfolios),
+            "positionCount": position_count,
+            "totalValue": round(positions_value + cash_total, 2),
+            "returnPct": round(return_pct, 2) if return_pct is not None else None,
+        })
+    return {"users": rows, "pricedTickers": len(prices), "generatedAt": int(_time_module.time())}
+
+# ── Perfil de usuario (Postgres app_users) — reemplaza Firestore users/{uid} ───
+# El blob de perfil (fullName, avatarId, investorProfile, checkoutReady, etc.) vive
+# en app_users.profile_data. El plan AUTORITATIVO (entitlement) es app_users.plan y
+# solo lo fija Stripe (/billing/stripe/confirm) o el admin; el cliente nunca lo toca.
+
+# Claves que NUNCA deben vivir en profile_data ni llegar al cliente: el secreto
+# TOTP es server-only (tabla totp_credentials). Son restos de la migración Firestore.
+_PROFILE_SECRET_KEYS = (
+    "totpSecret", "totpPendingSecret", "totpEnabled",
+    "stripeCustomerId", "stripeSubscriptionId",
+)
+_PROFILE_SERVER_KEYS = (
+    "plan", "selectedPlan", "checkoutReady",
+    "stripeCustomerId", "stripeSubscriptionId",
+    "billingStatus", "billingCycle", "billingCurrentPeriodEnd",
+)
+
+@app.get("/api/account/profile")
+def account_profile(token: dict = Depends(verify_firebase_user), session=Depends(get_session)):
+    user = upsert_user(session, token)
+    session.commit()
+    data = {k: v for k, v in (user.profile_data or {}).items() if k not in _PROFILE_SECRET_KEYS}
+    data.setdefault("fullName", user.display_name)
+    data.setdefault("email", user.email)
+    data["plan"] = normalize_plan(user.plan)
+    data["selectedPlan"] = normalize_plan(user.plan)
+    return data
+
+@app.patch("/api/account/profile")
+def account_profile_patch(
+    body: dict = Body(default={}),
+    token: dict = Depends(verify_firebase_user),
+    session=Depends(get_session),
+):
+    user = upsert_user(session, token)
+    incoming = dict(body or {})
+    incoming.pop("plan", None)  # el entitlement nunca se fija desde el cliente
+    for k in (*_PROFILE_SECRET_KEYS, *_PROFILE_SERVER_KEYS):
+        incoming.pop(k, None)
+    merged = {k: v for k, v in (user.profile_data or {}).items() if k not in _PROFILE_SECRET_KEYS[:3]}
+    merged.update(incoming)
+    user.profile_data = merged
+    if incoming.get("fullName"):
+        user.display_name = incoming["fullName"]
+    user.last_seen_at = utc_now()
+    session.commit()
+    return {"ok": True}
+
+@app.get("/api/admin/users")
+def admin_users(token: dict = Depends(require_admin), session=Depends(get_session)):
+    out = []
+    for u in session.query(AppUser).all():
+        pd = u.profile_data or {}
+        out.append({
+            "uid": u.firebase_uid,
+            "fullName": pd.get("fullName") or u.display_name,
+            "email": u.email,
+            "selectedPlan": u.plan,
+            "isDemo": bool(pd.get("isDemo")),
+            "createdAt": pd.get("createdAt") or (u.created_at.isoformat() if u.created_at else None),
+            "lastSeen": pd.get("lastSeen") or (u.last_seen_at.isoformat() if u.last_seen_at else None),
+        })
+    return {"users": out}
+
+class AdminPlanBody(BaseModel):
+    plan: str = ""
+
+@app.put("/api/admin/users/{uid}/plan")
+def admin_set_plan(
+    uid: str,
+    body: AdminPlanBody,
+    token: dict = Depends(require_admin),
+    session=Depends(get_session),
+):
+    body.plan = normalize_plan(body.plan)
+    if body.plan not in PLAN_PRICES:
+        raise HTTPException(status_code=400, detail="Plan no válido.")
+    user = session.get(AppUser, uid)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    user.plan = body.plan
+    session.add(SecurityActivity(
+        firebase_uid=uid, event="plan_changed_by_admin",
+        detail=f"plan={body.plan}; by={token.get('email')}", created_at=utc_now(),
+    ))
+    session.commit()
+    return {"ok": True, "plan": body.plan}
 
 RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "")
 PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")
@@ -1179,7 +1374,7 @@ def gallery():
 
 # ── Stripe ───────────────────────────────────────────────────────────────────
 @app.post("/api/billing/stripe/webhook")
-async def stripe_webhook(request: Request):
+async def stripe_webhook(request: Request, session=Depends(get_session)):
     if not STRIPE_WEBHOOK_SECRET:
         raise HTTPException(status_code=503, detail="Webhook no configurado")
     payload = await request.body()
@@ -1191,29 +1386,95 @@ async def stripe_webhook(request: Request):
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Firma inválida")
 
-    if event["type"] == "checkout.session.completed":
-        # TODO P2: actualizar Firestore via Admin SDK con selectedPlan y stripeSubscriptionId
-        pass
+    event_id = event["id"]
+    if session.get(BillingEvent, event_id):
+        return {"received": True, "duplicate": True}
 
+    event_type = event["type"]
+    obj = event["data"]["object"]
+    metadata = obj.get("metadata") or {}
+    uid = metadata.get("uid") or obj.get("client_reference_id")
+    customer_id = obj.get("customer")
+    user = session.get(AppUser, uid) if uid else None
+    if user is None and customer_id:
+        for candidate in session.query(AppUser).all():
+            if (candidate.profile_data or {}).get("stripeCustomerId") == customer_id:
+                user = candidate
+                uid = candidate.firebase_uid
+                break
+
+    if user is not None:
+        profile = dict(user.profile_data or {})
+        if customer_id:
+            profile["stripeCustomerId"] = customer_id
+        if event_type == "checkout.session.completed":
+            plan = normalize_plan(metadata.get("plan"))
+            if obj.get("payment_status") == "paid" and plan != "Explorer":
+                user.plan = plan
+                profile.update({
+                    "stripeSubscriptionId": obj.get("subscription"),
+                    "billingStatus": "active",
+                    "billingCycle": metadata.get("billing_cycle", "monthly"),
+                })
+        elif event_type == "customer.subscription.updated":
+            status = obj.get("status") or "unknown"
+            profile.update({
+                "stripeSubscriptionId": obj.get("id"),
+                "billingStatus": status,
+                "billingCurrentPeriodEnd": obj.get("current_period_end"),
+            })
+            plan = normalize_plan(metadata.get("plan"))
+            if status in {"active", "trialing"}:
+                user.plan = plan
+            elif status in {"canceled", "unpaid", "incomplete_expired"}:
+                user.plan = "Explorer"
+        elif event_type == "customer.subscription.deleted":
+            user.plan = "Explorer"
+            profile.update({"billingStatus": "canceled", "stripeSubscriptionId": obj.get("id")})
+        elif event_type == "invoice.payment_failed":
+            profile["billingStatus"] = "past_due"
+        elif event_type == "invoice.paid":
+            profile["billingStatus"] = "active"
+        user.profile_data = profile
+        user.last_seen_at = utc_now()
+
+    session.add(BillingEvent(
+        stripe_event_id=event_id,
+        event_type=event_type,
+        firebase_uid=uid,
+        created_at=utc_now(),
+    ))
+    session.commit()
     return {"received": True}
 
 
 class CheckoutRequest(BaseModel):
     plan: str = "Advisor Pro"
     billingCycle: str = "monthly"
-    user: Optional[dict] = None
 
 @app.post("/api/billing/stripe/create-checkout-session")
-async def stripe_create_session(request: Request, body: CheckoutRequest):
-    if body.plan == "Free":
-        raise HTTPException(status_code=400, detail="El plan Free no requiere pago.")
+async def stripe_create_session(
+    request: Request,
+    body: CheckoutRequest,
+    token: dict = Depends(verify_firebase_user),
+    db_session=Depends(get_session),
+):
+    plan = normalize_plan(body.plan)
+    if plan == "Explorer":
+        raise HTTPException(status_code=400, detail="El plan Explorer no requiere pago.")
+    if plan not in PLAN_PRICES or body.billingCycle not in {"monthly", "yearly"}:
+        raise HTTPException(status_code=400, detail="Plan o ciclo de cobro no valido.")
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe no esta configurado.")
     try:
-        prices = PLAN_PRICES.get(body.plan, PLAN_PRICES["Advisor Pro"])
+        user = upsert_user(db_session, token)
+        db_session.commit()
+        prices = PLAN_PRICES[plan]
         amount = prices["yearly"] if body.billingCycle == "yearly" else prices["monthly"]
         interval = "year" if body.billingCycle == "yearly" else "month"
-        user_email = (body.user or {}).get("email")
+        uid = token["uid"]
+        profile = user.profile_data or {}
 
-        base = str(request.base_url).rstrip("/")
         params = dict(
             mode="subscription",
             line_items=[{
@@ -1221,23 +1482,94 @@ async def stripe_create_session(request: Request, body: CheckoutRequest):
                     "currency": "usd",
                     "unit_amount": amount,
                     "recurring": {"interval": interval},
-                    "product_data": {"name": f"BlackPortfolio {body.plan}"},
+                    "product_data": {"name": f"BlackPortfolio {plan}"},
                 },
                 "quantity": 1,
             }],
-            success_url=f"{base}/success.html?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{base}/index.html#plans",
-            metadata={"plan": body.plan, "billing_cycle": body.billingCycle},
+            success_url=f"{FRONTEND_BASE_URL}/success.html?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{FRONTEND_BASE_URL}/index.html#plans",
+            client_reference_id=uid,
+            metadata={"plan": plan, "billing_cycle": body.billingCycle, "uid": uid},
+            subscription_data={"metadata": {"plan": plan, "billing_cycle": body.billingCycle, "uid": uid}},
+            allow_promotion_codes=True,
         )
-        if user_email:
-            params["customer_email"] = user_email
+        if profile.get("stripeCustomerId"):
+            params["customer"] = profile["stripeCustomerId"]
+        elif token.get("email"):
+            params["customer_email"] = token["email"]
 
-        session = stripe.checkout.Session.create(**params)
-        return {"url": session.url}
+        checkout_session = stripe.checkout.Session.create(**params)
+        return {"url": checkout_session.url}
     except stripe.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class StripeConfirmRequest(BaseModel):
+    sessionId: str = ""
+
+@app.post("/api/billing/stripe/confirm")
+def stripe_confirm(
+    request: Request,
+    body: StripeConfirmRequest,
+    token: dict = Depends(verify_firebase_user),
+    session=Depends(get_session),
+):
+    """Verifica server-side la sesión de Stripe y fija el plan del usuario en Postgres.
+    Reemplaza la Cloud Function confirmStripePayment (que exigía plan Blaze)."""
+    uid = token["uid"]
+    if not body.sessionId:
+        raise HTTPException(status_code=400, detail="Session ID requerido.")
+    try:
+        checkout = stripe.checkout.Session.retrieve(body.sessionId)
+    except stripe.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e.user_message or e))
+
+    if checkout.get("payment_status") != "paid":
+        raise HTTPException(status_code=402, detail="El pago no fue completado.")
+    ref = checkout.get("client_reference_id")
+    if ref != uid:
+        raise HTTPException(status_code=403, detail="Esta sesión no corresponde al usuario actual.")
+    plan = normalize_plan((checkout.get("metadata") or {}).get("plan"))
+    if plan not in PLAN_PRICES or plan == "Explorer":
+        raise HTTPException(status_code=400, detail="Plan no válido en la sesión de pago.")
+
+    user = upsert_user(session, token)
+    user.plan = plan
+    profile = dict(user.profile_data or {})
+    profile.update({
+        "stripeCustomerId": checkout.get("customer"),
+        "stripeSubscriptionId": checkout.get("subscription"),
+        "billingStatus": "active",
+        "billingCycle": (checkout.get("metadata") or {}).get("billing_cycle", "monthly"),
+    })
+    user.profile_data = profile
+    session.add(SecurityActivity(
+        firebase_uid=uid, event="plan_activated",
+        detail=f"plan={plan}; session={body.sessionId[:40]}", created_at=utc_now(),
+    ))
+    session.commit()
+    return {"plan": plan, "checkoutReady": True}
+
+
+@app.post("/api/billing/stripe/portal")
+def stripe_customer_portal(
+    token: dict = Depends(verify_firebase_user),
+    session=Depends(get_session),
+):
+    user = upsert_user(session, token)
+    customer_id = (user.profile_data or {}).get("stripeCustomerId")
+    if not customer_id:
+        raise HTTPException(status_code=404, detail="No hay una suscripcion de Stripe asociada.")
+    try:
+        portal = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=f"{FRONTEND_BASE_URL}/main.html#settings",
+        )
+        return {"url": portal.url}
+    except stripe.StripeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc.user_message or exc))
 
 # ── AI Insights (OpenRouter) ──────────────────────────────────────────────────
 # Proxy server-side: la API key NUNCA llega al navegador. Configúrala en Railway:
@@ -1287,7 +1619,11 @@ def _openrouter_chat(models, messages):
 
 @app.post("/api/ai/insights")
 @limiter.limit("10/minute")
-def ai_insights(request: Request, body: InsightsRequest):
+def ai_insights(
+    request: Request,
+    body: InsightsRequest,
+    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
 
@@ -1330,7 +1666,11 @@ class AnalyzerAIRequest(BaseModel):
 
 @app.post("/api/ai/analyzer")
 @limiter.limit("8/minute")
-def ai_analyzer(request: Request, body: AnalyzerAIRequest):
+def ai_analyzer(
+    request: Request,
+    body: AnalyzerAIRequest,
+    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
     if not body.assets:

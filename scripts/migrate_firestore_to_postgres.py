@@ -18,6 +18,7 @@ from persistence import (
     create_tables,
     get_session,
     initialize_firebase_admin,
+    normalize_plan,
     portfolio_checksum,
 )
 
@@ -75,7 +76,7 @@ def main():
                     display_name=auth_user.display_name or profile.get("fullName"),
                     email_verified=bool(auth_user.email_verified),
                     role=profile.get("role", "user"),
-                    plan=profile.get("selectedPlan", "Free"),
+                    plan=normalize_plan(profile.get("selectedPlan")),
                     created_at=datetime.fromtimestamp(created_ms / 1000, timezone.utc) if created_ms else current_time,
                     last_seen_at=current_time,
                     profile_data=profile,
@@ -86,7 +87,7 @@ def main():
                 user.display_name = auth_user.display_name or profile.get("fullName") or user.display_name
                 user.email_verified = bool(auth_user.email_verified)
                 user.role = profile.get("role", user.role)
-                user.plan = profile.get("selectedPlan", user.plan)
+                user.plan = normalize_plan(profile.get("selectedPlan", user.plan))
                 user.profile_data = profile
             session.flush()
             migrated_users += 1
