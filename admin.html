@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — BlackPortfolio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #010101;
+      --surface: rgba(14,14,18,0.96);
+      --border: rgba(255,255,255,0.08);
+      --text: #f5f7fb;
+      --muted: #9ca3b4;
+      --primary: #6f86ff;
+      --success: #32d6a2;
+      --warning: #ffb547;
+      --radius-md: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Inter", sans-serif;
+      background: linear-gradient(180deg, #000 0%, #040404 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+    #auth-guard {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+      font-size: 1.1rem;
+      color: var(--muted);
+    }
+    #admin-panel { display: none; max-width: 960px; margin: 0 auto; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header span { font-size: 0.85rem; color: var(--muted); }
+    .logout-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.83rem;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .logout-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px 24px;
+      flex: 1;
+      min-width: 140px;
+    }
+    .stat-card .label { font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-card .value { font-size: 1.6rem; font-weight: 700; }
+    .search-bar {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      color: var(--text);
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-bar:focus { border-color: var(--primary); }
+    .search-bar::placeholder { color: var(--muted); }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 14px 18px;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(111,134,255,0.04); }
+    tbody td { padding: 14px 18px; font-size: 0.88rem; vertical-align: middle; }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-free      { background: rgba(156,163,180,0.15); color: #9ca3b4; }
+    .badge-investor  { background: rgba(57,208,255,0.15);  color: #39d0ff; }
+    .badge-advisor   { background: rgba(111,134,255,0.15); color: #6f86ff; }
+    .badge-inst      { background: rgba(50,214,162,0.15);  color: #32d6a2; }
+    .badge-demo      { background: rgba(255,181,71,0.15);  color: #ffb547; }
+    .badge-online    { background: rgba(50,214,162,0.15);  color: #32d6a2; }
+    .badge-offline   { background: rgba(156,163,180,0.12); color: #9ca3b4; }
+    .badge-pos       { background: rgba(50,214,162,0.15);  color: #32d6a2; }
+    .badge-neg       { background: rgba(229,85,85,0.15);   color: #ff6b6b; }
+    .pf-count        { font-weight: 600; }
+    .pf-count small  { color: var(--muted); font-weight: 400; font-size: 0.72rem; }
+    .plan-select {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.84rem;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .plan-select:focus { border-color: var(--primary); }
+    .save-btn {
+      background: var(--primary);
+      border: none;
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.83rem;
+      font-weight: 600;
+      margin-left: 8px;
+      transition: opacity 0.2s;
+    }
+    .save-btn:hover { opacity: 0.85; }
+    .save-btn:disabled { opacity: 0.4; cursor: default; }
+    .save-btn.saved { background: var(--success); }
+    .empty-state { text-align: center; padding: 48px; color: var(--muted); }
+    #loading-msg { text-align: center; padding: 48px; color: var(--muted); }
+    /* ── Códigos de beta ── */
+    .promo-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 22px 24px;
+      margin-bottom: 28px;
+    }
+    .promo-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .promo-head h2 { font-size: 1.05rem; font-weight: 600; }
+    .promo-head p { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    .primary-btn {
+      background: var(--primary);
+      border: none; color: #fff;
+      padding: 9px 18px; border-radius: 9px;
+      cursor: pointer; font-size: 0.85rem; font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    .primary-btn:hover { opacity: 0.88; }
+    .primary-btn:disabled { opacity: 0.4; cursor: default; }
+    .promo-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 18px 0 4px; }
+    .promo-input {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 9px; padding: 8px 12px;
+      font-size: 0.85rem; outline: none;
+      transition: border-color 0.2s;
+    }
+    .promo-input:focus { border-color: var(--primary); }
+    .promo-input::placeholder { color: var(--muted); }
+    .promo-hint { font-size: 0.78rem; color: var(--muted); }
+    .promo-msg { font-size: 0.82rem; min-height: 18px; margin: 8px 0; }
+    #promo-table { margin-top: 12px; }
+    .promo-code {
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      background: rgba(111,134,255,0.12); color: var(--primary);
+      padding: 3px 9px; border-radius: 7px; font-size: 0.85rem; font-weight: 600;
+    }
+    .copy-btn, .deact-btn {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); padding: 4px 11px; border-radius: 7px;
+      cursor: pointer; font-size: 0.76rem; margin-left: 8px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .copy-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .deact-btn:hover { border-color: #ff6b6b; color: #ff6b6b; }
+    .deact-btn:disabled { opacity: 0.4; cursor: default; }
+  </style>
+</head>
+<body>
+  <div id="auth-guard">Verificando acceso…</div>
+
+  <div id="admin-panel">
+    <header>
+      <div>
+        <h1>Panel de Administración</h1>
+        <span id="admin-email"></span>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Cerrar sesión</button>
+    </header>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">Total usuarios</div>
+        <div class="value" id="stat-total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Explorer</div>
+        <div class="value" id="stat-free">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Investor</div>
+        <div class="value" id="stat-investor">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Advisor Pro</div>
+        <div class="value" id="stat-advisor">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Wealth Desk</div>
+        <div class="value" id="stat-inst">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Portafolios</div>
+        <div class="value" id="stat-portfolios">—</div>
+      </div>
+    </div>
+
+    <section class="promo-section">
+      <div class="promo-head">
+        <div>
+          <h2>Códigos de acceso beta · 100% off</h2>
+          <p>Cada código es único y de un solo uso. El beta tester lo ingresa en "Añadir código de promoción" en el checkout.</p>
+        </div>
+        <button id="genPromoBtn" class="primary-btn">+ Generar código</button>
+      </div>
+      <div class="promo-controls">
+        <input id="promoCustom" class="promo-input" type="text" placeholder="Código personalizado (opcional)" maxlength="40" />
+        <select id="promoDuration" class="promo-input">
+          <option value="0">Gratis siempre</option>
+          <option value="1">Gratis 1 mes</option>
+          <option value="3">Gratis 3 meses</option>
+          <option value="6">Gratis 6 meses</option>
+          <option value="12">Gratis 12 meses</option>
+        </select>
+        <span class="promo-hint">Si lo dejas en blanco se genera uno aleatorio.</span>
+      </div>
+      <div id="promo-msg" class="promo-msg"></div>
+      <div class="table-wrap">
+        <table id="promo-table" style="display:none">
+          <thead>
+            <tr><th>Código</th><th>Descuento</th><th>Usos</th><th>Estado</th><th></th></tr>
+          </thead>
+          <tbody id="promo-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="promo-empty" style="display:none">Aún no has generado códigos.</div>
+      </div>
+    </section>
+
+    <input class="search-bar" id="searchInput" type="text" placeholder="Buscar por nombre o email…" />
+
+    <div class="table-wrap">
+      <div id="loading-msg">Cargando usuarios…</div>
+      <table id="users-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Plan actual</th>
+            <th>Portafolios</th>
+            <th>Rendimiento</th>
+            <th>Cambiar plan</th>
+            <th>Registro</th>
+            <th>Sesión</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+      <div class="empty-state" id="empty-state" style="display:none">No se encontraron usuarios.</div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="auth.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

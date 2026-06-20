@@ -4,32 +4,48 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Log in | BlackPortfolio</title>
-  <meta name="description" content="Acceso a BlackPortfolio para iniciar sesion en la plataforma de portafolios de inversion.">
+  <meta name="description" content="Acceso a BlackPortfolio para iniciar sesión en la plataforma de portafolios de inversión.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <script src="theme-init.js"></script>
+  <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body class="auth-page">
   <div class="background-orb orb-one"></div>
   <div class="background-orb orb-two"></div>
+  <div class="background-orb orb-three"></div>
   <div class="grid-overlay"></div>
+
+  <button class="theme-toggle auth-theme-toggle" id="themeToggle" type="button" aria-label="Cambiar tema">
+    <svg class="tt-icon tt-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <span class="tt-pill"><span class="tt-thumb"></span></span>
+    <svg class="tt-icon tt-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
+  </button>
 
   <main class="auth-main">
     <div class="auth-shell">
       <div class="auth-intro">
         <a class="brand" href="index.html"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
         <span class="eyebrow">Acceso seguro</span>
-        <h1>Inicia sesion para continuar con tus portafolios de inversion.</h1>
+        <h1>Inicia sesión para continuar con tus portafolios de inversión.</h1>
         <p>
-          Esta pagina demo valida un usuario precargado y tambien los usuarios que registres
-          desde la landing principal.
+          Inicia sesión con tu cuenta registrada o crea una nueva desde la landing principal.
         </p>
-        <div class="demo-credentials">
-          <strong>Usuario demo</strong>
-          <span>Correo: <code>demo@blackportfolio.ai</code></span>
-          <span>Contrasena: <code>Black2026!</code></span>
-        </div>
+        <ul class="auth-features">
+          <li>
+            <span class="auth-feature-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+            <span>Protección con verificación en dos pasos</span>
+          </li>
+          <li>
+            <span class="auth-feature-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+            <span>Seguimiento de portafolios en tiempo real</span>
+          </li>
+          <li>
+            <span class="auth-feature-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <span>Tus datos cifrados y privados</span>
+          </li>
+        </ul>
       </div>
 
       <div class="auth-card">
@@ -38,10 +54,6 @@
           <button id="googleLoginBtn" class="button-google" type="button">
             <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
             <span>Continuar con Google</span>
-          </button>
-          <button id="appleLoginBtn" class="button-apple" type="button">
-            <svg width="18" height="18" viewBox="0 0 814 1000" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 439.8 0 336.7 0 238.6c0-187.2 121.8-286.1 241.8-286.1 61.4 0 112.5 40.8 150.6 40.8 36.3 0 93.4-43.2 163.4-43.2 62.5 0 163.5 22.5 220.9 112.2zm-109.5-95.8c-28.6-35.5-70.4-62.4-119.7-62.4-56.3 0-102 37.2-134.7 37.2-36.3 0-79.3-39.4-131.7-39.4-48.8 0-100.6 27.6-141.5 81.8C112.9 213 92 270.1 92 325.2c0 113.1 42.8 231.1 107 322.3 55.5 77.4 101.4 131.8 165.2 131.8 51.8 0 82.5-37.1 155.8-37.1 73.3 0 100.3 37.1 160.6 37.1 59.3 0 107.7-57.5 159.6-130.9 24.1-34.3 43.1-69.3 55.4-104.3z"/></svg>
-            <span>Continuar con Apple</span>
           </button>
         </div>
 
@@ -53,8 +65,17 @@
             <input id="loginEmail" name="email" type="email" placeholder="demo@blackportfolio.ai" required>
           </div>
           <div class="form-row">
-            <label for="loginPassword">Contrasena</label>
-            <input id="loginPassword" name="password" type="password" placeholder="Tu contrasena" required>
+            <div class="login-pw-label-row">
+              <label for="loginPassword">Contraseña</label>
+              <button type="button" class="forgot-pw-btn" id="forgotPwBtn">¿Olvidaste tu contraseña?</button>
+            </div>
+            <div class="pw-input-wrap">
+              <input id="loginPassword" name="password" type="password" placeholder="Tu contraseña" required autocomplete="current-password">
+              <button type="button" class="pw-toggle" id="loginPwToggle" aria-label="Mostrar contraseña">
+                <svg id="loginEyeIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="loginEyeOffIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
           </div>
           <button class="button primary submit-button" type="submit">Entrar</button>
           <p id="loginMessage" class="form-message" aria-live="polite"></p>
@@ -68,9 +89,96 @@
     </div>
   </main>
 
+  <!-- OTP Verification Overlay (shown when 2FA is enabled) -->
+  <div id="otpOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-label="Verificación en dos pasos">
+    <div class="otp-card">
+      <div class="otp-shield-icon">🔐</div>
+      <h2 class="otp-title" id="otpTitle">Verificación en dos pasos</h2>
+      <p class="otp-subtitle" id="otpSubtitle">Ingresa el código de 6 dígitos de Google Authenticator</p>
+
+      <div class="otp-grid" id="otpGrid">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 1">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 2">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 3">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 4">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 5">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 6">
+      </div>
+
+      <p id="otpError" class="otp-error-msg hidden"></p>
+
+      <button id="otpVerifyBtn" class="button primary otp-verify-btn" type="button" disabled>Verificar código</button>
+      <button id="otpClearBtn" class="button ghost otp-clear-btn" type="button">Limpiar</button>
+
+      <p class="otp-help">¿Problemas con el código? Asegúrate de que la hora de tu dispositivo esté sincronizada.</p>
+
+      <div class="otp-fallback">
+        <button id="otpEmailFallbackBtn" class="otp-fallback-link" type="button">¿No tienes tu código? Recibe un enlace de acceso por correo</button>
+        <p id="otpFallbackMsg" class="otp-fallback-msg hidden"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mandatory 2FA Setup Overlay (shown when 2FA is NOT yet enabled) -->
+  <div id="totpSetupOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-label="Configurar verificación en dos pasos">
+    <div class="totp-setup-card">
+      <h2>🔐 Activa la verificación en dos pasos</h2>
+      <p class="totp-sub">Tu cuenta requiere Google Authenticator. Escanea el código QR para agregar BlackPortfolio y continuar.</p>
+
+      <div id="totpSetupLoading" style="text-align:center">
+        <div class="totp-loading-spinner"></div>
+        <p style="font-size:0.83rem;color:var(--muted)">Generando código QR…</p>
+      </div>
+
+      <div id="totpSetupContent" class="hidden">
+        <div class="totp-qr-wrap"><img id="totpSetupQrImg" src="" alt="Código QR"></div>
+
+        <ol class="totp-steps">
+          <li><span class="step-num">1</span>Abre <strong>Google Authenticator</strong> en tu teléfono.</li>
+          <li><span class="step-num">2</span>Toca <strong>+</strong> → <strong>"Escanear código QR"</strong>.</li>
+          <li><span class="step-num">3</span>Aparecerá <strong>BlackPortfolio</strong> con un código de 6 dígitos.</li>
+          <li><span class="step-num">4</span>Ingresa ese código abajo para activar la protección.</li>
+        </ol>
+
+        <p class="totp-manual-key-label">Clave manual (si no puedes escanear):</p>
+        <div class="totp-manual-key" id="totpSetupManualKey">—</div>
+
+        <div class="totp-setup-otp-grid" id="totpSetupOtpGrid">
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 1">
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 2">
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 3">
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 4">
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 5">
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 6">
+        </div>
+        <p class="totp-setup-msg" id="totpSetupMsg"></p>
+
+        <div class="totp-setup-actions">
+          <button id="totpSetupVerifyBtn" class="button primary" type="button" disabled>Activar y continuar</button>
+          <button id="totpSetupLogoutBtn" class="button ghost" type="button">Cancelar y salir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="auth.js?v=4"></script>
-  <script src="login.js?v=3"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="assets/qrcode.min.js"></script>
+  <script src="assets/qr-shim.js"></script>
+  <script src="auth.js?v=8"></script>
+  <script src="plan-picker.js?v=1"></script>
+  <script src="login.js?v=6"></script>
+  <script>
+    (function () {
+      var btn = document.getElementById("themeToggle");
+      if (!btn) return;
+      btn.addEventListener("click", function () {
+        var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("bp-theme", next);
+      });
+    })();
+  </script>
 </body>
 </html>

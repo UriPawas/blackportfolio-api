@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=6">
-  <link rel="stylesheet" href="main.css?v=3">
+  <link rel="stylesheet" href="main.css?v=14">
   <style>
     .company-info-animation {
       display: flex;
@@ -45,8 +45,13 @@
       </div>
       <div class="dashboard-user-card">
         <span class="eyebrow">Sesión activa</span>
-        <strong id="sidebarUserName" class="is-skeleton">Cargando...</strong>
-        <span id="sidebarUserPlan" class="is-skeleton">Plan</span>
+        <div class="user-card-row">
+          <div id="sidebarUserAvatar" class="user-avatar is-skeleton"></div>
+          <div class="user-card-info">
+            <strong id="sidebarUserName" class="is-skeleton">Cargando...</strong>
+            <span id="sidebarUserPlan" class="is-skeleton">Plan</span>
+          </div>
+        </div>
       </div>
 
       <nav class="dashboard-nav">
@@ -79,9 +84,12 @@
           </div>
         </div>
         <div class="dashboard-topbar-meta">
-          <div class="mini-status-card">
-            <span>Cuenta</span>
-            <strong id="topbarUserName" class="is-skeleton">Cargando...</strong>
+          <div class="mini-status-card mini-status-card--account">
+            <div id="topbarUserAvatar" class="user-avatar user-avatar--sm is-skeleton"></div>
+            <div>
+              <span>Cuenta</span>
+              <strong id="topbarUserName" class="is-skeleton">Cargando...</strong>
+            </div>
           </div>
           <div class="mini-status-card">
             <span>Plan</span>
@@ -123,6 +131,18 @@
                   <button type="button" data-widget-type="portfolio">
                     <span class="hub-menu-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></span><span>Resumen de cartera</span>
                   </button>
+                  <button type="button" data-widget-type="risk">
+                    <span class="hub-menu-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span><span>Riesgo de cartera</span>
+                  </button>
+                  <button type="button" data-widget-type="dividends">
+                    <span class="hub-menu-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg></span><span>Dividendos y flujo</span>
+                  </button>
+                  <button type="button" data-widget-type="sentiment">
+                    <span class="hub-menu-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg></span><span>Noticias y sentimiento</span>
+                  </button>
+                  <button type="button" data-widget-type="macro">
+                    <span class="hub-menu-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg></span><span>Mapa macro</span>
+                  </button>
                 </div>
               </div>
               <button class="hub-icon-btn" id="hubHelpBtn" type="button" title="Ayuda">
@@ -161,6 +181,7 @@
             </div>
             <input id="importCsvInput" type="file" accept=".csv,text/csv" style="display:none">
           </div>
+          <div id="consolidatedBar" class="consolidated-bar hidden"></div>
           <div id="portfolioCardsGrid" class="portfolio-cards-grid"></div>
           <div id="noPortfoliosMsg" class="tracker-empty-state hidden">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v4H3zM3 11h18v10H3z"/><path d="M7 15h4M7 18h2"/></svg>
@@ -222,25 +243,57 @@
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Precio de mercado actual de cada posición multiplicado por la cantidad de acciones. Se actualiza al presionar "Actualizar precios".</span>
               </div>
-              <span>Valor actual</span>
+              <span class="kpi-hero-label-row">Valor actual
+                <select id="dashAltCurrencySelect" class="kpi-alt-currency-select" title="Ver equivalencia en otra moneda">
+                  <option value="">Sin equivalencia</option>
+                </select>
+              </span>
               <strong id="dashCurrentValue">—</strong>
+              <em id="dashCurrentValueAlt" class="kpi-alt-value"></em>
+              <em id="dashAltFxRate" class="kpi-alt-value kpi-fx-rate"></em>
             </div>
             <div class="summary-item tracker-kpi-hero">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
-                <span class="kpi-tooltip">Valor actual del portafolio menos el total invertido (compras + comisiones + IVA). Puede ser negativo si el mercado bajó.</span>
+                <span class="kpi-tooltip">Ganancia o pérdida total (no realizada + realizada) expresada como porcentaje sobre el costo invertido de las posiciones con precio. El monto es la suma en la moneda del portafolio.</span>
               </div>
               <span>Retorno total</span>
               <strong id="dashReturnAmt">—</strong>
               <em id="dashReturnPct">—</em>
+              <em id="dashReturnAmtAlt" class="kpi-alt-value"></em>
             </div>
-            <!-- ── Secondary row: 6 smaller KPIs ─────────────────────────── -->
+            <!-- ── Secondary row: smaller KPIs ───────────────────────────── -->
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Ganancia o pérdida de las posiciones que sigues teniendo (valor actual de mercado menos su costo). Aún no se materializa: cambia con el precio y solo se realiza al vender.</span>
+              </div>
+              <span>P/L no realizada</span><strong id="dashUnrealizedPnL">—</strong>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Ganancia o pérdida ya materializada por ventas: el dinero que efectivamente obtuviste (o perdiste) al vender, comparado con el costo promedio de esas acciones.</span>
+              </div>
+              <span>P/L realizada</span><strong id="dashRealizedPnL">—</strong>
+            </div>
             <div class="summary-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Suma de todas las compras realizadas en este portafolio, incluyendo comisiones e IVA pagados.</span>
               </div>
               <span>Total invertido</span><strong id="dashTotalInvested">$0.00</strong>
+              <em id="dashInvestedNote" class="kpi-alt-value"></em>
+            </div>
+            <div class="summary-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Efectivo disponible en el portafolio. Aumenta con aportes y ventas; disminuye con retiros y compras. Se incluye en el "Valor actual".</span>
+              </div>
+              <span class="kpi-hero-label-row">Efectivo
+                <button id="manageCashBtn" class="kpi-cash-btn" type="button" title="Aportar o retirar efectivo">Gestionar</button>
+              </span>
+              <strong id="dashCashBalance">$0.00</strong>
             </div>
             <div class="summary-item">
               <div class="kpi-info-wrap">
@@ -304,14 +357,23 @@
           <!-- ── Tab: Summary ─────────────────────────────────────────────── -->
           <div class="tracker-tab-panel" id="tabPanelSummary">
             <div class="tracker-main-grid">
-              <div class="dashboard-card">
-                <div class="card-header">
-                  <h3>Ponderacion del portafolio</h3>
-                  <span>Por monto invertido</span>
+              <div class="dashboard-card portfolio-weight-card">
+                <div class="card-header portfolio-weight-header">
+                  <div class="portfolio-weight-heading">
+                    <h3>Ponderación del portafolio</h3>
+                    <span>Distribución por posición</span>
+                  </div>
+                  <div class="donut-base-toggle" id="donutBaseToggle" aria-label="Base de cálculo de la ponderación">
+                    <button type="button" class="donut-base-btn active" data-base="invested" aria-pressed="true">Invertido</button>
+                    <button type="button" class="donut-base-btn" data-base="current" aria-pressed="false">Valor actual</button>
+                  </div>
                 </div>
                 <div class="donut-wrap">
-                  <canvas id="portfolioDonutChart"></canvas>
-                  <div id="donutLegend" class="donut-legend"></div>
+                  <div class="donut-chart-stage">
+                    <canvas id="portfolioDonutChart" aria-label="Gráfica de ponderación del portafolio"></canvas>
+                    <div id="portfolioDonutTooltip" class="donut-chart-tooltip hidden" role="status"></div>
+                  </div>
+                  <div id="donutLegend" class="donut-legend" aria-label="Detalle de ponderaciones"></div>
                 </div>
               </div>
 
@@ -353,21 +415,24 @@
             <div class="dashboard-card tracker-positions-section">
               <div class="card-header">
                 <h3>Posiciones</h3>
-                <button id="addPositionBtn" class="button primary" type="button">+ Agregar posicion</button>
+                <div class="positions-header-actions">
+                  <input id="positionsSearchInput" class="positions-search" type="text" placeholder="Buscar ticker…" autocomplete="off">
+                  <button id="addPositionBtn" class="button primary" type="button">+ Agregar posicion</button>
+                </div>
               </div>
               <div id="positionsTableShell" class="tracker-table-shell">
                 <table class="tracker-table tracker-table--positions">
                   <thead>
                     <tr>
-                      <th>Ticker</th>
+                      <th class="th-sortable" data-sort="ticker">Ticker</th>
                       <th class="th-sparkline">30 días</th>
-                      <th>Fecha</th>
-                      <th>Precio prom.</th>
-                      <th>Precio actual</th>
-                      <th>Cantidad</th>
-                      <th>Costo total</th>
-                      <th>Valor actual</th>
-                      <th>Retorno</th>
+                      <th class="th-sortable" data-sort="date">Fecha</th>
+                      <th class="th-sortable" data-sort="avg">Precio prom.</th>
+                      <th class="th-sortable" data-sort="price">Precio actual</th>
+                      <th class="th-sortable" data-sort="qty">Cantidad</th>
+                      <th class="th-sortable" data-sort="cost">Costo total</th>
+                      <th class="th-sortable" data-sort="value">Valor actual</th>
+                      <th class="th-sortable" data-sort="return">Retorno</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -385,6 +450,14 @@
 
             <!-- 3a. Metrics row -->
             <div class="perf-metrics-grid">
+              <div class="perf-metric-card dashboard-card">
+                <div class="perf-metric-header">
+                  <span class="perf-metric-label">Retorno TWR</span>
+                  <button class="perf-info-btn" type="button" data-metric="twr" title="Ver cálculo">ℹ</button>
+                </div>
+                <strong id="twrValue" class="perf-metric-value">—</strong>
+                <span id="twrSubLabel" class="perf-metric-sub">Ponderado por tiempo</span>
+              </div>
               <div class="perf-metric-card dashboard-card">
                 <div class="perf-metric-header">
                   <span class="perf-metric-label">Sharpe Ratio</span>
@@ -455,6 +528,24 @@
               <div id="perfChartStatus" class="perf-chart-status"></div>
             </div>
 
+            <div class="dashboard-card investment-value-card">
+              <div class="card-header investment-value-header">
+                <div>
+                  <h3>Capital invertido vs valor de mercado</h3>
+                  <span>Evolución histórica de las posiciones</span>
+                </div>
+                <div class="investment-value-legend" aria-label="Series de la gráfica">
+                  <span><i class="is-invested"></i>Capital invertido</span>
+                  <span><i class="is-market"></i>Valor de mercado</span>
+                </div>
+              </div>
+              <div id="investmentValueChartWrap" class="investment-value-chart-wrap">
+                <canvas id="investmentValueChart" aria-label="Comparación histórica entre capital invertido y valor de mercado"></canvas>
+                <div id="investmentValueTooltip" class="investment-value-tooltip hidden" role="status"></div>
+              </div>
+              <div id="investmentValueStatus" class="perf-chart-status"></div>
+            </div>
+
             <!-- ── Allocations row ───────────────────────────────────────── -->
             <div class="allocation-row">
               <div class="dashboard-card">
@@ -467,7 +558,7 @@
               <div class="dashboard-card">
                 <div class="card-header"><h3>Geográfico (portafolio)</h3></div>
                 <div class="alloc-donut-wrap">
-                  <canvas id="geoDonutChart"></canvas>
+                  <div id="geoWorldMap" class="alloc-geo-map"></div>
                   <div id="geoDonutLegend" class="alloc-legend"></div>
                 </div>
               </div>
@@ -513,13 +604,13 @@
                 <table class="tracker-table">
                   <thead>
                     <tr>
-                      <th>Fecha</th>
-                      <th>Tipo</th>
-                      <th>Ticker</th>
-                      <th>Cantidad</th>
-                      <th>Precio</th>
-                      <th>Comisión</th>
-                      <th>Total neto</th>
+                      <th class="th-sortable" data-txsort="date">Fecha</th>
+                      <th class="th-sortable" data-txsort="type">Tipo</th>
+                      <th class="th-sortable" data-txsort="ticker">Ticker</th>
+                      <th class="th-sortable" data-txsort="quantity">Cantidad</th>
+                      <th class="th-sortable" data-txsort="price">Precio</th>
+                      <th class="th-sortable" data-txsort="comm">Comisión</th>
+                      <th class="th-sortable" data-txsort="net">Total neto</th>
                     </tr>
                   </thead>
                   <tbody id="txTableBody"></tbody>
@@ -664,24 +755,42 @@
           <div class="tracker-tab-panel" id="tabPanelCorrelacion" style="display:none">
             <div class="corr-metrics-grid">
               <div class="perf-metric-card dashboard-card">
-                <div class="perf-metric-header"><span class="perf-metric-label">Correlación promedio</span></div>
+                <div class="kpi-info-wrap">
+                  <button class="kpi-info-btn" aria-label="Información">?</button>
+                  <span class="kpi-tooltip">Promedio de las correlaciones entre todos los pares de activos. Rango: -1 (completamente inversos) a +1 (idénticos). Valores bajos indican mejor diversificación.</span>
+                </div>
+                <span class="perf-metric-label">Correlación promedio</span>
                 <strong id="corrAvgValue" class="perf-metric-value">—</strong>
                 <span class="perf-metric-sub">Entre todos los pares</span>
               </div>
               <div class="perf-metric-card dashboard-card">
-                <div class="perf-metric-header"><span class="perf-metric-label">Score de diversificación</span></div>
+                <div class="kpi-info-wrap">
+                  <button class="kpi-info-btn" aria-label="Información">?</button>
+                  <span class="kpi-tooltip">Puntuación de 0-100 que mide qué tan diversificado está tu portafolio basado en correlaciones y pesos de posiciones. Puntuación más alta = mejor diversificación.</span>
+                </div>
+                <span class="perf-metric-label">Score de diversificación</span>
                 <strong id="corrDivScore" class="perf-metric-value">—</strong>
                 <span id="corrDivLabel" class="perf-metric-sub">—</span>
               </div>
               <div class="perf-metric-card dashboard-card">
-                <div class="perf-metric-header"><span class="perf-metric-label">Par más correlacionado</span></div>
+                <div class="kpi-info-wrap">
+                  <button class="kpi-info-btn" aria-label="Información">?</button>
+                  <span class="kpi-tooltip">El par de activos con la correlación más alta en tu portafolio. Un valor alto indica comportamiento muy similar. Puede significar redundancia y una oportunidad de rebalanceo.</span>
+                </div>
+                <span class="perf-metric-label">Par más correlacionado</span>
                 <strong id="corrMaxPair" class="perf-metric-value">—</strong>
                 <span id="corrMaxVal" class="perf-metric-sub">—</span>
               </div>
             </div>
             <div class="dashboard-card">
               <div class="card-header">
-                <h3>Matriz de correlación</h3>
+                <div class="corr-matrix-title-wrap">
+                  <h3>Matriz de correlación</h3>
+                  <div class="corr-matrix-info">
+                    <button class="kpi-info-btn" aria-label="Información sobre la matriz">?</button>
+                    <span class="kpi-tooltip corr-matrix-tooltip">Muestra la correlación de Pearson entre cada par de activos del portafolio, calculada con retornos diarios del último año. Valores cercanos a +1 indican movimiento conjunto; cercanos a -1 indican movimiento opuesto; cerca de 0 indica independencia. Usa esta tabla para identificar redundancias y mejorar la diversificación.</span>
+                  </div>
+                </div>
                 <span>Retornos diarios · 1 año</span>
               </div>
               <div id="corrMatrixWrap" class="corr-matrix-wrap"></div>
@@ -690,6 +799,9 @@
                 <span>−1 inversa</span>
                 <span class="corr-scale-bar"></span>
                 <span>+1 idéntica</span>
+              </div>
+              <div class="corr-scale-ticks">
+                <span>−1.0</span><span>−0.5</span><span>0</span><span>+0.5</span><span>+1.0</span>
               </div>
             </div>
           </div>
@@ -903,6 +1015,37 @@
                 <span id="withdrawNetPreview" class="withdraw-net-amount">—</span>
               </div>
               <button class="button danger" type="submit">Confirmar retiro</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Modal: Gestionar efectivo ──────────────────────────────── -->
+        <div id="cashModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal tracker-modal--sm">
+            <div class="tracker-modal-header">
+              <h3>Gestionar efectivo</h3>
+              <button id="closeCashModalBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="cashForm" class="dashboard-form">
+              <div class="form-row">
+                <label>Operación</label>
+                <div class="cash-op-toggle">
+                  <button type="button" class="cash-op-btn active" data-op="DEPOSITO">Aporte (+)</button>
+                  <button type="button" class="cash-op-btn" data-op="RETIRO">Retiro (−)</button>
+                </div>
+                <input type="hidden" id="cashOpInput" value="DEPOSITO">
+              </div>
+              <div class="form-row">
+                <label for="cashAmountInput">Monto</label>
+                <input id="cashAmountInput" type="number" step="any" min="0.01" placeholder="0.00" required autocomplete="off">
+              </div>
+              <div class="form-row">
+                <label for="cashDateInput">Fecha</label>
+                <input id="cashDateInput" type="date" required>
+              </div>
+              <p class="form-hint">El efectivo se suma al "Valor actual" y los aportes/retiros se usan para calcular el XIRR ponderado por dinero.</p>
+              <div id="cashError" class="form-hint hidden" style="color:#d94040"></div>
+              <button class="button primary" type="submit">Confirmar</button>
             </form>
           </div>
         </div>
@@ -1344,12 +1487,16 @@
           <div class="dashboard-card topdown-macro-card">
             <div class="card-header">
               <h3>Indicadores Macroeconómicos</h3>
-              <button id="tdRefreshBtn" class="button ghost" type="button" style="font-size:12px;padding:4px 10px">↻ Actualizar</button>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span id="tdLastUpdated" class="td-last-updated"></span>
+                <button id="tdRefreshBtn" class="button ghost" type="button" style="font-size:12px;padding:4px 10px">↻ Actualizar</button>
+              </div>
             </div>
             <div id="tdMacroGrid" class="topdown-macro-grid">
               <div class="td-macro-loading">Cargando indicadores…</div>
             </div>
             <div id="tdRegimeBanner" class="td-regime-banner"></div>
+            <div id="tdTopPicks" class="td-top-picks"></div>
           </div>
 
           <!-- ── Heatmap sectorial ────────────────────────────── -->
@@ -1363,11 +1510,22 @@
                 <button class="td-period-btn" data-period="1y">1A</button>
               </div>
             </div>
-            <p class="topdown-heatmap-hint">Haz clic en un sector para verlo en Mercados.</p>
+            <p class="topdown-heatmap-hint">Orden por retorno · <strong>color = fuerza relativa vs S&P</strong> (verde supera al índice, rojo lo sigue) · ★ favorecido por el régimen. Haz clic en un sector para verlo en Mercados.</p>
             <div id="tdHeatmapGrid" class="topdown-heatmap-grid">
               <div class="td-macro-loading">Cargando sectores…</div>
             </div>
             <div id="tdHeatmapStatus" class="mkw-status" style="display:none;margin-top:10px"></div>
+          </div>
+
+          <!-- ── Cuadrante Riesgo / Retorno ───────────────────── -->
+          <div class="dashboard-card topdown-scatter-card">
+            <div class="card-header">
+              <h3>Cuadrante Riesgo / Retorno</h3>
+              <span class="td-scatter-legend" title="Eje X: volatilidad (riesgo). Eje Y: retorno del período. Color y tamaño: Sharpe (retorno ajustado por riesgo). Borde dorado y ★: sector favorecido por el régimen macro.">tamaño/color = Sharpe ⓘ</span>
+            </div>
+            <div id="tdScatter" class="td-scatter">
+              <div class="td-macro-loading">Cargando cuadrante…</div>
+            </div>
           </div>
 
           <!-- ── Flujo de decisión Top-Down ───────────────────── -->
@@ -1483,6 +1641,7 @@
               </button>
               <div id="chartTypeMenu" class="market-menu hidden">
                 <button class="market-menu-item" type="button" data-chart-type="candlestick">Velas</button>
+                <button class="market-menu-item" type="button" data-chart-type="heikinashi">Heikin-Ashi</button>
                 <button class="market-menu-item" type="button" data-chart-type="bars">Barras</button>
                 <button class="market-menu-item" type="button" data-chart-type="line">Linea</button>
                 <button class="market-menu-item" type="button" data-chart-type="area">Area</button>
@@ -1589,6 +1748,18 @@
                     <div class="ind-info"><span class="ind-name">VWAP</span><span class="ind-desc">Precio ponderado por volumen</span></div>
                     <span class="ind-badge">✓</span>
                   </label>
+                  <label class="indicator-row" data-ind="bbpercent">
+                    <input type="checkbox" value="bbpercent" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#6f86ff"></span>
+                    <div class="ind-info"><span class="ind-name">BB %B</span><span class="ind-desc">Posición del precio dentro de las bandas</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="bbwidth">
+                    <input type="checkbox" value="bbwidth" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#f5a623"></span>
+                    <div class="ind-info"><span class="ind-name">BB Width</span><span class="ind-desc">Ancho de banda · anticipa rupturas de volatilidad</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
                 </div>
 
                 <div class="indicator-section" data-cat="osc">
@@ -1609,6 +1780,12 @@
                     <input type="checkbox" value="stoch" class="ind-cb">
                     <span class="ind-dot" style="--dot:#00c894"></span>
                     <div class="ind-info"><span class="ind-name">Estocástico (14,3,3)</span><span class="ind-desc">%K y %D · sobrecompra/venta</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="stochrsi">
+                    <input type="checkbox" value="stochrsi" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#39d0ff"></span>
+                    <div class="ind-info"><span class="ind-name">Stoch RSI (14,14,3,3)</span><span class="ind-desc">Estocástico aplicado al RSI · más sensible</span></div>
                     <span class="ind-badge">✓</span>
                   </label>
                   <label class="indicator-row" data-ind="cci">
@@ -1647,6 +1824,12 @@
                     <div class="ind-info"><span class="ind-name">ROC (12)</span><span class="ind-desc">Tasa de cambio porcentual</span></div>
                     <span class="ind-badge">✓</span>
                   </label>
+                  <label class="indicator-row" data-ind="divergence">
+                    <input type="checkbox" value="divergence" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#c084fc"></span>
+                    <div class="ind-info"><span class="ind-name">Divergencias RSI</span><span class="ind-desc">Marca divergencias alcistas/bajistas precio vs RSI</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
                 </div>
 
                 <div class="indicator-section" data-cat="price">
@@ -1667,6 +1850,18 @@
                     <input type="checkbox" value="fiboext" class="ind-cb">
                     <span class="ind-dot" style="--dot:#f5b84c"></span>
                     <div class="ind-info"><span class="ind-name">Fib. Extensión</span><span class="ind-desc">Niveles automáticos sobre swing alto/bajo</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="fiboret">
+                    <input type="checkbox" value="fiboret" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#39d0ff"></span>
+                    <div class="ind-info"><span class="ind-name">Fib. Retroceso</span><span class="ind-desc">23.6/38.2/50/61.8/78.6% sobre swing reciente</span></div>
+                    <span class="ind-badge">✓</span>
+                  </label>
+                  <label class="indicator-row" data-ind="srlevels">
+                    <input type="checkbox" value="srlevels" class="ind-cb">
+                    <span class="ind-dot" style="--dot:#32d6a2"></span>
+                    <div class="ind-info"><span class="ind-name">Soportes / Resistencias</span><span class="ind-desc">Niveles clave detectados automáticamente</span></div>
                     <span class="ind-badge">✓</span>
                   </label>
                 </div>
@@ -1741,6 +1936,9 @@
                   <span class="chart-52w-track"><span id="chart52wFill" class="chart-52w-fill"></span></span>
                   <span id="chart52wHigh" class="chart-52w-val"></span>
                 </span>
+                <button id="chartFullscreenBtn" class="chart-fullscreen-btn" type="button" title="Pantalla completa" aria-label="Expandir gráfico">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                </button>
               </div>
             </div>
             <div id="marketChartStatus" class="market-chart-status">Cargando gráfico...</div>
@@ -1854,6 +2052,7 @@
           </div><!-- /market-main-col -->
 
           <aside class="market-stats-rail" id="marketStatsRail">
+            <div id="technicalRatingCard" class="tech-rating-card"></div>
             <div class="stats-rail-head">Estadísticas clave</div>
             <div id="marketStatsRailBody" class="stats-rail-body">
               <p class="stats-rail-empty">Cargando…</p>
@@ -1881,7 +2080,71 @@
       </div>
 
       <section id="section-settings" class="dashboard-section">
-        <div class="dashboard-grid">
+        <article class="dashboard-card settings-overview-card">
+          <div class="settings-overview-copy">
+            <span class="settings-kicker">Centro de control</span>
+            <h2>Cuenta, seguridad y preferencias</h2>
+            <p>Administra tu perfil, protege el acceso y ajusta la experiencia de monitoreo desde un solo lugar.</p>
+          </div>
+          <div class="settings-overview-grid">
+            <div class="settings-overview-metric">
+              <span>Correo</span>
+              <strong id="settingsOverviewEmail">--</strong>
+              <small id="settingsOverviewEmailStatus">Estado pendiente</small>
+            </div>
+            <div class="settings-overview-metric">
+              <span>Plan</span>
+              <strong id="settingsOverviewPlan">--</strong>
+              <small id="settingsOverviewType">--</small>
+            </div>
+            <div class="settings-overview-metric settings-overview-metric--accent">
+              <span>Seguridad</span>
+              <strong id="settingsSecurityScore">--</strong>
+              <small id="settingsSecurityBadge">Calculando estado</small>
+            </div>
+            <div class="settings-overview-metric">
+              <span>Ultimo acceso</span>
+              <strong id="settingsOverviewLastLogin">--</strong>
+              <small id="settingsOverviewDevice">Este dispositivo</small>
+            </div>
+          </div>
+        </article>
+
+        <div class="settings-tabs" role="tablist" aria-label="Secciones de ajustes">
+          <button class="settings-tab active" type="button" data-settings-tab="account">Cuenta</button>
+          <button class="settings-tab" type="button" data-settings-tab="security">Seguridad</button>
+          <button class="settings-tab" type="button" data-settings-tab="preferences">Preferencias</button>
+          <button class="settings-tab" type="button" data-settings-tab="investor">Perfil inversor</button>
+        </div>
+
+        <div class="dashboard-grid settings-grid settings-view-account">
+          <article class="dashboard-card settings-security-center">
+            <div class="card-header">
+              <h3>Centro de seguridad</h3>
+              <span>Estado de proteccion</span>
+            </div>
+            <div class="security-score-row">
+              <div>
+                <span class="settings-kicker">Nivel actual</span>
+                <strong id="settingsSecurityScoreMain">--</strong>
+              </div>
+              <span id="settingsSecurityLevel" class="security-level-pill">Calculando</span>
+            </div>
+            <div class="security-checklist">
+              <div class="security-check-item" id="securityEmailCheck">
+                <span class="security-check-dot"></span>
+                <div><strong>Email verificado</strong><small>Confirma la identidad de la cuenta.</small></div>
+              </div>
+              <div class="security-check-item" id="securityTwoFaCheck">
+                <span class="security-check-dot"></span>
+                <div><strong>2FA activo</strong><small>Agrega una capa extra al inicio de sesion.</small></div>
+              </div>
+              <div class="security-check-item is-ok" id="securitySessionCheck">
+                <span class="security-check-dot"></span>
+                <div><strong>Sesion actual detectada</strong><small>Monitoreo basico del dispositivo activo.</small></div>
+              </div>
+            </div>
+          </article>
 
           <!-- Datos de sesión + Perfil -->
           <article class="dashboard-card">
@@ -1918,6 +2181,21 @@
                 </div>
                 <p id="nameChangeMessage" class="form-message" aria-live="polite"></p>
               </form>
+            </div>
+
+            <div class="settings-avatar-row">
+              <div class="settings-avatar-display">
+                <div id="settingsAvatarPreview" class="user-avatar user-avatar--lg"></div>
+                <div>
+                  <span class="settings-name-label">Avatar</span>
+                  <strong id="settingsAvatarHint">--</strong>
+                </div>
+              </div>
+              <button id="editAvatarBtn" class="button ghost settings-edit-btn" type="button">Editar</button>
+            </div>
+            <div id="avatarPickerPanel" class="avatar-picker-panel hidden">
+              <div id="avatarPickerGrid" class="avatar-picker-grid"></div>
+              <button id="closeAvatarPickerBtn" class="button ghost" type="button">Cerrar</button>
             </div>
 
             <div class="credentials-toggle-row">
@@ -2059,9 +2337,59 @@
             </div>
           </article>
 
+          <article class="dashboard-card investor-profile-card">
+            <div class="card-header">
+              <div>
+                <span class="settings-kicker">Asignación estratégica</span>
+                <h3>Perfil de inversionista</h3>
+              </div>
+              <span id="investorProfileStatus" class="investor-profile-status">Pendiente</span>
+            </div>
+            <div id="investorProfileEmpty" class="investor-profile-empty">
+              <h4>Define una referencia para tus decisiones</h4>
+              <p>Responde ocho preguntas breves para obtener una distribución orientativa entre renta variable, renta fija y efectivo.</p>
+              <button id="startInvestorProfileBtn" class="button primary" type="button">Crear mi perfil</button>
+            </div>
+            <div id="investorProfileSummary" class="investor-profile-summary hidden">
+              <div class="investor-profile-heading">
+                <div><span>Resultado actual</span><strong id="investorProfileName">--</strong></div>
+                <span id="investorProfileScore" class="investor-score-pill">--</span>
+              </div>
+              <p id="investorProfileDescription" class="investor-profile-description"></p>
+              <div id="investorAllocationGrid" class="investor-allocation-grid"></div>
+              <div class="investor-profile-meta">
+                <span id="investorProfileUpdated">Actualizado: --</span>
+                <button id="retakeInvestorProfileBtn" class="button ghost" type="button">Reevaluar perfil</button>
+              </div>
+              <p class="investor-profile-disclaimer">Referencia educativa basada en tus respuestas. No constituye asesoría financiera ni una recomendación de activos.</p>
+            </div>
+          </article>
         </div>
       </section>
 
+      <div id="investorProfileModal" class="investor-profile-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="investorProfileModalTitle">
+        <div class="investor-profile-modal">
+          <div class="investor-modal-topbar">
+            <div>
+              <span class="settings-kicker">Perfil de inversión</span>
+              <span id="investorProfileProgressLabel" class="investor-progress-label">Pregunta 1 de 8</span>
+            </div>
+            <button id="closeInvestorProfileBtn" class="investor-modal-close" type="button" aria-label="Cerrar">×</button>
+          </div>
+          <div class="investor-progress-track" aria-hidden="true"><span id="investorProfileProgressBar"></span></div>
+          <div id="investorProfileQuestionStage" class="investor-question-stage">
+            <h2 id="investorProfileModalTitle"></h2>
+            <p id="investorProfileQuestionHelp"></p>
+            <div id="investorProfileOptions" class="investor-option-list" role="radiogroup"></div>
+          </div>
+          <div id="investorProfileResultStage" class="investor-result-stage hidden" aria-live="polite"></div>
+          <div class="investor-modal-footer">
+            <button id="investorProfileBackBtn" class="button ghost" type="button">Anterior</button>
+            <button id="investorProfileLaterBtn" class="button ghost" type="button">Completar después</button>
+            <button id="investorProfileNextBtn" class="button primary" type="button" disabled>Continuar</button>
+          </div>
+        </div>
+      </div>
       <!-- 2FA Setup Modal (from Settings) -->
       <div id="mainTotpSetupModal" class="totp-setup-modal hidden" role="dialog" aria-modal="true" aria-label="Configurar Google Authenticator">
         <div class="totp-setup-card">
@@ -2236,6 +2564,18 @@
               </div>
             </div>
 
+            <!-- Analyst consensus & technical analysis -->
+            <div class="anlz-card">
+              <div class="anlz-card-header">
+                <div>
+                  <h3>Consenso de Analistas y Análisis Técnico</h3>
+                  <p class="anlz-card-sub">Precios objetivo de Wall Street · recomendación de consenso · tendencia, RSI, medias móviles y rango de 52 semanas</p>
+                </div>
+                <span class="anlz-badge">Wall Street · Técnico</span>
+              </div>
+              <div id="analystTechGrid" class="anlz-at-grid"></div>
+            </div>
+
             <!-- Correlation & portfolio MC (#4) -->
             <div id="correlationSection" class="anlz-card hidden">
               <div class="anlz-card-header">
@@ -2263,10 +2603,24 @@
               <div class="anlz-card-header">
                 <div>
                   <h3>Veredicto de Inversión</h3>
-                  <p class="anlz-card-sub">Score multifactor: DCF upside · probabilidad MC · calidad de balance · rentabilidad</p>
+                  <p class="anlz-card-sub">Score multifactor: DCF · Monte Carlo · fundamentales · técnico · consenso de analistas — con precio objetivo consolidado</p>
                 </div>
               </div>
               <div id="decisionGrid" class="anlz-decision-grid"></div>
+            </div>
+
+            <!-- Veredicto con IA (#1) -->
+            <div class="anlz-card anlz-ai-card">
+              <div class="anlz-card-header">
+                <div>
+                  <h3>Veredicto del Analista (IA)</h3>
+                  <p class="anlz-card-sub">Análisis redactado por IA a partir del DCF, Monte Carlo y fundamentales · educativo, no es asesoría</p>
+                </div>
+                <button id="aiVerdictBtn" class="anlz-ai-btn" type="button">✦ Generar veredicto</button>
+              </div>
+              <div id="aiVerdictBody" class="anlz-ai-body">
+                <p class="anlz-ai-empty">Genera un veredicto redactado por IA a partir del DCF, Monte Carlo y fundamentales de los activos analizados.</p>
+              </div>
             </div>
 
             <!-- News feed (#5) -->
@@ -2317,12 +2671,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="assets/qrcode.min.js"></script>
   <script src="assets/qr-shim.js"></script>
-  <script src="auth.js?v=6"></script>
+  <script src="assets/world-map-path.js?v=2"></script>
+  <script src="auth.js?v=8"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=3"></script>
+  <script src="main.js?v=15"></script>
   <script src="markowitz.js"></script>
-  <script src="analyzer.js"></script>
+  <script src="analyzer.js?v=2"></script>
   <script src="topdown.js"></script>
 </body>
 </html>

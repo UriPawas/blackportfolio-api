@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Página no encontrada | BlackPortfolio</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='12' fill='%23556eff'/><text x='18' y='25' font-family='Inter,system-ui,sans-serif' font-weight='700' font-size='22' fill='white' text-anchor='middle'>B</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=4">
+  <script>
+    (function(){
+      var s=localStorage.getItem('bp-theme');
+      var d=window.matchMedia('(prefers-color-scheme:dark)').matches;
+      document.documentElement.setAttribute('data-theme', s || (d ? 'dark' : 'light'));
+    })();
+  </script>
+  <style>
+    body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; }
+    .not-found-shell { max-width: 480px; padding: 2rem; }
+    .not-found-code { font-size: clamp(5rem, 18vw, 9rem); font-weight: 800; line-height: 1; letter-spacing: -0.04em; background: linear-gradient(135deg, var(--primary, #556eff), rgba(85,110,255,0.4)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 0.5rem; }
+    .not-found-shell h1 { font-size: clamp(1.2rem, 3vw, 1.5rem); margin: 0 0 0.75rem; }
+    .not-found-shell p { color: var(--muted); line-height: 1.65; margin-bottom: 2rem; }
+    .not-found-actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="background-orb orb-one"></div>
+  <div class="background-orb orb-two"></div>
+  <div class="grid-overlay"></div>
+
+  <div class="not-found-shell">
+    <div class="not-found-code">404</div>
+    <h1>Página no encontrada</h1>
+    <p>La dirección que buscas no existe o fue movida. Usa los botones de abajo para volver a un lugar seguro.</p>
+    <div class="not-found-actions">
+      <a class="button primary" href="index.html">Ir al inicio</a>
+      <a class="button secondary" href="login.html">Iniciar sesión</a>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,9 +1,56 @@
 rules_version = '2';
+
+// Campos que solo el backend (Admin SDK) puede modificar.
+// Un usuario autenticado NO puede escribirlos desde el cliente.
+// Esto bloquea que alguien se auto-asigne un plan premium o marque
+// su checkout como pagado sin haber pasado por Stripe.
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Cada usuario solo puede leer y escribir sus propios portafolios
+
+    // Portafolios: el usuario lee y escribe solo los suyos
     match /portfolios/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Hub (centro de inversión): el usuario lee y escribe solo el suyo
+    match /hubState/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Analizador de activos: estado persistido (tickers + supuestos) del propio usuario
+    match /analyzerState/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Perfil de usuario
+    match /users/{userId} {
+
+      // Lectura: solo el propio usuario o el admin
+      allow read: if request.auth != null
+        && (request.auth.uid == userId
+            || request.auth.token.email == 'furielpacheco@gmail.com');
+
+      // Creación del perfil (cuenta nueva): escritura libre del propio usuario.
+      // selectedPlan se fija al registrarse; el doc aún no existe.
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Actualización: el usuario puede editar sus propios datos EXCEPTO
+      // los campos sensibles de pago (solo el Admin SDK los toca).
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['selectedPlan', 'checkoutReady',
+                     'stripeSessionId', 'stripeSubscriptionId']);
+
+      // Admin: puede leer y actualizar cualquier perfil (panel de admin)
+      allow update: if request.auth != null
+        && request.auth.token.email == 'furielpacheco@gmail.com';
+
+      // Subcollection de secretos TOTP: solo accesible por el Admin SDK (Cloud Functions)
+      match /secrets/{doc} {
+        allow read, write: if false;
+      }
     }
   }
 }

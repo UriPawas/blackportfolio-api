@@ -10,16 +10,22 @@ from typing import Any, Callable
 from urllib.parse import quote
 
 import firebase_admin
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from firebase_admin import auth as firebase_auth
 from firebase_admin import credentials
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "portify-6467f")
+
+# Limiter compartido entre api.py y los routers de este módulo, para que los
+# endpoints sensibles de 2FA cuenten con el mismo control de tasa que el resto.
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 PLAN_ALIASES = {
     "Free": "Explorer",
@@ -241,11 +247,14 @@ _TWOFA_TTL_SECONDS = 12 * 3600
 
 
 def _twofa_signing_key() -> bytes:
-    raw = (
-        os.environ.get("TWOFA_SECRET")
-        or os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
-        or "blackportfolio-2fa-fallback-key"
-    )
+    # Falla cerrado: sin una clave real configurada, los tokens de sesión 2FA
+    # serían falsificables. No usamos un fallback hardcodeado.
+    raw = os.environ.get("TWOFA_SECRET") or os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if not raw:
+        raise RuntimeError(
+            "2FA signing key no configurada: define TWOFA_SECRET "
+            "(o FIREBASE_SERVICE_ACCOUNT_JSON) en el entorno."
+        )
     return hashlib.sha256(raw.encode("utf-8")).digest()
 
 
@@ -323,7 +332,9 @@ def twofa_status(
 
 
 @twofa_router.post("/setup")
+@limiter.limit("10/minute")
 def twofa_setup(
+    request: Request,
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),
 ):
@@ -351,7 +362,9 @@ def twofa_setup(
 
 
 @twofa_router.post("/verify-setup")
+@limiter.limit("5/minute")
 def twofa_verify_setup(
+    request: Request,
     body: TotpCodeBody,
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),
@@ -374,7 +387,9 @@ def twofa_verify_setup(
 
 
 @twofa_router.post("/verify")
+@limiter.limit("5/minute")
 def twofa_verify(
+    request: Request,
     body: TotpCodeBody,
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),
@@ -389,7 +404,9 @@ def twofa_verify(
 
 
 @twofa_router.post("/disable")
+@limiter.limit("5/minute")
 def twofa_disable(
+    request: Request,
     body: TotpCodeBody,
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),

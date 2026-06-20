@@ -372,9 +372,19 @@ if (googleSignupBtn) {
       "success"
     );
     syncAccountCard();
-    window.setTimeout(() => {
-      if (result.isNew) proceedAfterAuth();
-      else window.location.href = "main.html";
+    window.setTimeout(async () => {
+      if (!result.isNew) { window.location.href = "main.html"; return; }
+      // Si ya eligió un plan de pago en la landing, va directo a Stripe.
+      if (isPaidPlan(selectedPlanInput.value)) { proceedAfterAuth(); return; }
+      // Si no, que elija plan: gratis → dashboard, de pago → Stripe (redirige).
+      if (window.BlackPortfolioPlanPicker) {
+        const choice = await window.BlackPortfolioPlanPicker.run({
+          defaultCycle: billingSwitch.checked ? "yearly" : "monthly"
+        });
+        if (choice && !choice.paid) window.location.href = "main.html";
+      } else {
+        window.location.href = "main.html";
+      }
     }, 1200);
   });
 }

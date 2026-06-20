@@ -4,13 +4,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 from collections import OrderedDict
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from persistence import (
     install_persistence, verify_firebase_user, require_2fa, get_session,
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent,
-    normalize_plan, require_plan, upsert_user, utc_now,
+    normalize_plan, require_plan, upsert_user, utc_now, limiter,
 )
 import requests
 import yfinance as yf
@@ -18,6 +17,8 @@ import numpy as np
 import pandas as pd
 import os
 import json
+import secrets
+import string
 import stripe
 import time as _time_module
 from backup_service import start_backup_scheduler
@@ -252,7 +253,6 @@ PLAN_PRICES = {
     "Wealth Desk": {"monthly": 12900, "yearly": 123600},
 }
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -807,6 +807,115 @@ def admin_set_plan(
     ))
     session.commit()
     return {"ok": True, "plan": body.plan}
+
+# ── Cupones de beta (Stripe Promotion Codes) ──────────────────────────────────
+# Un único Coupon de 100% off (por duración); cada código que genera el admin es
+# un Promotion Code ÚNICO con max_redemptions=1 → un solo uso, no se repite.
+# El checkout ya acepta promotion codes (allow_promotion_codes=True), así que el
+# beta tester los teclea en "Añadir código de promoción".
+BETA_COUPON_NAME = "BlackPortfolio Beta — 100% off"
+
+def _beta_coupon_id(duration_months: int) -> str:
+    return f"bp_beta_100_{duration_months}m" if duration_months > 0 else "bp_beta_100_forever"
+
+def _get_or_create_beta_coupon(duration_months: int) -> str:
+    coupon_id = _beta_coupon_id(duration_months)
+    try:
+        stripe.Coupon.retrieve(coupon_id)
+    except stripe.StripeError:
+        params = dict(id=coupon_id, percent_off=100, name=BETA_COUPON_NAME)
+        if duration_months > 0:
+            params.update(duration="repeating", duration_in_months=duration_months)
+        else:
+            params.update(duration="forever")
+        stripe.Coupon.create(**params)
+    return coupon_id
+
+def _gen_promo_code() -> str:
+    # Sin caracteres ambiguos (O/0, I/1) para que sea fácil de dictar.
+    alphabet = "".join(c for c in (string.ascii_uppercase + string.digits) if c not in "O0I1")
+    return "BETA-" + "".join(secrets.choice(alphabet) for _ in range(8))
+
+def _to_plain(obj) -> dict:
+    """Convierte un objeto Stripe en un dict plano y recursivo. En stripe>=8 los
+    StripeObject NO son dict ni tienen .get(); str(obj) los serializa a JSON."""
+    if obj is None:
+        return {}
+    if isinstance(obj, dict):
+        return obj
+    return json.loads(str(obj))
+
+def _promo_coupon(pc: dict) -> dict:
+    """El cupón del promotion code. En la API nueva vive en promotion.coupon
+    (objeto expandido o, sin expand, solo el id como string)."""
+    cpn = (pc.get("promotion") or {}).get("coupon")
+    return {"id": cpn} if isinstance(cpn, str) else (cpn or {})
+
+def _promo_to_dict(pc) -> dict:
+    pc = _to_plain(pc)
+    cpn = _promo_coupon(pc)
+    return {
+        "id": pc.get("id"),
+        "code": pc.get("code"),
+        "active": pc.get("active"),
+        "timesRedeemed": pc.get("times_redeemed", 0),
+        "maxRedemptions": pc.get("max_redemptions"),
+        "createdAt": pc.get("created"),
+        "duration": cpn.get("duration"),
+        "durationInMonths": cpn.get("duration_in_months"),
+        "percentOff": cpn.get("percent_off"),
+    }
+
+class PromoCodeBody(BaseModel):
+    code: str = ""
+    durationMonths: int = 0
+    maxRedemptions: int = 1
+
+@app.post("/api/admin/promo-codes")
+def admin_create_promo_code(body: PromoCodeBody, token: dict = Depends(require_admin)):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe no esta configurado.")
+    duration = max(0, int(body.durationMonths or 0))
+    max_red = max(1, int(body.maxRedemptions or 1))
+    code = (body.code or "").strip().upper() or _gen_promo_code()
+    try:
+        coupon_id = _get_or_create_beta_coupon(duration)
+        promo = stripe.PromotionCode.create(
+            promotion={"type": "coupon", "coupon": coupon_id},
+            code=code,
+            max_redemptions=max_red,
+            metadata={"beta": "true", "by": token.get("email") or ""},
+            expand=["promotion.coupon"],
+        )
+    except stripe.StripeError as e:
+        # Stripe rechaza códigos duplicados (uniqueness) → 400 con mensaje claro.
+        raise HTTPException(status_code=400, detail=str(e.user_message or e))
+    return _promo_to_dict(promo)
+
+@app.get("/api/admin/promo-codes")
+def admin_list_promo_codes(token: dict = Depends(require_admin)):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe no esta configurado.")
+    out = []
+    try:
+        codes = stripe.PromotionCode.list(limit=100, expand=["data.promotion.coupon"])
+        for pc in codes.auto_paging_iter():
+            pc = _to_plain(pc)
+            if str(_promo_coupon(pc).get("id") or "").startswith("bp_beta_100"):
+                out.append(_promo_to_dict(pc))
+    except stripe.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e.user_message or e))
+    return {"codes": out}
+
+@app.post("/api/admin/promo-codes/{promo_id}/deactivate")
+def admin_deactivate_promo_code(promo_id: str, token: dict = Depends(require_admin)):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe no esta configurado.")
+    try:
+        promo = stripe.PromotionCode.modify(promo_id, active=False, expand=["promotion.coupon"])
+    except stripe.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e.user_message or e))
+    return _promo_to_dict(promo)
 
 RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "")
 PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")
@@ -1391,7 +1500,7 @@ async def stripe_webhook(request: Request, session=Depends(get_session)):
         return {"received": True, "duplicate": True}
 
     event_type = event["type"]
-    obj = event["data"]["object"]
+    obj = _to_plain(event["data"]["object"])
     metadata = obj.get("metadata") or {}
     uid = metadata.get("uid") or obj.get("client_reference_id")
     customer_id = obj.get("customer")
@@ -1409,7 +1518,8 @@ async def stripe_webhook(request: Request, session=Depends(get_session)):
             profile["stripeCustomerId"] = customer_id
         if event_type == "checkout.session.completed":
             plan = normalize_plan(metadata.get("plan"))
-            if obj.get("payment_status") == "paid" and plan != "Explorer":
+            # "no_payment_required" = checkout liquidado con cupón 100% off (beta).
+            if obj.get("payment_status") in ("paid", "no_payment_required") and plan != "Explorer":
                 user.plan = plan
                 profile.update({
                     "stripeSubscriptionId": obj.get("subscription"),
@@ -1522,11 +1632,12 @@ def stripe_confirm(
     if not body.sessionId:
         raise HTTPException(status_code=400, detail="Session ID requerido.")
     try:
-        checkout = stripe.checkout.Session.retrieve(body.sessionId)
+        checkout = _to_plain(stripe.checkout.Session.retrieve(body.sessionId))
     except stripe.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
 
-    if checkout.get("payment_status") != "paid":
+    # "no_payment_required" = cupón 100% off (beta); el checkout sí se completó.
+    if checkout.get("payment_status") not in ("paid", "no_payment_required"):
         raise HTTPException(status_code=402, detail="El pago no fue completado.")
     ref = checkout.get("client_reference_id")
     if ref != uid:

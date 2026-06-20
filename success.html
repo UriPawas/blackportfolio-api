@@ -32,6 +32,12 @@
       background:rgba(50,214,162,0.15); color:#32d6a2;
       border:1px solid rgba(50,214,162,0.3); margin-bottom:1.5rem;
     }
+    .plan-badge {
+      display:inline-block; padding:0.2rem 0.6rem; border-radius:6px;
+      font-size:0.8rem; font-weight:600;
+      background:rgba(111,134,255,0.15); color:#6f86ff;
+      border:1px solid rgba(111,134,255,0.3);
+    }
   </style>
 </head>
 <body>
@@ -43,20 +49,57 @@
     <span class="success-icon">✅</span>
     <span class="badge">PAGO CONFIRMADO</span>
     <h1>¡Suscripción activada!</h1>
-    <p>Tu plan de BlackPortfolio está activo. Ya puedes acceder a todas las funciones incluidas en tu suscripción.</p>
+    <p>Tu plan <span class="plan-badge" id="activePlan">BlackPortfolio</span> está activo. Ya puedes acceder a todas las funciones incluidas en tu suscripción.</p>
     <div class="success-actions">
       <a class="button primary" href="main.html">Ir al dashboard →</a>
       <a class="button secondary" href="index.html">Volver a la landing</a>
     </div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="auth.js?v=8"></script>
   <script>
-    // Mark checkout as ready for this session
-    const params = new URLSearchParams(location.search);
-    const sessionId = params.get("session_id");
-    if (sessionId && window.BlackPortfolioAuth) {
-      window.BlackPortfolioAuth.markCheckoutReady?.();
-    }
+    (function () {
+      const _IS_LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+      const API_BASE = _IS_LOCAL
+        ? "http://127.0.0.1:8000"
+        : "https://blackportfolio-api-production.up.railway.app";
+
+      firebase.auth().onAuthStateChanged(async function (user) {
+        if (!user) return;
+
+        const auth = window.BlackPortfolioAuth;
+        const planEl = document.getElementById("activePlan");
+        let plan = auth?.getSession()?.selectedPlan || "BlackPortfolio";
+        let confirmed = false;
+
+        // Confirma el pago server-side (Railway) y fija el plan en Postgres.
+        const sessionId = new URLSearchParams(location.search).get("session_id");
+        if (sessionId) {
+          try {
+            const idToken = await user.getIdToken();
+            const res = await fetch(`${API_BASE}/api/billing/stripe/confirm`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+              body: JSON.stringify({ sessionId })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.plan) {
+                plan = data.plan;
+                auth?.setPlan?.(data.plan);
+                confirmed = true;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (confirmed) auth?.markCheckoutReady?.();
+        if (planEl) planEl.textContent = confirmed ? plan : "Confirmación pendiente";
+      });
+    })();
   </script>
 </body>
 </html>

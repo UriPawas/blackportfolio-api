@@ -46,9 +46,24 @@
 
   let mkwAssets = [];   // [{ ticker, color, isFi }]
   let mkwResult = null; // computed on run
+  let mkwMaxCap = null; // per-asset weight cap (fraction) or null; set at start of each run
   let mkwInitialized = false;
   let mkwForecastYears = 5;
   let mkwRfrData = { rate: 9.0, label: "fallback", date: null, source: "fallback" };
+  let mkwAbortController = null;       // aborts in-flight fetches on a new run
+  let mkwActiveWorker = null;          // tracks the active Monte Carlo Web Worker
+  let mkwLastWeights = null;           // last {p,title} drawn in the weights panel (for theme redraw)
+  const mkwOhlcvCache = new Map();     // key: "period|TICKER,TICKER" → { ticker: { closes, timestamps } }
+
+  // Re-render charts on theme switch (called from applyTheme in main.js)
+  window.redrawMarkowitzCharts = function () {
+    if (!mkwResult) return;
+    try {
+      drawFrontier();
+      drawForecast();
+      if (mkwLastWeights) renderWeightsPanel(mkwLastWeights.p, mkwLastWeights.title);
+    } catch { /* canvas not ready */ }
+  };
 
   // ── Public init (called once when section is activated) ────────────────────
   window.initMarkowitz = function () {
@@ -59,9 +74,33 @@
     }
     mkwInitialized = true;
     bindEvents();
+    loadDraft();
     renderAssetList();
+    refreshSavedSelect();
     fetchMkwRfr();
+    updateModeDesc(getActiveMode());
+    updateRunBtnState();
   };
+
+  // ── Mode description + run-button gating ────────────────────────────────────
+  const MODE_DESCRIPTIONS = {
+    mvo: "Optimización clásica riesgo-retorno (Markowitz). Ideal para empezar: encuentra la mejor mezcla con tus datos históricos.",
+    smartbeta: "Inclina el portafolio hacia factores como momentum o baja volatilidad. Para usuarios que quieren un sesgo sistemático.",
+    blacklitterman: "Combina el equilibrio de mercado con tus propias expectativas (views). Avanzado: requiere definir retornos esperados."
+  };
+
+  function updateModeDesc(mode) {
+    const el = document.getElementById("mkwModeDesc");
+    if (el) el.textContent = MODE_DESCRIPTIONS[mode] || MODE_DESCRIPTIONS.mvo;
+  }
+
+  function updateRunBtnState() {
+    const btn = document.getElementById("mkwRunBtn");
+    if (!btn) return;
+    const enough = mkwAssets.length >= 2;
+    btn.disabled = !enough;
+    btn.title = enough ? "" : "Agrega al menos 2 activos para optimizar";
+  }
 
   // ── Event wiring ───────────────────────────────────────────────────────────
   function bindEvents() {
@@ -84,12 +123,21 @@
     });
 
     // Presets
-    document.querySelectorAll(".mkw-preset-btn").forEach(btn => {
+    document.querySelectorAll(".mkw-preset-card").forEach(btn => {
       btn.addEventListener("click", () => {
         mkwAssets = [];
         btn.dataset.tickers.split(",").forEach(t => addAsset(t.trim()));
         updateFiNote();
+        saveDraft();
       });
+    });
+
+    // Advanced params toggle
+    document.getElementById("mkwAdvToggle")?.addEventListener("click", e => {
+      const btn = e.currentTarget;
+      const expanded = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", String(!expanded));
+      document.getElementById("mkwAdvGrid")?.classList.toggle("hidden", expanded);
     });
 
     // Run
@@ -115,6 +163,13 @@
     document.getElementById("mkwFiMin")?.addEventListener("input", () => clampFiInputs());
     document.getElementById("mkwFiMax")?.addEventListener("input", () => clampFiInputs());
 
+    // Per-asset max weight cap toggle
+    document.getElementById("mkwMaxWeightEnabled")?.addEventListener("change", e => {
+      document.getElementById("mkwMaxWeightOptions")?.classList.toggle("hidden", !e.target.checked);
+      updateMaxWeightNote();
+    });
+    document.getElementById("mkwMaxWeight")?.addEventListener("input", updateMaxWeightNote);
+
     // Mode selector
     document.querySelectorAll(".mkw-mode-tab").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -128,11 +183,26 @@
           const labels = { mvo: "Optimizar portafolio", smartbeta: "Aplicar Smart Beta", blacklitterman: "Aplicar Black-Litterman" };
           runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${labels[mode] || labels.mvo}`;
         }
+        updateModeDesc(mode);
+        updateRunBtnState();
       });
     });
 
     // Black-Litterman: add view button
     document.getElementById("mkwBLAddViewBtn")?.addEventListener("click", addBLView);
+
+    // Saved portfolios + export
+    document.getElementById("mkwSaveBtn")?.addEventListener("click", saveCurrentPortfolio);
+    document.getElementById("mkwLoadBtn")?.addEventListener("click", loadSelectedPortfolio);
+    document.getElementById("mkwDeleteSavedBtn")?.addEventListener("click", deleteSelectedPortfolio);
+    document.getElementById("mkwExportCsvBtn")?.addEventListener("click", exportResultCsv);
+
+    // Auto-persist the working draft (asset list + params) so it survives reloads
+    ["mkwPeriod", "mkwRfr", "mkwNSim", "mkwVarConf", "mkwFiEnabled", "mkwFiMin",
+     "mkwFiMax", "mkwMaxWeightEnabled", "mkwMaxWeight"].forEach(id => {
+      document.getElementById(id)?.addEventListener("change", saveDraft);
+    });
+    document.querySelectorAll(".mkw-mode-tab").forEach(b => b.addEventListener("click", saveDraft));
   }
 
   function clampFiInputs() {
@@ -161,6 +231,77 @@
     const min = Math.max(0, Math.min(100, parseFloat(document.getElementById("mkwFiMin")?.value) || 0)) / 100;
     const max = Math.max(0, Math.min(100, parseFloat(document.getElementById("mkwFiMax")?.value) || 100)) / 100;
     return { min: Math.min(min, max), max: Math.max(min, max) };
+  }
+
+  // Per-asset max weight cap (fraction). Returns null if disabled.
+  // Clamps to the feasible minimum 1/N so the simplex (Σw=1) always has a solution.
+  function getMaxWeightCap() {
+    const enabled = document.getElementById("mkwMaxWeightEnabled")?.checked;
+    if (!enabled) return null;
+    const n = mkwAssets.length;
+    if (n === 0) return null;
+    let pct = parseFloat(document.getElementById("mkwMaxWeight")?.value);
+    if (!isFinite(pct) || pct <= 0) return null;
+    let cap = Math.min(1, pct / 100);
+    const minFeasible = 1 / n;
+    if (cap < minFeasible) cap = minFeasible;
+    return cap;
+  }
+
+  function updateMaxWeightNote() {
+    const note = document.getElementById("mkwMaxWeightNote");
+    if (!note) return;
+    const enabled = document.getElementById("mkwMaxWeightEnabled")?.checked;
+    if (!enabled) { note.textContent = ""; return; }
+    const n = mkwAssets.length;
+    const pct = parseFloat(document.getElementById("mkwMaxWeight")?.value);
+    if (document.getElementById("mkwFiEnabled")?.checked) {
+      note.textContent = "Nota: el tope por activo no se combina con las restricciones de renta fija (estas tienen prioridad).";
+      return;
+    }
+    if (n >= 2 && isFinite(pct) && pct / 100 < 1 / n - 1e-9) {
+      note.textContent = `Con ${n} activos, el mínimo viable es ${(100 / n).toFixed(1)}% por activo. Se usará ese valor.`;
+    } else {
+      note.textContent = "Ningún activo podrá superar este porcentaje del portafolio.";
+    }
+  }
+
+  // ── Per-asset cap helpers ─────────────────────────────────────────────────
+  // Project w onto { 0 ≤ w_i ≤ cap, Σw_i = 1 } via water-filling: violators are
+  // fixed at the cap permanently and the remaining mass is shared among the rest
+  // in proportion to the original weights, re-checking until none exceed the cap.
+  function projectSimplexCapped(w, cap) {
+    const n = w.length;
+    if (cap * n < 1) cap = 1 / n;
+    let s0 = 0;
+    const orig = w.map(x => { const v = Math.max(0, x); s0 += v; return v; });
+    if (s0 < 1e-12) return Array(n).fill(1 / n);
+    const normOrig = orig.map(x => x / s0);
+
+    const fixed = Array(n).fill(false);
+    let v = normOrig.slice();
+    for (let iter = 0; iter <= n; iter++) {
+      const fixedMass = fixed.reduce((acc, f) => acc + (f ? cap : 0), 0);
+      const remaining = Math.max(0, 1 - fixedMass);
+      let freeSum = 0, freeCount = 0;
+      for (let i = 0; i < n; i++) if (!fixed[i]) { freeSum += normOrig[i]; freeCount++; }
+
+      v = normOrig.map((x, i) => {
+        if (fixed[i]) return cap;
+        return freeSum > 1e-12 ? (x / freeSum) * remaining : (freeCount > 0 ? remaining / freeCount : 0);
+      });
+
+      let newViolator = false;
+      for (let i = 0; i < n; i++) {
+        if (!fixed[i] && v[i] > cap + 1e-9) { fixed[i] = true; newViolator = true; }
+      }
+      if (!newViolator) break;
+    }
+    return v.map(x => Math.min(cap, x));
+  }
+
+  function randomWeightsCapped(n, cap) {
+    return projectSimplexCapped(randomWeights(n), cap);
   }
 
   // ── Autocomplete ───────────────────────────────────────────────────────────
@@ -251,19 +392,32 @@
     ticker = ticker.toUpperCase();
     if (!ticker) return;
     if (mkwAssets.find(a => a.ticker === ticker)) {
-      flashInput(); return;
+      flashInput();
+      showInputMsg(`${ticker} ya está en la lista.`, "warn");
+      return;
     }
     if (mkwAssets.length >= 12) {
-      showStatus("Máximo 12 activos.", "warn"); return;
+      showInputMsg("Máximo 12 activos por portafolio.", "warn"); return;
     }
     const isFi = meta.quoteType
       ? detectFiFromMeta(meta.quoteType, meta.name || "", ticker)
       : isFixedIncome(ticker);
-    mkwAssets.push({ ticker, color: PALETTE[mkwAssets.length % PALETTE.length], isFi });
+    mkwAssets.push({ ticker, color: PALETTE[mkwAssets.length % PALETTE.length], isFi, name: meta.name || "" });
     renderAssetList();
     updateFiNote();
+    saveDraft();
+    showInputMsg("", "");
     // If added manually (no API metadata), enrich async
     if (!meta.quoteType) enrichAssetMeta(ticker);
+  }
+
+  // Inline validation message under the ticker input
+  function showInputMsg(msg, type) {
+    const el = document.getElementById("mkwInputMsg");
+    if (!el) return;
+    el.textContent = msg;
+    el.className = "mkw-input-msg" + (type ? " mkw-input-msg-" + type : "");
+    el.style.display = msg ? "block" : "none";
   }
 
   // Determine fixed income from Yahoo Finance quoteType + instrument name
@@ -282,15 +436,18 @@
       if (!res.ok) return;
       const payload = await res.json();
       const match = (payload.quotes ?? []).find(q => q.symbol?.toUpperCase() === ticker);
-      if (!match) return;
       const asset = mkwAssets.find(a => a.ticker === ticker);
       if (!asset) return;
-      const detected = detectFiFromMeta(match.quoteType || "", match.longname || match.shortname || "", ticker);
-      if (detected !== asset.isFi) {
-        asset.isFi = detected;
-        renderAssetList();
-        updateFiNote();
+      if (!match) {
+        showInputMsg(`No encontramos "${ticker}" en Yahoo Finance. Verifica el símbolo (ej. BTC-USD, BRK-B).`, "warn");
+        return;
       }
+      const name = match.longname || match.shortname || "";
+      const detected = detectFiFromMeta(match.quoteType || "", name, ticker);
+      const changed = detected !== asset.isFi || name !== asset.name;
+      asset.isFi = detected;
+      asset.name = name;
+      if (changed) { renderAssetList(); updateFiNote(); }
     } catch { /* API offline — keep pattern-based result */ }
   }
 
@@ -299,6 +456,7 @@
     mkwAssets.forEach((a, i) => { a.color = PALETTE[i % PALETTE.length]; });
     renderAssetList();
     updateFiNote();
+    saveDraft();
   }
 
   function renderAssetList() {
@@ -309,21 +467,25 @@
 
     if (mkwAssets.length === 0) {
       list.innerHTML = '<p class="mkw-empty-assets">Agrega al menos 2 activos para optimizar.</p>';
+      updateRunBtnState();
       return;
     }
 
-    list.innerHTML = mkwAssets.map(a =>
-      `<div class="mkw-asset-chip">
+    list.innerHTML = mkwAssets.map(a => {
+      const shortName = a.name ? String(a.name).split("-")[0].trim().slice(0, 22) : "";
+      return `<div class="mkw-asset-chip"${shortName ? ` title="${a.name.replace(/"/g, "&quot;")}"` : ""}>
         <span class="mkw-chip-dot" style="background:${a.color}"></span>
         <span class="mkw-chip-label">${a.ticker}</span>
+        ${shortName ? `<span class="mkw-chip-name">${shortName}</span>` : ''}
         ${a.isFi ? '<span class="mkw-chip-fi">RF</span>' : ''}
         <button class="mkw-chip-remove" data-ticker="${a.ticker}" type="button" aria-label="Quitar ${a.ticker}">×</button>
-      </div>`
-    ).join("");
+      </div>`;
+    }).join("");
 
     list.querySelectorAll(".mkw-chip-remove").forEach(btn => {
       btn.addEventListener("click", () => removeAsset(btn.dataset.ticker));
     });
+    updateRunBtnState();
   }
 
   function flashInput() {
@@ -417,12 +579,17 @@
   // ── Gradient descent: minimum variance ────────────────────────────────────
   function refineMinVariance(mu, cov, n, rfr, fiIdx, fiMin, fiMax) {
     const hasFiConstraint = fiIdx && fiIdx.length > 0;
+    const cap = (!hasFiConstraint && mkwMaxCap) ? mkwMaxCap : null;
     const project = hasFiConstraint
       ? w => projectConstrainedSimplex(w, fiIdx, fiMin, fiMax)
-      : w => projectSimplex(w);
+      : cap
+        ? w => projectSimplexCapped(w, cap)
+        : w => projectSimplex(w);
     let w = hasFiConstraint
       ? randomWeightsConstrained(n, fiIdx, (fiMin + fiMax) / 2, (fiMin + fiMax) / 2)
-      : Array(n).fill(1 / n);
+      : cap
+        ? randomWeightsCapped(n, cap)
+        : Array(n).fill(1 / n);
     const lr = 0.02;
     const iters = 3000;
 
@@ -443,14 +610,19 @@
   // ── Gradient ascent: maximum Sharpe ───────────────────────────────────────
   function refineMaxSharpe(mu, cov, n, rfr, fiIdx, fiMin, fiMax) {
     const hasFiConstraint = fiIdx && fiIdx.length > 0;
+    const cap = (!hasFiConstraint && mkwMaxCap) ? mkwMaxCap : null;
     const project = hasFiConstraint
       ? w => projectConstrainedSimplex(w, fiIdx, fiMin, fiMax)
-      : w => projectSimplex(w);
+      : cap
+        ? w => projectSimplexCapped(w, cap)
+        : w => projectSimplex(w);
     const genSeed = () => hasFiConstraint
       ? randomWeightsConstrained(n, fiIdx, fiMin, fiMax)
-      : randomWeights(n);
+      : cap
+        ? randomWeightsCapped(n, cap)
+        : randomWeights(n);
 
-    const candidates = [hasFiConstraint ? randomWeightsConstrained(n, fiIdx, (fiMin + fiMax) / 2, (fiMin + fiMax) / 2) : Array(n).fill(1 / n)];
+    const candidates = [hasFiConstraint ? randomWeightsConstrained(n, fiIdx, (fiMin + fiMax) / 2, (fiMin + fiMax) / 2) : (cap ? randomWeightsCapped(n, cap) : Array(n).fill(1 / n))];
     for (let s = 0; s < 5; s++) candidates.push(genSeed());
 
     let best = null;
@@ -492,6 +664,374 @@
     return document.querySelector(".mkw-mode-tab.mkw-mode-active")?.dataset.mode || "mvo";
   }
 
+  function setActiveMode(mode) {
+    const btn = document.querySelector(`.mkw-mode-tab[data-mode="${mode}"]`);
+    if (btn && !btn.classList.contains("mkw-mode-active")) btn.click();
+  }
+
+  // ── Shared OHLCV fetch with per-(period+tickers) cache and abort ────────────
+  // Fetches weekly closes for every asset in parallel. Cached by period + symbol
+  // set so switching modes (MVO → Smart Beta → BL) reuses the same download.
+  async function fetchOHLCVMap(tickers, period, signal) {
+    const cacheKey = period + "|" + [...tickers].sort().join(",");
+    if (mkwOhlcvCache.has(cacheKey)) {
+      // Return a shallow copy so callers can't mutate the cached arrays.
+      const cached = mkwOhlcvCache.get(cacheKey);
+      return Object.fromEntries(tickers.map(t => [t, cached[t]]));
+    }
+    const dataMap = {};
+    await Promise.all(tickers.map(async ticker => {
+      const res = await fetch(`${API_BASE_URL}/chart/${ticker}?range=${period}&interval=1wk`, { signal });
+      if (!res.ok) throw new Error(`No se pudieron obtener datos para ${ticker} (HTTP ${res.status})`);
+      const json = await res.json();
+      const result = json?.chart?.result?.[0];
+      const rawTs    = result?.timestamp ?? [];
+      const rawClose = result?.indicators?.quote?.[0]?.close ?? [];
+      // Keep only pairs where close is valid (non-null, positive)
+      const pairs = rawTs.map((ts, i) => ({ ts, price: rawClose[i] }))
+                         .filter(p => p.price != null && p.price > 0);
+      dataMap[ticker] = { timestamps: pairs.map(p => p.ts), closes: pairs.map(p => p.price) };
+      if (dataMap[ticker].closes.length < 40)
+        throw new Error(`Datos insuficientes para ${ticker} (${dataMap[ticker].closes.length} velas)`);
+    }));
+    mkwOhlcvCache.set(cacheKey, dataMap);
+    return Object.fromEntries(tickers.map(t => [t, dataMap[t]]));
+  }
+
+  // Start a fresh run: abort in-flight fetches AND any live MC worker.
+  function beginRun() {
+    if (mkwAbortController) mkwAbortController.abort();
+    if (mkwActiveWorker) { mkwActiveWorker.terminate(); mkwActiveWorker = null; }
+    mkwAbortController = new AbortController();
+    return mkwAbortController.signal;
+  }
+  function isAbortError(err) {
+    return err && (err.name === "AbortError" || String(err.message || "").includes("aborted"));
+  }
+
+  // ── P1-4: Timestamp alignment ─────────────────────────────────────────────
+  // Intersects weekly timestamps across all tickers so returns are date-matched
+  // rather than tail-aligned (which mis-pairs weeks when assets have different
+  // histories or missing bars).
+  function alignAndComputeReturns(dataMap, tickers) {
+    // Build timestamp→price maps per ticker
+    const maps = tickers.map(t => {
+      const m = new Map();
+      const { timestamps, closes } = dataMap[t];
+      timestamps.forEach((ts, i) => m.set(ts, closes[i]));
+      return m;
+    });
+    // Intersect: only keep timestamps present in every ticker
+    const sets = maps.map(m => new Set(m.keys()));
+    let common = [...sets[0]];
+    for (let i = 1; i < sets.length; i++) common = common.filter(ts => sets[i].has(ts));
+    common.sort((a, b) => a - b);
+    if (common.length < 42) return null; // need ≥41 prices for ≥40 returns
+
+    const aligned = tickers.map((_, i) => common.map(ts => maps[i].get(ts)));
+    // Log-returns from aligned prices
+    const returnsMatrix = aligned.map(prices => {
+      const r = [];
+      for (let j = 1; j < prices.length; j++) r.push(Math.log(prices[j] / prices[j - 1]));
+      return r;
+    });
+    return { returnsMatrix, commonDates: common };
+  }
+
+  // ── P1-5: Ledoit-Wolf shrinkage (Oracle Approximating Shrinkage) ─────────
+  // Shrinks the sample covariance toward (tr(S)/p)·I to reduce estimation
+  // error in short windows. Prevents extreme concentrated weights from noisy Σ.
+  function shrinkLW(S, nObs) {
+    const p = S.length;
+    if (p <= 1 || nObs <= p) return S; // degenerate: no shrinkage
+    let trS = 0, trSS = 0;
+    for (let i = 0; i < p; i++) {
+      trS += S[i][i];
+      for (let j = 0; j < p; j++) trSS += S[i][j] * S[i][j];
+    }
+    const trS2 = trS * trS;
+    const num = (1 - 2 / p) * trSS + trS2;
+    const den = (nObs + 1 - 2 / p) * (trSS - trS2 / p);
+    const rho = den > 1e-14 ? Math.max(0, Math.min(1, num / den)) : 1;
+    const mu = trS / p; // target = mu·I
+    return S.map((row, i) => row.map((v, j) => (1 - rho) * v + (i === j ? rho * mu : 0)));
+  }
+
+  // ── P1-7: Analytical closed-form solutions ────────────────────────────────
+  // Used when there are no active constraints (no FI band, no weight cap).
+  // Replaces the gradient descent loops → O(p³) one-shot vs 3000-4000 iters.
+  function matVecMkw(M, v) {
+    return M.map(row => row.reduce((s, x, j) => s + x * v[j], 0));
+  }
+  // Returns safe inverse or null if matrix is (near-)singular.
+  function matInvSafe(A) {
+    const p = A.length;
+    const M = A.map((r, i) => [...r, ...Array.from({ length: p }, (_, j) => i === j ? 1 : 0)]);
+    for (let col = 0; col < p; col++) {
+      let pivot = col;
+      for (let r = col + 1; r < p; r++) if (Math.abs(M[r][col]) > Math.abs(M[pivot][col])) pivot = r;
+      [M[col], M[pivot]] = [M[pivot], M[col]];
+      const d = M[col][col];
+      if (Math.abs(d) < 1e-12) return null;
+      for (let j = 0; j < 2 * p; j++) M[col][j] /= d;
+      for (let r = 0; r < p; r++) {
+        if (r === col) continue;
+        const f = M[r][col];
+        for (let j = 0; j < 2 * p; j++) M[r][j] -= f * M[col][j];
+      }
+    }
+    return M.map(r => r.slice(p));
+  }
+  // Global minimum variance portfolio: w = Σ⁻¹·1 / (1ᵀ·Σ⁻¹·1), projected to Δ₊
+  function analyticalMinVarW(cov) {
+    const inv = matInvSafe(cov);
+    if (!inv) return null;
+    let w = matVecMkw(inv, Array(cov.length).fill(1));
+    const s = w.reduce((a, b) => a + b, 0);
+    if (Math.abs(s) < 1e-12) return null;
+    return projectSimplex(w.map(x => x / s));
+  }
+  // Tangency portfolio: w = Σ⁻¹·(μ−rf) / (1ᵀ·Σ⁻¹·(μ−rf)), projected to Δ₊
+  function analyticalMaxSharpeW(mu, cov, rfr) {
+    const inv = matInvSafe(cov);
+    if (!inv) return null;
+    const excess = mu.map(m => m - rfr);
+    let w = matVecMkw(inv, excess);
+    const s = w.reduce((a, b) => a + b, 0);
+    if (Math.abs(s) < 1e-12 || s < 0) return null; // all-negative excess → infeasible
+    return projectSimplex(w.map(x => x / s));
+  }
+
+  // ── P1-7: Async Monte Carlo via Web Worker (non-blocking) ────────────────
+  // Serializes the needed pure functions into an inline Blob worker so the
+  // 10k–75k simulation loop runs off the main thread.
+  function buildMkwWorker() {
+    const fns = [dot, portfolioStats,
+                 randomWeights, randomWeightsConstrained, randomWeightsCapped,
+                 projectSimplex, projectSimplexCapped, projectConstrainedSimplex
+                ].map(f => f.toString()).join('\n');
+    const body = fns + `
+      self.onmessage = function(e) {
+        var d = e.data;
+        var portfolios = [];
+        for (var s = 0; s < d.nSim; s++) {
+          var w = d.useFi ? randomWeightsConstrained(d.n, d.fiIdx, d.fiMin, d.fiMax)
+                          : d.mkwMaxCap ? randomWeightsCapped(d.n, d.mkwMaxCap)
+                          : randomWeights(d.n);
+          var stats = portfolioStats(w, d.mu, d.cov);
+          portfolios.push({ w: w, ret: stats.ret, vol: stats.vol,
+                            sharpe: (stats.ret - d.rfr) / (stats.vol + 1e-12) });
+        }
+        self.postMessage(portfolios);
+      };
+    `;
+    try {
+      return new Worker(URL.createObjectURL(new Blob([body], { type: 'application/javascript' })));
+    } catch { return null; }
+  }
+  function runMonteCarloPar(params) {
+    const worker = buildMkwWorker();
+    if (!worker) {
+      // Fallback: synchronous (old browsers / strict CSP)
+      const { mu, cov, n, rfr, nSim, useFi, fiIdx, fiMin, fiMax, mkwMaxCap: cap } = params;
+      const portfolios = [];
+      for (let s = 0; s < nSim; s++) {
+        const w = useFi ? randomWeightsConstrained(n, fiIdx, fiMin, fiMax)
+                        : cap ? randomWeightsCapped(n, cap) : randomWeights(n);
+        const { ret, vol } = portfolioStats(w, mu, cov);
+        portfolios.push({ w, ret, vol, sharpe: (ret - rfr) / (vol + 1e-12) });
+      }
+      return Promise.resolve(portfolios);
+    }
+    mkwActiveWorker = worker;
+    return new Promise((resolve, reject) => {
+      worker.onmessage = e => { worker.terminate(); mkwActiveWorker = null; resolve(e.data); };
+      worker.onerror  = e => {
+        worker.terminate(); mkwActiveWorker = null;
+        if (e.message) { reject(new Error(e.message)); return; }
+        // Worker blocked (e.g. CSP) — fall back to synchronous computation
+        const { mu, cov, n, rfr, nSim, useFi, fiIdx, fiMin, fiMax, mkwMaxCap: cap } = params;
+        const portfolios = [];
+        for (let s = 0; s < nSim; s++) {
+          const w = useFi ? randomWeightsConstrained(n, fiIdx, fiMin, fiMax)
+                          : cap ? randomWeightsCapped(n, cap) : randomWeights(n);
+          const { ret, vol } = portfolioStats(w, mu, cov);
+          portfolios.push({ w, ret, vol, sharpe: (ret - rfr) / (vol + 1e-12) });
+        }
+        resolve(portfolios);
+      };
+      worker.postMessage(params);
+    });
+  }
+
+  // ── Persistence (per-user, namespaced — never touches tracker/user keys) ────
+  function mkwUid() {
+    try { return window.BlackPortfolioAuth?.getSession()?.id || "anonymous"; }
+    catch { return "anonymous"; }
+  }
+  function draftKey() { return `bp-mkw-draft-${mkwUid()}`; }
+  function savedKey() { return `bp-mkw-saved-${mkwUid()}`; }
+
+  function readParams() {
+    return {
+      mode: getActiveMode(),
+      period: document.getElementById("mkwPeriod")?.value,
+      rfr: document.getElementById("mkwRfr")?.value,
+      nSim: document.getElementById("mkwNSim")?.value,
+      varConf: document.getElementById("mkwVarConf")?.value,
+      fiEnabled: !!document.getElementById("mkwFiEnabled")?.checked,
+      fiMin: document.getElementById("mkwFiMin")?.value,
+      fiMax: document.getElementById("mkwFiMax")?.value,
+      maxWeightEnabled: !!document.getElementById("mkwMaxWeightEnabled")?.checked,
+      maxWeight: document.getElementById("mkwMaxWeight")?.value,
+    };
+  }
+  function applyParams(p) {
+    if (!p) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    set("mkwPeriod", p.period); set("mkwRfr", p.rfr); set("mkwNSim", p.nSim); set("mkwVarConf", p.varConf);
+    set("mkwFiMin", p.fiMin); set("mkwFiMax", p.fiMax); set("mkwMaxWeight", p.maxWeight);
+    const fiEl = document.getElementById("mkwFiEnabled");
+    if (fiEl) { fiEl.checked = !!p.fiEnabled; document.getElementById("mkwFiOptions")?.classList.toggle("hidden", !p.fiEnabled); }
+    const mwEl = document.getElementById("mkwMaxWeightEnabled");
+    if (mwEl) { mwEl.checked = !!p.maxWeightEnabled; document.getElementById("mkwMaxWeightOptions")?.classList.toggle("hidden", !p.maxWeightEnabled); }
+    if (p.mode) setActiveMode(p.mode);
+    updateMkwRfrLabel();
+    updateFiNote();
+    updateMaxWeightNote();
+  }
+
+  function saveDraft() {
+    try { localStorage.setItem(draftKey(), JSON.stringify({ assets: mkwAssets, params: readParams() })); }
+    catch { /* storage full / unavailable — non-fatal */ }
+  }
+  function loadDraft() {
+    try {
+      const raw = localStorage.getItem(draftKey());
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.assets) && d.assets.length) {
+        mkwAssets = d.assets
+          .filter(a => a && a.ticker)
+          .slice(0, 12)
+          .map((a, i) => ({ ticker: String(a.ticker).toUpperCase(), color: PALETTE[i % PALETTE.length], isFi: !!a.isFi, name: a.name || "" }));
+        renderAssetList();
+        updateFiNote();
+      }
+      if (d.params) applyParams(d.params);
+    } catch { /* corrupt draft — ignore */ }
+  }
+
+  function getSavedPortfolios() {
+    try { return JSON.parse(localStorage.getItem(savedKey())) ?? []; } catch { return []; }
+  }
+  function setSavedPortfolios(list) {
+    try { localStorage.setItem(savedKey(), JSON.stringify(list)); } catch { /* non-fatal */ }
+  }
+  function refreshSavedSelect(selectIndex) {
+    const sel = document.getElementById("mkwSavedSelect");
+    if (!sel) return;
+    const list = getSavedPortfolios();
+    sel.innerHTML = '<option value="">Portafolios guardados…</option>' +
+      list.map((s, i) => `<option value="${i}">${escapeHtmlMkw(s.name)}</option>`).join("");
+    if (selectIndex != null) sel.value = String(selectIndex);
+  }
+  function escapeHtmlMkw(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function saveCurrentPortfolio() {
+    if (mkwAssets.length < 2) { showStatus("Agrega al menos 2 activos antes de guardar.", "warn"); return; }
+    const fallback = mkwAssets.map(a => a.ticker).slice(0, 3).join("-");
+    const name = (prompt("Nombre del portafolio:", fallback) || "").trim();
+    if (!name) return;
+    const list = getSavedPortfolios();
+    const entry = {
+      name,
+      assets: mkwAssets.map(a => ({ ticker: a.ticker, isFi: a.isFi })),
+      params: readParams(),
+      savedAt: Date.now(),
+    };
+    const existing = list.findIndex(s => s.name === name);
+    if (existing >= 0) list[existing] = entry; else list.push(entry);
+    setSavedPortfolios(list);
+    refreshSavedSelect(existing >= 0 ? existing : list.length - 1);
+    showStatus(`Portafolio "${name}" guardado.`, "success");
+  }
+  function loadSelectedPortfolio() {
+    const sel = document.getElementById("mkwSavedSelect");
+    const idx = parseInt(sel?.value, 10);
+    const list = getSavedPortfolios();
+    if (isNaN(idx) || !list[idx]) { showStatus("Selecciona un portafolio guardado.", "warn"); return; }
+    const s = list[idx];
+    mkwAssets = (s.assets || [])
+      .filter(a => a && a.ticker)
+      .slice(0, 12)
+      .map((a, i) => ({ ticker: String(a.ticker).toUpperCase(), color: PALETTE[i % PALETTE.length], isFi: !!a.isFi }));
+    renderAssetList();
+    updateFiNote();
+    applyParams(s.params);
+    saveDraft();
+    showStatus(`"${s.name}" cargado. Pulsa Optimizar para ejecutar.`, "success");
+  }
+  function deleteSelectedPortfolio() {
+    const sel = document.getElementById("mkwSavedSelect");
+    const idx = parseInt(sel?.value, 10);
+    const list = getSavedPortfolios();
+    if (isNaN(idx) || !list[idx]) { showStatus("Selecciona un portafolio guardado para eliminar.", "warn"); return; }
+    const name = list[idx].name;
+    if (!confirm(`¿Eliminar el portafolio guardado "${name}"?`)) return;
+    list.splice(idx, 1);
+    setSavedPortfolios(list);
+    refreshSavedSelect();
+    showStatus(`"${name}" eliminado.`, "");
+  }
+
+  // ── CSV export of the optimized result ──────────────────────────────────────
+  function exportResultCsv() {
+    if (!mkwResult) { showStatus("Ejecuta una optimización antes de exportar.", "warn"); return; }
+    const { tickers, minVarPortfolio, maxSharpePortfolio, mu, cov, rfr } = mkwResult;
+    const pct = x => (x * 100).toFixed(2);
+    const stat = p => {
+      const vol = p.vol, ret = p.ret;
+      return { ret: pct(ret), vol: pct(vol), sharpe: ((ret - rfr) / vol).toFixed(3) };
+    };
+    const ms = stat(maxSharpePortfolio), mv = stat(minVarPortfolio);
+
+    const rows = [];
+    rows.push(["BlackPortfolio — Resultado de optimización"]);
+    rows.push(["Generado", new Date().toLocaleString()]);
+    rows.push(["Modo", getActiveMode()]);
+    rows.push(["Tasa libre de riesgo (%)", (rfr * 100).toFixed(2)]);
+    rows.push([]);
+    rows.push(["Métrica", "Máx. Sharpe", "Mín. Varianza"]);
+    rows.push(["Retorno esperado (%)", ms.ret, mv.ret]);
+    rows.push(["Volatilidad (%)", ms.vol, mv.vol]);
+    rows.push(["Sharpe", ms.sharpe, mv.sharpe]);
+    rows.push([]);
+    rows.push(["Activo", "Retorno esp. anual (%)", "Peso Máx. Sharpe (%)", "Peso Mín. Varianza (%)"]);
+    tickers.forEach((t, i) => {
+      rows.push([t, pct(mu[i]), pct(maxSharpePortfolio.w[i]), pct(minVarPortfolio.w[i])]);
+    });
+
+    const csv = rows.map(r => r.map(cellCsv).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `portafolio_${tickers.join("-")}_${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showStatus("CSV exportado.", "success");
+  }
+  function cellCsv(v) {
+    const s = String(v ?? "");
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
   // ── Core optimization ──────────────────────────────────────────────────────
   async function runOptimization() {
     if (mkwAssets.length < 2) {
@@ -512,51 +1052,35 @@
     const period = document.getElementById("mkwPeriod")?.value || "2y";
     const rfr = parseFloat(document.getElementById("mkwRfr")?.value ?? "4.5") / 100;
     const nSim = parseInt(document.getElementById("mkwNSim")?.value || "5000");
+    mkwMaxCap = getMaxWeightCap();
+    const signal = beginRun();
 
     try {
-      // ── 1. Fetch OHLCV ─────────────────────────────────────────────────
-      const dataMap = {};
-      await Promise.all(mkwAssets.map(async ({ ticker }) => {
-        const res = await fetch(`${API_BASE_URL}/chart/${ticker}?range=${period}&interval=1wk`);
-        if (!res.ok) throw new Error(`No se pudieron obtener datos para ${ticker} (HTTP ${res.status})`);
-        const json = await res.json();
-        const chartResult = json?.chart?.result?.[0];
-        const closes = chartResult?.indicators?.quote?.[0]?.close ?? [];
-        dataMap[ticker] = closes.filter(v => v != null && v > 0);
-        if (dataMap[ticker].length < 40)
-          throw new Error(`Datos insuficientes para ${ticker} (${dataMap[ticker].length} velas)`);
-      }));
+      // ── 1. Fetch OHLCV (cached per period+tickers, abortable) ──────────
+      const dataMap = await fetchOHLCVMap(mkwAssets.map(a => a.ticker), period, signal);
 
-      showStatus("Calculando retornos y covarianza...", "loading");
+      showStatus("Alineando fechas y calculando retornos...", "loading");
 
-      // ── 2. Align & compute returns ─────────────────────────────────────
+      // ── 2. Timestamp-aligned returns (P1-4) ───────────────────────────
       const tickers = mkwAssets.map(a => a.ticker);
       const N = tickers.length;
-      const minLen = Math.min(...tickers.map(t => dataMap[t].length));
-
-      // Weekly log-returns: r_t = ln(P_t / P_{t-1})
-      const returnsMatrix = tickers.map(t => {
-        const prices = dataMap[t].slice(-minLen);
-        const r = [];
-        for (let i = 1; i < prices.length; i++)
-          r.push(Math.log(prices[i] / prices[i - 1]));
-        return r;
-      }); // shape: N × (T-1)
-
+      const aligned = alignAndComputeReturns(dataMap, tickers);
+      if (!aligned) throw new Error("No hay suficientes fechas comunes entre los activos seleccionados (mínimo 40 semanas alineadas).");
+      const { returnsMatrix } = aligned;
       const T = returnsMatrix[0].length;
 
       // Annualised mean (×52 for weekly)
       const mu = returnsMatrix.map(r => (r.reduce((s, v) => s + v, 0) / T) * 52);
 
-      // Annualised covariance (×52)
-      const cov = Array.from({ length: N }, (_, i) =>
+      // Annualised sample covariance (×52), then Ledoit-Wolf shrinkage (P1-5)
+      const covRaw = Array.from({ length: N }, (_, i) =>
         Array.from({ length: N }, (_, j) => {
           const ri = returnsMatrix[i], rj = returnsMatrix[j];
           const mi = mu[i] / 52, mj = mu[j] / 52;
-          const c = ri.reduce((s, v, k) => s + (v - mi) * (rj[k] - mj), 0) / (T - 1);
-          return c * 52;
+          return (ri.reduce((s, v, k) => s + (v - mi) * (rj[k] - mj), 0) / (T - 1)) * 52;
         })
       );
+      const cov = shrinkLW(covRaw, T); // shrunk covariance used for optimization
 
       // ── FI constraint setup ────────────────────────────────────────────
       const fiConstraint = getFiConstraints();
@@ -574,38 +1098,58 @@
       const fiMin = fiConstraint ? fiConstraint.min : 0;
       const fiMax = fiConstraint ? fiConstraint.max : 1;
       const useFi = fiConstraint && fiIdx.length > 0;
+      const hasConstraints = useFi || !!mkwMaxCap;
 
-      showStatus(`Simulando ${nSim.toLocaleString()} portafolios...`, "loading");
+      showStatus(`Simulando ${nSim.toLocaleString()} portafolios (worker)...`, "loading");
 
-      // ── 3. Monte Carlo ─────────────────────────────────────────────────
-      const portfolios = [];
-      for (let s = 0; s < nSim; s++) {
-        const w = useFi
-          ? randomWeightsConstrained(N, fiIdx, fiMin, fiMax)
-          : randomWeights(N);
-        const { ret, vol } = portfolioStats(w, mu, cov);
-        const sharpe = (ret - rfr) / (vol + 1e-12);
-        portfolios.push({ w, ret, vol, sharpe });
+      // ── 3. Monte Carlo via Web Worker — non-blocking (P1-7) ────────────
+      const portfolios = await runMonteCarloPar({
+        mu, cov, n: N, rfr, nSim, useFi,
+        fiIdx: useFi ? fiIdx : [],
+        fiMin, fiMax, mkwMaxCap: mkwMaxCap || null
+      });
+
+      showStatus("Calculando portafolios óptimos...", "loading");
+
+      // ── 4. Optimal portfolios: analytical (unconstrained) or gradient ──
+      // P1-7: closed-form Σ⁻¹ solution is instant and exact for long-only
+      // unconstrained case; fall back to gradient descent when constraints active.
+      let minVarPortfolio, maxSharpePortfolio;
+      if (!hasConstraints) {
+        const mvW = analyticalMinVarW(cov);
+        const msW = analyticalMaxSharpeW(mu, cov, rfr);
+        // Analytical gives exact long-only solution when all weights ≥ 0;
+        // if projection flipped signs we still want gradient refinement as fallback.
+        const useAnalytical = mvW && msW;
+        if (useAnalytical) {
+          const mvStats = portfolioStats(mvW, mu, cov);
+          const msStats = portfolioStats(msW, mu, cov);
+          minVarPortfolio    = { w: mvW, ret: mvStats.ret, vol: mvStats.vol, sharpe: (mvStats.ret - rfr) / mvStats.vol };
+          maxSharpePortfolio = { w: msW, ret: msStats.ret, vol: msStats.vol, sharpe: (msStats.ret - rfr) / msStats.vol };
+        } else {
+          minVarPortfolio    = refineMinVariance(mu, cov, N, rfr, null, 0, 1);
+          maxSharpePortfolio = refineMaxSharpe(mu, cov, N, rfr, null, 0, 1);
+        }
+      } else {
+        minVarPortfolio    = refineMinVariance(mu, cov, N, rfr, useFi ? fiIdx : null, fiMin, fiMax);
+        maxSharpePortfolio = refineMaxSharpe(mu, cov, N, rfr, useFi ? fiIdx : null, fiMin, fiMax);
       }
 
-      showStatus("Refinando portafolios óptimos...", "loading");
-
-      // ── 4. Analytical refinement ───────────────────────────────────────
-      const minVarPortfolio = refineMinVariance(mu, cov, N, rfr, useFi ? fiIdx : null, fiMin, fiMax);
-      const maxSharpePortfolio = refineMaxSharpe(mu, cov, N, rfr, useFi ? fiIdx : null, fiMin, fiMax);
-
-      mkwResult = { portfolios, minVarPortfolio, maxSharpePortfolio, mu, cov, tickers, rfr, returnsMatrix };
+      mkwResult = { portfolios, minVarPortfolio, maxSharpePortfolio, mu, cov, covRaw, tickers, rfr, returnsMatrix, nObs: T };
 
       // ── 5. Render ──────────────────────────────────────────────────────
       showStatus("", "");
       showResults(true);
       drawFrontier();
+      renderMuWarning();
       renderOptimalCards();
       renderWeightsPanel(maxSharpePortfolio, "Máx. Sharpe (Tangencia)");
       renderCalcSection();
       drawForecast();
+      renderBacktestCard();
 
     } catch (err) {
+      if (isAbortError(err)) return;  // superseded by a newer run
       const msg = String(err.message || err);
       if (msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("networkerror") || msg.toLowerCase().includes("failed to fetch")) {
         showStatus("No se pudo conectar con el servidor. Ejecuta 'python api.py' primero.", "error");
@@ -613,9 +1157,63 @@
         showStatus(msg, "error");
       }
     } finally {
-      runBtn.disabled = false;
-      runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg> Optimizar portafolio`;
+      if (!signal?.aborted) {
+        runBtn.disabled = false;
+        runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg> Optimizar portafolio`;
+      }
     }
+  }
+
+  // ── Theme-aware chart palette (works in both dark and light themes) ────────
+  function chartColors() {
+    const light = document.body.classList.contains("light-mode");
+    return {
+      light,
+      grid:      light ? "rgba(15,23,42,0.08)"  : "rgba(255,255,255,0.06)",
+      gridBold:  light ? "rgba(15,23,42,0.14)"  : "rgba(255,255,255,0.12)",
+      tick:      light ? "rgba(15,23,42,0.55)"  : "rgba(255,255,255,0.42)",
+      axis:      light ? "rgba(15,23,42,0.7)"   : "rgba(255,255,255,0.5)",
+      legend:    light ? "rgba(15,23,42,0.72)"  : "rgba(255,255,255,0.68)",
+      halo:      light ? "#ffffff"              : "#0c0f1a",
+      baseline:  light ? "rgba(15,23,42,0.2)"   : "rgba(255,255,255,0.15)",
+      startDot:  light ? "rgba(15,23,42,0.45)"  : "rgba(255,255,255,0.55)",
+      panel:     light ? "rgba(255,255,255,0.85)" : "rgba(12,15,26,0.82)",
+      mv: "#6f86ff",
+      ms: "#f5b84c",
+      // Sharpe gradient endpoints (low → high)
+      lo: [244, 84, 110],
+      hi: light ? [16, 170, 120] : [0, 210, 150],
+    };
+  }
+
+  // Round-rect helper for pill labels
+  function roundRectMkw(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Upper-left efficient frontier envelope: max return per volatility bin
+  function efficientEnvelope(portfolios, nBins) {
+    if (!portfolios.length) return [];
+    const vols = portfolios.map(p => p.vol);
+    const vMin = Math.min(...vols), vMax = Math.max(...vols);
+    if (vMax - vMin < 1e-9) return [];
+    const bins = new Array(nBins).fill(null);
+    portfolios.forEach(p => {
+      const k = Math.min(nBins - 1, Math.floor(((p.vol - vMin) / (vMax - vMin)) * nBins));
+      if (!bins[k] || p.ret > bins[k].ret) bins[k] = { vol: p.vol, ret: p.ret };
+    });
+    // Keep only the non-decreasing upper hull (drop points dominated from the left)
+    const pts = bins.filter(Boolean);
+    const hull = [];
+    let maxRet = -Infinity;
+    for (const pt of pts) { if (pt.ret >= maxRet) { hull.push(pt); maxRet = pt.ret; } }
+    return hull;
   }
 
   // ── Efficient frontier scatter chart ──────────────────────────────────────
@@ -638,13 +1236,28 @@
     const allRets = portfolios.map(p => p.ret);
     const allSharpes = portfolios.map(p => p.sharpe);
 
-    const minVol = Math.min(...allVols, minVarPortfolio.vol) * 0.88;
-    const maxVol = Math.max(...allVols) * 1.06;
-    const minRet = Math.min(...allRets, minVarPortfolio.ret);
-    const maxRet = Math.max(...allRets, maxSharpePortfolio.ret);
+    let minVol = Math.min(...allVols, minVarPortfolio.vol, maxSharpePortfolio.vol) * 0.88;
+    let maxVol = Math.max(...allVols, minVarPortfolio.vol, maxSharpePortfolio.vol) * 1.06;
+    const minRet = Math.min(...allRets, minVarPortfolio.ret, maxSharpePortfolio.ret);
+    const maxRet = Math.max(...allRets, minVarPortfolio.ret, maxSharpePortfolio.ret);
     const retPad = (maxRet - minRet) * 0.12;
-    const minRetP = minRet - retPad;
-    const maxRetP = maxRet + retPad;
+    let minRetP = minRet - retPad;
+    let maxRetP = maxRet + retPad;
+
+    // Guard against degenerate (near-zero) spans — when all portfolios share an
+    // almost-identical return or volatility the scale collapses, division by zero
+    // pushes every point off-canvas and the frontier appears blank. Expand around
+    // the center so markers and the scatter always render.
+    if (maxRetP - minRetP < 1e-6) {
+      const c = (maxRetP + minRetP) / 2 || 0.01;
+      minRetP = c - Math.max(Math.abs(c) * 0.1, 0.005);
+      maxRetP = c + Math.max(Math.abs(c) * 0.1, 0.005);
+    }
+    if (maxVol - minVol < 1e-6) {
+      const c = (maxVol + minVol) / 2 || 0.01;
+      minVol = c - Math.max(Math.abs(c) * 0.1, 0.005);
+      maxVol = c + Math.max(Math.abs(c) * 0.1, 0.005);
+    }
     const minSharpe = Math.min(...allSharpes);
     const maxSharpe = Math.max(...allSharpes);
 
@@ -656,32 +1269,36 @@
     const yScale = r => pad.t + ph - ((r - minRetP) / (maxRetP - minRetP)) * ph;
 
     ctx.clearRect(0, 0, W, H);
+    const C = chartColors();
+    const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+    const sharpeRGB = t => [lerp(C.lo[0], C.hi[0], t), lerp(C.lo[1], C.hi[1], t), lerp(C.lo[2], C.hi[2], t)];
 
     // ── Grid ───────────────────────────────────────────────────────────────
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
     ctx.lineWidth = 1;
     ctx.font = "10px Inter, system-ui, sans-serif";
 
     const nGridY = 5, nGridX = 5;
     for (let i = 0; i <= nGridY; i++) {
       const y = pad.t + (ph / nGridY) * i;
+      ctx.strokeStyle = C.grid;
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
       const val = maxRetP - ((maxRetP - minRetP) / nGridY) * i;
-      ctx.fillStyle = "rgba(255,255,255,0.38)";
+      ctx.fillStyle = C.tick;
       ctx.textAlign = "right";
       ctx.fillText((val * 100).toFixed(1) + "%", pad.l - 6, y + 3.5);
     }
     for (let i = 0; i <= nGridX; i++) {
       const x = pad.l + (pw / nGridX) * i;
+      ctx.strokeStyle = C.grid;
       ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ph); ctx.stroke();
       const val = minVol + ((maxVol - minVol) / nGridX) * i;
-      ctx.fillStyle = "rgba(255,255,255,0.38)";
+      ctx.fillStyle = C.tick;
       ctx.textAlign = "center";
       ctx.fillText((val * 100).toFixed(1) + "%", x, pad.t + ph + 15);
     }
 
     // ── Axis labels ────────────────────────────────────────────────────────
-    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.fillStyle = C.axis;
     ctx.font = "11px Inter, system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Volatilidad anualizada", pad.l + pw / 2, H - 6);
@@ -692,62 +1309,103 @@
     ctx.restore();
 
     // ── Scatter: Monte Carlo portfolios ────────────────────────────────────
+    const dense = portfolios.length > 8000;
     portfolios.forEach(p => {
       const x = xScale(p.vol);
       const y = yScale(p.ret);
       const t = (p.sharpe - minSharpe) / (maxSharpe - minSharpe + 1e-12);
-      // Red (low Sharpe) → Green (high Sharpe)
-      const r = Math.round(242 + (0 - 242) * t);
-      const g = Math.round(77 + (200 - 77) * t);
-      const b = Math.round(106 + (148 - 106) * t);
+      const [r, g, b] = sharpeRGB(t);
       ctx.beginPath();
-      ctx.arc(x, y, 2.2, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${r},${g},${b},0.45)`;
+      ctx.arc(x, y, dense ? 1.8 : 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${r},${g},${b},${dense ? 0.32 : 0.42})`;
       ctx.fill();
     });
 
-    // ── Marker: Min Variance ───────────────────────────────────────────────
-    {
-      const x = xScale(minVarPortfolio.vol);
-      const y = yScale(minVarPortfolio.ret);
-      ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2);
-      ctx.fillStyle = "#6f86ff"; ctx.fill();
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.8; ctx.stroke();
-      ctx.fillStyle = "#fff"; ctx.font = "bold 9px Inter, sans-serif";
-      ctx.textAlign = "center"; ctx.fillText("MV", x, y - 12);
+    // ── Efficient frontier envelope (upper-left hull) ──────────────────────
+    const hull = efficientEnvelope(portfolios, 48);
+    if (hull.length >= 3) {
+      ctx.beginPath();
+      hull.forEach((pt, i) => ctx[i === 0 ? "moveTo" : "lineTo"](xScale(pt.vol), yScale(pt.ret)));
+      ctx.strokeStyle = C.light ? "rgba(16,170,120,0.9)" : "rgba(0,210,150,0.85)";
+      ctx.lineWidth = 2.4; ctx.lineJoin = "round"; ctx.shadowColor = "rgba(0,210,150,0.4)"; ctx.shadowBlur = 6;
+      ctx.stroke(); ctx.shadowBlur = 0;
     }
 
-    // ── Marker: Max Sharpe ─────────────────────────────────────────────────
-    {
-      const x = xScale(maxSharpePortfolio.vol);
-      const y = yScale(maxSharpePortfolio.ret);
-      ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2);
-      ctx.fillStyle = "#f5b84c"; ctx.fill();
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.8; ctx.stroke();
-      ctx.fillStyle = "#111"; ctx.font = "bold 9px Inter, sans-serif";
-      ctx.textAlign = "center"; ctx.fillText("MS", x, y + 3.5);
+    // ── Markers with pill labels ───────────────────────────────────────────
+    function marker(p, color, label, txtColor) {
+      const x = xScale(p.vol), y = yScale(p.ret);
+      ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.strokeStyle = C.halo; ctx.lineWidth = 2; ctx.stroke();
+      ctx.font = "bold 9px Inter, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const tw = ctx.measureText(label).width;
+      const py = y - 16;
+      roundRectMkw(ctx, x - tw / 2 - 5, py - 7, tw + 10, 14, 4);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.fillStyle = txtColor; ctx.fillText(label, x, py);
+      ctx.textBaseline = "alphabetic";
     }
+    marker(minVarPortfolio, C.mv, "MV", "#fff");
+    marker(maxSharpePortfolio, C.ms, "MS", "#1a1205");
 
-    // ── Legend ─────────────────────────────────────────────────────────────
-    const legendX = pad.l + pw - 130;
-    const legendY = pad.t + 8;
+    // ── Legend (with backing panel for contrast) ───────────────────────────
     const legendItems = [
-      { color: "#f24d6a", label: "Bajo Sharpe" },
-      { color: "#00c894", label: "Alto Sharpe" },
-      { color: "#6f86ff", label: "MV — Mín. Varianza" },
-      { color: "#f5b84c", label: "MS — Máx. Sharpe" },
+      { color: `rgb(${C.lo.join(",")})`, label: "Bajo Sharpe" },
+      { color: `rgb(${C.hi.join(",")})`, label: "Alto Sharpe" },
+      { color: C.mv, label: "MV — Mín. Varianza" },
+      { color: C.ms, label: "MS — Máx. Sharpe" },
     ];
     ctx.font = "10px Inter, system-ui, sans-serif";
+    const legW = 142, legH = legendItems.length * 17 + 12;
+    const legendX = pad.l + pw - legW + 14;
+    const legendY = pad.t + 14;
+    roundRectMkw(ctx, legendX - 14, legendY - 12, legW, legH, 8);
+    ctx.fillStyle = C.panel; ctx.fill();
+    ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
     legendItems.forEach((item, i) => {
       const lx = legendX, ly = legendY + i * 17;
       ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2);
       ctx.fillStyle = item.color; ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.65)";
+      ctx.fillStyle = C.legend;
       ctx.textAlign = "left"; ctx.fillText(item.label, lx + 10, ly + 3.5);
     });
+
+    // ── Degenerate-data banner ─────────────────────────────────────────────
+    // If every portfolio collapses to one point (identical asset series), the
+    // frontier has no shape to show — tell the user instead of leaving it blank.
+    const volSpread = Math.max(...allVols) - Math.min(...allVols);
+    const retSpread = Math.max(...allRets) - Math.min(...allRets);
+    if (volSpread < 1e-4 && retSpread < 1e-4) {
+      ctx.font = "12px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.fillStyle = C.axis;
+      ctx.fillText("Los activos tienen series casi idénticas — sin dispersión que graficar.", pad.l + pw / 2, pad.t + ph / 2 - 8);
+      ctx.fillStyle = C.tick; ctx.font = "11px Inter, system-ui, sans-serif";
+      ctx.fillText("Prueba con activos más diversos o recarga (Ctrl+Shift+R) si los datos llegaron incompletos.", pad.l + pw / 2, pad.t + ph / 2 + 12);
+    }
   }
 
   // ── Optimal portfolio cards ────────────────────────────────────────────────
+  function renderMuWarning() {
+    const id = "mkwMuWarning";
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = id;
+      el.className = "mkw-mu-warning";
+      // Insert before the optimal-cards row
+      const row = document.querySelector(".mkw-optimal-row");
+      if (row) row.parentNode.insertBefore(el, row);
+      else document.getElementById("mkwResultsSection")?.prepend(el);
+    }
+    const T = mkwResult?.nObs ?? 0;
+    el.innerHTML = `
+      <span class="mkw-mu-icon">ⓘ</span>
+      <span><strong>Máx. Sharpe es sensible a μ histórico</strong> — los retornos esperados estimados con ${T} semanas tienen alta varianza estadística.
+      El portafolio de <strong>Mín. Varianza es más robusto</strong> porque no depende de μ.
+      Black-Litterman mitiga esto incorporando un prior de equilibrio.</span>
+    `;
+  }
+
   function renderOptimalCards() {
     if (!mkwResult) return;
     const { minVarPortfolio, maxSharpePortfolio } = mkwResult;
@@ -789,6 +1447,7 @@
   // ── Weights panel ──────────────────────────────────────────────────────────
   function renderWeightsPanel(p, title) {
     if (!p || !mkwResult) return;
+    mkwLastWeights = { p, title };
     const { tickers } = mkwResult;
 
     const titleEl = document.getElementById("mkwWeightsPanelTitle");
@@ -830,9 +1489,10 @@
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
 
+    const C = chartColors();
     const cx = size / 2, cy = size / 2;
     const outerR = cx - 8;
-    const innerR = outerR * 0.55;
+    const innerR = outerR * 0.58;
     let angle = -Math.PI / 2;
 
     weights.forEach((w, i) => {
@@ -845,16 +1505,19 @@
       ctx.closePath();
       ctx.fillStyle = color;
       ctx.fill();
+      // Thin separator between slices for a crisp, professional look
+      ctx.strokeStyle = C.light ? "rgba(255,255,255,0.9)" : "rgba(12,15,26,0.9)";
+      ctx.lineWidth = 2; ctx.stroke();
       angle += sweep;
     });
 
-    // Donut hole
+    // Donut hole — matches the card surface in each theme
     ctx.beginPath();
     ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(12,12,15,1)";
+    ctx.fillStyle = C.light ? "#f4f6fb" : "#0c0f1a";
     ctx.fill();
 
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.fillStyle = C.axis;
     ctx.font = "bold 11px Inter, system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -985,6 +1648,11 @@
     renderMatrix("mkwCalcCorrContent", tickers, (i, j) => cov[i][j] / (vols2[i] * vols2[j]),
       v => v.toFixed(3),
       v => corrHeatColor(v));
+    // Canvas visual heatmap (added after renderMatrix so it prepends above the table)
+    const corrMatrix = Array.from({ length: N }, (_, i) =>
+      Array.from({ length: N }, (_, j) => cov[i][j] / (vols2[i] * vols2[j]))
+    );
+    drawCorrHeatmapCanvas(tickers, corrMatrix);
 
     // VaR panel
     renderVaRPanel();
@@ -1058,7 +1726,11 @@
 
   function showResults(visible) {
     const el = document.getElementById("mkwResultsSection");
-    if (el) el.style.display = visible ? "" : "none";
+    if (!el) return;
+    el.style.display = visible ? "" : "none";
+    if (visible && window.innerWidth <= 1000) {
+      setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
   }
 
   // Year selector for forecast
@@ -1145,6 +1817,8 @@
     const toY = v => padTop + cH - ((v - yMin) / vRange) * cH;
 
     ctx.clearRect(0, 0, W, H);
+    const C = chartColors();
+    const lerpF = (a, b, t) => Math.round(a + (b - a) * t);
 
     // Grid
     const gridSteps = 5;
@@ -1152,14 +1826,14 @@
       const v = yMin + (vRange / gridSteps) * i;
       const y = toY(v);
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + cW, y);
-      ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.38)"; ctx.font = "10px Inter,sans-serif";
+      ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = C.tick; ctx.font = "10px Inter,sans-serif";
       ctx.textAlign = "right"; ctx.textBaseline = "middle";
       ctx.fillText(fmtCompact(v), padL - 5, y);
     }
 
     // X axis labels (years)
-    ctx.fillStyle = "rgba(255,255,255,0.38)"; ctx.font = "10px Inter,sans-serif";
+    ctx.fillStyle = C.tick; ctx.font = "10px Inter,sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     for (let yr = 0; yr <= years; yr++) {
       ctx.fillText(yr === 0 ? "Hoy" : `Año ${yr}`, toX(yr * 12), padTop + cH + 5);
@@ -1167,30 +1841,30 @@
 
     // S0 baseline dashed
     ctx.beginPath(); ctx.moveTo(padL, toY(S0)); ctx.lineTo(padL + cW, toY(S0));
-    ctx.strokeStyle = "rgba(255,255,255,0.15)"; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.stroke();
+    ctx.strokeStyle = C.baseline; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.stroke();
     ctx.setLineDash([]);
 
     // Cloud paths
     paths.forEach(({ path, sharpe }) => {
       const t = (sharpe - minS) / (maxS - minS + 1e-12);
-      const r = Math.round(242 + (0 - 242) * t);
-      const g = Math.round(77 + (200 - 77) * t);
-      const b = Math.round(106 + (148 - 106) * t);
+      const r = lerpF(C.lo[0], C.hi[0], t), g = lerpF(C.lo[1], C.hi[1], t), b = lerpF(C.lo[2], C.hi[2], t);
       ctx.beginPath();
       for (let i = 0; i <= steps; i++) ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(path[i]));
-      ctx.strokeStyle = `rgba(${r},${g},${b},0.18)`;
+      ctx.strokeStyle = `rgba(${r},${g},${b},${C.light ? 0.22 : 0.16})`;
       ctx.lineWidth = 1; ctx.lineJoin = "round"; ctx.stroke();
     });
 
     // Min Variance — blue thick
     ctx.beginPath();
     for (let i = 0; i <= steps; i++) ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(mvPath[i]));
-    ctx.strokeStyle = "#6f86ff"; ctx.lineWidth = 2.2; ctx.lineJoin = "round"; ctx.stroke();
+    ctx.strokeStyle = C.mv; ctx.lineWidth = 2.4; ctx.lineJoin = "round";
+    ctx.shadowColor = C.light ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.45)"; ctx.shadowBlur = 3; ctx.stroke(); ctx.shadowBlur = 0;
 
     // Max Sharpe — gold thick
     ctx.beginPath();
     for (let i = 0; i <= steps; i++) ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(msPath[i]));
-    ctx.strokeStyle = "#f5b84c"; ctx.lineWidth = 2.2; ctx.lineJoin = "round"; ctx.stroke();
+    ctx.strokeStyle = C.ms; ctx.lineWidth = 2.4; ctx.lineJoin = "round";
+    ctx.shadowColor = C.light ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.45)"; ctx.shadowBlur = 3; ctx.stroke(); ctx.shadowBlur = 0;
 
     // End-point labels
     function endLabel(path, label, color) {
@@ -1201,12 +1875,12 @@
       ctx.textAlign = "left"; ctx.textBaseline = "middle";
       ctx.fillText(`${label} ${fmtCompact(v)}`, x, y);
     }
-    endLabel(mvPath, "MV", "#6f86ff");
-    endLabel(msPath, "MS", "#f5b84c");
+    endLabel(mvPath, "MV", C.mv);
+    endLabel(msPath, "MS", C.ms);
 
     // Starting dot
     ctx.beginPath(); ctx.arc(toX(0), toY(S0), 4, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fill();
+    ctx.fillStyle = C.startDot; ctx.fill();
 
     statusEl.textContent = `${sampleN} trayectorias de ${portfolios.length.toLocaleString()} portafolios simulados · inicio normalizado $${S0.toLocaleString()}`;
   }
@@ -1232,43 +1906,33 @@
     const period = document.getElementById("mkwPeriod")?.value || "2y";
     const rfr = parseFloat(document.getElementById("mkwRfr")?.value ?? "4.5") / 100;
     const nSim = parseInt(document.getElementById("mkwNSim")?.value || "10000");
+    mkwMaxCap = getMaxWeightCap();
+    const signal = beginRun();
 
     try {
-      const dataMap = {};
-      await Promise.all(mkwAssets.map(async ({ ticker }) => {
-        const res = await fetch(`${API_BASE_URL}/chart/${ticker}?range=${period}&interval=1wk`);
-        if (!res.ok) throw new Error(`No se pudieron obtener datos para ${ticker} (HTTP ${res.status})`);
-        const json = await res.json();
-        const closes = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-        dataMap[ticker] = closes.filter(v => v != null && v > 0);
-        if (dataMap[ticker].length < 40)
-          throw new Error(`Datos insuficientes para ${ticker} (${dataMap[ticker].length} velas)`);
-      }));
+      const dataMap = await fetchOHLCVMap(mkwAssets.map(a => a.ticker), period, signal);
 
       showStatus("Calculando scores de factores...", "loading");
 
       const tickers = mkwAssets.map(a => a.ticker);
       const N = tickers.length;
-      const minLen = Math.min(...tickers.map(t => dataMap[t].length));
 
-      // Build log-returns
-      const returnsMatrix = tickers.map(t => {
-        const prices = dataMap[t].slice(-minLen);
-        const r = [];
-        for (let i = 1; i < prices.length; i++) r.push(Math.log(prices[i] / prices[i - 1]));
-        return r;
-      });
+      // Timestamp-aligned returns (P1-4)
+      const alignedSB = alignAndComputeReturns(dataMap, tickers);
+      if (!alignedSB) throw new Error("No hay suficientes fechas comunes entre los activos seleccionados.");
+      const { returnsMatrix } = alignedSB;
       const T = returnsMatrix[0].length;
 
-      // Annualized mean and cov (same as MVO)
+      // Annualized mean + shrunk covariance (P1-5)
       const mu = returnsMatrix.map(r => (r.reduce((s, v) => s + v, 0) / T) * 52);
-      const cov = Array.from({ length: N }, (_, i) =>
+      const covRawSB = Array.from({ length: N }, (_, i) =>
         Array.from({ length: N }, (_, j) => {
           const ri = returnsMatrix[i], rj = returnsMatrix[j];
           const mi = mu[i] / 52, mj = mu[j] / 52;
           return (ri.reduce((s, v, k) => s + (v - mi) * (rj[k] - mj), 0) / (T - 1)) * 52;
         })
       );
+      const cov = shrinkLW(covRawSB, T);
 
       // ── Factor scores ──────────────────────────────────────────────────────
       const useMom    = document.getElementById("sbMomentum")?.checked;
@@ -1331,20 +1995,30 @@
       const muMean = mu.reduce((s, v) => s + v, 0) / N;
       const muAdj = composite.map(c => (compSum > 0 ? c / compSum : 1 / N) * muMean * N);
 
-      showStatus(`Simulando ${nSim.toLocaleString()} portafolios con retornos ajustados por factor...`, "loading");
+      showStatus(`Simulando ${nSim.toLocaleString()} portafolios con retornos ajustados por factor (worker)...`, "loading");
 
-      // Monte Carlo with factor-tilted mu
-      const portfolios = [];
-      for (let s = 0; s < nSim; s++) {
-        const w = randomWeights(N);
-        const { ret, vol } = portfolioStats(w, muAdj, cov);
-        portfolios.push({ w, ret, vol, sharpe: (ret - rfr) / (vol + 1e-12) });
+      // Monte Carlo via Web Worker (P1-7) + analytical optimal (P1-7)
+      const portfolios = await runMonteCarloPar({
+        mu: muAdj, cov, n: N, rfr, nSim,
+        useFi: false, fiIdx: [], fiMin: 0, fiMax: 1,
+        mkwMaxCap: mkwMaxCap || null
+      });
+
+      // Unconstrained analytical solution first; gradient as fallback
+      const sbMvW = !mkwMaxCap ? analyticalMinVarW(cov) : null;
+      const sbMsW = !mkwMaxCap ? analyticalMaxSharpeW(muAdj, cov, rfr) : null;
+      let minVarPortfolio, maxSharpePortfolio;
+      if (sbMvW && sbMsW) {
+        const mvSt = portfolioStats(sbMvW, muAdj, cov);
+        const msSt = portfolioStats(sbMsW, muAdj, cov);
+        minVarPortfolio    = { w: sbMvW, ret: mvSt.ret, vol: mvSt.vol, sharpe: (mvSt.ret - rfr) / mvSt.vol };
+        maxSharpePortfolio = { w: sbMsW, ret: msSt.ret, vol: msSt.vol, sharpe: (msSt.ret - rfr) / msSt.vol };
+      } else {
+        minVarPortfolio    = refineMinVariance(muAdj, cov, N, rfr, null, 0, 1);
+        maxSharpePortfolio = refineMaxSharpe(muAdj, cov, N, rfr, null, 0, 1);
       }
 
-      const minVarPortfolio = refineMinVariance(muAdj, cov, N, rfr, null, 0, 1);
-      const maxSharpePortfolio = refineMaxSharpe(muAdj, cov, N, rfr, null, 0, 1);
-
-      mkwResult = { portfolios, minVarPortfolio, maxSharpePortfolio, mu: muAdj, cov, tickers, rfr, returnsMatrix };
+      mkwResult = { portfolios, minVarPortfolio, maxSharpePortfolio, mu: muAdj, cov, tickers, rfr, returnsMatrix, nObs: T };
 
       // Attach factor scores to result for display
       mkwResult.smartBetaScores = tickers.map((t, i) => ({
@@ -1358,18 +2032,23 @@
       showStatus("", "");
       showResults(true);
       drawFrontier();
+      renderMuWarning();
       renderOptimalCards();
       renderWeightsPanel(maxSharpePortfolio, "Smart Beta — Máx. Sharpe");
       renderCalcSection();
       renderSmartBetaScoreCard();
       drawForecast();
+      renderBacktestCard();
 
     } catch (err) {
+      if (isAbortError(err)) return;  // superseded by a newer run
       const msg = String(err.message || err);
       showStatus(msg.toLowerCase().includes("fetch") ? "No se pudo conectar con el servidor. Ejecuta 'python api.py' primero." : msg, "error");
     } finally {
-      runBtn.disabled = false;
-      runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg> Aplicar Smart Beta`;
+      if (!signal?.aborted) {
+        runBtn.disabled = false;
+        runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg> Aplicar Smart Beta`;
+      }
     }
   }
 
@@ -1565,41 +2244,34 @@
     const nSim   = parseInt(document.getElementById("mkwNSim")?.value || "10000");
     const tau    = parseFloat(document.getElementById("blTau")?.value ?? "0.05");
     const delta  = parseFloat(document.getElementById("blDelta")?.value ?? "2.5");
+    mkwMaxCap = getMaxWeightCap();
+
+    const signal = beginRun();
 
     try {
-      const dataMap = {};
-      await Promise.all(mkwAssets.map(async ({ ticker }) => {
-        const res = await fetch(`${API_BASE_URL}/chart/${ticker}?range=${period}&interval=1wk`);
-        if (!res.ok) throw new Error(`No se pudieron obtener datos para ${ticker} (HTTP ${res.status})`);
-        const json = await res.json();
-        const closes = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-        dataMap[ticker] = closes.filter(v => v != null && v > 0);
-        if (dataMap[ticker].length < 40)
-          throw new Error(`Datos insuficientes para ${ticker} (${dataMap[ticker].length} velas)`);
-      }));
+      const dataMap = await fetchOHLCVMap(mkwAssets.map(a => a.ticker), period, signal);
 
       showStatus("Computando retornos de equilibrio...", "loading");
 
       const tickers = mkwAssets.map(a => a.ticker);
       const N = tickers.length;
-      const minLen = Math.min(...tickers.map(t => dataMap[t].length));
 
-      const returnsMatrix = tickers.map(t => {
-        const prices = dataMap[t].slice(-minLen);
-        const r = [];
-        for (let i = 1; i < prices.length; i++) r.push(Math.log(prices[i] / prices[i - 1]));
-        return r;
-      });
+      // Timestamp-aligned returns (P1-4)
+      const alignedBL = alignAndComputeReturns(dataMap, tickers);
+      if (!alignedBL) throw new Error("No hay suficientes fechas comunes entre los activos seleccionados.");
+      const { returnsMatrix } = alignedBL;
       const T = returnsMatrix[0].length;
       const mu_hist = returnsMatrix.map(r => (r.reduce((s, v) => s + v, 0) / T) * 52);
 
-      const cov = Array.from({ length: N }, (_, i) =>
+      // Shrunk covariance (P1-5) — BL uses it for prior + posterior + optimization
+      const covRawBL = Array.from({ length: N }, (_, i) =>
         Array.from({ length: N }, (_, j) => {
           const ri = returnsMatrix[i], rj = returnsMatrix[j];
           const mi = mu_hist[i] / 52, mj = mu_hist[j] / 52;
           return (ri.reduce((s, v, k) => s + (v - mi) * (rj[k] - mj), 0) / (T - 1)) * 52;
         })
       );
+      const cov = shrinkLW(covRawBL, T);
 
       // ── Black-Litterman ────────────────────────────────────────────────────
       // Prior: equal-weight market portfolio
@@ -1668,40 +2340,406 @@
         }
       }
 
-      showStatus(`Simulando ${nSim.toLocaleString()} portafolios con retornos BL...`, "loading");
+      showStatus(`Simulando ${nSim.toLocaleString()} portafolios BL (worker)...`, "loading");
 
-      // MVO with BL returns
-      const portfolios = [];
-      for (let s = 0; s < nSim; s++) {
-        const w = randomWeights(N);
-        const { ret, vol } = portfolioStats(w, mu_bl, cov);
-        portfolios.push({ w, ret, vol, sharpe: (ret - rfr) / (vol + 1e-12) });
+      // Monte Carlo via Web Worker (P1-7)
+      const portfolios = await runMonteCarloPar({
+        mu: mu_bl, cov, n: N, rfr, nSim,
+        useFi: false, fiIdx: [], fiMin: 0, fiMax: 1,
+        mkwMaxCap: mkwMaxCap || null
+      });
+
+      // Analytical optimal portfolios (P1-7)
+      const blMvW = !mkwMaxCap ? analyticalMinVarW(cov) : null;
+      const blMsW = !mkwMaxCap ? analyticalMaxSharpeW(mu_bl, cov, rfr) : null;
+      let minVarPortfolio, maxSharpePortfolio;
+      if (blMvW && blMsW) {
+        const mvSt = portfolioStats(blMvW, mu_bl, cov);
+        const msSt = portfolioStats(blMsW, mu_bl, cov);
+        minVarPortfolio    = { w: blMvW, ret: mvSt.ret, vol: mvSt.vol, sharpe: (mvSt.ret - rfr) / mvSt.vol };
+        maxSharpePortfolio = { w: blMsW, ret: msSt.ret, vol: msSt.vol, sharpe: (msSt.ret - rfr) / msSt.vol };
+      } else {
+        minVarPortfolio    = refineMinVariance(mu_bl, cov, N, rfr, null, 0, 1);
+        maxSharpePortfolio = refineMaxSharpe(mu_bl, cov, N, rfr, null, 0, 1);
       }
-
-      const minVarPortfolio   = refineMinVariance(mu_bl, cov, N, rfr, null, 0, 1);
-      const maxSharpePortfolio = refineMaxSharpe(mu_bl, cov, N, rfr, null, 0, 1);
 
       mkwResult = {
         portfolios, minVarPortfolio, maxSharpePortfolio,
-        mu: mu_bl, mu_hist, mu_eq: Pi, cov, tickers, rfr, returnsMatrix
+        mu: mu_bl, mu_hist, mu_eq: Pi, cov, tickers, rfr, returnsMatrix, nObs: T
       };
 
       showStatus("", "");
       showResults(true);
       drawFrontier();
+      renderMuWarning();
       renderOptimalCards();
       renderWeightsPanel(maxSharpePortfolio, "Black-Litterman — Máx. Sharpe");
       renderCalcSection();
       renderBLReturnComparisonCard(tickers, Pi, mu_hist, mu_bl);
       drawForecast();
+      renderBacktestCard();
 
     } catch (err) {
+      if (isAbortError(err)) return;  // superseded by a newer run
       const msg = String(err.message || err);
       showStatus(msg.toLowerCase().includes("fetch") ? "No se pudo conectar con el servidor. Ejecuta 'python api.py' primero." : msg, "error");
     } finally {
-      runBtn.disabled = false;
-      runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg> Aplicar Black-Litterman`;
+      if (!signal?.aborted) {
+        runBtn.disabled = false;
+        runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><polygon points="5 3 19 12 5 21 5 3"/></svg> Aplicar Black-Litterman`;
+      }
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── BACKTEST HISTÓRICO (#3) ───────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+
+  function renderBacktestCard() {
+    const container = document.getElementById("mkwResultsSection");
+    if (!container || !mkwResult) return;
+
+    let card = document.getElementById("mkwBacktestCard");
+    if (!card) {
+      card = document.createElement("div");
+      card.id = "mkwBacktestCard";
+      card.className = "dashboard-card";
+      const weightsCard = container.querySelector(".mkw-weights-card");
+      if (weightsCard) container.insertBefore(card, weightsCard);
+      else container.appendChild(card);
+    }
+
+    card.innerHTML = `
+      <div class="card-header">
+        <h3>Backtest Walk-Forward</h3>
+        <span>Reoptimización periódica sobre ventana móvil · con costos de transacción · vs 1/N y S&amp;P 500</span>
+      </div>
+      <div class="mkw-bt-controls">
+        <div class="mkw-bt-control">
+          <label for="mkwBtRebal">Rebalanceo</label>
+          <select id="mkwBtRebal">
+            <option value="4">Mensual</option>
+            <option value="13" selected>Trimestral</option>
+            <option value="26">Semestral</option>
+          </select>
+        </div>
+        <div class="mkw-bt-control">
+          <label for="mkwBtCost">Costo por rebalanceo</label>
+          <select id="mkwBtCost">
+            <option value="0">0 bps</option>
+            <option value="5">5 bps</option>
+            <option value="10" selected>10 bps</option>
+            <option value="25">25 bps</option>
+          </select>
+        </div>
+      </div>
+      <div class="mkw-forecast-legend">
+        <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#f5b84c;height:3px;width:22px"></span>Máx. Sharpe</span>
+        <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#6f86ff;height:3px;width:22px"></span>Mín. Varianza</span>
+        <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#32d6a2;height:3px;width:22px"></span>1/N (igual peso)</span>
+        <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:transparent;border-top:2px dashed rgba(255,255,255,0.38);width:22px;display:inline-block;vertical-align:middle;margin-right:4px"></span>S&amp;P 500</span>
+      </div>
+      <div class="mc-chart-wrap"><canvas id="mkwBacktestCanvas"></canvas></div>
+      <div id="mkwBacktestStatus" class="perf-chart-status">Cargando benchmark…</div>
+      <div id="mkwBacktestMetrics"></div>`;
+
+    card.querySelector("#mkwBtRebal")?.addEventListener("change", runBacktest);
+    card.querySelector("#mkwBtCost")?.addEventListener("change", runBacktest);
+
+    runBacktest();
+  }
+
+  // Annualized mean & shrunk covariance from a weekly log-returns matrix (N × T)
+  function muCovFromReturns(retMatrix) {
+    const N = retMatrix.length;
+    const T = retMatrix[0].length;
+    const mu = retMatrix.map(r => (r.reduce((s, v) => s + v, 0) / T) * 52);
+    const covRaw = Array.from({ length: N }, (_, i) =>
+      Array.from({ length: N }, (_, j) => {
+        const ri = retMatrix[i], rj = retMatrix[j];
+        const mi = mu[i] / 52, mj = mu[j] / 52;
+        return (ri.reduce((s, v, k) => s + (v - mi) * (rj[k] - mj), 0) / (T - 1)) * 52;
+      })
+    );
+    return { mu, cov: shrinkLW(covRaw, T) };
+  }
+
+  async function runBacktest() {
+    const canvas = document.getElementById("mkwBacktestCanvas");
+    const statusEl = document.getElementById("mkwBacktestStatus");
+    const metricsEl = document.getElementById("mkwBacktestMetrics");
+    if (!canvas || !mkwResult || !statusEl) return;
+
+    const { returnsMatrix, tickers, rfr } = mkwResult;
+    const period = document.getElementById("mkwPeriod")?.value || "2y";
+    const R = parseInt(document.getElementById("mkwBtRebal")?.value, 10) || 13;       // rebalance every R weeks
+    const costRate = (parseFloat(document.getElementById("mkwBtCost")?.value) || 0) / 10000; // bps → fraction
+
+    try {
+      const N = returnsMatrix.length;
+      const T = returnsMatrix[0].length;
+
+      // ── Rolling-window split: initial lookback L, test = weeks [L, T) ─────────
+      let L = Math.max(52, Math.floor(T * 0.5));
+      L = Math.min(L, T - Math.max(R, 12));
+      const testLen = T - L;
+      if (L < 30 || testLen < Math.max(R, 8)) {
+        statusEl.textContent = "Período insuficiente para un backtest walk-forward (usa un rango más largo).";
+        if (metricsEl) metricsEl.innerHTML = "";
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
+      // Simple (arithmetic) weekly returns — needed for compounding & weight drift
+      const simpleMatrix = returnsMatrix.map(r => r.map(v => Math.exp(v) - 1));
+
+      const fiConstraint = getFiConstraints();
+      const fiIdx = tickers.map((t, i) => mkwAssets[i]?.isFi ? i : -1).filter(i => i >= 0);
+      const useFi = fiConstraint && fiIdx.length > 0;
+      const fiMin = fiConstraint ? fiConstraint.min : 0;
+      const fiMax = fiConstraint ? fiConstraint.max : 1;
+
+      // Weight rules: reoptimize on the trailing window [t-L, t)
+      const wfMaxSharpe = win => { const { mu, cov } = muCovFromReturns(win); return refineMaxSharpe(mu, cov, N, rfr, useFi ? fiIdx : null, fiMin, fiMax).w; };
+      const wfMinVar    = win => { const { mu, cov } = muCovFromReturns(win); return refineMinVariance(mu, cov, N, rfr, useFi ? fiIdx : null, fiMin, fiMax).w; };
+      const wfEqual     = () => new Array(N).fill(1 / N);
+
+      // Walk forward: rebalance every R weeks using a trailing L-week window.
+      // Weights drift between rebalances; turnover at each rebalance pays costRate.
+      function walkForward(weightFn) {
+        const cum = [1], rets = [];
+        let curW = null, turnover = 0, rebalances = 0;
+        for (let t = L; t < T; t++) {
+          if ((t - L) % R === 0) {
+            const win = returnsMatrix.map(r => r.slice(t - L, t));
+            const target = weightFn(win);
+            let tov = 0;
+            if (curW) { for (let i = 0; i < N; i++) tov += Math.abs(target[i] - curW[i]); }
+            else { tov = 1; } // initial deployment from cash
+            turnover += tov; rebalances++;
+            cum[cum.length - 1] *= (1 - tov * costRate);
+            curW = target.slice();
+          }
+          let pr = 0; for (let i = 0; i < N; i++) pr += curW[i] * simpleMatrix[i][t];
+          const nc = cum[cum.length - 1] * (1 + pr);
+          cum.push(nc); rets.push(pr);
+          for (let i = 0; i < N; i++) curW[i] = curW[i] * (1 + simpleMatrix[i][t]) / (1 + pr); // drift
+        }
+        return { cum, rets, turnover, rebalances };
+      }
+
+      const ms = walkForward(wfMaxSharpe);
+      const mv = walkForward(wfMinVar);
+      const eq = walkForward(wfEqual);
+
+      // ── Benchmark: SPY buy & hold over the same test window ──────────────────
+      const res = await fetch(`${API_BASE_URL}/chart/SPY?range=${period}&interval=1wk`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const spyCloses = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+      const spyFiltered = spyCloses.filter(v => v != null && v > 0);
+      const spyRaw = [];
+      const spyLen = Math.min(spyFiltered.length, T + 1);
+      for (let i = 1; i < spyLen; i++) spyRaw.push(Math.log(spyFiltered[i] / spyFiltered[i - 1]));
+
+      const spyCum = [1 * (1 - costRate)], spyRets = [];
+      for (let t = L; t < T; t++) {
+        const r = spyRaw[t] != null ? Math.exp(spyRaw[t]) - 1 : 0;
+        spyCum.push(spyCum[spyCum.length - 1] * (1 + r));
+        spyRets.push(r);
+      }
+
+      const len = ms.cum.length - 1;
+      if (len < 4) { statusEl.textContent = "Datos insuficientes en la ventana de prueba."; return; }
+
+      drawBacktestChart(canvas, ms.cum, mv.cum, eq.cum, spyCum);
+
+      function totRet(c) { return c[c.length - 1] - 1; }
+      function maxDraw(c) {
+        let pk = c[0], dd = 0;
+        for (const v of c) { if (v > pk) pk = v; const d = (pk - v) / pk; if (d > dd) dd = d; }
+        return dd;
+      }
+      function sharpe(rets, r0 = rfr) {
+        if (!rets.length) return 0;
+        const m = rets.reduce((s, v) => s + v, 0) / rets.length;
+        const vari = rets.reduce((s, v) => s + (v - m) ** 2, 0) / Math.max(1, rets.length - 1);
+        return (m * 52 - r0) / Math.max(1e-9, Math.sqrt(vari * 52));
+      }
+
+      const fmtP = v => (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+      const cls = v => v >= 0 ? "mkw-pos" : "mkw-neg";
+
+      if (metricsEl) {
+        metricsEl.innerHTML = `
+          <div class="mkw-weights-table-shell tracker-table-shell" style="margin-top:14px">
+            <table class="tracker-table mkw-calc-table">
+              <thead><tr>
+                <th>Métrica (fuera de muestra)</th>
+                <th style="color:#f5b84c">Máx. Sharpe</th>
+                <th style="color:#6f86ff">Mín. Varianza</th>
+                <th style="color:#32d6a2">1/N</th>
+                <th style="color:rgba(255,255,255,0.45)">S&amp;P 500</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>Retorno total (neto)</td>
+                  <td class="${cls(totRet(ms.cum))}">${fmtP(totRet(ms.cum))}</td>
+                  <td class="${cls(totRet(mv.cum))}">${fmtP(totRet(mv.cum))}</td>
+                  <td class="${cls(totRet(eq.cum))}">${fmtP(totRet(eq.cum))}</td>
+                  <td class="${cls(totRet(spyCum))}">${fmtP(totRet(spyCum))}</td>
+                </tr>
+                <tr><td>Max Drawdown</td>
+                  <td class="mkw-neg">-${(maxDraw(ms.cum)*100).toFixed(1)}%</td>
+                  <td class="mkw-neg">-${(maxDraw(mv.cum)*100).toFixed(1)}%</td>
+                  <td class="mkw-neg">-${(maxDraw(eq.cum)*100).toFixed(1)}%</td>
+                  <td class="mkw-neg">-${(maxDraw(spyCum)*100).toFixed(1)}%</td>
+                </tr>
+                <tr><td>Sharpe</td>
+                  <td>${sharpe(ms.rets).toFixed(3)}</td>
+                  <td>${sharpe(mv.rets).toFixed(3)}</td>
+                  <td>${sharpe(eq.rets).toFixed(3)}</td>
+                  <td>${sharpe(spyRets).toFixed(3)}</td>
+                </tr>
+                <tr><td>Turnover total · rebalanceos</td>
+                  <td>${(ms.turnover*100).toFixed(0)}% · ${ms.rebalances}</td>
+                  <td>${(mv.turnover*100).toFixed(0)}% · ${mv.rebalances}</td>
+                  <td>${(eq.turnover*100).toFixed(0)}% · ${eq.rebalances}</td>
+                  <td>—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mkw-calc-matrix-note" style="margin-top:10px">Walk-forward: cada ${R} semanas se reoptimizan los pesos usando solo las ${L} semanas previas, se aplican hacia adelante y se cobra el costo de transacción sobre el turnover de cada rebalanceo. 1/N (igual peso, mismo calendario de rebalanceo) y S&amp;P 500 (comprar y mantener) son las líneas base. Todo es fuera de muestra: la optimización nunca ve los datos sobre los que se mide.</p>`;
+      }
+
+      statusEl.textContent = `Ventana móvil: ${L} sem · prueba: ${len} sem · rebalanceo cada ${R} sem · costo ${(costRate*10000).toFixed(0)} bps · base 100`;
+    } catch (err) {
+      if (statusEl) statusEl.textContent = "Backtest no disponible: " + err.message;
+    }
+  }
+
+  function drawBacktestChart(canvas, msCum, mvCum, eqCum, spyCum) {
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth || 680;
+    const H = Math.max(240, Math.round(W * 0.38));
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    const T = msCum.length;
+    const pad = { t: 16, r: 20, b: 30, l: 64 };
+    const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+
+    const all = [...msCum, ...mvCum, ...eqCum, ...spyCum];
+    const yMin = Math.min(...all) * 0.97, yMax = Math.max(...all) * 1.03;
+    const toX = i => pad.l + (i / (T - 1)) * cW;
+    const toY = v => pad.t + cH - ((v - yMin) / (yMax - yMin || 1)) * cH;
+
+    ctx.clearRect(0, 0, W, H);
+
+    for (let i = 0; i <= 5; i++) {
+      const v = yMin + (yMax - yMin) / 5 * i;
+      const y = toY(v);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cW, y);
+      ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.font = "10px Inter,sans-serif";
+      ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText((v * 100).toFixed(0), pad.l - 5, y);
+    }
+
+    ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.font = "10px Inter,sans-serif";
+    ctx.textAlign = "center"; ctx.translate(14, pad.t + cH / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText("Valor (base 100)", 0, 0); ctx.restore();
+
+    const weeks = T - 1, years = Math.max(1, Math.round(weeks / 52));
+    ctx.fillStyle = "rgba(255,255,255,0.38)"; ctx.font = "10px Inter,sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let yr = 0; yr <= years; yr++) {
+      const idx = Math.min(Math.round(yr * weeks / years), weeks);
+      ctx.fillText(yr === 0 ? "Inicio" : `${yr}a`, toX(idx), pad.t + cH + 5);
+    }
+
+    ctx.beginPath(); ctx.moveTo(pad.l, toY(1)); ctx.lineTo(pad.l + cW, toY(1));
+    ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.stroke();
+
+    ctx.beginPath();
+    spyCum.forEach((v, i) => ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(v)));
+    ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+
+    ctx.beginPath();
+    eqCum.forEach((v, i) => ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(v)));
+    ctx.strokeStyle = "#32d6a2"; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+
+    ctx.beginPath();
+    mvCum.forEach((v, i) => ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(v)));
+    ctx.strokeStyle = "#6f86ff"; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+
+    ctx.beginPath();
+    msCum.forEach((v, i) => ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(v)));
+    ctx.strokeStyle = "#f5b84c"; ctx.lineWidth = 2.2; ctx.lineJoin = "round"; ctx.stroke();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── HEATMAP DE CORRELACIÓN CANVAS (#4) ───────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+
+  function drawCorrHeatmapCanvas(tickers, corrMatrix) {
+    const container = document.getElementById("mkwCalcCorrContent");
+    if (!container) return;
+    const N = tickers.length;
+    const maxFit = Math.min(window.innerWidth * 0.42, 520);
+    const cellSize = Math.max(38, Math.min(72, Math.floor(maxFit / (N + 1))));
+    const labelPad = cellSize;
+    const totalSize = labelPad + N * cellSize;
+
+    let canvas = container.querySelector(".mkw-corr-heatmap-canvas");
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.className = "mkw-corr-heatmap-canvas";
+      canvas.style.cssText = "display:block;margin:0 auto 16px;border-radius:8px;max-width:100%";
+      container.prepend(canvas);
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = totalSize * dpr; canvas.height = totalSize * dpr;
+    canvas.style.width = totalSize + "px"; canvas.style.height = totalSize + "px";
+
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, totalSize, totalSize);
+
+    const fontSize = Math.max(9, Math.round(cellSize * 0.18));
+    ctx.font = `${fontSize}px Inter,sans-serif`;
+
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) {
+        const v = Math.max(-1, Math.min(1, corrMatrix[i][j]));
+        const { bg } = corrHeatColor(v);
+        const x = labelPad + j * cellSize;
+        const y = labelPad + i * cellSize;
+        ctx.fillStyle = bg;
+        ctx.fillRect(x, y, cellSize - 1, cellSize - 1);
+        ctx.fillStyle = Math.abs(v) > 0.55 ? "#fff" : "rgba(255,255,255,0.7)";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(v.toFixed(2), x + cellSize / 2 - 0.5, y + cellSize / 2);
+      }
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.65)";
+    ctx.font = `${Math.max(8, fontSize - 1)}px Inter,sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    tickers.forEach((t, j) => {
+      const label = t.length > 6 ? t.slice(0, 5) + "…" : t;
+      ctx.fillText(label, labelPad + j * cellSize + cellSize / 2, labelPad / 2);
+    });
+    ctx.textAlign = "right";
+    tickers.forEach((t, i) => {
+      const label = t.length > 6 ? t.slice(0, 5) + "…" : t;
+      ctx.fillText(label, labelPad - 5, labelPad + i * cellSize + cellSize / 2);
+    });
   }
 
   function renderBLReturnComparisonCard(tickers, Pi, mu_hist, mu_bl) {

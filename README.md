@@ -7,9 +7,9 @@ Landing page moderna para presentar una plataforma de creacion y gestion de port
 - Hero visual con enfoque financiero
 - Seccion de beneficios para riesgo, asignacion y reportes
 - Planes con cambio mensual y anual
-- Formulario de creacion de cuenta con persistencia en `localStorage`
-- Hook listo para checkout con PayPal, Stripe o gateway propio
-- Barra de navegacion corregida para no tapar contenido al desplazarse
+- Autenticación con **Firebase** (correo/contraseña + Google) y **2FA TOTP server-side**
+- Checkout real con **Stripe** (webhook firmado); el plan es autoritativo en PostgreSQL
+- Persistencia de portafolios en **PostgreSQL** (Railway); `localStorage` solo como caché
 - Pagina `login.html` con acceso para usuario demo y usuarios registrados
 - Pagina `main.html` protegida con inicio personalizable y seccion `Portafolio Tracker`
 - Seccion `Mercados` con buscador de tickers, autocompletado de Yahoo Finance, grafico interactivo e indicadores
@@ -18,19 +18,22 @@ Landing page moderna para presentar una plataforma de creacion y gestion de port
 
 Abre `index.html` directamente en tu navegador.
 
-## Punto de integracion de pagos
+## Pagos (Stripe — en producción)
 
-La integracion esta preparada en `app.js` mediante:
+El frontend inicia el checkout en `app.js` mediante:
 
 ```js
 window.BlackPortfolioPayments.startCheckout({ gateway, plan, user })
 ```
 
-Y cada proveedor base usa un endpoint sugerido:
+Endpoints reales del backend (FastAPI en Railway):
 
-- PayPal: `/api/billing/paypal/create-order`
-- Stripe: `/api/billing/stripe/create-checkout-session`
-- Custom: `/api/billing/custom/checkout`
+- `POST /api/billing/stripe/create-checkout-session`
+- `POST /api/billing/stripe/confirm`
+- `POST /api/billing/stripe/portal`
+- `POST /api/billing/stripe/webhook` (verificado por firma)
+
+El plan del usuario es autoritativo en PostgreSQL (`app_users.plan`); nunca se confía en el cliente.
 
 ## Credenciales demo
 

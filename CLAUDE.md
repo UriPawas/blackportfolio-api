@@ -55,16 +55,19 @@ Auto-detects a free port. Assumes `fastapi` and `uvicorn` are installed. Serves 
 | `login.html` | `login.js` | Demo and registered user login |
 | `main.html` | `main.js` | Protected dashboard — portfolio tracker, markets, settings |
 
-`auth.js` is shared across all pages via `window.BlackPortfolioAuth`. All user data persists in `localStorage` — there is no backend auth.
+`auth.js` is shared across all pages via `window.BlackPortfolioAuth`. Auth is **Firebase Authentication** (email/password + Google sign-in), not localStorage. `localStorage` is only a cache; the source of truth is the backend (PostgreSQL on Railway). Server-side **2FA (TOTP)** is enforced — the secret never reaches the client.
 
-### Backend API (`api.py`)
-- `GET /api/search?q=<ticker>` — Yahoo Finance ticker autocomplete
-- `GET /api/chart/{symbol}?range=<range>&interval=<interval>` — Historical OHLCV data
+### Backend API (`api.py` + `persistence.py`) — FastAPI on Railway
+- `GET /api/search`, `GET /api/chart/{symbol}` — Yahoo Finance / CoinGecko market data
+- `GET /api/account/bootstrap`, `PUT /api/account/portfolios` — portfolio persistence (PostgreSQL); plan limits enforced server-side via `PLAN_LIMITS`
+- `POST /api/2fa/*` — server-side TOTP setup/verify/disable (rate-limited)
+- `/api/admin/*` — admin panel (gated by `require_admin`)
+- Auth: Firebase ID token verified with `verify_id_token(check_revoked=True)`; sensitive endpoints additionally require a valid 2FA session token (`require_2fa`).
 
-Payment endpoints (`/api/billing/paypal/...`, `/api/billing/stripe/...`, `/api/billing/custom/...`) are **stubs** — not implemented yet.
-
-### Payment Hook
-`window.BlackPortfolioPayments.startCheckout({ gateway, plan, user })` in `app.js` — handles gateway selection and payload construction. The actual HTTP calls target the stub endpoints above.
+### Billing (Stripe — live, not stubs)
+- `POST /api/billing/stripe/create-checkout-session`, `/confirm`, `/portal`, `/webhook`
+- The Stripe webhook is signature-verified; the user's `plan` is authoritative in PostgreSQL (`app_users.plan`), never trusted from the client.
+- Frontend entry point: `window.BlackPortfolioPayments.startCheckout({ gateway, plan, user })` in `app.js`.
 
 ## Demo Credentials
 - Email: `demo@blackportfolio.ai`
