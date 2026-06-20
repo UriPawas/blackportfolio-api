@@ -7,6 +7,7 @@ from collections import OrderedDict
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from persistence import install_persistence
 import requests
 import yfinance as yf
 import numpy as np
@@ -256,9 +257,11 @@ app.add_middleware(
         "https://portify-6467f.web.app",
         "https://portify-6467f.firebaseapp.com",
     ],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
 )
+
+install_persistence(app)
 
 @app.get("/health")
 def health():
@@ -1318,6 +1321,74 @@ def ai_insights(request: Request, body: InsightsRequest):
     if not text:
         raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
     return {"insights": text, "model": info}
+
+
+class AnalyzerAIRequest(BaseModel):
+    assets: list
+    portfolio: Optional[dict] = None
+    lang: str = "es"
+
+@app.post("/api/ai/analyzer")
+@limiter.limit("8/minute")
+def ai_analyzer(request: Request, body: AnalyzerAIRequest):
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
+    if not body.assets:
+        raise HTTPException(status_code=400, detail="Sin activos para analizar")
+
+    models = ["deepseek/deepseek-v4-flash"]
+    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    system_msg = (
+        "Eres un analista financiero senior (CFA) con experiencia en research de buy-side, objetivo y "
+        "prudente. Recibes la salida de un motor cuantitativo que integra: valoración DCF multi-escenario, "
+        "simulación Monte Carlo, fundamentales completos, análisis técnico (tendencia, RSI, medias móviles, "
+        "rango de 52 semanas, momentum), consenso de analistas de Wall Street con precios objetivo, un "
+        "precio objetivo consolidado (mezcla ponderada de DCF, Monte Carlo y analistas) y un score "
+        "multifactor. Redactas un veredicto de inversión institucional, profundo y educativo. "
+        "Reglas: (1) Te apoyas SIEMPRE en las cifras del JSON y las citas explícitamente con valores y "
+        "porcentajes. (2) NUNCA inventes datos que no estén en el JSON. (3) Triangulas: contrasta lo que "
+        "dice la valoración intrínseca (DCF) con lo estocástico (Monte Carlo), lo técnico y el consenso de "
+        "analistas — señala cuándo coinciden (alta convicción) y cuándo divergen (señal de cautela). "
+        "(4) No das órdenes personalizadas ni garantías de rentabilidad; ofreces observaciones de "
+        "valoración, riesgo, calidad y timing. (5) Si un activo no tiene DCF (ETF/cripto), apóyate en "
+        "Monte Carlo, técnico, analistas y fundamentales disponibles."
+    )
+    payload = {"activos": body.assets}
+    if body.portfolio:
+        payload["portafolio"] = body.portfolio
+    user_msg = (
+        f"Redacta un veredicto MUY COMPLETO en {lang_name}, en Markdown, con esta estructura usando "
+        "encabezados '## ':\n\n"
+        "## Resumen ejecutivo — 3-4 frases sintetizando el conjunto: qué activo luce mejor posicionado y "
+        "por qué, con la cifra clave (upside del objetivo consolidado) de cada uno.\n\n"
+        "Luego, para CADA activo, una sección '## <TICKER> — <veredicto en 2-4 palabras> (convicción: "
+        "Alta/Media/Baja)'. Dentro, usa estas sub-secciones con encabezado '### ':\n"
+        "### Valoración — intrínseco DCF (base/optimista/conservador) vs. precio, upside, WACC y crecimiento; "
+        "margen de seguridad.\n"
+        "### Riesgo y probabilidad — Monte Carlo: prob. de subida a 12m, P10/mediana/P90, volatilidad anual y "
+        "qué implica.\n"
+        "### Técnico — tendencia (golden/death cross), RSI (sobrecompra/sobreventa), posición en el rango de "
+        "52 semanas, momentum; ¿el timing acompaña a la tesis?\n"
+        "### Analistas y precio objetivo — recomendación de consenso, nº de analistas, objetivo medio/alto/bajo "
+        "y su upside; compáralo con el DCF.\n"
+        "### Veredicto — 2-3 frases que integren todo, cita el **precio objetivo consolidado** y su upside, el "
+        "score del modelo, y enumera 1-2 catalizadores y 1-2 riesgos principales.\n\n"
+        "Si hay datos de portafolio, añade '## Portafolio y diversificación' comentando correlación, beneficio "
+        "de diversificación y prob. de subida del conjunto.\n\n"
+        "Cierra con '## Conclusión y ranking' — ordena los activos de mejor a peor posicionado por relación "
+        "riesgo/recompensa, justificando con cifras, en términos educativos.\n\n"
+        "Sé concreto, profesional y cuantitativo; cita SIEMPRE cifras. Omite una sub-sección solo si no hay "
+        "datos para ella. Mantén un tono institucional pero claro.\n\n"
+        f"Datos (JSON):\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+
+    text, info = _openrouter_chat(models, [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg},
+    ])
+    if not text:
+        raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
+    return {"verdict": text, "model": info}
 
 
 # Servir estáticos solo en local — en Railway lo hace Firebase Hosting

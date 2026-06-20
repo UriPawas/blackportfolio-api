@@ -7,3 +7,6 @@ pydantic==2.10.6
 slowapi==0.1.9
 numpy
 pandas
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
+firebase-admin>=6.5,<8

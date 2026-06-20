@@ -1,0 +1,11 @@
+functions/.env
+functions/node_modules/
+__pycache__/
+*.pyc
+.firebase/
+
+# Firebase Admin service account keys (NUNCA commitear)
+*firebase-adminsdk*.json
+serviceAccount*.json
+.env
+
