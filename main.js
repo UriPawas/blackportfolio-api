@@ -13993,6 +13993,74 @@ changePasswordForm.addEventListener("submit", async e => {
   });
 })();
 
+// ── Feedback in-app (beta) ────────────────────────────────────────────────────
+(function initFeedback() {
+  const openBtn   = document.getElementById("feedbackOpenBtn");
+  const modal     = document.getElementById("feedbackModal");
+  const closeBtn  = document.getElementById("feedbackCloseBtn");
+  const form      = document.getElementById("feedbackForm");
+  const category  = document.getElementById("feedbackCategory");
+  const message   = document.getElementById("feedbackMessage");
+  const submitBtn = document.getElementById("feedbackSubmitBtn");
+  const msgEl     = document.getElementById("feedbackMsg");
+  if (!openBtn || !modal || !form) return;
+
+  function open() {
+    if (msgEl) { msgEl.textContent = ""; msgEl.style.color = ""; }
+    modal.classList.remove("hidden");
+  }
+  function close() { modal.classList.add("hidden"); }
+
+  openBtn.addEventListener("click", open);
+  closeBtn?.addEventListener("click", close);
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = (message?.value || "").trim();
+    if (!text) { message?.focus(); return; }
+
+    const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
+    if (!user) {
+      if (msgEl) { msgEl.style.color = "#ff6b6b"; msgEl.textContent = "Inicia sesión para enviar feedback."; }
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Enviando…";
+    try {
+      const idToken = await user.getIdToken();
+      const twofaToken = sessionStorage.getItem("bp-2fa-token");
+      const activeSection = document.querySelector(".dashboard-nav-item.active")?.dataset.section || "";
+      const res = await fetch(`${API_BASE_URL}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+          ...(twofaToken ? { "X-2FA-Token": twofaToken } : {}),
+        },
+        body: JSON.stringify({
+          category: category?.value || "general",
+          message: text,
+          page: (activeSection ? `${activeSection} · ` : "") + location.pathname,
+          userAgent: navigator.userAgent,
+          appVersion: "beta",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      window.showToast?.("¡Gracias! Tu feedback fue enviado.", "success");
+      form.reset();
+      close();
+    } catch (err) {
+      if (msgEl) { msgEl.style.color = "#ff6b6b"; msgEl.textContent = "No se pudo enviar: " + err.message; }
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Enviar";
+    }
+  });
+})();
+
 // ── Settings Enhancements ─────────────────────────────────────────────────────
 (function initSettingsEnhancements() {
   const CURRENCY_KEY = "bp-currency";
@@ -14001,17 +14069,39 @@ changePasswordForm.addEventListener("submit", async e => {
   function refreshVerifiedBadge() {
     const user = window.BlackPortfolioAuth.firebaseAuth.currentUser;
     const badge = document.getElementById("emailVerifiedBadge");
+    const resendBtn = document.getElementById("resendVerifyBtn");
     if (!badge || !user) return false;
     if (user.emailVerified) {
       badge.textContent = "✓ Verificado";
       badge.className = "settings-verified-badge settings-verified-badge--ok";
+      if (resendBtn) resendBtn.classList.add("hidden");
       return true;
     } else {
       badge.textContent = "Sin verificar";
       badge.className = "settings-verified-badge settings-verified-badge--warn";
+      if (resendBtn) resendBtn.classList.remove("hidden");
       return false;
     }
   }
+
+  (function initResendVerify() {
+    const resendBtn = document.getElementById("resendVerifyBtn");
+    if (!resendBtn) return;
+    resendBtn.addEventListener("click", async () => {
+      resendBtn.disabled = true;
+      const original = resendBtn.textContent;
+      resendBtn.textContent = "Enviando…";
+      const r = await window.BlackPortfolioAuth.resendEmailVerification();
+      if (r.ok) {
+        window.showToast?.("Correo de verificación enviado. Revisa tu bandeja.", "success");
+        resendBtn.textContent = "Enviado ✓";
+      } else {
+        window.showToast?.(r.error || "No se pudo enviar el correo.", "error");
+        resendBtn.textContent = original;
+        resendBtn.disabled = false;
+      }
+    });
+  })();
 
   function setText(id, value) {
     const el = document.getElementById(id);

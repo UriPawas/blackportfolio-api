@@ -43,6 +43,7 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async (user) => {
   adminPanel.style.display = "block";
   adminEmail.textContent = user.email;
   loadPromoCodes();
+  loadFeedback();
 });
 
 async function adminFetch(path, options = {}) {
@@ -366,6 +367,103 @@ promoType?.addEventListener("change", () => {
 });
 
 genPromoBtn?.addEventListener("click", generatePromo);
+
+// ── Feedback de usuarios ──────────────────────────────────────────────────────
+const feedbackTable   = document.getElementById("feedback-table");
+const feedbackTbody   = document.getElementById("feedback-tbody");
+const feedbackEmpty   = document.getElementById("feedback-empty");
+const feedbackLoading = document.getElementById("feedback-loading");
+const feedbackBadge   = document.getElementById("feedback-badge");
+const feedbackRefresh = document.getElementById("feedbackRefreshBtn");
+
+let feedbackItems = [];
+
+const FB_CATEGORY = {
+  bug: "🐞 Error", idea: "💡 Idea", question: "❓ Pregunta", general: "💬 General",
+};
+const FB_STATUS = { new: "Nuevo", read: "Leído", resolved: "Resuelto" };
+
+function fbDate(iso) {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleString("es-MX", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+  catch { return "—"; }
+}
+
+function statusBadgeFb(status) {
+  const cls = status === "new" ? "badge-online" : status === "resolved" ? "badge-offline" : "badge-investor";
+  return `<span class="badge ${cls}">${FB_STATUS[status] || status}</span>`;
+}
+
+function renderFeedback() {
+  feedbackTbody.innerHTML = "";
+  const newCount = feedbackItems.filter(f => f.status === "new").length;
+  if (feedbackBadge) {
+    feedbackBadge.style.display = newCount ? "inline-block" : "none";
+    feedbackBadge.textContent = `${newCount} nuevo${newCount === 1 ? "" : "s"}`;
+  }
+  if (!feedbackItems.length) {
+    feedbackEmpty.style.display = "block";
+    feedbackTable.style.display = "none";
+    return;
+  }
+  feedbackEmpty.style.display = "none";
+  feedbackTable.style.display = "table";
+
+  feedbackItems.forEach(f => {
+    const tr = document.createElement("tr");
+    const nextStatus = f.status === "new" ? "read" : f.status === "read" ? "resolved" : "new";
+    const nextLabel  = f.status === "new" ? "Marcar leído" : f.status === "read" ? "Resolver" : "Reabrir";
+    tr.innerHTML = `
+      <td>${esc(f.displayName) || "—"}<br><span style="color:var(--muted);font-size:0.78rem">${esc(f.email) || "—"}</span></td>
+      <td>${planBadge(f.plan)}</td>
+      <td style="white-space:nowrap">${esc(FB_CATEGORY[f.category] || f.category)}</td>
+      <td style="max-width:340px;white-space:pre-wrap">${esc(f.message)}</td>
+      <td style="color:var(--muted);font-size:0.78rem">${esc(f.page) || "—"}</td>
+      <td style="color:var(--muted);font-size:0.8rem;white-space:nowrap">${fbDate(f.createdAt)}</td>
+      <td style="white-space:nowrap">${statusBadgeFb(f.status)}
+        <button class="copy-btn fb-status-btn" data-id="${f.id}" data-next="${nextStatus}">${nextLabel}</button></td>
+    `;
+    feedbackTbody.appendChild(tr);
+  });
+
+  feedbackTbody.querySelectorAll(".fb-status-btn").forEach(b =>
+    b.addEventListener("click", () => setFeedbackStatus(b)));
+}
+
+async function loadFeedback() {
+  try {
+    const res = await adminFetch("/admin/feedback");
+    if (!res.ok) { if (feedbackLoading) feedbackLoading.textContent = "No se pudo cargar el feedback."; return; }
+    const data = await res.json();
+    feedbackItems = data.feedback || [];
+    if (feedbackLoading) feedbackLoading.style.display = "none";
+    renderFeedback();
+  } catch (err) {
+    console.error("No se pudo cargar el feedback.", err);
+    if (feedbackLoading) feedbackLoading.textContent = "Error al cargar el feedback.";
+  }
+}
+
+async function setFeedbackStatus(btn) {
+  const id = btn.dataset.id;
+  const next = btn.dataset.next;
+  btn.disabled = true;
+  try {
+    const res = await adminFetch(`/admin/feedback/${encodeURIComponent(id)}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status: next }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const item = feedbackItems.find(f => String(f.id) === String(id));
+    if (item) item.status = next;
+    renderFeedback();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Error";
+  }
+}
+
+feedbackRefresh?.addEventListener("click", loadFeedback);
 
 async function savePlan(btn) {
   const uid = btn.dataset.uid;

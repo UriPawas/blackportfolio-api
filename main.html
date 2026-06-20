@@ -65,6 +65,7 @@
       </nav>
 
       <div class="dashboard-sidebar-footer">
+        <button id="feedbackOpenBtn" class="button secondary" type="button">💬 Enviar feedback</button>
         <a class="button secondary" href="index.html" data-i18n="sidebar_back">Volver a landing</a>
         <button id="logoutButton" class="button ghost" type="button" data-i18n="sidebar_logout">Cerrar sesión</button>
       </div>
@@ -2157,6 +2158,7 @@
                 <span data-i18n="settings_email_label">Correo</span>
                 <strong id="settingsEmail">--</strong>
                 <span id="emailVerifiedBadge" class="settings-verified-badge hidden"></span>
+                <button id="resendVerifyBtn" type="button" class="settings-resend-verify hidden">Reenviar verificación</button>
               </div>
               <div class="summary-item"><span data-i18n="settings_plan_label">Plan</span><strong id="settingsPlan">--</strong></div>
               <div class="summary-item"><span data-i18n="settings_type_label">Tipo</span><strong id="settingsType">--</strong></div>
@@ -2666,6 +2668,38 @@
     </div>
   </div>
 
+  <!-- ── Modal: Enviar feedback (beta) ───────────────────────────── -->
+  <div id="feedbackModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tracker-modal">
+      <div class="tracker-modal-header">
+        <h3>Enviar feedback</h3>
+        <button id="feedbackCloseBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="feedbackForm" class="dashboard-form">
+        <p style="color:var(--muted,#9ca3b4);font-size:0.85rem;margin-bottom:4px">
+          Cuéntanos qué te gustó, qué falló o qué te gustaría ver. Tu correo y plan se adjuntan automáticamente.
+        </p>
+        <div class="form-row">
+          <label for="feedbackCategory">Tipo</label>
+          <select id="feedbackCategory" class="dashboard-input">
+            <option value="bug">🐞 Reportar un error</option>
+            <option value="idea">💡 Sugerencia / idea</option>
+            <option value="question">❓ Pregunta</option>
+            <option value="general" selected>💬 Comentario general</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="feedbackMessage">Mensaje</label>
+          <textarea id="feedbackMessage" rows="5" maxlength="4000" required
+            placeholder="Escribe aquí tu comentario…" class="dashboard-input"></textarea>
+        </div>
+        <div id="feedbackMsg" style="min-height:18px;font-size:0.82rem"></div>
+        <button id="feedbackSubmitBtn" class="button primary" type="submit">Enviar</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="monitoring.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>

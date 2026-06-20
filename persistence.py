@@ -109,6 +109,25 @@ class TotpCredential(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class Feedback(Base):
+    """Feedback in-app enviado por usuarios durante la beta. El email/nombre/plan
+    se capturan server-side desde app_users (no se confía en el cliente)."""
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    firebase_uid: Mapped[str] = mapped_column(String(128), index=True)
+    email: Mapped[str | None] = mapped_column(String(320))
+    display_name: Mapped[str | None] = mapped_column(String(200))
+    plan: Mapped[str | None] = mapped_column(String(80))
+    category: Mapped[str] = mapped_column(String(40), default="general")
+    message: Mapped[str] = mapped_column(Text)
+    page: Mapped[str | None] = mapped_column(String(200))
+    user_agent: Mapped[str | None] = mapped_column(String(400))
+    app_version: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="new", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 def _database_url() -> str:
     if not DATABASE_URL:
         raise HTTPException(status_code=503, detail="PostgreSQL no esta configurado.")
@@ -564,9 +583,54 @@ def replace_portfolios(
     return {"ok": True, "checksum": checksum, "version": snapshot.version, "unchanged": False}
 
 
+class FeedbackBody(BaseModel):
+    category: str = "general"
+    message: str = ""
+    page: str = ""
+    userAgent: str = ""
+    appVersion: str = ""
+
+
+feedback_router = APIRouter(prefix="/api", tags=["feedback"])
+
+
+@feedback_router.post("/feedback")
+@limiter.limit("10/minute")
+def submit_feedback(
+    request: Request,
+    body: FeedbackBody,
+    token: dict[str, Any] = Depends(verify_firebase_user),
+    session: Session = Depends(get_session),
+):
+    """Recibe feedback in-app. Solo exige autenticación Firebase (no 2FA) para que
+    cualquier usuario logueado pueda enviarlo sin fricción. Los datos de identidad
+    se toman del registro server-side, no del cliente."""
+    message = (body.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío.")
+    user = upsert_user(session, token)
+    fb = Feedback(
+        firebase_uid=token["uid"],
+        email=user.email,
+        display_name=user.display_name,
+        plan=normalize_plan(user.plan),
+        category=(body.category or "general")[:40],
+        message=message[:4000],
+        page=((body.page or "")[:200] or None),
+        user_agent=((body.userAgent or "")[:400] or None),
+        app_version=((body.appVersion or "")[:40] or None),
+        status="new",
+        created_at=utc_now(),
+    )
+    session.add(fb)
+    session.commit()
+    return {"ok": True, "id": fb.id}
+
+
 def install_persistence(app) -> None:
     app.include_router(router)
     app.include_router(twofa_router)
+    app.include_router(feedback_router)
 
     @app.on_event("startup")
     def initialize_persistence_tables():

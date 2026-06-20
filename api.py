@@ -8,7 +8,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from persistence import (
     install_persistence, verify_firebase_user, require_2fa, get_session,
-    AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent,
+    AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
     normalize_plan, require_plan, upsert_user, utc_now, limiter,
 )
 import requests
@@ -355,6 +355,23 @@ PLAN_PRICES = {
     "Advisor Pro": {"monthly": 5900,  "yearly": 56400},
     "Wealth Desk": {"monthly": 12900, "yearly": 123600},
 }
+
+# ── Monitoreo de errores (Sentry) ─────────────────────────────────────────────
+# No-op si SENTRY_DSN no está configurado, de modo que local/dev no requiere nada.
+_SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            integrations=[FastApiIntegration()],
+            environment=os.environ.get("RAILWAY_ENVIRONMENT", "production"),
+            traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            send_default_pii=False,
+        )
+    except Exception as _e:
+        print(f"Sentry no se inicializó: {_e}")
 
 app = FastAPI()
 app.state.limiter = limiter
@@ -1050,6 +1067,46 @@ def admin_deactivate_promo_code(promo_id: str, token: dict = Depends(require_adm
     except stripe.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
     return _promo_to_dict(promo)
+
+# ── Feedback in-app (beta) ────────────────────────────────────────────────────
+@app.get("/api/admin/feedback")
+def admin_list_feedback(token: dict = Depends(require_admin), session=Depends(get_session)):
+    rows = session.query(Feedback).order_by(Feedback.created_at.desc()).limit(500).all()
+    out = [{
+        "id": f.id,
+        "uid": f.firebase_uid,
+        "email": f.email,
+        "displayName": f.display_name,
+        "plan": f.plan,
+        "category": f.category,
+        "message": f.message,
+        "page": f.page,
+        "userAgent": f.user_agent,
+        "appVersion": f.app_version,
+        "status": f.status,
+        "createdAt": f.created_at.isoformat() if f.created_at else None,
+    } for f in rows]
+    new_count = sum(1 for f in rows if f.status == "new")
+    return {"feedback": out, "newCount": new_count}
+
+class FeedbackStatusBody(BaseModel):
+    status: str = "new"
+
+@app.put("/api/admin/feedback/{feedback_id}/status")
+def admin_set_feedback_status(
+    feedback_id: int,
+    body: FeedbackStatusBody,
+    token: dict = Depends(require_admin),
+    session=Depends(get_session),
+):
+    if body.status not in ("new", "read", "resolved"):
+        raise HTTPException(status_code=400, detail="Estado no válido.")
+    fb = session.get(Feedback, feedback_id)
+    if not fb:
+        raise HTTPException(status_code=404, detail="Feedback no encontrado.")
+    fb.status = body.status
+    session.commit()
+    return {"ok": True, "id": fb.id, "status": fb.status}
 
 RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "")
 PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")

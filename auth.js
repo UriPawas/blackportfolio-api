@@ -236,6 +236,8 @@
       const result = await firebaseAuth.createUserWithEmailAndPassword(payload.email, payload.password);
       const user = result.user;
       await user.updateProfile({ displayName: payload.fullName });
+      // Envía el correo de verificación (best-effort: no bloquea el alta si falla).
+      try { await user.sendEmailVerification(); } catch (e) { console.warn("No se pudo enviar verificación:", e); }
       const requestedPlan = normalizePlan(payload.selectedPlan);
       const userData = {
         fullName: payload.fullName,
@@ -253,6 +255,21 @@
       if (err.code === "auth/email-already-in-use") throw new Error("Ya existe una cuenta con ese correo.");
       if (err.code === "auth/weak-password") throw new Error("La contrasena debe tener al menos 6 caracteres.");
       throw new Error("Error al crear la cuenta. Intenta de nuevo.");
+    }
+  }
+
+  async function resendEmailVerification() {
+    const user = firebaseAuth.currentUser;
+    if (!user) return { ok: false, error: "No autenticado." };
+    if (user.emailVerified) return { ok: false, error: "Tu correo ya está verificado." };
+    try {
+      await user.sendEmailVerification();
+      return { ok: true };
+    } catch (err) {
+      if (err.code === "auth/too-many-requests") {
+        return { ok: false, error: "Demasiados intentos. Espera unos minutos." };
+      }
+      return { ok: false, error: "No se pudo enviar el correo. Intenta de nuevo." };
     }
   }
 
@@ -539,6 +556,7 @@
     checkLockout: () => ({ locked: false, remainingMs: 0, attempts: 0 }),
     touchActivity: () => {},
     changePassword,
+    resendEmailVerification,
     markCheckoutReady,
     setPlan,
     setExtra,

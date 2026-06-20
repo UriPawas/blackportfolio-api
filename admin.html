@@ -278,6 +278,26 @@
       </div>
     </section>
 
+    <section class="promo-section">
+      <div class="promo-head">
+        <div>
+          <h2>Feedback de usuarios <span id="feedback-badge" class="badge badge-demo" style="display:none"></span></h2>
+          <p>Comentarios, errores e ideas enviados desde la app. Marca como leído o resuelto.</p>
+        </div>
+        <button id="feedbackRefreshBtn" class="copy-btn">↻ Actualizar</button>
+      </div>
+      <div class="table-wrap" style="margin-top:14px">
+        <table id="feedback-table" style="display:none">
+          <thead>
+            <tr><th>Usuario</th><th>Plan</th><th>Tipo</th><th>Mensaje</th><th>Contexto</th><th>Fecha</th><th>Estado</th></tr>
+          </thead>
+          <tbody id="feedback-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="feedback-empty" style="display:none">Aún no hay feedback.</div>
+        <div id="feedback-loading" class="empty-state">Cargando feedback…</div>
+      </div>
+    </section>
+
     <input class="search-bar" id="searchInput" type="text" placeholder="Buscar por nombre o email…" />
 
     <div class="table-wrap">
@@ -301,6 +321,7 @@
     </div>
   </div>
 
+  <script src="monitoring.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
