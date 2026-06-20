@@ -5,8 +5,37 @@ const logoutButtonSecondary = document.getElementById("logoutButtonSecondary");
 
 const sidebarUserName = document.getElementById("sidebarUserName");
 const sidebarUserPlan = document.getElementById("sidebarUserPlan");
+const sidebarUserAvatar = document.getElementById("sidebarUserAvatar");
 const topbarUserName = document.getElementById("topbarUserName");
 const topbarPlan = document.getElementById("topbarPlan");
+const topbarUserAvatar = document.getElementById("topbarUserAvatar");
+
+const AVATAR_PRESETS = [
+  { id: "1", emoji: "🦊", colors: ["#ff7b54", "#ffb26b"] },
+  { id: "2", emoji: "🐯", colors: ["#ffd166", "#ef476f"] },
+  { id: "3", emoji: "🦉", colors: ["#6f86ff", "#39d0ff"] },
+  { id: "4", emoji: "🐬", colors: ["#00c2cb", "#1a8fe3"] },
+  { id: "5", emoji: "🦁", colors: ["#f9844a", "#f3722c"] },
+  { id: "6", emoji: "🐼", colors: ["#4361ee", "#7209b7"] },
+  { id: "7", emoji: "🦄", colors: ["#f72585", "#7209b7"] },
+  { id: "8", emoji: "🐺", colors: ["#43aa8b", "#577590"] }
+];
+
+function getAvatarPreset(avatarId) {
+  return AVATAR_PRESETS.find(a => a.id === avatarId) || AVATAR_PRESETS[0];
+}
+
+function renderAvatarInto(el, session) {
+  if (!el) return;
+  if (session.photoURL) {
+    el.style.background = "none";
+    el.innerHTML = `<img src="${session.photoURL}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+  } else {
+    const preset = getAvatarPreset(session.avatarId);
+    el.style.background = `linear-gradient(135deg, ${preset.colors[0]}, ${preset.colors[1]})`;
+    el.textContent = preset.emoji;
+  }
+}
 const settingsUser = document.getElementById("settingsUser");
 const settingsEmail = document.getElementById("settingsEmail");
 const settingsPlan = document.getElementById("settingsPlan");
@@ -33,9 +62,14 @@ const marketChartStatus = document.getElementById("marketChartStatus");
 const marketChartContainer = document.getElementById("marketChart");
 const marketChartOverlay = document.getElementById("marketChartOverlay");
 const marketChartOverlayMsg = document.getElementById("marketChartOverlayMsg");
+const chartFullscreenBtn = document.getElementById("chartFullscreenBtn");
+const marketChartShell = document.querySelector(".market-chart-shell");
 
 const marketStorageKey = "blackportfolio-market-state";
-const hubStorageKey = "blackportfolio-hub-state";
+function getHubStorageKey() {
+  const session = window.BlackPortfolioAuth?.getSession();
+  return `blackportfolio-hub-state-${session?.id || "anonymous"}`;
+}
 const HOME_HEADING = "Centro de inversión";
 
 const rangeConfigs = {
@@ -89,6 +123,13 @@ const chartTypeIcons = {
       <line x1="19" y1="7" x2="19" y2="10" stroke="#f23445" opacity="0.7" stroke-width="1.5"/>
       <line x1="19" y1="16" x2="19" y2="19" stroke="#f23445" opacity="0.7" stroke-width="1.5"/>
     </svg>
+  `,
+  heikinashi: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 3v18M17 3v18"></path>
+      <rect x="5" y="8" width="4" height="6" rx="2"></rect>
+      <rect x="15" y="9" width="4" height="8" rx="2"></rect>
+    </svg>
   `
 };
 
@@ -107,6 +148,9 @@ const indicatorDefinitions = {
             colors: { macd: "#6f86ff", signal: "#ff6b8a", histUp: "#00c894", histDown: "#ff4d6a" } },
   stoch:  { label: "Estocástico", type: "panel", panelType: "stoch", k: 14, d: 3, smooth: 3,
             colors: { k: "#00c894", d: "#f5a623" } },
+  stochrsi: { label: "Stoch RSI (14,14,3,3)", type: "panel", panelType: "stochrsi",
+            rsiPeriod: 14, period: 14, kSmooth: 3, dSmooth: 3,
+            colors: { k: "#39d0ff", d: "#ff8c42" } },
   cci:    { label: "CCI (20)", type: "panel", panelType: "cci",   period: 20,  color: "#f5a623" },
   atr:    { label: "ATR (14)", type: "panel", panelType: "atr",   period: 14,  color: "#ff8c42" },
   momentum: { label: "Momentum (10)", type: "panel", panelType: "momentum", period: 10, color: "#c084fc" },
@@ -119,6 +163,11 @@ const indicatorDefinitions = {
             colors: { up: "#32d6a2", down: "#ff6b81" } },
   fiboext:{ label: "Fib. Extensión", type: "fiboext", lookback: 60,
             color: "#f5b84c" },
+  fiboret:{ label: "Fib. Retroceso", type: "fiboret", lookback: 60,
+            color: "#39d0ff" },
+  srlevels: { label: "Soportes / Resistencias", type: "srlevels", lookback: 200, strength: 3, maxLevels: 3,
+            colors: { support: "#32d6a2", resistance: "#ff6b81" } },
+  divergence: { label: "Divergencias RSI", type: "divergence", strength: 5, lookback: 150, color: "#c084fc" },
   ichimoku: { label: "Ichimoku Cloud", type: "ichimoku", tenkan: 9, kijun: 26, senkou: 52,
             colors: { tenkan: "#39d0ff", kijun: "#ff6b8a", spanA: "#00c894", spanB: "#ff8c42",
                       cloudUp: "rgba(0,200,148,0.14)", cloudDown: "rgba(255,107,138,0.14)", chikou: "#c0a0ff" } },
@@ -131,18 +180,20 @@ const indicatorDefinitions = {
   obv:    { label: "OBV", type: "panel", panelType: "obv", color: "#6f86ff" },
   mfi:    { label: "MFI (14)", type: "panel", panelType: "mfi", period: 14, color: "#c084fc" },
   willr:  { label: "Williams %R", type: "panel", panelType: "willr", period: 14, color: "#39d0ff" },
-  roc:    { label: "ROC (12)", type: "panel", panelType: "roc", period: 12, color: "#f5a623" }
+  roc:    { label: "ROC (12)", type: "panel", panelType: "roc", period: 12, color: "#f5a623" },
+  bbpercent: { label: "BB %B", type: "panel", panelType: "bbpercent", period: 20, mult: 2, color: "#6f86ff" },
+  bbwidth:   { label: "BB Width", type: "panel", panelType: "bbwidth", period: 20, mult: 2, color: "#f5a623" }
 };
 
-const PANEL_HEIGHTS = { vol: 0.13, rsi: 0.17, macd: 0.19, stoch: 0.15, cci: 0.15, atr: 0.13, momentum: 0.15,
-  adx: 0.16, obv: 0.13, mfi: 0.15, willr: 0.15, roc: 0.15 };
+const PANEL_HEIGHTS = { vol: 0.13, rsi: 0.17, macd: 0.19, stoch: 0.15, stochrsi: 0.15, cci: 0.15, atr: 0.13, momentum: 0.15,
+  adx: 0.16, obv: 0.13, mfi: 0.15, willr: 0.15, roc: 0.15, bbpercent: 0.15, bbwidth: 0.13 };
 const PANEL_GAP = 0.01;
 
 // ── Plan restriction system ───────────────────────────────────────────────────
-const _ALL_CHART_TYPES = ["candlestick", "bars", "line", "area", "volheatmap"];
+const _ALL_CHART_TYPES = ["candlestick", "bars", "line", "area", "volheatmap", "heikinashi"];
 
 const PLAN_LIMITS = {
-  "-1": { // Free
+  "-1": { // Explorer
     sections: ["home", "tracker", "settings"],
     ranges: ["1D", "1W", "1M"],
     chartTypes: ["line", "area"],
@@ -171,7 +222,7 @@ const PLAN_LIMITS = {
     sections: null, ranges: null, chartTypes: null, indicators: null,
     maxIndicators: Infinity, maxPortfolios: Infinity
   },
-  3: { // Institutional Desk
+  3: { // Wealth Desk
     sections: null, ranges: null, chartTypes: null, indicators: null,
     maxIndicators: Infinity, maxPortfolios: Infinity
   }
@@ -179,7 +230,7 @@ const PLAN_LIMITS = {
 
 function getPlanLevel(session) {
   if (!session || session.isDemo) return 0;
-  return { "Free": -1, "Investor": 1, "Advisor Pro": 2, "Institutional Desk": 3 }[session.selectedPlan] ?? 1;
+  return { "Explorer": -1, "Investor": 1, "Advisor Pro": 2, "Wealth Desk": 3 }[session.selectedPlan] ?? -1;
 }
 
 function showPlanToast(message) {
@@ -190,6 +241,34 @@ function showPlanToast(message) {
   toast.innerHTML = `🔒 ${message} &nbsp;<a href="index.html#plans" style="color:#6f86ff;font-weight:600">Ver planes →</a>`;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 4500);
+}
+
+// Toast genérico. opts: { type: "info"|"error"|"success", actionLabel, onAction, duration }
+function showToast(message, opts = {}) {
+  document.getElementById("appToast")?.remove();
+  const toast = document.createElement("div");
+  toast.id = "appToast";
+  toast.className = "app-toast" + (opts.type ? " app-toast--" + opts.type : "");
+  toast.setAttribute("role", "status");
+  const span = document.createElement("span");
+  span.textContent = message;
+  toast.appendChild(span);
+  let timer;
+  if (opts.actionLabel && typeof opts.onAction === "function") {
+    const btn = document.createElement("button");
+    btn.className = "app-toast-action";
+    btn.type = "button";
+    btn.textContent = opts.actionLabel;
+    btn.addEventListener("click", () => {
+      clearTimeout(timer);
+      toast.remove();
+      opts.onAction();
+    });
+    toast.appendChild(btn);
+  }
+  document.body.appendChild(toast);
+  timer = setTimeout(() => toast.remove(), opts.duration ?? 4500);
+  return toast;
 }
 
 function showUpgradeOverlay(sectionId) {
@@ -314,6 +393,13 @@ let vpPrimitive = null;
 let gapsPrimitive = null;
 let ichimokuCloudPrimitive = null;
 let fiboPriceLines = [];
+let _markerSources = {};
+
+function applyAllMarkers() {
+  if (!mainSeries) return;
+  const all = Object.values(_markerSources).flat().sort((a, b) => a.time - b.time);
+  mainSeries.setMarkers(all);
+}
 let lastCandles = [];
 let lastHighs = [];
 let lastLows = [];
@@ -372,6 +458,16 @@ function renderUser(session) {
   settingsType.textContent = session.isDemo ? "Demo" : "Registrado";
   const displayEl = document.getElementById("settingsUserDisplay");
   if (displayEl) displayEl.textContent = session.fullName;
+
+  [sidebarUserAvatar, topbarUserAvatar].forEach(el => el?.classList.remove("is-skeleton"));
+  renderAvatarInto(sidebarUserAvatar, session);
+  renderAvatarInto(topbarUserAvatar, session);
+  const settingsPreview = document.getElementById("settingsAvatarPreview");
+  const avatarHint = document.getElementById("settingsAvatarHint");
+  const editAvatarBtn = document.getElementById("editAvatarBtn");
+  if (settingsPreview) renderAvatarInto(settingsPreview, session);
+  if (avatarHint) avatarHint.textContent = session.isGoogle ? "Foto de tu cuenta de Google" : "Predeterminado";
+  if (editAvatarBtn) editAvatarBtn.classList.toggle("hidden", !!session.isGoogle);
 }
 
 function updateHeading(sectionId) {
@@ -1336,6 +1432,49 @@ function computeStoch(highs, lows, closes, k = 14, d = 3, smooth = 3) {
   return { k: slowK, d: slowD };
 }
 
+function computeHeikinAshi(candles) {
+  const result = [];
+  let prevOpen, prevClose;
+  candles.forEach((c, i) => {
+    const close = (c.open + c.high + c.low + c.close) / 4;
+    const open = i === 0 ? (c.open + c.close) / 2 : (prevOpen + prevClose) / 2;
+    const high = Math.max(c.high, open, close);
+    const low = Math.min(c.low, open, close);
+    result.push({ time: c.time, open, high, low, close });
+    prevOpen = open; prevClose = close;
+  });
+  return result;
+}
+
+function computeStochRSI(closes, rsiPeriod = 14, stochPeriod = 14, kSmooth = 3, dSmooth = 3) {
+  const rsi = computeRSI(closes, rsiPeriod);
+  if (rsi.length < stochPeriod) return { k: [], d: [] };
+  const fastK = [];
+  for (let i = stochPeriod - 1; i < rsi.length; i++) {
+    const window = rsi.slice(i - stochPeriod + 1, i + 1).map(v => v.value);
+    const hh = Math.max(...window), ll = Math.min(...window);
+    const range = hh - ll;
+    fastK.push({ time: rsi[i].time, value: range === 0 ? 50 : (rsi[i].value - ll) / range * 100 });
+  }
+  const slowK = computeSMA(fastK, kSmooth);
+  const slowD = computeSMA(slowK, dSmooth);
+  return { k: slowK, d: slowD };
+}
+
+function computeBBDerived(closeData, period, mult) {
+  const { upper, mid, lower } = computeBB(closeData, period, mult);
+  if (!upper.length) return { percentB: [], width: [] };
+  const closeMap = new Map(closeData.map(d => [d.time, d.value]));
+  const percentB = [], width = [];
+  for (let i = 0; i < upper.length; i++) {
+    const range = upper[i].value - lower[i].value;
+    const close = closeMap.get(upper[i].time);
+    percentB.push({ time: upper[i].time, value: range === 0 ? 0.5 : (close - lower[i].value) / range });
+    width.push({ time: upper[i].time, value: mid[i].value === 0 ? 0 : (range / mid[i].value) * 100 });
+  }
+  return { percentB, width };
+}
+
 function computePSAR(candles, step = 0.02, maxAf = 0.2) {
   if (candles.length < 2) return [];
   const result = [];
@@ -1392,6 +1531,196 @@ function computeAutoFibExtension(candles, lookback = 60) {
     return { ratio: r, price };
   });
   return { direction, hi, lo, levels };
+}
+
+function findSwingPoints(candles, strength = 3) {
+  const highs = [], lows = [];
+  for (let i = strength; i < candles.length - strength; i++) {
+    const c = candles[i];
+    let isHigh = true, isLow = true;
+    for (let j = i - strength; j <= i + strength; j++) {
+      if (j === i) continue;
+      if (candles[j].high >= c.high) isHigh = false;
+      if (candles[j].low <= c.low) isLow = false;
+    }
+    if (isHigh) highs.push(c.high);
+    if (isLow) lows.push(c.low);
+  }
+  return { highs, lows };
+}
+
+function clusterLevels(values, tolerancePct) {
+  if (!values.length) return [];
+  const sorted = [...values].sort((a, b) => a - b);
+  const clusters = [];
+  let current = { sum: sorted[0], count: 1 };
+  for (let i = 1; i < sorted.length; i++) {
+    const v = sorted[i];
+    const center = current.sum / current.count;
+    if (Math.abs(v - center) / center <= tolerancePct) {
+      current.sum += v; current.count++;
+    } else {
+      clusters.push(current);
+      current = { sum: v, count: 1 };
+    }
+  }
+  clusters.push(current);
+  return clusters.map((c) => ({ price: c.sum / c.count, touches: c.count }));
+}
+
+function computeSupportResistance(candles, lookback = 200, strength = 3, maxLevels = 3) {
+  const n = candles.length;
+  if (n < strength * 2 + 5) return { support: [], resistance: [] };
+  const start = Math.max(0, n - lookback);
+  const slice = candles.slice(start);
+  const { highs, lows } = findSwingPoints(slice, strength);
+  const currentPrice = candles[n - 1].close;
+  const tolerancePct = 0.012;
+  const resistance = clusterLevels(highs, tolerancePct)
+    .filter((c) => c.price > currentPrice)
+    .sort((a, b) => b.touches - a.touches || a.price - b.price)
+    .slice(0, maxLevels);
+  const support = clusterLevels(lows, tolerancePct)
+    .filter((c) => c.price < currentPrice)
+    .sort((a, b) => b.touches - a.touches || b.price - a.price)
+    .slice(0, maxLevels);
+  return { support, resistance };
+}
+
+function findPivots(values, strength) {
+  const highs = [], lows = [];
+  for (let i = strength; i < values.length - strength; i++) {
+    let isHigh = true, isLow = true;
+    for (let j = i - strength; j <= i + strength; j++) {
+      if (j === i) continue;
+      if (values[j].value >= values[i].value) isHigh = false;
+      if (values[j].value <= values[i].value) isLow = false;
+    }
+    if (isHigh) highs.push(i);
+    if (isLow) lows.push(i);
+  }
+  return { highs, lows };
+}
+
+function computeDivergences(closeData, rsiData, strength = 5, lookback = 150) {
+  if (closeData.length < strength * 2 + 10 || rsiData.length < strength * 2 + 10) return [];
+  const rsiMap = new Map(rsiData.map((p) => [p.time, p.value]));
+  const n = closeData.length;
+  const start = Math.max(0, n - lookback);
+  const points = closeData.slice(start)
+    .filter((p) => rsiMap.has(p.time))
+    .map((p) => ({ time: p.time, price: p.value, rsi: rsiMap.get(p.time) }));
+  const priceVals = points.map((p) => ({ time: p.time, value: p.price }));
+  const { highs: priceHighs, lows: priceLows } = findPivots(priceVals, strength);
+  const markers = [];
+
+  for (let k = 1; k < priceHighs.length; k++) {
+    const i1 = priceHighs[k - 1], i2 = priceHighs[k];
+    if (points[i2].price > points[i1].price && points[i2].rsi < points[i1].rsi) {
+      markers.push({ time: points[i2].time, position: "aboveBar", color: "#ff4d6a", shape: "arrowDown", text: "Div ↓" });
+    }
+  }
+  for (let k = 1; k < priceLows.length; k++) {
+    const i1 = priceLows[k - 1], i2 = priceLows[k];
+    if (points[i2].price < points[i1].price && points[i2].rsi > points[i1].rsi) {
+      markers.push({ time: points[i2].time, position: "belowBar", color: "#32d6a2", shape: "arrowUp", text: "Div ↑" });
+    }
+  }
+  return markers;
+}
+
+function computeTechnicalRating(closes, highs, lows, volumes) {
+  const last = (arr) => arr.length ? arr[arr.length - 1].value : null;
+  const oscVotes = [];
+
+  const rsi = last(computeRSI(closes, 14));
+  if (rsi != null) oscVotes.push(rsi < 30 ? 1 : rsi > 70 ? -1 : 0);
+
+  const stochK = last(computeStoch(highs, lows, closes, 14, 3, 3).k);
+  if (stochK != null) oscVotes.push(stochK < 20 ? 1 : stochK > 80 ? -1 : 0);
+
+  const cci = last(computeCCI(highs, lows, closes, 20));
+  if (cci != null) oscVotes.push(cci < -100 ? 1 : cci > 100 ? -1 : 0);
+
+  const macd = computeMACD(closes);
+  if (macd.macdLine.length) {
+    const m = macd.macdLine[macd.macdLine.length - 1].value;
+    const s = macd.signalLine[macd.signalLine.length - 1].value;
+    oscVotes.push(m > s ? 1 : m < s ? -1 : 0);
+  }
+
+  const adxData = computeADX(highs, lows, closes, 14);
+  if (adxData.adx.length) {
+    const adx = adxData.adx[adxData.adx.length - 1].value;
+    const pdi = adxData.plusDi[adxData.plusDi.length - 1].value;
+    const mdi = adxData.minusDi[adxData.minusDi.length - 1].value;
+    oscVotes.push(adx > 20 ? (pdi > mdi ? 1 : pdi < mdi ? -1 : 0) : 0);
+  }
+
+  const willr = last(computeWilliamsR(highs, lows, closes, 14));
+  if (willr != null) oscVotes.push(willr < -80 ? 1 : willr > -20 ? -1 : 0);
+
+  const roc = last(computeROC(closes, 12));
+  if (roc != null) oscVotes.push(roc > 0 ? 1 : roc < 0 ? -1 : 0);
+
+  const mfi = last(computeMFI(highs, lows, closes, volumes, 14));
+  if (mfi != null) oscVotes.push(mfi < 20 ? 1 : mfi > 80 ? -1 : 0);
+
+  const maVotes = [];
+  const price = closes[closes.length - 1]?.value;
+  if (price != null) {
+    [10, 20, 30, 50, 100, 200].forEach((p) => {
+      const sma = last(computeSMA(closes, p));
+      if (sma != null) maVotes.push(price > sma ? 1 : price < sma ? -1 : 0);
+      if (closes.length >= p) {
+        const ema = last(computeEMA(closes, p));
+        if (ema != null) maVotes.push(price > ema ? 1 : price < ema ? -1 : 0);
+      }
+    });
+  }
+
+  const count = (arr, v) => arr.filter((x) => x === v).length;
+  const allVotes = [...oscVotes, ...maVotes];
+  const buy = count(allVotes, 1), sell = count(allVotes, -1), neutral = count(allVotes, 0);
+  const total = allVotes.length;
+  const score = total ? (buy - sell) / total : 0;
+
+  let label, cls;
+  if (score >= 0.5) { label = "Compra fuerte"; cls = "strong-buy"; }
+  else if (score >= 0.1) { label = "Compra"; cls = "buy"; }
+  else if (score <= -0.5) { label = "Venta fuerte"; cls = "strong-sell"; }
+  else if (score <= -0.1) { label = "Venta"; cls = "sell"; }
+  else { label = "Neutral"; cls = "neutral"; }
+
+  return {
+    label, cls, score,
+    oscillators: { buy: count(oscVotes, 1), sell: count(oscVotes, -1), neutral: count(oscVotes, 0) },
+    movingAverages: { buy: count(maVotes, 1), sell: count(maVotes, -1), neutral: count(maVotes, 0) }
+  };
+}
+
+function renderTechnicalRating() {
+  const el = document.getElementById("technicalRatingCard");
+  if (!el) return;
+  if (!lastCloses.length) { el.innerHTML = ""; return; }
+  const r = computeTechnicalRating(lastCloses, lastHighs, lastLows, lastVolumes);
+  const pct = Math.max(0, Math.min(100, ((r.score + 1) / 2) * 100));
+  el.innerHTML = `
+    <div class="tr-head">
+      <span class="tr-title">Calificación técnica</span>
+      <span class="tr-badge tr-${r.cls}">${r.label}</span>
+    </div>
+    <div class="tr-gauge">
+      <div class="tr-gauge-track">
+        <div class="tr-gauge-marker" style="left:${pct}%"></div>
+      </div>
+      <div class="tr-gauge-labels"><span>Venta</span><span>Neutral</span><span>Compra</span></div>
+    </div>
+    <div class="tr-breakdown">
+      <div class="tr-bd-row"><span>Osciladores</span><strong>${r.oscillators.buy}C / ${r.oscillators.neutral}N / ${r.oscillators.sell}V</strong></div>
+      <div class="tr-bd-row"><span>Medias móviles</span><strong>${r.movingAverages.buy}C / ${r.movingAverages.neutral}N / ${r.movingAverages.sell}V</strong></div>
+    </div>
+  `;
 }
 
 function computeATR(highs, lows, closes, period = 14) {
@@ -1678,6 +2007,43 @@ function renderStochPanel(highs, lows, closes, pos, cfg) {
   computedIndicatorData.stoch = { k, d };
 }
 
+function renderStochRSIPanel(closes, pos, cfg) {
+  const rsiPeriod = cfg.rsiPeriod ?? 14, stochPeriod = cfg.period ?? 14;
+  const kSmooth = cfg.kSmooth ?? 3, dSmooth = cfg.dSmooth ?? 3;
+  const { k, d } = computeStochRSI(closes, rsiPeriod, stochPeriod, kSmooth, dSmooth);
+  if (!k.length) return;
+  const c = cfg.colors || indicatorDefinitions.stochrsi.colors;
+  addPanelLineSeries("stochrsi", pos, { color: c.k, lineWidth: 1.5, lastValueVisible: true }).setData(k);
+  addPanelLineSeries("stochrsi", pos, { color: c.d, lineWidth: 1 }).setData(d);
+  addPanelLineSeries("stochrsi", pos, { color: "rgba(255,107,129,0.4)", lineWidth: 1, lineStyle: 2 })
+    .setData(k.map(p => ({ time: p.time, value: 80 })));
+  addPanelLineSeries("stochrsi", pos, { color: "rgba(50,214,162,0.4)", lineWidth: 1, lineStyle: 2 })
+    .setData(k.map(p => ({ time: p.time, value: 20 })));
+  computedIndicatorData.stochrsi = { k, d };
+}
+
+function renderBBPercentPanel(closes, pos, cfg) {
+  const period = cfg.period ?? 20, mult = cfg.mult ?? 2;
+  const { percentB } = computeBBDerived(closes, period, mult);
+  if (!percentB.length) return;
+  const color = cfg.color ?? indicatorDefinitions.bbpercent.color;
+  addPanelLineSeries("bbpercent", pos, { color, lineWidth: 1.5, lastValueVisible: true }).setData(percentB);
+  addPanelLineSeries("bbpercent", pos, { color: "rgba(255,107,129,0.4)", lineWidth: 1, lineStyle: 2 })
+    .setData(percentB.map(p => ({ time: p.time, value: 1 })));
+  addPanelLineSeries("bbpercent", pos, { color: "rgba(50,214,162,0.4)", lineWidth: 1, lineStyle: 2 })
+    .setData(percentB.map(p => ({ time: p.time, value: 0 })));
+  computedIndicatorData.bbpercent = percentB;
+}
+
+function renderBBWidthPanel(closes, pos, cfg) {
+  const period = cfg.period ?? 20, mult = cfg.mult ?? 2;
+  const { width } = computeBBDerived(closes, period, mult);
+  if (!width.length) return;
+  const color = cfg.color ?? indicatorDefinitions.bbwidth.color;
+  addPanelLineSeries("bbwidth", pos, { color, lineWidth: 1.5, lastValueVisible: true }).setData(width);
+  computedIndicatorData.bbwidth = width;
+}
+
 function renderCCIPanel(highs, lows, closes, pos, cfg) {
   const period = cfg.period ?? 20;
   const data = computeCCI(highs, lows, closes, period);
@@ -1900,6 +2266,7 @@ function getIndicatorCfg(key) {
 function renderIndicators(closeData, volumeData) {
   clearIndicatorSeries();
   computedIndicatorData = {};
+  _markerSources.divergence = [];
 
   const { mainBottom, positions } = getPanelLayout();
   if (mainSeries) {
@@ -2002,6 +2369,54 @@ function renderIndicators(closeData, volumeData) {
       computedIndicatorData[key] = fib;
       return;
     }
+    if (def.type === "fiboret") {
+      if (!lastCandles.length) return;
+      const fib = computeAutoFibExtension(lastCandles, cfg.lookback ?? 60);
+      if (!fib) return;
+      const color = cfg.color ?? def.color;
+      fib.levels.filter((lvl) => lvl.ratio <= 1).forEach((lvl) => {
+        const pl = mainSeries.createPriceLine({
+          price: lvl.price,
+          color,
+          lineWidth: 1,
+          lineStyle: lvl.ratio === 0 || lvl.ratio === 1 ? 0 : 2,
+          axisLabelVisible: true,
+          title: `Fib ${(lvl.ratio * 100).toFixed(1)}%`
+        });
+        fiboPriceLines.push(pl);
+      });
+      computedIndicatorData[key] = fib;
+      return;
+    }
+    if (def.type === "srlevels") {
+      if (!lastCandles.length) return;
+      const { support, resistance } = computeSupportResistance(lastCandles, cfg.lookback ?? 200, cfg.strength ?? 3, cfg.maxLevels ?? 3);
+      const c = cfg.colors || def.colors;
+      resistance.forEach((lvl) => {
+        const pl = mainSeries.createPriceLine({
+          price: lvl.price, color: c.resistance, lineWidth: 1, lineStyle: 2,
+          axisLabelVisible: true, title: `R ${lvl.touches}x`
+        });
+        fiboPriceLines.push(pl);
+      });
+      support.forEach((lvl) => {
+        const pl = mainSeries.createPriceLine({
+          price: lvl.price, color: c.support, lineWidth: 1, lineStyle: 2,
+          axisLabelVisible: true, title: `S ${lvl.touches}x`
+        });
+        fiboPriceLines.push(pl);
+      });
+      computedIndicatorData[key] = { support, resistance };
+      return;
+    }
+    if (def.type === "divergence") {
+      if (!closeData.length) return;
+      const rsiData = computeRSI(closeData, 14);
+      const markers = computeDivergences(closeData, rsiData, cfg.strength ?? 5, cfg.lookback ?? 150);
+      _markerSources.divergence = markers;
+      computedIndicatorData[key] = markers;
+      return;
+    }
 
     // ── Primitive ───────────────────────────────────────────────────────────
     if (def.type === "primitive") {
@@ -2027,6 +2442,9 @@ function renderIndicators(closeData, volumeData) {
     else if (key === "rsi")  renderRSIPanel(closeData, pos);
     else if (key === "macd") renderMACDPanel(closeData, pos, cfg);
     else if (key === "stoch") renderStochPanel(lastHighs, lastLows, closeData, pos, cfg);
+    else if (key === "stochrsi") renderStochRSIPanel(closeData, pos, cfg);
+    else if (key === "bbpercent") renderBBPercentPanel(closeData, pos, cfg);
+    else if (key === "bbwidth") renderBBWidthPanel(closeData, pos, cfg);
     else if (key === "cci")   renderCCIPanel(lastHighs, lastLows, closeData, pos, cfg);
     else if (key === "atr")   renderATRPanel(lastHighs, lastLows, closeData, pos, cfg);
     else if (key === "momentum") renderMomentumPanel(closeData, pos);
@@ -2037,6 +2455,7 @@ function renderIndicators(closeData, volumeData) {
     else if (key === "roc")   renderROCPanel(closeData, pos, cfg);
   });
 
+  applyAllMarkers();
   renderIndicatorLegend();
 }
 
@@ -2135,13 +2554,17 @@ async function loadMarketChart() {
 
     if (marketState.chartType === "volheatmap") {
       mainSeries.setData(computeVolumeHeatmap(candles, volumes));
+    } else if (marketState.chartType === "heikinashi") {
+      mainSeries.setData(computeHeikinAshi(candles));
     } else if (marketState.chartType === "candlestick" || marketState.chartType === "bars") {
       mainSeries.setData(candles);
     } else {
       mainSeries.setData(closes);
     }
 
+    _markerSources = {};
     renderIndicators(closes, volumes);
+    renderTechnicalRating();
     tvChart.timeScale().fitContent();
 
     chartSymbolLabel.textContent = meta.symbol || symbol;
@@ -2532,6 +2955,7 @@ async function loadCompareSeries() {
 // ── Dividend / Event Markers ──────────────────────────────────────────────────
 async function loadChartEvents(symbol) {
   if (!tvChart || !mainSeries || !lastCandles.length) return;
+  _markerSources.dividends = [];
   try {
     const res = await fetch(`${API_BASE_URL}/dividends/${encodeURIComponent(symbol)}`);
     if (!res.ok) return;
@@ -2550,7 +2974,8 @@ async function loadChartEvents(symbol) {
         text: `Div $${Number(d.amount).toFixed(3)}`
       }))
       .sort((a, b) => a.time - b.time);
-    if (markers.length) mainSeries.setMarkers(markers);
+    _markerSources.dividends = markers;
+    applyAllMarkers();
   } catch {}
 }
 
@@ -3402,6 +3827,8 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async function(user) {
     }
     sessionStorage.setItem("totp_verified", user.uid);
   }
+  await window.BlackPortfolioAuth.syncFromFirestore(user.uid);
+  await syncPortfoliosFromCloud();
   const session = window.BlackPortfolioAuth.buildSession(user);
   renderUser(session);
   applyPlanRestrictions(session);
@@ -3425,7 +3852,7 @@ navItems.forEach((item) => {
 
 resetHomeButton.addEventListener("click", () => {
   if (confirm("¿Restablecer el inicio? Se perderán todos los espacios y tarjetas personalizadas.")) {
-    localStorage.removeItem(hubStorageKey);
+    localStorage.removeItem(getHubStorageKey());
     location.reload();
   }
 });
@@ -4592,7 +5019,7 @@ const BENCHMARKS = {
   "URTH": "MSCI World", "EEM": "MSCI EM", "^MXX": "IPC Mexico",
   "^FTSE": "FTSE 100", "^N225": "Nikkei 225", "none": "Sin referencia"
 };
-const CURRENCY_SYMBOLS = { USD: "$", MXN: "$", EUR: "€", GBP: "£", CAD: "CA$", BRL: "R$" };
+const CURRENCY_SYMBOLS = { USD: "$", MXN: "$", EUR: "€", GBP: "£", CAD: "CA$", BRL: "R$", JPY: "¥", CNY: "¥", AUD: "AU$", CHF: "CHF " };
 
 const SECTOR_MAP = {
   AAPL:"Tecnología",MSFT:"Tecnología",GOOGL:"Tecnología",GOOG:"Tecnología",META:"Tecnología",NVDA:"Tecnología",AMD:"Tecnología",
@@ -4667,6 +5094,23 @@ let _lastPortfolioCurrentValue = null;
 let perfMetricsData = null;
 let perfReportData = null; // series + extras para el reporte PDF (curva, benchmark, drawdown)
 let perfVarHorizon = "daily"; // "daily" | "annual"
+let posSort = { key: null, dir: "asc" };   // ordenamiento tabla de posiciones (L2.2)
+let posSearch = "";                          // búsqueda tabla de posiciones (L2.2)
+let txSort = { key: "date", dir: "desc" };  // ordenamiento tabla de transacciones (L2.2)
+let donutBase = "invested";                  // base del donut de ponderación: "invested" | "current" (L2.3)
+
+// Valor de una posición para el donut según la base seleccionada (L2.3)
+function _donutPosValue(pos, currency) {
+  const t = calcPositionTotals(pos);
+  const posCur = getPosCurrency(pos, currency);
+  const cost = convertAmount(t.total, posCur, currency) ?? t.total;
+  if (donutBase === "current") {
+    const price = getCachedPrice(pos.ticker);
+    if (price !== null) return convertAmount(price * (pos.quantity || 0), posCur, currency) ?? price * (pos.quantity || 0);
+    return cost; // sin precio: usar costo como respaldo
+  }
+  return cost;
+}
 let perfRfr = { rate: 9.0, label: "Tasa libre de riesgo (fallback)", date: null, source: "fallback" };
 let perfRfrFetched = false;
 
@@ -4690,53 +5134,136 @@ function updateSharpeRfrLabel() {
   el.textContent = `Tasa libre de riesgo: ${perfRfr.rate.toFixed(2)}% (${perfRfr.label}${dateTxt})`;
 }
 
-function getPortfolios() {
-  try { return JSON.parse(localStorage.getItem(getTrackerKey())) ?? []; }
-  catch { return []; }
+let _portfolioMemory = [];
+let _portfolioLoaded = false;
+let _portfolioSaveInFlight = null;
+let _portfolioPendingSnapshot = null;
+
+function clonePortfolios(portfolios) {
+  return JSON.parse(JSON.stringify(Array.isArray(portfolios) ? portfolios : []));
 }
 
-// ── Cloud sync (Firestore) ────────────────────────────────────────────────────
-let _cloudSyncTimer = null;
+function getPortfolios() {
+  return _portfolioMemory;
+}
 
-async function pushPortfoliosToCloud(portfolios) {
+async function portfolioApiRequest(path, options = {}) {
+  const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
+  if (!user) throw new Error("No hay una sesion autenticada.");
+  const token = await user.getIdToken();
+  const twofaToken = sessionStorage.getItem("bp-2fa-token");
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(twofaToken ? { "X-2FA-Token": twofaToken } : {}),
+      ...(options.headers || {})
+    }
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    // La cuenta tiene 2FA activo pero falta verificarlo en esta sesión: re-loguear.
+    if (response.status === 403 && body.detail === "2fa_required") {
+      sessionStorage.removeItem("totp_verified");
+      window.location.href = "login.html";
+      throw new Error("Verificación 2FA requerida.");
+    }
+    throw new Error(body.detail || `Error de persistencia (${response.status}).`);
+  }
+  return response.json();
+}
+
+async function readLegacyPortfolioCandidate() {
+  let local = [];
+  try { local = JSON.parse(localStorage.getItem(getTrackerKey())) ?? []; }
+  catch { local = []; }
+
+  let firestore = [];
   try {
     const db = window.BlackPortfolioAuth?.db;
-    const session = window.BlackPortfolioAuth?.getSession();
-    if (!db || !session?.id || session.id === "anonymous") return;
-    await db.collection("portfolios").doc(session.id).set({
-      data: portfolios,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  } catch (_) { /* localStorage es fuente de verdad, fallar silenciosamente */ }
+    const uid = window.BlackPortfolioAuth?.firebaseAuth?.currentUser?.uid;
+    if (db && uid) {
+      const doc = await db.collection("portfolios").doc(uid).get();
+      if (doc.exists && Array.isArray(doc.data()?.data)) firestore = doc.data().data;
+    }
+  } catch {}
+  return { local, firestore };
+}
+
+async function writePortfoliosToPostgres(portfolios, source = "app") {
+  return portfolioApiRequest("/account/portfolios", {
+    method: "PUT",
+    body: JSON.stringify({ portfolios, source })
+  });
 }
 
 async function syncPortfoliosFromCloud() {
+  if (_portfolioLoaded) return false;
+  const legacy = await readLegacyPortfolioCandidate();
+  const previous = JSON.stringify(_portfolioMemory);
   try {
-    const db = window.BlackPortfolioAuth?.db;
-    const session = window.BlackPortfolioAuth?.getSession();
-    if (!db || !session?.id || session.id === "anonymous") return false;
-    const doc = await db.collection("portfolios").doc(session.id).get();
-    if (!doc.exists) return false;
-    const cloudData = doc.data()?.data;
-    if (!Array.isArray(cloudData)) return false;
-    const local = getPortfolios();
-    // La nube gana si tiene más portafolios o el contenido es diferente
-    const changed =
-      cloudData.length > local.length ||
-      (cloudData.length === local.length && JSON.stringify(cloudData) !== JSON.stringify(local));
-    if (changed) {
-      localStorage.setItem(getTrackerKey(), JSON.stringify(cloudData));
-      return true;
+    let bootstrap = await portfolioApiRequest("/account/bootstrap");
+    const serverHasData = Array.isArray(bootstrap.portfolios);
+    const localDiffers = legacy.local.length &&
+      JSON.stringify(legacy.local) !== JSON.stringify(bootstrap.portfolios);
+
+    if (serverHasData && bootstrap.portfolioSource === "migration_firestore" && localDiffers) {
+      await writePortfoliosToPostgres(legacy.local, "migration_local_override");
+      bootstrap = await portfolioApiRequest("/account/bootstrap");
+    } else if (!serverHasData) {
+      const candidate = legacy.local.length ? legacy.local : legacy.firestore;
+      if (candidate.length) {
+        const source = legacy.local.length ? "migration_local" : "migration_firestore_client";
+        await writePortfoliosToPostgres(candidate, source);
+        bootstrap = await portfolioApiRequest("/account/bootstrap");
+      }
     }
-    return false;
-  } catch (_) { return false; }
+
+    const verified = Array.isArray(bootstrap.portfolios) ? bootstrap.portfolios : [];
+    const expected = serverHasData && !(bootstrap.portfolioSource === "migration_firestore" && localDiffers)
+      ? verified
+      : (legacy.local.length ? legacy.local : legacy.firestore);
+    if (expected.length && JSON.stringify(verified) !== JSON.stringify(expected)) {
+      throw new Error("La verificacion de migracion no coincide.");
+    }
+
+    _portfolioMemory = clonePortfolios(verified);
+    _portfolioLoaded = true;
+    localStorage.removeItem(getTrackerKey());
+    return previous !== JSON.stringify(_portfolioMemory);
+  } catch (error) {
+    const fallback = legacy.local.length ? legacy.local : legacy.firestore;
+    _portfolioMemory = clonePortfolios(fallback);
+    _portfolioLoaded = false;
+    console.error("PostgreSQL portfolio sync failed; legacy data preserved.", error);
+    return previous !== JSON.stringify(_portfolioMemory);
+  }
+}
+
+async function flushPortfolioSaveQueue() {
+  if (_portfolioSaveInFlight || !_portfolioPendingSnapshot) return;
+  const snapshot = _portfolioPendingSnapshot;
+  _portfolioPendingSnapshot = null;
+  _portfolioSaveInFlight = writePortfoliosToPostgres(snapshot)
+    .catch((error) => {
+      console.error("No se pudo guardar el portafolio en PostgreSQL.", error);
+      setTimeout(() => {
+        if (!_portfolioPendingSnapshot) _portfolioPendingSnapshot = clonePortfolios(_portfolioMemory);
+        void flushPortfolioSaveQueue();
+      }, 5000);
+    })
+    .finally(() => {
+      _portfolioSaveInFlight = null;
+      if (_portfolioPendingSnapshot) flushPortfolioSaveQueue();
+    });
+  await _portfolioSaveInFlight;
 }
 
 function savePortfolios(portfolios) {
-  localStorage.setItem(getTrackerKey(), JSON.stringify(portfolios));
-  // Debounce: espera 1.5s antes de escribir a Firestore para agrupar cambios rápidos
-  if (_cloudSyncTimer) clearTimeout(_cloudSyncTimer);
-  _cloudSyncTimer = setTimeout(() => pushPortfoliosToCloud(portfolios), 1500);
+  _portfolioMemory = clonePortfolios(portfolios);
+  _portfolioPendingSnapshot = clonePortfolios(portfolios);
+  void flushPortfolioSaveQueue();
 }
 
 function generateId() {
@@ -4897,6 +5424,18 @@ function importPositionsCSV(file) {
         positions.push({ id: generateId(), ticker, avgPrice, quantity, commissionPercent, applyIva, ivaRate, purchaseDate, currency });
       }
       if (!positions.length) { alert("No se encontraron posiciones válidas en el CSV."); return; }
+      // Registrar una COMPRA por posición para que las transacciones sean la fuente de
+      // verdad del P/L realizado (L1.3) — necesario para ventas futuras de lo importado.
+      const transactions = positions.map((p) => {
+        const { total } = calcPositionTotals(p);
+        const comm = p.avgPrice * p.quantity * ((p.commissionPercent || 0) / 100);
+        return {
+          id: generateId(),
+          date: p.purchaseDate ? new Date(p.purchaseDate + "T12:00:00").toISOString() : new Date().toISOString(),
+          type: "COMPRA", ticker: p.ticker, quantity: p.quantity, price: p.avgPrice,
+          commissionPercent: p.commissionPercent || 0, commCost: comm, net: total, currency: p.currency
+        };
+      }).sort((a, b) => b.date.localeCompare(a.date));
       const baseName = file.name.replace(/\.csv$/i, "").trim() || "Importado";
       const portfolios = getPortfolios();
       portfolios.push({
@@ -4906,7 +5445,8 @@ function importPositionsCSV(file) {
         benchmark: "^GSPC",
         currency: positions[0].currency,
         createdAt: new Date().toISOString(),
-        positions
+        positions,
+        transactions
       });
       savePortfolios(portfolios);
       renderPortfolioCards();
@@ -4937,9 +5477,17 @@ function _pdfBuildAllocationSVG(posData, totalCurrentValue) {
 }
 
 async function fetchAIInsights(metrics, lang) {
+  const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
+  if (!user) throw new Error("No hay una sesion autenticada.");
+  const token = await user.getIdToken();
+  const twofaToken = sessionStorage.getItem("bp-2fa-token");
   const res = await fetch(`${API_BASE_URL}/ai/insights`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(twofaToken ? { "X-2FA-Token": twofaToken } : {})
+    },
     body: JSON.stringify({ metrics, lang: lang || "es" }),
   });
   if (!res.ok) throw new Error("HTTP " + res.status);
@@ -5847,6 +6395,15 @@ async function exportPortfolioPDF(startStr, endStr) {
   win.document.close();
 }
 
+// Marca la flecha de orden en el encabezado activo (L2.2)
+function _markSortIndicators(selector, attr, sortState) {
+  document.querySelectorAll(selector).forEach((th) => {
+    const key = th.dataset[attr];
+    th.classList.toggle("sort-asc", sortState.key === key && sortState.dir === "asc");
+    th.classList.toggle("sort-desc", sortState.key === key && sortState.dir === "desc");
+  });
+}
+
 function renderTransactionsTab() {
   const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
   const allTxs = portfolio ? (portfolio.transactions || []) : [];
@@ -5868,6 +6425,26 @@ function renderTransactionsTab() {
     if (filterTo   && txDay > filterTo)   return false;
     return true;
   });
+
+  // Ordenamiento (L2.2)
+  const txSortVal = (tx, key) => {
+    switch (key) {
+      case "date": return tx.date || "";
+      case "type": return tx.type || "";
+      case "ticker": return tx.ticker || "";
+      case "quantity": return tx.quantity || 0;
+      case "price": return tx.price || 0;
+      case "comm": return tx.commCost || 0;
+      case "net": return tx.net || 0;
+      default: return 0;
+    }
+  };
+  txs.sort((a, b) => {
+    const va = txSortVal(a, txSort.key), vb = txSortVal(b, txSort.key);
+    let cmp = typeof va === "string" ? va.localeCompare(vb) : va - vb;
+    return txSort.dir === "asc" ? cmp : -cmp;
+  });
+  _markSortIndicators("[data-txsort]", "txsort", txSort);
 
   const hasFilters = filterType || filterTicker || filterFrom || filterTo;
   if (allTxs.length) {
@@ -5891,17 +6468,19 @@ function renderTransactionsTab() {
     return;
   }
 
+  const typeClassMap = { COMPRA: "tx-buy", DIVIDENDO: "tx-dividend", DEPOSITO: "tx-deposit", RETIRO: "tx-withdraw" };
   tbody.innerHTML = txs.map((tx) => {
     const date = new Date(tx.date).toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" });
-    const typeClass = tx.type === "COMPRA" ? "tx-buy" : tx.type === "DIVIDENDO" ? "tx-dividend" : "tx-sell";
+    const typeClass = typeClassMap[tx.type] || "tx-sell";
     const sym = CURRENCY_SYMBOLS[tx.currency] || "$";
+    const isCash = tx.type === "DEPOSITO" || tx.type === "RETIRO";
     return `<tr>
       <td>${date}</td>
       <td><span class="tx-badge ${typeClass}">${tx.type}</span></td>
-      <td><strong>${tx.ticker}</strong></td>
-      <td>${tx.quantity}</td>
-      <td>${sym}${tx.price.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
-      <td>${sym}${tx.commCost.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${tx.commissionPercent.toFixed(2)}%)</td>
+      <td><strong>${isCash ? "Efectivo" : tx.ticker}</strong></td>
+      <td>${isCash ? "—" : tx.quantity}</td>
+      <td>${isCash ? "—" : sym + tx.price.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
+      <td>${isCash ? "—" : sym + tx.commCost.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ` (${tx.commissionPercent.toFixed(2)}%)`}</td>
       <td><strong>${sym}${tx.net.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
     </tr>`;
   }).join("");
@@ -5948,6 +6527,17 @@ function getCachedPrice(ticker) {
 function getCachedPrev(ticker) {
   const entry = getPriceCache()[ticker];
   return entry ? (entry.prev ?? null) : null;
+}
+
+// Etiqueta de frescura del precio cacheado (L2.10)
+function _priceFreshnessLabel(ticker, cache) {
+  const entry = (cache || getPriceCache())[ticker];
+  if (!entry || !entry.ts) return { title: "Precio no disponible", cls: "stale" };
+  const ageMin = (Date.now() - entry.ts) / 60000;
+  const when = new Date(entry.ts).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  const rel = ageMin < 1 ? "hace segundos" : ageMin < 60 ? `hace ${Math.round(ageMin)} min` : `hace ${Math.round(ageMin / 60)} h`;
+  const cls = ageMin > 60 ? "stale" : ageMin > 15 ? "aging" : "fresh";
+  return { title: `Actualizado ${when} · ${rel}`, cls };
 }
 
 async function fetchLatestPrice(ticker) {
@@ -6008,10 +6598,39 @@ function getCachedExchangeRate(from, to) {
   return getCachedPrice(`${from}${to}=X`);
 }
 
+// ── Equivalencia del portafolio en otra moneda (no altera el valor real) ──
+const DASH_ALT_CURRENCIES = ["USD", "EUR", "MXN", "GBP", "JPY", "CAD", "BRL", "CNY", "AUD", "CHF"];
+
+function getDashAltCurrency(portfolioCurrency) {
+  return localStorage.getItem(`bp_dashAltCurrency_${activePortfolioId}`) || "";
+}
+
+function setDashAltCurrency(value) {
+  if (value) localStorage.setItem(`bp_dashAltCurrency_${activePortfolioId}`, value);
+  else localStorage.removeItem(`bp_dashAltCurrency_${activePortfolioId}`);
+}
+
+function populateDashAltCurrencySelect(portfolioCurrency) {
+  const sel = document.getElementById("dashAltCurrencySelect");
+  if (!sel) return;
+  const selected = getDashAltCurrency(portfolioCurrency);
+  const options = ["", ...DASH_ALT_CURRENCIES.filter(c => c !== portfolioCurrency)];
+  sel.innerHTML = options.map(c => `<option value="${c}">${c || "Sin equivalencia"}</option>`).join("");
+  sel.value = selected && options.includes(selected) ? selected : "";
+}
+
 function convertAmount(amount, fromCurrency, toCurrency) {
   if (fromCurrency === toCurrency) return amount;
   const rate = getCachedExchangeRate(fromCurrency, toCurrency);
   return rate !== null ? amount * rate : null;
+}
+
+function formatDashExchangeRate(fromCurrency, toCurrency) {
+  if (!fromCurrency || !toCurrency || fromCurrency === toCurrency) return "";
+  const rate = getCachedExchangeRate(fromCurrency, toCurrency);
+  if (rate === null) return "Tipo de cambio pendiente";
+  const decimals = rate >= 100 ? 2 : rate >= 10 ? 4 : 6;
+  return `TC usado: 1 ${fromCurrency} = ${rate.toFixed(decimals)} ${toCurrency}`;
 }
 
 async function fetchExchangeRates(fromCurrencies, toCurrency) {
@@ -6071,6 +6690,43 @@ function reconstructRealizedPnL(portfolio) {
   return total;
 }
 
+// Resumen financiero de un portafolio usando precios en caché (sin fetch).
+// Reutilizado por las tarjetas de la lista y la barra de patrimonio consolidado.
+function computePortfolioSnapshot(portfolio) {
+  const positions = portfolio.positions || [];
+  const currency = portfolio.currency || "USD";
+  let totalCurrentValue = 0, totalCostPriced = 0, prevValue = 0, hasAnyPrice = false;
+  positions.forEach((pos) => {
+    const price = getCachedPrice(pos.ticker);
+    if (price === null) return;
+    const posCur = getPosCurrency(pos, currency);
+    const qty = pos.quantity || 0;
+    hasAnyPrice = true;
+    totalCurrentValue += convertAmount(price * qty, posCur, currency) ?? (price * qty);
+    const cost = calcPositionTotals(pos).total;
+    totalCostPriced += convertAmount(cost, posCur, currency) ?? cost;
+    const prev = getCachedPrev(pos.ticker);
+    const pv = (prev !== null ? prev : price) * qty;
+    prevValue += convertAmount(pv, posCur, currency) ?? pv;
+  });
+  const cashBalance = portfolio.cashBalance || 0;
+  // Fuente única de verdad: el P/L realizado se reconstruye siempre desde las transacciones
+  const realizedPnL = reconstructRealizedPnL(portfolio);
+  const currentValue = (hasAnyPrice ? totalCurrentValue : 0) + cashBalance;
+  const unrealizedPnL = hasAnyPrice ? totalCurrentValue - totalCostPriced : 0;
+  const returnAmt = (hasAnyPrice || (!positions.length && realizedPnL !== 0))
+    ? unrealizedPnL + realizedPnL : null;
+  // Retorno % sobre el costo invertido (base de costo), no sobre el valor actual
+  const returnCostBasis = totalCostPriced > 0 ? totalCostPriced : 0;
+  const returnPct = returnAmt !== null && returnCostBasis > 0 ? returnAmt / returnCostBasis * 100 : null;
+  const dayChangeAmt = hasAnyPrice ? totalCurrentValue - prevValue : null;
+  const dayChangePct = dayChangeAmt !== null && prevValue > 0 ? dayChangeAmt / prevValue * 100 : null;
+  return {
+    currency, currentValue, hasAnyPrice, returnAmt, returnPct,
+    dayChangeAmt, dayChangePct, positionCount: positions.length,
+  };
+}
+
 function calcPortfolioTotals(positions, portfolioCurrency) {
   let totalInvested = 0, totalComm = 0, totalIva = 0;
   const pCur = portfolioCurrency || "USD";
@@ -6090,6 +6746,7 @@ function showTrackerListView() {
   document.getElementById("trackerDashView").classList.add("hidden");
   renderPortfolioCards();
   renderWatchlist();
+  loadListViewData();
 }
 
 function _invalidatePriceCache(portfolioId) {
@@ -6105,6 +6762,11 @@ function _invalidatePriceCache(portfolioId) {
 function showTrackerDashView(portfolioId) {
   if (_dashRefreshTimer) { clearInterval(_dashRefreshTimer); _dashRefreshTimer = null; }
   activePortfolioId = portfolioId;
+  // Reiniciar búsqueda/orden de la tabla de posiciones al abrir un portafolio (L2.2)
+  posSearch = "";
+  posSort = { key: null, dir: "asc" };
+  const _posSearchEl = document.getElementById("positionsSearchInput");
+  if (_posSearchEl) _posSearchEl.value = "";
   perfTabLoaded = false;
   perfDailyReturns = null;
   perfReportData = null;
@@ -6126,6 +6788,14 @@ function showTrackerDashView(portfolioId) {
   document.getElementById("trackerListView").classList.add("hidden");
   document.getElementById("trackerDashView").classList.remove("hidden");
   renderPortfolioDashboard();
+  // Restaurar la última pestaña activa de este portafolio (L2.4)
+  try {
+    const savedTab = localStorage.getItem(`bp_activeTab_${portfolioId}`);
+    if (savedTab && savedTab !== "summary") {
+      const tabBtn = document.querySelector(`.tracker-tab-btn[data-tab='${savedTab}']`);
+      if (tabBtn) tabBtn.click();
+    }
+  } catch {}
   _dashRefreshTimer = setInterval(() => {
     const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
     if (!portfolio) return;
@@ -6151,13 +6821,23 @@ function renderPortfolioCards() {
 
   emptyMsg.classList.add("hidden");
   grid.innerHTML = portfolios.map((p) => {
-    const positions = p.positions || [];
-    const { totalInvested } = calcPortfolioTotals(positions, p.currency);
     const date = new Date(p.createdAt).toLocaleDateString("es-MX", {
       day: "2-digit", month: "short", year: "numeric"
     });
-    const benchLabel = BENCHMARKS[p.benchmark] || "";
     const currLabel = p.currency || "USD";
+    const snap = computePortfolioSnapshot(p);
+    const valueStr = snap.hasAnyPrice || snap.currentValue > 0
+      ? formatCurrency(snap.currentValue, currLabel) : "—";
+    let dayHtml = "";
+    if (snap.dayChangePct !== null) {
+      const up = snap.dayChangePct >= 0;
+      dayHtml = `<span class="pc-day ${up ? "return-pos" : "return-neg"}">${up ? "▲" : "▼"} ${up ? "+" : ""}${snap.dayChangePct.toFixed(2)}% hoy</span>`;
+    }
+    let retHtml = "—";
+    if (snap.returnPct !== null) {
+      const up = snap.returnPct >= 0;
+      retHtml = `<em class="${up ? "return-pos" : "return-neg"}">${up ? "+" : ""}${snap.returnPct.toFixed(2)}%</em>`;
+    }
     return `
       <button class="portfolio-card" type="button" data-portfolio-id="${p.id}">
         <div class="portfolio-card-header">
@@ -6166,6 +6846,15 @@ function renderPortfolioCards() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </span>
         </div>
+        <div class="portfolio-card-value">
+          <strong>${valueStr}</strong>
+          ${dayHtml}
+        </div>
+        <div class="portfolio-card-stats">
+          <span class="pc-stat">Retorno ${retHtml}</span>
+          <span class="pc-stat">${snap.positionCount} ${snap.positionCount === 1 ? "posición" : "posiciones"}</span>
+          <span class="pc-curr">${currLabel}</span>
+        </div>
         <div class="portfolio-card-footer">
           <span class="portfolio-card-date">Creado ${date}</span>
           <span class="portfolio-card-cta">Ver portafolio →</span>
@@ -6173,6 +6862,8 @@ function renderPortfolioCards() {
       </button>
     `;
   }).join("");
+
+  renderConsolidatedBar(portfolios);
 
   grid.querySelectorAll("[data-portfolio-id]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -6189,6 +6880,94 @@ function renderPortfolioCards() {
       document.getElementById("deletePortfolioModal").classList.remove("hidden");
     });
   });
+}
+
+// ── Barra de patrimonio consolidado (suma de todos los portafolios) ──────────
+function renderConsolidatedBar(portfolios) {
+  const bar = document.getElementById("consolidatedBar");
+  if (!bar) return;
+  portfolios = portfolios || getPortfolios();
+  if (portfolios.length < 2) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+
+  // Moneda base = la más frecuente entre los portafolios
+  const counts = {};
+  portfolios.forEach(p => { const c = p.currency || "USD"; counts[c] = (counts[c] || 0) + 1; });
+  const base = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || "USD";
+
+  let totalValue = 0, totalDay = 0, totalPrevDay = 0, totalReturn = 0;
+  let anyValue = false, anyDay = false, anyReturn = false, fxMissing = false;
+  portfolios.forEach((p) => {
+    const snap = computePortfolioSnapshot(p);
+    const cur = snap.currency;
+    const conv = (amt) => {
+      if (amt === null) return null;
+      const v = convertAmount(amt, cur, base);
+      if (v === null) { fxMissing = true; return null; }
+      return v;
+    };
+    if (snap.hasAnyPrice || snap.currentValue > 0) {
+      const v = conv(snap.currentValue);
+      if (v !== null) { totalValue += v; anyValue = true; }
+    }
+    if (snap.dayChangeAmt !== null) {
+      const d = conv(snap.dayChangeAmt);
+      const prev = conv(snap.currentValue - snap.dayChangeAmt);
+      if (d !== null && prev !== null) { totalDay += d; totalPrevDay += prev; anyDay = true; }
+    }
+    if (snap.returnAmt !== null) {
+      const r = conv(snap.returnAmt);
+      if (r !== null) { totalReturn += r; anyReturn = true; }
+    }
+  });
+
+  if (!anyValue) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+
+  const dayPct = anyDay && totalPrevDay > 0 ? totalDay / totalPrevDay * 100 : null;
+  const retPct = anyReturn && (totalValue - totalReturn) > 0 ? totalReturn / (totalValue - totalReturn) * 100 : null;
+  const metric = (label, valueHtml) => `<div class="cbar-metric"><span class="cbar-label">${label}</span><strong class="cbar-value">${valueHtml}</strong></div>`;
+  const signed = (amt, pct) => {
+    const up = amt >= 0;
+    const cls = up ? "return-pos" : "return-neg";
+    const pctStr = pct !== null ? ` <em class="${cls}">(${up ? "+" : ""}${pct.toFixed(2)}%)</em>` : "";
+    return `<span class="${cls}">${up ? "+" : ""}${formatCurrency(amt, base)}</span>${pctStr}`;
+  };
+
+  bar.innerHTML = `
+    <div class="cbar-metric cbar-metric--primary">
+      <span class="cbar-label">Patrimonio total · ${portfolios.length} portafolios</span>
+      <strong class="cbar-value cbar-value--lg">${formatCurrency(totalValue, base)} <small>${base}</small></strong>
+    </div>
+    ${anyDay ? metric("Cambio hoy", signed(totalDay, dayPct)) : ""}
+    ${anyReturn ? metric("Retorno total", signed(totalReturn, retPct)) : ""}
+    ${fxMissing ? `<div class="cbar-note">Algunos valores aún sin tipo de cambio</div>` : ""}
+  `;
+  bar.classList.remove("hidden");
+}
+
+// Carga precios+FX de todos los portafolios y refresca tarjetas + barra consolidada
+async function loadListViewData() {
+  const portfolios = getPortfolios();
+  if (!portfolios.length) return;
+  const tickers = [...new Set(portfolios.flatMap(p => (p.positions || []).map(pos => pos.ticker)))];
+  if (!tickers.length) return;
+  const counts = {};
+  portfolios.forEach(p => { const c = p.currency || "USD"; counts[c] = (counts[c] || 0) + 1; });
+  const base = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || "USD";
+  // Pares FX: posición→moneda-del-portafolio (para snapshot) y moneda-del-portafolio→base (para consolidar)
+  const fxJobs = [];
+  portfolios.forEach((p) => {
+    const cur = p.currency || "USD";
+    const posCurs = (p.positions || []).map(pos => getPosCurrency(pos, cur));
+    fxJobs.push(fetchExchangeRates(posCurs, cur));
+  });
+  fxJobs.push(fetchExchangeRates(portfolios.map(p => p.currency || "USD"), base));
+  try {
+    await Promise.all([fetchPricesBatch(tickers), ...fxJobs]);
+  } catch {}
+  // Solo re-renderizar si seguimos en la vista de lista
+  if (!document.getElementById("trackerListView").classList.contains("hidden")) {
+    renderPortfolioCards();
+  }
 }
 
 function setDashPriceStatus(msg, type) {
@@ -6208,6 +6987,12 @@ async function renderPortfolioDashboard() {
   perfReportData = null;
 
   _doRenderDashboard(portfolio);
+
+  const altCurrency = getDashAltCurrency(portfolio.currency || "USD");
+  if (altCurrency) {
+    fetchExchangeRates([portfolio.currency || "USD"], altCurrency).then(() => _doRenderDashboard(portfolio));
+  }
+
   const tickers = [...new Set((portfolio.positions || []).map((p) => p.ticker))];
   if (!tickers.length) return;
 
@@ -6289,10 +7074,25 @@ function buildXirrFlows(portfolio, currentValue) {
     .filter(t => t.date && t.net != null)
     .sort((a, b) => a.date.localeCompare(b.date));
   if (!txs.length || currentValue <= 0) return null;
-  const flows = txs.map(tx => ({
-    amount: tx.type === "COMPRA" ? -Math.abs(tx.net) : Math.abs(tx.net),
-    date: new Date(tx.date)
-  }));
+  // Si el portafolio gestiona efectivo (aportes/retiros), usar el modelo de flujos de caja:
+  // los aportes (−) y retiros (+) son los flujos externos; compras/ventas son movimientos
+  // internos (efectivo↔activo) y no se cuentan para evitar doble conteo.
+  const hasCashFlows = txs.some(t => t.type === "DEPOSITO" || t.type === "RETIRO");
+  let flows;
+  if (hasCashFlows) {
+    flows = txs
+      .filter(tx => tx.type === "DEPOSITO" || tx.type === "RETIRO")
+      .map(tx => ({
+        amount: tx.type === "DEPOSITO" ? -Math.abs(tx.net) : Math.abs(tx.net),
+        date: new Date(tx.date)
+      }));
+  } else {
+    flows = txs.map(tx => ({
+      amount: tx.type === "COMPRA" ? -Math.abs(tx.net) : Math.abs(tx.net),
+      date: new Date(tx.date)
+    }));
+  }
+  if (!flows.length) return null;
   flows.push({ amount: currentValue, date: new Date() });
   return flows;
 }
@@ -6370,28 +7170,31 @@ function _doRenderDashboard(portfolio) {
   let totalCurrentValue = 0;
   let totalCostPriced = 0;
   let hasAnyPrice = false;
+  let pricedCount = 0;
   positions.forEach((pos) => {
     const price = getCachedPrice(pos.ticker);
     const posCur = getPosCurrency(pos, currency);
     if (price !== null) {
       hasAnyPrice = true;
+      pricedCount++;
       totalCurrentValue += convertAmount(price * (pos.quantity || 0), posCur, currency) ?? (price * (pos.quantity || 0));
       totalCostPriced += convertAmount(calcPositionTotals(pos).total, posCur, currency) ?? calcPositionTotals(pos).total;
     }
   });
 
   const cashBalance = portfolio.cashBalance || 0;
-  const realizedPnL = portfolio.realizedPnL !== undefined
-    ? portfolio.realizedPnL
-    : reconstructRealizedPnL(portfolio);
+  // Fuente única de verdad: el P/L realizado se reconstruye siempre desde las transacciones
+  const realizedPnL = reconstructRealizedPnL(portfolio);
 
   const displayCurrentValue = (hasAnyPrice ? totalCurrentValue : 0) + cashBalance;
   _lastPortfolioCurrentValue = displayCurrentValue > 0 ? displayCurrentValue : null;
   const unrealizedPnL = hasAnyPrice ? totalCurrentValue - totalCostPriced : 0;
   const showReturn = hasAnyPrice || (!positions.length && realizedPnL !== 0);
   const returnAmt = showReturn ? unrealizedPnL + realizedPnL : null;
-  const returnPct = returnAmt !== null && displayCurrentValue > 0
-    ? (returnAmt / displayCurrentValue * 100)
+  // Retorno % sobre el costo invertido de las posiciones con precio (base de costo), no sobre el valor actual
+  const returnCostBasis = totalCostPriced > 0 ? totalCostPriced : 0;
+  const returnPct = returnAmt !== null && returnCostBasis > 0
+    ? (returnAmt / returnCostBasis * 100)
     : null;
 
   document.getElementById("dashPortfolioName").textContent = portfolio.name;
@@ -6400,6 +7203,19 @@ function _doRenderDashboard(portfolio) {
   document.getElementById("dashTotalCommissions").textContent = formatCurrency(totalComm, currency);
   document.getElementById("dashTotalIva").textContent = formatCurrency(totalIva, currency);
   document.getElementById("dashBenchmark").textContent = BENCHMARKS[portfolio.benchmark] || "—";
+
+  // Efectivo disponible en el portafolio (L1.10)
+  const cashEl = document.getElementById("dashCashBalance");
+  if (cashEl) cashEl.textContent = formatCurrency(cashBalance, currency);
+
+  // Aviso de alcance: valor y retorno excluyen posiciones sin precio (L1.7)
+  const investedNoteEl = document.getElementById("dashInvestedNote");
+  if (investedNoteEl) {
+    const unpriced = positions.length - pricedCount;
+    investedNoteEl.textContent = (positions.length && unpriced > 0)
+      ? `Valor y retorno excluyen ${unpriced} sin precio`
+      : "";
+  }
 
   const cvEl = document.getElementById("dashCurrentValue");
   cvEl.textContent = (hasAnyPrice || cashBalance > 0) ? formatCurrency(displayCurrentValue, currency) : "—";
@@ -6417,6 +7233,41 @@ function _doRenderDashboard(portfolio) {
     retAmtEl.textContent = "—"; retAmtEl.className = "";
     retPctEl.textContent = "—"; retPctEl.className = "";
   }
+
+  // ── Equivalencia en otra moneda (solo informativa, no altera el valor real) ──
+  populateDashAltCurrencySelect(currency);
+  const altCurrency = getDashAltCurrency(currency);
+  const cvAltEl = document.getElementById("dashCurrentValueAlt");
+  const retAltEl = document.getElementById("dashReturnAmtAlt");
+  const fxRateEl = document.getElementById("dashAltFxRate");
+  if (altCurrency && altCurrency !== currency) {
+    const cvConverted = (hasAnyPrice || cashBalance > 0) ? convertAmount(displayCurrentValue, currency, altCurrency) : null;
+    cvAltEl.textContent = cvConverted !== null ? `≈ ${formatCurrency(cvConverted, altCurrency)}` : "";
+    if (fxRateEl) fxRateEl.textContent = formatDashExchangeRate(currency, altCurrency);
+    if (returnAmt !== null) {
+      const retConverted = convertAmount(returnAmt, currency, altCurrency);
+      const sign = returnAmt >= 0 ? "+" : "";
+      retAltEl.textContent = retConverted !== null ? `≈ ${sign}${formatCurrency(retConverted, altCurrency)}` : "";
+    } else {
+      retAltEl.textContent = "";
+    }
+  } else {
+    cvAltEl.textContent = "";
+    retAltEl.textContent = "";
+    if (fxRateEl) fxRateEl.textContent = "";
+  }
+
+  // P/L no realizada vs realizada
+  const setPnlKpi = (id, value, show) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!show) { el.textContent = "—"; el.className = ""; return; }
+    const sign = value >= 0 ? "+" : "";
+    el.textContent = sign + formatCurrency(value, currency);
+    el.className = value >= 0 ? "return-pos" : "return-neg";
+  };
+  setPnlKpi("dashUnrealizedPnL", unrealizedPnL, hasAnyPrice);
+  setPnlKpi("dashRealizedPnL", realizedPnL, realizedPnL !== 0);
 
   // XIRR
   const xirrEl = document.getElementById("dashXirr");
@@ -6505,6 +7356,15 @@ function renderSummaryTable(positions, totalInvested, currency, cashBalance) {
   tbody.innerHTML = rows.join("");
 }
 
+function posTickerLogoHtml(ticker, fallbackColor) {
+  const sym = (ticker || "").split(".")[0];
+  const initials = (ticker || "").slice(0, 2);
+  return `<span class="pos-ticker-logo" style="--pos-logo-bg:${fallbackColor}">` +
+    `<img src="https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}?format=png" alt="" ` +
+    `onerror="this.parentElement.classList.add('pos-ticker-logo--fallback');this.remove();this.parentElement.textContent='${initials}';">` +
+    `</span>`;
+}
+
 function renderPositionsTable(positions, totalInvested, currency, transactions) {
   const tbody = document.getElementById("positionsTableBody");
   const tableShell = document.getElementById("positionsTableShell");
@@ -6519,11 +7379,48 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
   emptyMsg.classList.add("hidden");
   tableShell.classList.add("is-loading-prices");
 
-  tbody.innerHTML = positions.map((pos, i) => {
+  // Búsqueda + ordenamiento (L2.2)
+  let rows = positions.slice();
+  if (posSearch) rows = rows.filter((p) => p.ticker.toUpperCase().includes(posSearch.toUpperCase()));
+  if (posSort.key) {
+    const sortVal = (pos, key) => {
+      const t = calcPositionTotals(pos);
+      const posCur = getPosCurrency(pos, currency);
+      const price = getCachedPrice(pos.ticker);
+      const cost = convertAmount(t.total, posCur, currency) ?? t.total;
+      const value = price !== null ? (convertAmount(price * pos.quantity, posCur, currency) ?? price * pos.quantity) : -Infinity;
+      switch (key) {
+        case "ticker": return pos.ticker || "";
+        case "date": return pos.purchaseDate || "";
+        case "avg": return pos.avgPrice || 0;
+        case "price": return price ?? -Infinity;
+        case "qty": return pos.quantity || 0;
+        case "cost": return cost;
+        case "value": return value;
+        case "return": return value !== -Infinity && cost > 0 ? (value - cost) / cost : -Infinity;
+        default: return 0;
+      }
+    };
+    rows.sort((a, b) => {
+      const va = sortVal(a, posSort.key), vb = sortVal(b, posSort.key);
+      let cmp = typeof va === "string" ? va.localeCompare(vb) : va - vb;
+      return posSort.dir === "asc" ? cmp : -cmp;
+    });
+  }
+  _markSortIndicators(".tracker-table--positions [data-sort]", "sort", posSort);
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">Sin posiciones que coincidan con "${posSearch}".</td></tr>`;
+    tableShell.classList.remove("is-loading-prices");
+    return;
+  }
+
+  tbody.innerHTML = rows.map((pos, i) => {
     const t = calcPositionTotals(pos);
     const posCur = getPosCurrency(pos, currency);
     const color = CHART_COLORS[i % CHART_COLORS.length];
     const currentPrice = getCachedPrice(pos.ticker);
+    const fr = currentPrice !== null ? _priceFreshnessLabel(pos.ticker) : null;
     const currentValueRaw = currentPrice !== null ? currentPrice * pos.quantity : null;
     const currentValue = currentValueRaw !== null ? (convertAmount(currentValueRaw, posCur, currency) ?? currentValueRaw) : null;
     const costConverted = convertAmount(t.total, posCur, currency) ?? t.total;
@@ -6558,12 +7455,12 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
     return `<tr class="pos-row">
       <td>
         ${txs.length ? `<button class="pos-expand-btn" type="button" data-lots-for="${pos.id}" aria-label="Ver lotes"><svg class="pos-expand-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>` : ""}
-        <span class="pos-ticker-dot" style="background:${color}"></span><strong>${pos.ticker}</strong>${currTag}
+        ${posTickerLogoHtml(pos.ticker, color)}<strong>${pos.ticker}</strong>${currTag}
       </td>
       <td class="td-sparkline"><canvas class="pos-sparkline" data-ticker="${pos.ticker}" width="80" height="28"></canvas></td>
       <td>${dateStr}</td>
       <td>${formatCurrency(pos.avgPrice, posCur)}</td>
-      <td>${currentPrice !== null ? formatCurrency(currentPrice, posCur) : '<span class="muted-val">…</span>'}</td>
+      <td>${currentPrice !== null ? `<span class="price-fresh-dot price-fresh-dot--${fr.cls}" title="${fr.title}"></span>` + formatCurrency(currentPrice, posCur) : '<span class="muted-val" title="Precio cargando o no disponible">…</span>'}</td>
       <td>${parseFloat(pos.quantity.toFixed(5))}</td>
       <td>${formatCurrency(costConverted, currency)}</td>
       <td>${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
@@ -6599,9 +7496,26 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       const portfolios = getPortfolios();
       const portfolio = portfolios.find((p) => p.id === activePortfolioId);
       if (!portfolio) return;
-      portfolio.positions = (portfolio.positions || []).filter((p) => p.id !== btn.dataset.posId);
+      const allPos = portfolio.positions || [];
+      const idx = allPos.findIndex((p) => p.id === btn.dataset.posId);
+      if (idx === -1) return;
+      const [removed] = allPos.splice(idx, 1);  // conserva orden para restaurar
       savePortfolios(portfolios);
       renderPortfolioDashboard();
+      // Toast con opción de deshacer (L2.1)
+      showToast(`Posición ${removed.ticker} eliminada.`, {
+        actionLabel: "Deshacer",
+        duration: 7000,
+        onAction: () => {
+          const ps = getPortfolios();
+          const p = ps.find((q) => q.id === activePortfolioId);
+          if (!p) return;
+          if (!p.positions) p.positions = [];
+          p.positions.splice(Math.min(idx, p.positions.length), 0, removed);
+          savePortfolios(ps);
+          renderPortfolioDashboard();
+        }
+      });
     });
   });
 }
@@ -6878,14 +7792,16 @@ function _pearson(a, b) {
   const den = Math.sqrt(da * db);
   return den > 0 ? num / den : 0;
 }
-function _corrColor(c) {
+function _corrColor(c, isDiag) {
+  if (isDiag) return "rgba(120,146,255,0.09)";
   const t = Math.max(-1, Math.min(1, c));
-  if (t >= 0) {
-    const r = Math.round(80 + t * 150), g = Math.round(185 - t * 150);
-    return `rgba(${r},${g},90,${0.22 + 0.55 * t})`;
-  }
-  const b = Math.round(120 + (-t) * 120);
-  return `rgba(70,120,${b},${0.22 + 0.45 * (-t)})`;
+  const neg = [88, 124, 240];
+  const mid = [134, 142, 158];
+  const pos = [232, 104, 126];
+  const mix = (a, b, f) => a.map((v, i) => Math.round(v + (b[i] - v) * f));
+  const rgb = t >= 0 ? mix(mid, pos, t) : mix(mid, neg, -t);
+  const alpha = 0.12 + 0.72 * Math.abs(t);
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
 }
 async function renderCorrelationTab(portfolio) {
   corrTabLoaded = true;
@@ -6946,8 +7862,14 @@ async function renderCorrelationTab(portfolio) {
   for (let i = 0; i < n; i++) {
     html += `<tr><th>${valid[i]}</th>`;
     for (let j = 0; j < n; j++) {
-      const c = M[i][j];
-      html += `<td style="background:${_corrColor(c)};color:${Math.abs(c) > 0.6 ? "#fff" : "var(--text)"}" title="${valid[i]} vs ${valid[j]}: ${c.toFixed(2)}">${c.toFixed(2)}</td>`;
+      const c = M[i][j], diag = i === j, abs = Math.abs(c);
+      const highPos = !diag && c >= 0.55, highNeg = !diag && c <= -0.55;
+      const cls = [diag ? "corr-diag" : "", highPos ? "corr-high-pos" : "", highNeg ? "corr-high-neg" : ""].filter(Boolean).join(" ");
+      const textColor = (highPos || highNeg) ? "#fff" : "var(--text)";
+      const strength = !diag ? (abs >= 0.7 ? " ▲" : abs >= 0.4 ? " ●" : "") : "";
+      const label = diag ? "—" : `${c.toFixed(2)}${strength}`;
+      const tipText = diag ? `${valid[i]} (auto-correlación)` : `${valid[i]} vs ${valid[j]}: ${c.toFixed(2)} · ${abs>=0.7?"Alta":abs>=0.4?"Moderada":"Baja"} correlación ${c>=0?"positiva":"negativa"}`;
+      html += `<td class="${cls}" style="background:${_corrColor(c, diag)};color:${textColor}" title="${tipText}">${label}</td>`;
     }
     html += "</tr>";
   }
@@ -7213,108 +8135,196 @@ function recomputeRebalance() {
   sumEl.style.color = off ? "var(--danger, #ff6b81)" : "var(--success, #32d6a2)";
 }
 
-function drawDonutChart(canvas, positions, totalInvested, currency, cashBalance) {
-  const dpr = window.devicePixelRatio || 1;
-  const size = 200;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  canvas.style.width = size + "px";
-  canvas.style.height = size + "px";
+const portfolioDonutStates = new WeakMap();
+
+function paintPortfolioDonut(canvas) {
+  const state = portfolioDonutStates.get(canvas);
+  if (!state) return;
+  const { size, dpr, cx, cy, outerR, innerR, entries, grandTotal, positionsCount, currency, hoverIndex } = state;
   const ctx = canvas.getContext("2d");
-  ctx.scale(dpr, dpr);
-
-  const cx = size / 2;
-  const cy = size / 2;
-  const outerR = cx - 8;
-  const innerR = outerR * 0.58;
-
+  const lightMode = document.body.classList.contains("light-mode");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
 
-  const cash = cashBalance || 0;
-  const grandTotal = totalInvested + cash;
-
-  if ((!positions.length && cash <= 0) || grandTotal <= 0) {
+  if (grandTotal <= 0) {
     ctx.beginPath();
     ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
     ctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    ctx.fillStyle = lightMode ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.05)";
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.font = "bold 13px Inter, sans-serif";
+    ctx.fillStyle = lightMode ? "rgba(15,23,42,0.42)" : "rgba(255,255,255,0.32)";
+    ctx.font = "600 13px Inter, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("Sin datos", cx, cy);
     return;
   }
 
-  const sliceCount = positions.length + (cash > 0 ? 1 : 0);
-  const gap = sliceCount > 1 ? 0.025 : 0;
-  let startAngle = -Math.PI / 2;
-
-  positions.forEach((pos, i) => {
-    const t = calcPositionTotals(pos);
-    const posCur = getPosCurrency(pos, currency);
-    const posTotal = convertAmount(t.total, posCur, currency) ?? t.total;
-    const sweep = Math.max(0, (posTotal / grandTotal) * Math.PI * 2 - gap);
-    if (sweep <= 0) return;
-    const endAngle = startAngle + sweep;
+  entries.forEach((entry, index) => {
+    if (entry.endAngle <= entry.startAngle) return;
+    const isActive = hoverIndex === index;
+    const radius = outerR + (isActive ? 5 : 0);
+    ctx.save();
+    ctx.globalAlpha = hoverIndex === null || isActive ? 1 : 0.34;
+    if (isActive) {
+      ctx.shadowColor = entry.color;
+      ctx.shadowBlur = 14;
+    }
     ctx.beginPath();
-    ctx.arc(cx, cy, outerR, startAngle, endAngle);
-    ctx.arc(cx, cy, innerR, endAngle, startAngle, true);
+    ctx.arc(cx, cy, radius, entry.startAngle, entry.endAngle);
+    ctx.arc(cx, cy, innerR, entry.endAngle, entry.startAngle, true);
     ctx.closePath();
-    ctx.fillStyle = CHART_COLORS[i % CHART_COLORS.length];
+    ctx.fillStyle = entry.color;
     ctx.fill();
-    startAngle = endAngle + gap;
+    ctx.restore();
   });
 
-  if (cash > 0) {
-    const sweep = Math.max(0, (cash / grandTotal) * Math.PI * 2 - gap);
-    if (sweep > 0) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, outerR, startAngle, startAngle + sweep);
-      ctx.arc(cx, cy, innerR, startAngle + sweep, startAngle, true);
-      ctx.closePath();
-      ctx.fillStyle = "#4ade80";
-      ctx.fill();
-    }
-  }
-
-  ctx.fillStyle = "#dce5ff";
-  ctx.font = "bold 15px Inter, sans-serif";
+  const activeEntry = hoverIndex === null ? null : entries[hoverIndex];
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const assetLabel = positions.length + (positions.length === 1 ? " activo" : " activos");
-  ctx.fillText(assetLabel, cx, cy - 9);
-  ctx.fillStyle = "rgba(255,255,255,0.38)";
-  ctx.font = "11px Inter, sans-serif";
-  ctx.fillText(formatCurrency(grandTotal), cx, cy + 11);
+  ctx.fillStyle = lightMode ? "#172033" : "#e8edff";
+  ctx.font = "700 16px Inter, sans-serif";
+  ctx.fillText(activeEntry ? activeEntry.label : `${positionsCount} ${positionsCount === 1 ? "activo" : "activos"}`, cx, cy - 10);
+  ctx.fillStyle = lightMode ? "rgba(23,32,51,0.58)" : "rgba(226,232,255,0.5)";
+  ctx.font = "500 11px Inter, sans-serif";
+  ctx.fillText(activeEntry ? `${(activeEntry.value / grandTotal * 100).toFixed(1)}% del total` : formatCurrency(grandTotal, currency), cx, cy + 12);
+}
+
+function setPortfolioDonutHover(canvas, index, point) {
+  const state = portfolioDonutStates.get(canvas);
+  if (!state) return;
+  if (state.hoverIndex !== index) {
+    state.hoverIndex = index;
+    paintPortfolioDonut(canvas);
+    document.querySelectorAll("#donutLegend .donut-legend-item").forEach((item) => {
+      item.classList.toggle("is-highlighted", index !== null && Number(item.dataset.index) === index);
+    });
+  }
+  const tooltip = document.getElementById("portfolioDonutTooltip");
+  if (!tooltip) return;
+  if (index === null || !state.entries[index]) {
+    tooltip.classList.add("hidden");
+    return;
+  }
+  const entry = state.entries[index];
+  tooltip.innerHTML = "<strong></strong><span></span><small></small>";
+  tooltip.querySelector("strong").textContent = entry.label;
+  tooltip.querySelector("span").textContent = `${(entry.value / state.grandTotal * 100).toFixed(1)}%`;
+  tooltip.querySelector("small").textContent = formatCurrency(entry.value, state.currency);
+  const displayScale = canvas.getBoundingClientRect().width / state.size;
+  const displaySize = state.size * displayScale;
+  const tooltipX = (point?.x ?? state.cx) * displayScale;
+  const tooltipY = (point?.y ?? state.cy) * displayScale;
+  tooltip.style.left = `${Math.min(Math.max(tooltipX, 72), displaySize - 72)}px`;
+  tooltip.style.top = `${Math.max(tooltipY, 62)}px`;
+  tooltip.classList.remove("hidden");
+}
+
+function ensurePortfolioDonutInteractions(canvas) {
+  if (canvas.dataset.interactive === "true") return;
+  canvas.dataset.interactive = "true";
+  canvas.addEventListener("pointermove", (event) => {
+    const state = portfolioDonutStates.get(canvas);
+    if (!state) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * (state.size / rect.width);
+    const y = (event.clientY - rect.top) * (state.size / rect.height);
+    const distance = Math.hypot(x - state.cx, y - state.cy);
+    let angle = Math.atan2(y - state.cy, x - state.cx);
+    while (angle < -Math.PI / 2) angle += Math.PI * 2;
+    const index = distance >= state.innerR && distance <= state.outerR + 7
+      ? state.entries.findIndex((entry) => angle >= entry.startAngle && angle <= entry.endAngle)
+      : -1;
+    canvas.style.cursor = index >= 0 ? "pointer" : "default";
+    setPortfolioDonutHover(canvas, index >= 0 ? index : null, { x, y });
+  });
+  canvas.addEventListener("pointerleave", () => {
+    canvas.style.cursor = "default";
+    setPortfolioDonutHover(canvas, null);
+  });
+  document.addEventListener("pointermove", (event) => {
+    if (event.target !== canvas && !event.target.closest?.("#donutLegend .donut-legend-item")) {
+      canvas.style.cursor = "default";
+      setPortfolioDonutHover(canvas, null);
+    }
+  });
+}
+
+function drawDonutChart(canvas, positions, totalInvested, currency, cashBalance) {
+  if (!canvas) return;
+  canvas.style.cursor = "default";
+  document.getElementById("portfolioDonutTooltip")?.classList.add("hidden");
+  document.querySelectorAll("#donutLegend .donut-legend-item").forEach((item) => item.classList.remove("is-highlighted"));
+  const dpr = window.devicePixelRatio || 1;
+  const size = 220;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = size + "px";
+  canvas.style.height = size + "px";
+  const cx = size / 2;
+  const cy = size / 2;
+  const outerR = cx - 12;
+  const innerR = outerR * 0.61;
+  const cash = cashBalance || 0;
+  const posVals = positions.map((position) => _donutPosValue(position, currency));
+  const entries = positions.map((position, index) => ({
+    label: position.ticker,
+    value: posVals[index],
+    color: CHART_COLORS[index % CHART_COLORS.length]
+  }));
+  if (cash > 0) entries.push({ label: "Efectivo", value: cash, color: "#4ade80" });
+  const grandTotal = entries.reduce((sum, entry) => sum + entry.value, 0);
+  const visibleEntries = entries.filter((entry) => entry.value > 0).length;
+  const gap = visibleEntries > 1 ? 0.025 : 0;
+  let startAngle = -Math.PI / 2;
+  entries.forEach((entry) => {
+    const sweep = grandTotal > 0 ? Math.max(0, (entry.value / grandTotal) * Math.PI * 2 - gap) : 0;
+    entry.startAngle = startAngle;
+    entry.endAngle = startAngle + sweep;
+    if (sweep > 0) startAngle = entry.endAngle + gap;
+  });
+  portfolioDonutStates.set(canvas, {
+    size, dpr, cx, cy, outerR, innerR, entries, grandTotal,
+    positionsCount: positions.length, currency, hoverIndex: null
+  });
+  ensurePortfolioDonutInteractions(canvas);
+  paintPortfolioDonut(canvas);
 }
 
 function renderDonutLegend(positions, totalInvested, currency, cashBalance) {
   const legend = document.getElementById("donutLegend");
   const cash = cashBalance || 0;
   if (!positions.length && cash <= 0) { legend.innerHTML = ""; return; }
-  const grandTotal = totalInvested + cash;
+  const posVals = positions.map((p) => _donutPosValue(p, currency));
+  const grandTotal = posVals.reduce((s, v) => s + v, 0) + cash;
   let rows = positions.map((pos, i) => {
-    const t = calcPositionTotals(pos);
-    const posCur = getPosCurrency(pos, currency);
-    const posTotal = convertAmount(t.total, posCur, currency) ?? t.total;
+    const posTotal = posVals[i];
     const weight = grandTotal > 0 ? (posTotal / grandTotal * 100).toFixed(1) : "0.0";
-    return `<div class="donut-legend-item">
+    return `<button class="donut-legend-item" type="button" data-index="${i}">
       <span class="donut-legend-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>
       <span class="donut-legend-ticker">${pos.ticker}</span>
+      <span class="donut-legend-value">${formatCurrency(posTotal, currency)}</span>
       <span class="donut-legend-weight">${weight}%</span>
-    </div>`;
+    </button>`;
   });
   if (cash > 0) {
     const cashWeight = grandTotal > 0 ? (cash / grandTotal * 100).toFixed(1) : "0.0";
-    rows.push(`<div class="donut-legend-item">
+    rows.push(`<button class="donut-legend-item" type="button" data-index="${positions.length}">
       <span class="donut-legend-dot" style="background:#4ade80"></span>
-      <span class="donut-legend-ticker">Cash</span>
+      <span class="donut-legend-ticker">Efectivo</span>
+      <span class="donut-legend-value">${formatCurrency(cash, currency)}</span>
       <span class="donut-legend-weight">${cashWeight}%</span>
-    </div>`);
+    </button>`);
   }
   legend.innerHTML = rows.join("");
+  const canvas = document.getElementById("portfolioDonutChart");
+  legend.querySelectorAll(".donut-legend-item").forEach((item) => {
+    const index = Number(item.dataset.index);
+    item.addEventListener("mouseenter", () => setPortfolioDonutHover(canvas, index));
+    item.addEventListener("mouseleave", () => setPortfolioDonutHover(canvas, null));
+    item.addEventListener("focus", () => setPortfolioDonutHover(canvas, index));
+    item.addEventListener("blur", () => setPortfolioDonutHover(canvas, null));
+  });
 }
 
 function getTickerSector(ticker) {
@@ -7335,7 +8345,8 @@ function getTickerGeo(ticker) {
   if (ticker.endsWith(".T")) return "Japón";
   if (ticker.endsWith(".TO")) return "Canadá";
   if (ticker.endsWith(".AX")) return "Australia";
-  return "Otro";
+  // Sin sufijo de bolsa extranjera reconocido: se asume listado en EE.UU. (caso más común).
+  return "EE.UU.";
 }
 
 const ALLOC_COLORS = [
@@ -7343,7 +8354,25 @@ const ALLOC_COLORS = [
   "#9f7aea","#f687b3","#48bb78","#ed8936","#4299e1","#667eea","#fc8181"
 ];
 
-function buildAllocationData(positions, totalInvested, currency, labelFn, cashBalance) {
+// Región -> códigos ISO 3166-1 numéricos de los países a iluminar en el mapa.
+const GEO_REGION_IDS = {
+  "EE.UU.": ["840"],
+  "Canadá": ["124"],
+  "México": ["484"],
+  "R. Unido": ["826"],
+  "Alemania": ["276"],
+  "Francia": ["250"],
+  "Italia": ["380"],
+  "Europa": ["826", "276", "250", "380", "724", "528", "756", "752", "578", "208", "246", "056", "040", "616", "620", "372", "300"],
+  "China": ["156"],
+  "Hong Kong": ["156"],
+  "Japón": ["392"],
+  "Asia-Pacífico": ["156", "392", "410", "158", "360", "458", "764", "704", "608", "554", "036"],
+  "Australia": ["036", "554"],
+  "Mercados em.": ["076", "356", "710", "643", "484", "792", "156", "608", "360"],
+};
+
+function buildAllocationData(positions, totalInvested, currency, labelFn, cashBalance, includeCash = true) {
   const buckets = {};
   positions.forEach((pos) => {
     const t = calcPositionTotals(pos);
@@ -7352,7 +8381,7 @@ function buildAllocationData(positions, totalInvested, currency, labelFn, cashBa
     const label = labelFn(pos.ticker);
     buckets[label] = (buckets[label] || 0) + val;
   });
-  if (cashBalance > 0) {
+  if (includeCash && cashBalance > 0) {
     buckets["Cash"] = (buckets["Cash"] || 0) + cashBalance;
   }
   return Object.entries(buckets)
@@ -7418,18 +8447,50 @@ function renderAllocationLegend(el, data, total) {
   }).join("");
 }
 
+function renderGeoWorldMap(container, data, total) {
+  if (!container) return;
+  const countries = window.WORLD_COUNTRIES || {};
+  const ids = Object.keys(countries);
+  if (!data.length || total <= 0 || !ids.length) {
+    container.innerHTML = '<div class="geo-map-empty">Sin datos</div>';
+    return;
+  }
+  // Color por país según la región con exposición (gana el mayor peso si hay solape).
+  const highlight = {};
+  data.forEach((d) => {
+    const regionIds = GEO_REGION_IDS[d.label];
+    if (!regionIds) return;
+    const pct = (d.value / total) * 100;
+    regionIds.forEach((id) => {
+      if (countries[id] && (!highlight[id] || pct > highlight[id].pct)) {
+        highlight[id] = { color: d.color, pct, label: d.label };
+      }
+    });
+  });
+  const base = ids.map((id) => `<path d="${countries[id]}"/>`).join("");
+  const lit = Object.entries(highlight)
+    .map(([id, h]) => `<path d="${countries[id]}" fill="${h.color}" fill-opacity="0.9" stroke="rgba(255,255,255,0.8)" stroke-width="0.7"><title>${h.label}: ${h.pct.toFixed(1)}%</title></path>`)
+    .join("");
+  // viewBox recortado (sin Antártida ni polo norte vacío) para encuadrar mejor el mapa.
+  container.innerHTML = `
+    <svg viewBox="0 22 1000 392" class="geo-world-map-svg" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <g class="geo-base" fill="rgba(255,255,255,0.05)" stroke="rgba(140,160,220,0.16)" stroke-width="0.5" stroke-linejoin="round">${base}</g>
+      <g class="geo-lit" stroke-linejoin="round">${lit}</g>
+    </svg>`;
+}
+
 function renderAllocationCharts(positions, totalInvested, currency, cashBalance) {
   const sectorCanvas = document.getElementById("sectorDonutChart");
-  const geoCanvas = document.getElementById("geoDonutChart");
-  if (!sectorCanvas || !geoCanvas) return;
+  const geoMapEl = document.getElementById("geoWorldMap");
+  if (!sectorCanvas || !geoMapEl) return;
   const cash = cashBalance || 0;
   const grandTotal = totalInvested + cash;
   const sectorData = buildAllocationData(positions, totalInvested, currency, getTickerSector, cash);
-  const geoData = buildAllocationData(positions, totalInvested, currency, getTickerGeo, cash);
+  const geoData = buildAllocationData(positions, totalInvested, currency, getTickerGeo, cash, false);
   drawAllocationDonut(sectorCanvas, sectorData, grandTotal, "sectores");
   renderAllocationLegend(document.getElementById("sectorDonutLegend"), sectorData, grandTotal);
-  drawAllocationDonut(geoCanvas, geoData, grandTotal, "regiones");
-  renderAllocationLegend(document.getElementById("geoDonutLegend"), geoData, grandTotal);
+  renderGeoWorldMap(geoMapEl, geoData, totalInvested);
+  renderAllocationLegend(document.getElementById("geoDonutLegend"), geoData, totalInvested);
 }
 
 function drawHoldingsBarChart(canvas, positions, currency) {
@@ -7514,20 +8575,47 @@ function initCustomSelects() {
     const list = wrapper.querySelector(".custom-select-list");
     const hidden = wrapper.querySelector("input[type=hidden]");
 
+    const openList = () => {
+      document.querySelectorAll(".custom-select.is-open").forEach((el) => el.classList.remove("is-open"));
+      wrapper.classList.add("is-open");
+    };
+    const closeList = () => wrapper.classList.remove("is-open");
+
     trigger.addEventListener("click", () => {
       const isOpen = wrapper.classList.contains("is-open");
       document.querySelectorAll(".custom-select.is-open").forEach((el) => el.classList.remove("is-open"));
       if (!isOpen) wrapper.classList.add("is-open");
     });
 
-    list.querySelectorAll("li").forEach((li) => {
-      li.addEventListener("click", () => {
-        list.querySelectorAll("li").forEach((el) => el.classList.remove("is-active"));
-        li.classList.add("is-active");
-        trigger.querySelector("span").textContent = li.textContent;
-        hidden.value = li.dataset.value;
-        wrapper.classList.remove("is-open");
-      });
+    const items = [...list.querySelectorAll("li")];
+    items.forEach((li) => { li.tabIndex = -1; });
+
+    const selectItem = (li) => {
+      items.forEach((el) => el.classList.remove("is-active"));
+      li.classList.add("is-active");
+      trigger.querySelector("span").textContent = li.textContent;
+      hidden.value = li.dataset.value;
+      closeList();
+      trigger.focus();
+      hidden.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    items.forEach((li) => li.addEventListener("click", () => selectItem(li)));
+
+    // Teclado en el botón (L2.6)
+    trigger.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+        e.preventDefault();
+        openList();
+        (items.find((el) => el.classList.contains("is-active")) || items[0])?.focus();
+      }
+    });
+    // Teclado dentro de la lista (L2.6)
+    list.addEventListener("keydown", (e) => {
+      const idx = items.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") { e.preventDefault(); items[Math.min(items.length - 1, idx + 1)]?.focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); items[Math.max(0, idx - 1)]?.focus(); }
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (items[idx]) selectItem(items[idx]); }
+      else if (e.key === "Escape") { e.preventDefault(); closeList(); trigger.focus(); }
     });
   });
 
@@ -7700,7 +8788,20 @@ function initializeTrackerModule() {
     }
   });
 
-  document.getElementById("addPositionBtn").addEventListener("click", () => openModal("addPositionModal"));
+  document.getElementById("dashAltCurrencySelect")?.addEventListener("change", (e) => {
+    setDashAltCurrency(e.target.value);
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (!portfolio) return;
+    _doRenderDashboard(portfolio);
+    const altCurrency = e.target.value;
+    if (altCurrency) fetchExchangeRates([portfolio.currency || "USD"], altCurrency).then(() => _doRenderDashboard(portfolio));
+  });
+
+  document.getElementById("addPositionBtn").addEventListener("click", () => {
+    const dateInput = document.getElementById("posPurchaseDateInput");
+    if (dateInput) dateInput.max = new Date().toISOString().slice(0, 10);  // sin fechas futuras (L1.6)
+    openModal("addPositionModal");
+  });
   document.getElementById("closePositionModalBtn").addEventListener("click", () => closeModal("addPositionModal"));
   document.getElementById("addPositionModal").addEventListener("click", (e) => {
     if (e.target === e.currentTarget) closeModal("addPositionModal");
@@ -7776,6 +8877,13 @@ function initializeTrackerModule() {
 
     const purchaseDate = document.getElementById("posPurchaseDateInput").value;
     const posCurrency = document.getElementById("posCurrencyInput").value || "USD";
+
+    // Validación: la fecha de compra no puede ser futura (L1.6)
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (purchaseDate && purchaseDate > todayStr) {
+      showToast("La fecha de compra no puede ser futura.", { type: "error" });
+      return;
+    }
 
     // Buscar posición existente del mismo ticker
     const existingPos = portfolio.positions.find((p) => p.ticker === ticker);
@@ -7916,23 +9024,89 @@ function initializeTrackerModule() {
       document.getElementById("tabPanelRebalanceo").style.display = tab === "rebalanceo" ? "" : "none";
       document.getElementById("tabPanelCorrelacion").style.display = tab === "correlacion" ? "" : "none";
       document.getElementById("tabPanelWhatif").style.display = tab === "whatif" ? "" : "none";
+      // Recordar la pestaña activa por portafolio (L2.4)
+      try { localStorage.setItem(`bp_activeTab_${activePortfolioId}`, tab); } catch {}
       if (tab === "transacciones") renderTransactionsTab();
       if (tab === "dividendos") renderDividendsTab();
       if (tab === "rebalanceo") renderRebalanceTab();
       if (tab === "correlacion" && !corrTabLoaded) {
         const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+        const cs = document.getElementById("corrStatus");
+        if (cs) cs.innerHTML = `<span class="inline-spinner"></span> Calculando correlaciones…`;
         if (portfolio) renderCorrelationTab(portfolio);
       }
       if (tab === "desempeno" && !perfTabLoaded) {
         const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+        const ps = document.getElementById("perfChartStatus");
+        if (ps) ps.innerHTML = `<span class="inline-spinner"></span> Calculando rendimiento histórico…`;
         if (portfolio) loadPerformanceTab(portfolio);
       }
       if (tab === "proyeccion" && !mcTabLoaded) {
         const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+        const ms = document.getElementById("mcStatus");
+        if (ms) ms.innerHTML = `<span class="inline-spinner"></span> Simulando escenarios…`;
         if (portfolio) loadMonteCarloTab(portfolio);
       }
     });
   });
+
+  // ── Búsqueda de posiciones (L2.2) ──────────────────────────────────────────
+  document.getElementById("positionsSearchInput")?.addEventListener("input", (e) => {
+    posSearch = e.target.value.trim();
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (portfolio) {
+      const { totalInvested } = calcPortfolioTotals(portfolio.positions || [], portfolio.currency || "USD");
+      renderPositionsTable(portfolio.positions || [], totalInvested, portfolio.currency || "USD", portfolio.transactions || []);
+      drawAllSparklines((portfolio.positions || []));
+    }
+  });
+
+  // ── Ordenamiento de la tabla de posiciones (L2.2) ──────────────────────────
+  document.querySelector(".tracker-table--positions thead")?.addEventListener("click", (e) => {
+    const th = e.target.closest("[data-sort]");
+    if (!th) return;
+    const key = th.dataset.sort;
+    if (posSort.key === key) posSort.dir = posSort.dir === "asc" ? "desc" : "asc";
+    else { posSort.key = key; posSort.dir = key === "ticker" || key === "date" ? "asc" : "desc"; }
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (portfolio) {
+      const { totalInvested } = calcPortfolioTotals(portfolio.positions || [], portfolio.currency || "USD");
+      renderPositionsTable(portfolio.positions || [], totalInvested, portfolio.currency || "USD", portfolio.transactions || []);
+      drawAllSparklines((portfolio.positions || []));
+    }
+  });
+
+  // ── Ordenamiento de la tabla de transacciones (L2.2) ───────────────────────
+  document.querySelector("#txTableShell thead")?.addEventListener("click", (e) => {
+    const th = e.target.closest("[data-txsort]");
+    if (!th) return;
+    const key = th.dataset.txsort;
+    if (txSort.key === key) txSort.dir = txSort.dir === "asc" ? "desc" : "asc";
+    else { txSort.key = key; txSort.dir = (key === "ticker" || key === "type") ? "asc" : "desc"; }
+    renderTransactionsTab();
+  });
+
+  // ── Toggle base del donut de ponderación (L2.3) ────────────────────────────
+  document.getElementById("donutBaseToggle")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".donut-base-btn");
+    if (!btn) return;
+    donutBase = btn.dataset.base;
+    document.querySelectorAll("#donutBaseToggle .donut-base-btn").forEach((b) => {
+      const isActive = b === btn;
+      b.classList.toggle("active", isActive);
+      b.setAttribute("aria-pressed", String(isActive));
+    });
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (portfolio) {
+      const { totalInvested } = calcPortfolioTotals(portfolio.positions || [], portfolio.currency || "USD");
+      const cashBalance = portfolio.cashBalance || 0;
+      drawDonutChart(document.getElementById("portfolioDonutChart"), portfolio.positions || [], totalInvested, portfolio.currency || "USD", cashBalance);
+      renderDonutLegend(portfolio.positions || [], totalInvested, portfolio.currency || "USD", cashBalance);
+    }
+  });
+
+  // ── Gestión de efectivo (L1.10) ────────────────────────────────────────────
+  _wireCashModal();
 
   // ── Monte Carlo year buttons ─────────────────────────────────────────────
   document.getElementById("mcYearNav").addEventListener("click", (e) => {
@@ -7995,7 +9169,90 @@ function initializeTrackerModule() {
     if (portfolio) loadPerformanceTab(portfolio);
   });
 
+  // ── Accesibilidad: cerrar cualquier modal del tracker con ESC (L2.6) ───────
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    let closedAny = false;
+    document.querySelectorAll(".tracker-modal-backdrop:not(.hidden)").forEach((m) => {
+      m.classList.add("hidden");
+      closedAny = true;
+    });
+    // También cerrar el modal de eliminar portafolio (usa hidden directo)
+    const delModal = document.getElementById("deletePortfolioModal");
+    if (delModal && !delModal.classList.contains("hidden")) { delModal.classList.add("hidden"); pendingDeleteId = null; closedAny = true; }
+    if (closedAny) document.querySelectorAll(".custom-select.is-open").forEach((el) => el.classList.remove("is-open"));
+  });
+
+  // Al abrir un modal, enfocar su primer campo (L2.6)
+  document.querySelectorAll(".tracker-modal-backdrop").forEach((backdrop) => {
+    const obs = new MutationObserver(() => {
+      if (!backdrop.classList.contains("hidden")) {
+        const focusable = backdrop.querySelector("input:not([type=hidden]), select, button.button");
+        if (focusable) setTimeout(() => focusable.focus(), 30);
+      }
+    });
+    obs.observe(backdrop, { attributes: true, attributeFilter: ["class"] });
+  });
+
   trackerInitialized = true;
+}
+
+// ── Modal de gestión de efectivo (L1.10) ──────────────────────────────────────
+function _wireCashModal() {
+  const open = () => {
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (!portfolio) return;
+    document.getElementById("cashAmountInput").value = "";
+    document.getElementById("cashDateInput").value = new Date().toISOString().slice(0, 10);
+    document.getElementById("cashError").classList.add("hidden");
+    document.getElementById("cashOpInput").value = "DEPOSITO";
+    document.querySelectorAll("#cashModal .cash-op-btn").forEach((b) => b.classList.toggle("active", b.dataset.op === "DEPOSITO"));
+    openModal("cashModal");
+  };
+  document.getElementById("manageCashBtn")?.addEventListener("click", open);
+  document.getElementById("closeCashModalBtn")?.addEventListener("click", () => closeModal("cashModal"));
+  document.getElementById("cashModal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeModal("cashModal");
+  });
+  document.querySelectorAll("#cashModal .cash-op-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#cashModal .cash-op-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      document.getElementById("cashOpInput").value = btn.dataset.op;
+    });
+  });
+  document.getElementById("cashForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const op = document.getElementById("cashOpInput").value;
+    const amount = parseFloat(document.getElementById("cashAmountInput").value) || 0;
+    const dateStr = document.getElementById("cashDateInput").value;
+    const errEl = document.getElementById("cashError");
+    const showErr = (msg) => { errEl.textContent = msg; errEl.classList.remove("hidden"); };
+
+    if (amount <= 0) return showErr("Ingresa un monto mayor a cero.");
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (dateStr && dateStr > todayStr) return showErr("La fecha no puede ser futura.");
+
+    const portfolios = getPortfolios();
+    const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+    if (!portfolio) return;
+    const cur = portfolio.currency || "USD";
+    const currentCash = portfolio.cashBalance || 0;
+    if (op === "RETIRO" && amount > currentCash + 1e-9) {
+      return showErr(`No puedes retirar más del efectivo disponible (${formatCurrency(currentCash, cur)}).`);
+    }
+
+    portfolio.cashBalance = op === "DEPOSITO" ? currentCash + amount : currentCash - amount;
+    if (!portfolio.transactions) portfolio.transactions = [];
+    const isoDate = dateStr ? new Date(dateStr + "T12:00:00").toISOString() : new Date().toISOString();
+    portfolio.transactions.unshift({
+      id: generateId(), date: isoDate, type: op, ticker: "CASH",
+      quantity: 1, price: amount, commissionPercent: 0, commCost: 0, net: amount, currency: cur
+    });
+    savePortfolios(portfolios);
+    closeModal("cashModal");
+    showToast(op === "DEPOSITO" ? `Aporte de ${formatCurrency(amount, cur)} registrado.` : `Retiro de ${formatCurrency(amount, cur)} registrado.`, { type: "success" });
+    renderPortfolioDashboard();
+  });
 }
 
 // ── Performance tab helpers ───────────────────────────────────────────────────
@@ -8409,6 +9666,203 @@ function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labe
   svg.addEventListener("touchend", () => onHover(null));
 }
 
+const investmentValueChartStates = new WeakMap();
+
+function buildInvestmentValueSeries(allPositions, dates, tickerDateMaps, portfolioCurrency) {
+  if (!dates.length) return [];
+  return dates.map((date) => {
+    let invested = 0;
+    let market = 0;
+    allPositions.forEach((position) => {
+      const purchaseDate = position.purchaseDate ? String(position.purchaseDate).slice(0, 10) : dates[0];
+      const sellDate = position.sellDate ? String(position.sellDate).slice(0, 10) : null;
+      if (date < purchaseDate || (sellDate && date > sellDate)) return;
+      const close = tickerDateMaps[position.ticker]?.[date];
+      const quantity = Number(position.quantity) || 0;
+      const averagePrice = Number(position.avgPrice) || 0;
+      if (!Number.isFinite(close) || close <= 0 || quantity <= 0) return;
+      const positionCurrency = position.currency || portfolioCurrency;
+      const conversion = convertAmount(1, positionCurrency, portfolioCurrency) ?? 1;
+      invested += averagePrice * quantity * conversion;
+      market += close * quantity * conversion;
+    });
+    return { date, invested, market };
+  }).filter((point) => point.invested > 0 || point.market > 0);
+}
+
+function paintInvestmentValueChart(canvas) {
+  const state = investmentValueChartStates.get(canvas);
+  if (!state) return;
+  const { width, height, dpr, points, currency, hoverIndex } = state;
+  const ctx = canvas.getContext("2d");
+  const lightMode = document.body.classList.contains("light-mode");
+  const pad = { left: 64, right: 20, top: 22, bottom: 38 };
+  const chartWidth = width - pad.left - pad.right;
+  const chartHeight = height - pad.top - pad.bottom;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  if (!points.length) {
+    ctx.fillStyle = lightMode ? "rgba(23,32,51,0.5)" : "rgba(226,232,255,0.45)";
+    ctx.font = "500 13px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Sin datos históricos suficientes", width / 2, height / 2);
+    return;
+  }
+
+  const values = points.flatMap((point) => [point.invested, point.market]);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const valuePadding = (rawMax - rawMin) * 0.12 || Math.max(rawMax * 0.08, 1);
+  const minValue = Math.max(0, rawMin - valuePadding);
+  const maxValue = rawMax + valuePadding;
+  const valueRange = Math.max(maxValue - minValue, 1);
+  const toX = (index) => pad.left + (index / Math.max(points.length - 1, 1)) * chartWidth;
+  const toY = (value) => pad.top + chartHeight * (1 - (value - minValue) / valueRange);
+  state.toX = toX;
+  state.toY = toY;
+  state.pad = pad;
+  state.chartWidth = chartWidth;
+  state.chartHeight = chartHeight;
+
+  const gridColor = lightMode ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.07)";
+  const axisColor = lightMode ? "rgba(23,32,51,0.48)" : "rgba(226,232,255,0.42)";
+  ctx.font = "500 10px Inter, sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (let step = 0; step <= 4; step++) {
+    const value = minValue + (valueRange / 4) * step;
+    const y = toY(value);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(width - pad.right, y);
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = axisColor;
+    ctx.fillText(formatCurrencyCompact(value, currency), pad.left - 10, y);
+  }
+
+  const labelIndexes = [...new Set([0, Math.round((points.length - 1) * 0.25), Math.round((points.length - 1) * 0.5), Math.round((points.length - 1) * 0.75), points.length - 1])];
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  labelIndexes.forEach((index) => {
+    const date = new Date(`${points[index].date}T12:00:00`);
+    ctx.fillStyle = axisColor;
+    ctx.fillText(date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" }), toX(index), height - pad.bottom + 12);
+  });
+
+  const marketGradient = ctx.createLinearGradient(0, pad.top, 0, height - pad.bottom);
+  marketGradient.addColorStop(0, lightMode ? "rgba(111,134,255,0.18)" : "rgba(111,134,255,0.24)");
+  marketGradient.addColorStop(1, "rgba(111,134,255,0)");
+  ctx.beginPath();
+  points.forEach((point, index) => ctx[index ? "lineTo" : "moveTo"](toX(index), toY(point.market)));
+  ctx.lineTo(toX(points.length - 1), height - pad.bottom);
+  ctx.lineTo(toX(0), height - pad.bottom);
+  ctx.closePath();
+  ctx.fillStyle = marketGradient;
+  ctx.fill();
+
+  const drawLine = (key, color, dashed = false) => {
+    ctx.beginPath();
+    points.forEach((point, index) => ctx[index ? "lineTo" : "moveTo"](toX(index), toY(point[key])));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = key === "market" ? 2.5 : 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.setLineDash(dashed ? [6, 5] : []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  drawLine("invested", "#f5b84c", true);
+  drawLine("market", "#6f86ff");
+
+  if (hoverIndex !== null && points[hoverIndex]) {
+    const point = points[hoverIndex];
+    const x = toX(hoverIndex);
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, height - pad.bottom);
+    ctx.strokeStyle = lightMode ? "rgba(15,23,42,0.22)" : "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    [[point.invested, "#f5b84c"], [point.market, "#6f86ff"]].forEach(([value, color]) => {
+      ctx.beginPath();
+      ctx.arc(x, toY(value), 4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = lightMode ? "#ffffff" : "#0d0f17";
+      ctx.stroke();
+    });
+  }
+}
+
+function setInvestmentValueHover(canvas, index) {
+  const state = investmentValueChartStates.get(canvas);
+  if (!state) return;
+  if (state.hoverIndex !== index) {
+    state.hoverIndex = index;
+    paintInvestmentValueChart(canvas);
+  }
+  const tooltip = document.getElementById("investmentValueTooltip");
+  if (!tooltip) return;
+  if (index === null || !state.points[index]) {
+    tooltip.classList.add("hidden");
+    return;
+  }
+  const point = state.points[index];
+  const difference = point.market - point.invested;
+  tooltip.innerHTML = `<strong>${new Date(point.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}</strong>
+    <span><i class="is-invested"></i>Capital invertido <b>${formatCurrency(point.invested, state.currency)}</b></span>
+    <span><i class="is-market"></i>Valor de mercado <b>${formatCurrency(point.market, state.currency)}</b></span>
+    <small class="${difference >= 0 ? "return-pos" : "return-neg"}">Diferencia: ${difference >= 0 ? "+" : ""}${formatCurrency(difference, state.currency)}</small>`;
+  const x = state.toX(index);
+  tooltip.style.left = `${Math.min(Math.max(x + 12, 12), state.width - 196)}px`;
+  tooltip.style.top = `${Math.max(12, state.toY(Math.max(point.invested, point.market)) - 18)}px`;
+  tooltip.classList.remove("hidden");
+}
+
+function ensureInvestmentValueInteractions(canvas) {
+  if (canvas.dataset.interactive === "true") return;
+  canvas.dataset.interactive = "true";
+  canvas.addEventListener("pointermove", (event) => {
+    const state = investmentValueChartStates.get(canvas);
+    if (!state || !state.points.length) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * (state.width / rect.width);
+    if (x < state.pad.left || x > state.width - state.pad.right) {
+      setInvestmentValueHover(canvas, null);
+      return;
+    }
+    const index = Math.max(0, Math.min(state.points.length - 1, Math.round((x - state.pad.left) / state.chartWidth * (state.points.length - 1))));
+    setInvestmentValueHover(canvas, index);
+  });
+  canvas.addEventListener("pointerleave", () => setInvestmentValueHover(canvas, null));
+  document.addEventListener("pointermove", (event) => {
+    if (event.target !== canvas) setInvestmentValueHover(canvas, null);
+  });
+}
+
+function drawInvestmentValueChart(canvas, points, currency) {
+  if (!canvas) return;
+  const width = canvas.parentElement?.clientWidth || 700;
+  const height = width < 560 ? 260 : 300;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  investmentValueChartStates.set(canvas, { width, height, dpr, points, currency, hoverIndex: null });
+  document.getElementById("investmentValueTooltip")?.classList.add("hidden");
+  ensureInvestmentValueInteractions(canvas);
+  paintInvestmentValueChart(canvas);
+}
+
 function buildAllPositionHistory(portfolio) {
   const portfolioCur = portfolio.currency || "USD";
   const result = [];
@@ -8471,6 +9925,10 @@ async function loadPerformanceTab(portfolio) {
   perfTabLoaded = true;
   const statusEl = document.getElementById("perfChartStatus");
   const canvas = document.getElementById("perfLineChart");
+  const investmentCanvas = document.getElementById("investmentValueChart");
+  const investmentStatus = document.getElementById("investmentValueStatus");
+  const portfolioCur = portfolio.currency || "USD";
+  if (investmentStatus) investmentStatus.textContent = "Calculando evolución del capital...";
 
   const activePeriodBtn = document.querySelector(".perf-period-btn.active");
   const range = activePeriodBtn?.dataset.range || "1y";
@@ -8481,6 +9939,8 @@ async function loadPerformanceTab(portfolio) {
   updateSharpeRfrLabel();
 
   statusEl.textContent = "Calculando rendimiento histórico...";
+  const twrResetEl = document.getElementById("twrValue");
+  if (twrResetEl) { twrResetEl.textContent = "—"; twrResetEl.className = "perf-metric-value"; }
   document.getElementById("sharpeValue").textContent = "—";
   document.getElementById("volatilityValue").textContent = "—";
   document.getElementById("varValue").textContent = "—";
@@ -8491,10 +9951,11 @@ async function loadPerformanceTab(portfolio) {
   const allPositions = buildAllPositionHistory(portfolio);
   if (!allPositions.length) {
     statusEl.textContent = "Agrega posiciones para ver el rendimiento.";
+    drawInvestmentValueChart(investmentCanvas, [], portfolioCur);
+    if (investmentStatus) investmentStatus.textContent = "Agrega posiciones para ver esta comparación.";
     return;
   }
 
-  const portfolioCur = portfolio.currency || "USD";
   const uniqueTickers = [...new Set(allPositions.map((p) => p.ticker))];
 
   // Fetch all historical data in parallel + Yahoo beta per active ticker
@@ -8568,6 +10029,8 @@ async function loadPerformanceTab(portfolio) {
   const tickersWithData = uniqueTickers.filter((t) => (histMap[t] || []).length > 1);
   if (!tickersWithData.length) {
     statusEl.textContent = "No se pudieron obtener datos históricos.";
+    drawInvestmentValueChart(investmentCanvas, [], portfolioCur);
+    if (investmentStatus) investmentStatus.textContent = "No se pudieron obtener datos históricos.";
     const retryBtn = document.createElement("button");
     retryBtn.className = "button ghost";
     retryBtn.style.cssText = "margin-left:8px;padding:0.2rem 0.7rem;font-size:0.8rem;vertical-align:middle";
@@ -8586,6 +10049,8 @@ async function loadPerformanceTab(portfolio) {
   let commonDates = [...dateSets[0]].filter((d) => dateSets.every((s) => s.has(d))).sort();
   if (commonDates.length < 2) {
     statusEl.textContent = "Fechas insuficientes para calcular rendimiento.";
+    drawInvestmentValueChart(investmentCanvas, [], portfolioCur);
+    if (investmentStatus) investmentStatus.textContent = "Fechas insuficientes para comparar valores.";
     return;
   }
 
@@ -8669,6 +10134,32 @@ async function loadPerformanceTab(portfolio) {
 
   const maxDD = calcMaxDrawdown(dailyPortfolioReturns);
   document.getElementById("maxDrawdownValue").textContent = maxDD !== null ? "-" + maxDD.toFixed(2) + "%" : "—";
+
+  // TWR (Time-Weighted Return): acumulado del periodo y, si abarca ~1 año o más, anualizado (L1.8)
+  const twrEl = document.getElementById("twrValue");
+  const twrSubEl = document.getElementById("twrSubLabel");
+  if (twrEl) {
+    const twrTotalPct = portfolioCumulative.length ? portfolioCumulative[portfolioCumulative.length - 1].value : null;
+    if (twrTotalPct !== null && returnDates.length >= 2) {
+      const firstD = new Date(returnDates[0]);
+      const lastD = new Date(returnDates[returnDates.length - 1]);
+      const years = (lastD - firstD) / (365.25 * 864e5);
+      const twrTotal = twrTotalPct / 100;
+      if (years >= 0.95 && twrTotal > -1) {
+        const ann = Math.pow(1 + twrTotal, 1 / years) - 1;
+        twrEl.textContent = (ann >= 0 ? "+" : "") + (ann * 100).toFixed(2) + "%";
+        if (twrSubEl) twrSubEl.textContent = `Anualizado · ${twrTotalPct >= 0 ? "+" : ""}${twrTotalPct.toFixed(2)}% acum.`;
+      } else {
+        twrEl.textContent = (twrTotalPct >= 0 ? "+" : "") + twrTotalPct.toFixed(2) + "%";
+        if (twrSubEl) twrSubEl.textContent = "Acumulado en el periodo";
+      }
+      twrEl.className = "perf-metric-value " + (twrTotal >= 0 ? "return-pos" : "return-neg");
+    } else {
+      twrEl.textContent = "—";
+      twrEl.className = "perf-metric-value";
+      if (twrSubEl) twrSubEl.textContent = "Ponderado por tiempo";
+    }
+  }
 
   // Compute per-asset beta vs benchmark for info popup
   const assetBetas = [];
@@ -8783,6 +10274,11 @@ async function loadPerformanceTab(portfolio) {
   };
 
   drawPerfChart(canvas, portfolioCumulative, benchmarkCumulative, returnDates, portfolio.name, benchmarkLabel);
+  const investmentValueSeries = buildInvestmentValueSeries(allPositions, commonDates, tickerDateMaps, portfolioCur);
+  drawInvestmentValueChart(investmentCanvas, investmentValueSeries, portfolioCur);
+  if (investmentStatus) investmentStatus.textContent = investmentValueSeries.length
+    ? `${investmentValueSeries.length} sesiones · Valores expresados en ${portfolioCur}`
+    : "Sin datos históricos suficientes para comparar valores.";
   statusEl.textContent = `${returnDates.length} sesiones · ${tickersWithData.length} ticker(s)`;
 }
 
@@ -9203,6 +10699,17 @@ function buildPerfInfoContent(metric) {
 
   const fmt = (v, decimals = 6) => v !== null && v !== undefined ? v.toFixed(decimals) : "—";
   const pct = (v, decimals = 4) => v !== null && v !== undefined ? (v * 100).toFixed(decimals) + "%" : "—";
+
+  if (metric === "twr") {
+    return {
+      title: "Retorno TWR (Time-Weighted) — Cálculo",
+      body: `
+        <div class="perf-info-formula">TWR = ∏(1 + rₜ) − 1 ; anualizado = (1 + TWR)^(1/años) − 1</div>
+        <p class="perf-info-note">El retorno ponderado por tiempo encadena los retornos diarios del portafolio (con pesos por costo y posiciones vendidas aportando 0% tras su venta), eliminando el efecto del momento y tamaño de tus aportes. Es la métrica estándar para comparar contra un benchmark.</p>
+        <p class="perf-info-note">A diferencia del XIRR (ponderado por dinero), el TWR responde "¿qué tan bien se comportó la estrategia?" en lugar de "¿cuánto gané yo según cuándo aporté?". Si el periodo abarca ~1 año o más se muestra anualizado; si es menor, se muestra el acumulado del periodo.</p>
+      `
+    };
+  }
 
   if (metric === "sharpe") {
     const annMean = d.mean * 252;
@@ -9683,7 +11190,7 @@ changePasswordForm.addEventListener("submit", async e => {
       if (result.ok) {
         msg.textContent = "✓ 2FA activado correctamente.";
         msg.className = "totp-setup-msg form-message success";
-        setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); }, 1200);
+        setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); window.BlackPortfolioRefreshSettings?.(); }, 1200);
         return;
       }
 
@@ -9727,7 +11234,7 @@ changePasswordForm.addEventListener("submit", async e => {
       if (result.ok) {
         msg.textContent = "2FA desactivado.";
         msg.className = "totp-setup-msg form-message success";
-        setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); }, 1000);
+        setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); window.BlackPortfolioRefreshSettings?.(); }, 1000);
         return;
       }
 
@@ -9774,8 +11281,11 @@ changePasswordForm.addEventListener("submit", async e => {
   const widgetRefs = new Map(); // widget.id → { el, chart, series, fetcher }
 
   function loadHubState() {
+    // Legacy: el Hub usaba una clave global compartida entre cuentas del mismo
+    // navegador. La eliminamos para que cada usuario arranque con su propio estado.
+    try { localStorage.removeItem("blackportfolio-hub-state"); } catch {}
     try {
-      const raw = localStorage.getItem(hubStorageKey);
+      const raw = localStorage.getItem(getHubStorageKey());
       if (raw) {
         const s = JSON.parse(raw);
         if (s && Array.isArray(s.spaces) && s.spaces.length) return s;
@@ -9806,14 +11316,14 @@ changePasswordForm.addEventListener("submit", async e => {
       if (!cloudData || !Array.isArray(cloudData.spaces) || !cloudData.spaces.length) return false;
       if (JSON.stringify(cloudData) !== JSON.stringify(state)) {
         state = cloudData;
-        localStorage.setItem(hubStorageKey, JSON.stringify(state));
+        localStorage.setItem(getHubStorageKey(), JSON.stringify(state));
         return true;
       }
       return false;
     } catch (_) { return false; }
   }
   function saveHubState() {
-    localStorage.setItem(hubStorageKey, JSON.stringify(state));
+    localStorage.setItem(getHubStorageKey(), JSON.stringify(state));
     if (_hubSyncTimer) clearTimeout(_hubSyncTimer);
     _hubSyncTimer = setTimeout(() => pushHubStateToCloud(state), 1500);
   }
@@ -9905,7 +11415,11 @@ changePasswordForm.addEventListener("submit", async e => {
       calendar:  { w: 380, h: 360, title: "Calendario de eventos", config: { tab: "earnings" } },
       note:      { w: 260, h: 180, title: "Nota", config: { text: "Escribe aquí…" } },
       heatmap:   { w: 660, h: 440, title: "Mapa de calor", config: { index: "SP500", sector: "Todos" } },
-      portfolio: { w: 340, h: 320, title: "Resumen de cartera", config: { portfolioId: null } }
+      portfolio: { w: 340, h: 320, title: "Resumen de cartera", config: { portfolioId: null } },
+      risk:      { w: 380, h: 340, title: "Riesgo de cartera", config: { portfolioId: null } },
+      dividends: { w: 380, h: 360, title: "Dividendos y flujo", config: { portfolioId: null } },
+      sentiment: { w: 420, h: 360, title: "Noticias y sentimiento", config: { source: "auto" } },
+      macro:     { w: 420, h: 360, title: "Mapa macro", config: { symbols: ["^VIX", "DX-Y.NYB", "^TNX", "CL=F", "GC=F", "MXN=X"] } }
     }[type];
     if (!defaults) return;
     const offset = sp.widgets.length * 24;
@@ -10073,6 +11587,10 @@ changePasswordForm.addEventListener("submit", async e => {
     if (widget.type === "note") return renderNoteWidget(widget, body, ref);
     if (widget.type === "heatmap") return renderHeatmapWidget(widget, body, ref);
     if (widget.type === "portfolio") return renderPortfolioWidget(widget, body, ref);
+    if (widget.type === "risk") return renderRiskWidget(widget, body, ref);
+    if (widget.type === "dividends") return renderDividendsWidget(widget, body, ref);
+    if (widget.type === "sentiment") return renderSentimentWidget(widget, body, ref);
+    if (widget.type === "macro") return renderMacroWidget(widget, body, ref);
   }
 
   // Chart widget
@@ -10288,6 +11806,14 @@ changePasswordForm.addEventListener("submit", async e => {
     inp.placeholder = "Agregar ticker (ej. TSLA)";
     inp.maxLength = 12;
 
+    const inputWrap = document.createElement("div");
+    inputWrap.className = "hw-wl-input-wrap";
+    const suggestionsEl = document.createElement("div");
+    suggestionsEl.className = "hw-ticker-suggestions hidden";
+    suggestionsEl.style.cssText = "position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:220px;overflow-y:auto;background:rgba(10,10,12,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:10px;z-index:9999;padding:4px;";
+    inputWrap.appendChild(inp);
+    inputWrap.appendChild(suggestionsEl);
+
     const addBtn = document.createElement("button");
     addBtn.type = "button"; addBtn.textContent = "+";
     addBtn.className = "hw-wl-add-btn";
@@ -10297,7 +11823,7 @@ changePasswordForm.addEventListener("submit", async e => {
     cfgBtn.title = "Configurar columnas";
     cfgBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 
-    toolbar.appendChild(inp);
+    toolbar.appendChild(inputWrap);
     toolbar.appendChild(addBtn);
     toolbar.appendChild(cfgBtn);
     body.appendChild(toolbar);
@@ -10429,18 +11955,75 @@ changePasswordForm.addEventListener("submit", async e => {
     }
 
     // ── Symbol add logic ───────────────────────────────────────────────
-    function addSym() {
-      const s = inp.value.trim().toUpperCase();
+    let hwSuggestDebounce = null;
+    let hwSuggestAbort = null;
+
+    function hideSuggestions() {
+      suggestionsEl.innerHTML = "";
+      suggestionsEl.classList.add("hidden");
+    }
+
+    function addSym(symbol, name) {
+      const raw = typeof symbol === "string" ? symbol : inp.value;
+      const s = raw.trim().toUpperCase();
       if (!s) return;
       if (!widget.config.symbols.includes(s)) {
         widget.config.symbols.push(s);
+        if (name) cache[s] = { ...(cache[s] || {}), name };
         saveHubState();
         fetchPrices();
       }
       inp.value = "";
+      hideSuggestions();
+    }
+
+    function showSuggestions(items) {
+      if (!items.length) { hideSuggestions(); return; }
+      suggestionsEl.innerHTML = items.map(item => `
+        <button type="button" data-symbol="${item.symbol}" data-name="${item.name.replace(/"/g, '&quot;')}"
+          style="width:100%;display:flex;align-items:center;gap:8px;text-align:left;padding:6px 10px;border-radius:8px;background:transparent;border:none;color:inherit;cursor:pointer;font-size:11px;">
+          <div style="flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:rgba(111,134,255,0.2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#6f86ff;">${item.symbol.slice(0, 2)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;color:#fff;">${item.symbol}</div>
+            <div style="color:#9aa3b8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
+          </div>
+          <div style="color:#6f86ff;font-size:10px;flex-shrink:0;">${item.exchange}</div>
+        </button>`).join("");
+      suggestionsEl.classList.remove("hidden");
+      suggestionsEl.querySelectorAll("button[data-symbol]").forEach(btn => {
+        btn.addEventListener("mousedown", e => {
+          e.preventDefault();
+          addSym(btn.dataset.symbol, btn.dataset.name);
+        });
+        btn.addEventListener("mouseover", () => { btn.style.background = "rgba(111,134,255,0.1)"; });
+        btn.addEventListener("mouseout", () => { btn.style.background = "transparent"; });
+      });
     }
     addBtn.addEventListener("click", addSym);
-    inp.addEventListener("keydown", e => { if (e.key === "Enter") addSym(); });
+    inp.addEventListener("input", () => {
+      const q = inp.value.trim();
+      if (hwSuggestDebounce) clearTimeout(hwSuggestDebounce);
+      if (!q) { hideSuggestions(); return; }
+      hwSuggestDebounce = setTimeout(async () => {
+        try {
+          if (hwSuggestAbort) hwSuggestAbort.abort();
+          hwSuggestAbort = new AbortController();
+          const res = await fetch(getYahooSearchUrl(q), { signal: hwSuggestAbort.signal });
+          if (!res.ok) return;
+          const payload = await res.json();
+          const items = (payload.quotes || [])
+            .filter(qt => qt.symbol && qt.isYahooFinance)
+            .slice(0, 6)
+            .map(qt => ({ symbol: qt.symbol, name: qt.longname || qt.shortname || qt.symbol, exchange: qt.exchDisp || qt.exchange || "" }));
+          showSuggestions(items);
+        } catch (err) { if (err.name !== "AbortError") hideSuggestions(); }
+      }, 280);
+    });
+    inp.addEventListener("keydown", e => {
+      if (e.key === "Enter") addSym();
+      if (e.key === "Escape") hideSuggestions();
+    });
+    inp.addEventListener("blur", () => { setTimeout(hideSuggestions, 150); });
     inp.addEventListener("mousedown", e => e.stopPropagation());
 
     // ── Cache & data fetching ──────────────────────────────────────────
@@ -10581,7 +12164,11 @@ changePasswordForm.addEventListener("submit", async e => {
     fetchPrices();
     const interval = setInterval(fetchPrices, 60000);
     ref.refresh = fetchPrices;
-    ref.cleanup = () => clearInterval(interval);
+    ref.cleanup = () => {
+      clearInterval(interval);
+      if (hwSuggestDebounce) clearTimeout(hwSuggestDebounce);
+      if (hwSuggestAbort) hwSuggestAbort.abort();
+    };
   }
 
   // Calendar widget
@@ -11753,6 +13340,366 @@ changePasswordForm.addEventListener("submit", async e => {
     fetchAll();
   }
 
+  function hubEscape(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[ch]));
+  }
+
+  function hubPct(value, digits = 1) {
+    if (!Number.isFinite(value)) return "--";
+    return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
+  }
+
+  function hubPopulatePortfolioSelect(sel, widget) {
+    const portfolios = getPortfolios();
+    sel.innerHTML = portfolios.length
+      ? portfolios.map(p => `<option value="${hubEscape(p.id)}">${hubEscape(p.name)}</option>`).join("")
+      : `<option value="">Sin portafolios</option>`;
+    if (widget.config.portfolioId && portfolios.find(p => p.id === widget.config.portfolioId)) {
+      sel.value = widget.config.portfolioId;
+    } else if (portfolios.length) {
+      sel.value = portfolios[0].id;
+      widget.config.portfolioId = portfolios[0].id;
+      saveHubState();
+    }
+    return portfolios;
+  }
+
+  function hubPositionValue(pos, portfolioCurrency) {
+    const qty = pos.quantity || 0;
+    const price = getCachedPrice(pos.ticker);
+    const posCur = getPosCurrency(pos, portfolioCurrency);
+    const value = price !== null ? price * qty : calcPositionTotals(pos).total;
+    return convertAmount(value, posCur, portfolioCurrency) ?? value;
+  }
+
+  function hubPortfolioRows(portfolio) {
+    const currency = portfolio?.currency || "USD";
+    return (portfolio?.positions || []).map((pos, index) => ({
+      pos,
+      ticker: String(pos.ticker || "").toUpperCase(),
+      value: hubPositionValue(pos, currency),
+      color: CHART_COLORS[index % CHART_COLORS.length],
+      price: getCachedPrice(pos.ticker),
+      prev: getCachedPrev(pos.ticker)
+    }));
+  }
+
+  async function hubRefreshPortfolioPrices(portfolio) {
+    if (!portfolio?.positions?.length) return;
+    const tickers = [...new Set(portfolio.positions.map(p => p.ticker).filter(Boolean))];
+    const currencies = portfolio.positions.map(p => getPosCurrency(p, portfolio.currency || "USD"));
+    await Promise.all([fetchPricesBatch(tickers), fetchExchangeRates(currencies, portfolio.currency || "USD")]);
+  }
+
+  function hubRenderEmpty(body, message) {
+    body.innerHTML = `<div class="hw-insight-empty">${hubEscape(message)}</div>`;
+  }
+
+  function renderRiskWidget(widget, body, ref) {
+    if (!widget.config) widget.config = {};
+    body.classList.add("hw-insight-body");
+    body.innerHTML = `
+      <div class="hw-insight-toolbar">
+        <select class="hw-insight-select" aria-label="Portafolio"></select>
+      </div>
+      <div class="hw-risk-score">
+        <div><span>Nivel de riesgo</span><strong id="hwr-score-${widget.id}">--</strong></div>
+        <em id="hwr-label-${widget.id}">Calculando</em>
+      </div>
+      <div class="hw-risk-grid" id="hwr-grid-${widget.id}"></div>
+      <div class="hw-risk-bars" id="hwr-bars-${widget.id}"></div>`;
+
+    const sel = body.querySelector("select");
+    sel.addEventListener("mousedown", e => e.stopPropagation());
+    sel.addEventListener("change", () => {
+      widget.config.portfolioId = sel.value || null;
+      saveHubState();
+      renderData();
+    });
+
+    function renderData() {
+      const portfolios = hubPopulatePortfolioSelect(sel, widget);
+      const portfolio = portfolios.find(p => p.id === widget.config.portfolioId);
+      const scoreEl = document.getElementById(`hwr-score-${widget.id}`);
+      const labelEl = document.getElementById(`hwr-label-${widget.id}`);
+      const gridEl = document.getElementById(`hwr-grid-${widget.id}`);
+      const barsEl = document.getElementById(`hwr-bars-${widget.id}`);
+      if (!portfolio) {
+        if (scoreEl) scoreEl.textContent = "--";
+        if (labelEl) labelEl.textContent = "Sin cartera";
+        if (gridEl) gridEl.innerHTML = "";
+        if (barsEl) barsEl.innerHTML = `<div class="hw-insight-empty">Agrega un portafolio para medir riesgo.</div>`;
+        return;
+      }
+
+      const rows = hubPortfolioRows(portfolio).filter(r => r.value > 0);
+      const total = rows.reduce((sum, r) => sum + r.value, 0) + (portfolio.cashBalance || 0);
+      const top = rows.reduce((max, r) => r.value > max.value ? r : max, { value: 0, ticker: "--" });
+      const topWeight = total > 0 ? top.value / total : 0;
+      const missing = rows.filter(r => r.price === null).length;
+      const weightedMove = rows.reduce((sum, r) => {
+        if (!r.price || !r.prev || r.prev <= 0 || total <= 0) return sum;
+        return sum + Math.abs((r.price - r.prev) / r.prev) * (r.value / total);
+      }, 0);
+      const diversificationPenalty = Math.max(0, 8 - rows.length) * 5;
+      const concentrationPenalty = Math.max(0, topWeight - 0.25) * 120;
+      const pricePenalty = rows.length ? (missing / rows.length) * 15 : 10;
+      const movePenalty = Math.min(25, weightedMove * 250);
+      const score = Math.max(0, Math.round(100 - diversificationPenalty - concentrationPenalty - pricePenalty - movePenalty));
+      const label = score >= 75 ? "Controlado" : score >= 55 ? "Moderado" : "Alto";
+
+      if (scoreEl) scoreEl.textContent = `${score}/100`;
+      if (labelEl) {
+        labelEl.textContent = label;
+        labelEl.className = score >= 75 ? "ok" : score >= 55 ? "warn" : "bad";
+      }
+      if (gridEl) {
+        gridEl.innerHTML = `
+          <div><span>Mayor posicion</span><strong>${hubEscape(top.ticker)}</strong><small>${(topWeight * 100).toFixed(1)}%</small></div>
+          <div><span>Activos</span><strong>${rows.length}</strong><small>${missing ? `${missing} sin precio` : "precios listos"}</small></div>
+          <div><span>Volatilidad proxy</span><strong>${(weightedMove * 100).toFixed(2)}%</strong><small>mov. ponderado dia</small></div>`;
+      }
+      if (barsEl) {
+        barsEl.innerHTML = rows
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 5)
+          .map(r => {
+            const pct = total > 0 ? r.value / total * 100 : 0;
+            return `<div class="hw-risk-bar-row"><span>${hubEscape(r.ticker)}</span><div><i style="width:${Math.min(100, pct)}%;background:${r.color}"></i></div><strong>${pct.toFixed(1)}%</strong></div>`;
+          }).join("") || `<div class="hw-insight-empty">Sin posiciones.</div>`;
+      }
+    }
+
+    async function refresh() {
+      const portfolio = getPortfolios().find(p => p.id === widget.config.portfolioId);
+      await hubRefreshPortfolioPrices(portfolio);
+      renderData();
+    }
+    ref.refresh = refresh;
+    renderData();
+    refresh();
+  }
+
+  const HUB_DIVIDEND_YIELDS = {
+    AAPL: 0.005, MSFT: 0.007, NVDA: 0.001, QQQ: 0.006, SPY: 0.013, VOO: 0.013,
+    KO: 0.031, PEP: 0.029, PG: 0.024, JNJ: 0.03, PFE: 0.055, T: 0.06,
+    VZ: 0.065, JPM: 0.024, BAC: 0.026, XOM: 0.032, CVX: 0.041, WMT: 0.011,
+    COST: 0.006, "GFNORTEO.MX": 0.045, "WALMEX.MX": 0.018, "FEMSAUBD.MX": 0.017,
+    "BIMBOA.MX": 0.015, "CEMEXCPO.MX": 0.006
+  };
+  const HUB_SECTOR_YIELDS = {
+    "Finanzas": 0.025, "Energia": 0.035, "Consumo basico": 0.018,
+    "Consumo bÃ¡sico": 0.018, "Salud": 0.022, "TecnologÃ­a": 0.006, "Tecnologia": 0.006
+  };
+
+  function hubDividendYield(ticker) {
+    const t = String(ticker || "").toUpperCase();
+    if (HUB_DIVIDEND_YIELDS[t] != null) return HUB_DIVIDEND_YIELDS[t];
+    const sector = SECTOR_MAP[t] || "";
+    return HUB_SECTOR_YIELDS[sector] ?? 0;
+  }
+
+  function renderDividendsWidget(widget, body, ref) {
+    if (!widget.config) widget.config = {};
+    body.classList.add("hw-insight-body");
+    body.innerHTML = `
+      <div class="hw-insight-toolbar"><select class="hw-insight-select" aria-label="Portafolio"></select></div>
+      <div class="hw-dividend-hero">
+        <span>Flujo anual estimado</span>
+        <strong id="hwd-annual-${widget.id}">--</strong>
+        <small id="hwd-monthly-${widget.id}">-- mensual</small>
+      </div>
+      <div class="hw-dividend-list" id="hwd-list-${widget.id}"></div>
+      <p class="hw-insight-note">Estimacion beta con yields internos/proxy; no sustituye calendario oficial de dividendos.</p>`;
+
+    const sel = body.querySelector("select");
+    sel.addEventListener("mousedown", e => e.stopPropagation());
+    sel.addEventListener("change", () => {
+      widget.config.portfolioId = sel.value || null;
+      saveHubState();
+      renderData();
+    });
+
+    function renderData() {
+      const portfolios = hubPopulatePortfolioSelect(sel, widget);
+      const portfolio = portfolios.find(p => p.id === widget.config.portfolioId);
+      const annualEl = document.getElementById(`hwd-annual-${widget.id}`);
+      const monthlyEl = document.getElementById(`hwd-monthly-${widget.id}`);
+      const listEl = document.getElementById(`hwd-list-${widget.id}`);
+      if (!portfolio) {
+        if (annualEl) annualEl.textContent = "--";
+        if (monthlyEl) monthlyEl.textContent = "-- mensual";
+        if (listEl) listEl.innerHTML = `<div class="hw-insight-empty">Agrega un portafolio para estimar flujo.</div>`;
+        return;
+      }
+      const currency = portfolio.currency || "USD";
+      const rows = hubPortfolioRows(portfolio)
+        .map(r => ({ ...r, yield: hubDividendYield(r.ticker) }))
+        .filter(r => r.value > 0 && r.yield > 0);
+      const annual = rows.reduce((sum, r) => sum + r.value * r.yield, 0);
+      if (annualEl) annualEl.textContent = formatCurrency(annual, currency);
+      if (monthlyEl) monthlyEl.textContent = `${formatCurrency(annual / 12, currency)} mensual estimado`;
+      if (listEl) {
+        if (!rows.length) {
+          listEl.innerHTML = `<div class="hw-insight-empty">Sin activos con supuesto de dividendo.</div>`;
+          return;
+        }
+        listEl.innerHTML = rows
+          .sort((a, b) => (b.value * b.yield) - (a.value * a.yield))
+          .slice(0, 5)
+          .map((r, index) => {
+            const d = new Date();
+            d.setMonth(d.getMonth() + index + 1);
+            const when = d.toLocaleDateString("es-MX", { month: "short", day: "2-digit" });
+            return `<div class="hw-dividend-row">
+              <div><strong>${hubEscape(r.ticker)}</strong><span>${when} proxy</span></div>
+              <em>${(r.yield * 100).toFixed(1)}% yield</em>
+              <b>${formatCurrency(r.value * r.yield / 4, currency)}</b>
+            </div>`;
+          }).join("");
+      }
+    }
+
+    async function refresh() {
+      const portfolio = getPortfolios().find(p => p.id === widget.config.portfolioId);
+      await hubRefreshPortfolioPrices(portfolio);
+      renderData();
+    }
+    ref.refresh = refresh;
+    renderData();
+    refresh();
+  }
+
+  function hubCollectSentimentSymbols() {
+    const symbols = new Set();
+    activeSpace().widgets.forEach(w => {
+      if (w.type === "watchlist" && Array.isArray(w.config?.symbols)) w.config.symbols.forEach(s => symbols.add(s));
+      if (w.type === "chart" && w.config?.symbol) symbols.add(w.config.symbol);
+    });
+    getPortfolios().forEach(p => (p.positions || []).forEach(pos => symbols.add(pos.ticker)));
+    return [...symbols].filter(Boolean).slice(0, 12);
+  }
+
+  function renderSentimentWidget(widget, body, ref) {
+    body.classList.add("hw-insight-body");
+    body.innerHTML = `
+      <div class="hw-sentiment-head">
+        <div><span>Sentimiento agregado</span><strong id="hws-score-${widget.id}">--</strong></div>
+        <em id="hws-badge-${widget.id}">Leyendo senales</em>
+      </div>
+      <div class="hw-sentiment-list" id="hws-list-${widget.id}"></div>
+      <p class="hw-insight-note">Feed beta basado en watchlist, cartera y movimientos de precio; integracion de noticias reales queda lista para API futura.</p>`;
+
+    async function renderData(fetchFresh = false) {
+      const symbols = hubCollectSentimentSymbols();
+      const listEl = document.getElementById(`hws-list-${widget.id}`);
+      const scoreEl = document.getElementById(`hws-score-${widget.id}`);
+      const badgeEl = document.getElementById(`hws-badge-${widget.id}`);
+      if (!symbols.length) {
+        if (scoreEl) scoreEl.textContent = "--";
+        if (badgeEl) badgeEl.textContent = "Sin universo";
+        if (listEl) listEl.innerHTML = `<div class="hw-insight-empty">Agrega una watchlist o portafolio para generar senales.</div>`;
+        return;
+      }
+      if (fetchFresh) await fetchPricesBatch(symbols);
+      const rows = symbols.map(sym => {
+        const price = getCachedPrice(sym);
+        const prev = getCachedPrev(sym);
+        const pct = price && prev ? (price - prev) / prev * 100 : 0;
+        return { sym, price, prev, pct };
+      });
+      const avg = rows.reduce((sum, r) => sum + r.pct, 0) / rows.length;
+      const positive = rows.filter(r => r.pct > 0.2).length;
+      const negative = rows.filter(r => r.pct < -0.2).length;
+      if (scoreEl) scoreEl.textContent = avg >= 0 ? "Positivo" : "Defensivo";
+      if (badgeEl) {
+        badgeEl.textContent = `${positive} alcistas / ${negative} bajistas`;
+        badgeEl.className = avg >= 0 ? "ok" : "bad";
+      }
+      if (listEl) {
+        listEl.innerHTML = rows
+          .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
+          .slice(0, 6)
+          .map(r => {
+            const cls = r.pct >= 0 ? "positive" : "negative";
+            const title = Math.abs(r.pct) >= 2
+              ? (r.pct >= 0 ? "Impulso positivo" : "Presion vendedora")
+              : "Seguimiento neutral";
+            const copy = r.price ? `Precio ${r.price.toFixed(2)} | ${hubPct(r.pct, 2)} vs previo` : "Precio pendiente de actualizar";
+            return `<div class="hw-sentiment-row">
+              <div><strong>${title}: ${hubEscape(r.sym)}</strong><span>${copy}</span></div>
+              <em class="${cls}">${hubPct(r.pct, 1)}</em>
+            </div>`;
+          }).join("");
+      }
+    }
+
+    ref.refresh = () => renderData(true);
+    renderData(false);
+    renderData(true);
+  }
+
+  const HUB_MACRO = [
+    { symbol: "^VIX", label: "VIX", detail: "miedo mercado", kind: "number" },
+    { symbol: "DX-Y.NYB", label: "DXY", detail: "dolar global", kind: "number" },
+    { symbol: "^TNX", label: "US 10Y", detail: "tasas largas", kind: "yield" },
+    { symbol: "CL=F", label: "Petroleo", detail: "energia", kind: "usd" },
+    { symbol: "GC=F", label: "Oro", detail: "refugio", kind: "usd" },
+    { symbol: "MXN=X", label: "USD/MXN", detail: "tipo de cambio", kind: "number" }
+  ];
+
+  function hubFormatMacroValue(item, value) {
+    if (!Number.isFinite(value)) return "--";
+    if (item.kind === "yield") return `${(value / 10).toFixed(2)}%`;
+    if (item.kind === "usd") return `$${value.toFixed(value > 100 ? 0 : 2)}`;
+    return value.toFixed(value > 100 ? 1 : 2);
+  }
+
+  function hubMacroSignal(item, value) {
+    if (!Number.isFinite(value)) return "Sin dato";
+    if (item.symbol === "^VIX") return value > 25 ? "Riesgo alto" : value > 16 ? "Cautela" : "Riesgo bajo";
+    if (item.symbol === "^TNX") return value > 45 ? "Tasas exigentes" : value > 35 ? "Tasas firmes" : "Tasas suaves";
+    if (item.symbol === "DX-Y.NYB") return value > 105 ? "Dolar fuerte" : value < 100 ? "Dolar debil" : "Neutral";
+    if (item.symbol === "GC=F") return "Refugio";
+    if (item.symbol === "CL=F") return "Inflacion energia";
+    if (item.symbol === "MXN=X") return value > 19 ? "MXN presionado" : "MXN estable";
+    return "Neutral";
+  }
+
+  function renderMacroWidget(widget, body, ref) {
+    body.classList.add("hw-insight-body");
+    body.innerHTML = `
+      <div class="hw-macro-grid" id="hwm-grid-${widget.id}"></div>
+      <p class="hw-insight-note">Lectura macro con proxies de Yahoo Finance cuando hay precio disponible.</p>`;
+    const grid = document.getElementById(`hwm-grid-${widget.id}`);
+
+    function renderData() {
+      if (!grid) return;
+      grid.innerHTML = HUB_MACRO.map(item => {
+        const price = getCachedPrice(item.symbol);
+        const prev = getCachedPrev(item.symbol);
+        const pct = price && prev ? (price - prev) / prev * 100 : null;
+        const cls = pct === null ? "neutral" : pct >= 0 ? "positive" : "negative";
+        return `<div class="hw-macro-card">
+          <span>${hubEscape(item.label)}</span>
+          <strong>${hubFormatMacroValue(item, price)}</strong>
+          <small>${hubEscape(item.detail)}</small>
+          <em class="${cls}">${pct === null ? hubMacroSignal(item, price) : `${hubMacroSignal(item, price)} | ${hubPct(pct, 1)}`}</em>
+        </div>`;
+      }).join("");
+    }
+
+    async function refresh() {
+      await fetchPricesBatch(HUB_MACRO.map(item => item.symbol));
+      renderData();
+    }
+    ref.refresh = refresh;
+    renderData();
+    refresh();
+  }
+
   // Portfolio summary widget
   function renderPortfolioWidget(widget, body, ref) {
     if (!widget.config) widget.config = {};
@@ -11842,10 +13789,10 @@ changePasswordForm.addEventListener("submit", async e => {
       const displayCurrentValue = (hasAnyPrice ? totalCurrentValue : 0) + cashBalance;
       if (valueEl) valueEl.textContent = (hasAnyPrice || cashBalance > 0) ? formatCurrency(displayCurrentValue, currency) : formatCurrency(totalInvested, currency);
 
-      const realizedPnL = portfolio.realizedPnL !== undefined ? portfolio.realizedPnL : reconstructRealizedPnL(portfolio);
+      const realizedPnL = reconstructRealizedPnL(portfolio);
       const unrealizedPnL = hasAnyPrice ? totalCurrentValue - totalCostPriced : 0;
       const returnAmt = hasAnyPrice ? unrealizedPnL + realizedPnL : null;
-      const returnPct = returnAmt !== null && displayCurrentValue > 0 ? (returnAmt / displayCurrentValue * 100) : null;
+      const returnPct = returnAmt !== null && totalCostPriced > 0 ? (returnAmt / totalCostPriced * 100) : null;
       if (retEl) {
         if (returnPct !== null) {
           const sign = returnPct >= 0 ? "+" : "";
@@ -12029,6 +13976,23 @@ changePasswordForm.addEventListener("submit", async e => {
   if (cta && addBtn) cta.addEventListener("click", () => addBtn.click());
 })();
 
+(function initSettingsTabs() {
+  const grid = document.querySelector("#section-settings .settings-grid");
+  const tabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+  if (!grid || tabs.length === 0) return;
+
+  function activate(view) {
+    grid.classList.remove("settings-view-account", "settings-view-security", "settings-view-preferences", "settings-view-investor");
+    grid.classList.add(`settings-view-${view}`);
+    tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.settingsTab === view));
+    window.BlackPortfolioRefreshSettings?.();
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => activate(tab.dataset.settingsTab));
+  });
+})();
+
 // ── Settings Enhancements ─────────────────────────────────────────────────────
 (function initSettingsEnhancements() {
   const CURRENCY_KEY = "bp-currency";
@@ -12037,14 +14001,58 @@ changePasswordForm.addEventListener("submit", async e => {
   function refreshVerifiedBadge() {
     const user = window.BlackPortfolioAuth.firebaseAuth.currentUser;
     const badge = document.getElementById("emailVerifiedBadge");
-    if (!badge || !user) return;
+    if (!badge || !user) return false;
     if (user.emailVerified) {
       badge.textContent = "✓ Verificado";
       badge.className = "settings-verified-badge settings-verified-badge--ok";
+      return true;
     } else {
       badge.textContent = "Sin verificar";
       badge.className = "settings-verified-badge settings-verified-badge--warn";
+      return false;
     }
+  }
+
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function getLastActivity(session) {
+    if (!session?.id) return null;
+    const entries = JSON.parse(localStorage.getItem(`bp-activity-${session.id}`) || "[]");
+    return entries.length ? entries[0] : null;
+  }
+
+  function setSecurityCheck(id, ok) {
+    document.getElementById(id)?.classList.toggle("is-ok", !!ok);
+  }
+
+  function renderSettingsOverview(session, flags = {}) {
+    if (!session) return;
+    const emailVerified = !!flags.emailVerified;
+    const twoFactorEnabled = !!flags.twoFactorEnabled;
+    const securityPoints = 45 + (emailVerified ? 25 : 0) + (twoFactorEnabled ? 30 : 0);
+    const securityLabel = securityPoints >= 90 ? "Alto" : securityPoints >= 70 ? "Bueno" : "Basico";
+    const lastActivity = getLastActivity(session);
+    const lastActivityDate = lastActivity ? new Date(lastActivity.date) : null;
+
+    setText("settingsOverviewEmail", session.email || "--");
+    setText("settingsOverviewEmailStatus", emailVerified ? "Email verificado" : "Pendiente de verificacion");
+    setText("settingsOverviewPlan", session.selectedPlan || "--");
+    setText("settingsOverviewType", session.isDemo ? "Cuenta demo" : "Cuenta registrada");
+    setText("settingsSecurityScore", `${securityPoints}%`);
+    setText("settingsSecurityScoreMain", `${securityPoints}%`);
+    setText("settingsSecurityBadge", `Nivel ${securityLabel}`);
+    setText("settingsSecurityLevel", securityLabel);
+    setText("settingsOverviewLastLogin", lastActivityDate
+      ? lastActivityDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" })
+      : "Sin registro");
+    setText("settingsOverviewDevice", lastActivity?.device || "Este dispositivo");
+
+    setSecurityCheck("securityEmailCheck", emailVerified);
+    setSecurityCheck("securityTwoFaCheck", twoFactorEnabled);
+    setSecurityCheck("securitySessionCheck", true);
   }
 
   // ── Profile name editing ─────────────────────────────────────────────────
@@ -12083,8 +14091,7 @@ changePasswordForm.addEventListener("submit", async e => {
         extra.fullName = newName;
         localStorage.setItem(`bp-extra-${user.uid}`, JSON.stringify(extra));
       } catch {}
-      const db = window.BlackPortfolioAuth?.db;
-      if (db) db.collection("users").doc(user.uid).update({ fullName: newName }).catch(() => {});
+      window.BlackPortfolioAuth?.setExtra?.(user.uid, { fullName: newName });
       const session = window.BlackPortfolioAuth.buildSession(user);
       renderUser(session);
       if (nameChangeMsg) { nameChangeMsg.className = "form-message success"; nameChangeMsg.textContent = "✓ Nombre actualizado."; }
@@ -12101,7 +14108,57 @@ changePasswordForm.addEventListener("submit", async e => {
     }
   });
 
+  // ── Avatar picker ─────────────────────────────────────────────────────────
+  const editAvatarBtn      = document.getElementById("editAvatarBtn");
+  const avatarPickerPanel  = document.getElementById("avatarPickerPanel");
+  const avatarPickerGrid   = document.getElementById("avatarPickerGrid");
+  const closeAvatarPickerBtn = document.getElementById("closeAvatarPickerBtn");
+
+  if (avatarPickerGrid && !avatarPickerGrid.children.length) {
+    AVATAR_PRESETS.forEach(preset => {
+      const opt = document.createElement("button");
+      opt.type = "button";
+      opt.className = "avatar-picker-option";
+      opt.style.background = `linear-gradient(135deg, ${preset.colors[0]}, ${preset.colors[1]})`;
+      opt.textContent = preset.emoji;
+      opt.dataset.avatarId = preset.id;
+      opt.addEventListener("click", () => {
+        window.BlackPortfolioAuth.setAvatar(preset.id);
+        const session = window.BlackPortfolioAuth.getSession();
+        renderUser(session);
+        avatarPickerGrid.querySelectorAll(".avatar-picker-option").forEach(o =>
+          o.classList.toggle("is-selected", o.dataset.avatarId === preset.id)
+        );
+      });
+      avatarPickerGrid.appendChild(opt);
+    });
+  }
+
+  editAvatarBtn?.addEventListener("click", () => {
+    const session = window.BlackPortfolioAuth.getSession();
+    avatarPickerGrid?.querySelectorAll(".avatar-picker-option").forEach(o =>
+      o.classList.toggle("is-selected", o.dataset.avatarId === session?.avatarId)
+    );
+    avatarPickerPanel?.classList.remove("hidden");
+  });
+  closeAvatarPickerBtn?.addEventListener("click", () => {
+    avatarPickerPanel?.classList.add("hidden");
+  });
+
   // ── Plan & billing ───────────────────────────────────────────────────────
+  async function openStripePortal() {
+    const user = window.BlackPortfolioAuth.firebaseAuth.currentUser;
+    if (!user) throw new Error("No autenticado.");
+    const token = await user.getIdToken();
+    const response = await fetch(`${API_BASE_URL}/billing/stripe/portal`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || "No se pudo abrir Stripe.");
+    window.location.href = body.url;
+  }
+
   function renderPlanBilling(session) {
     if (!session) return;
     const planName        = document.getElementById("billingPlanName");
@@ -12111,32 +14168,52 @@ changePasswordForm.addEventListener("submit", async e => {
     const upgradeBtn      = document.getElementById("upgradePlanBtn");
 
     if (planName) planName.textContent = session.selectedPlan || "—";
-    if (billingStatus) billingStatus.innerHTML = '<span style="color:var(--success)">● Activo</span>';
-    if (billingPayment) billingPayment.textContent = session.isDemo ? "—" : "•••• 4242";
+    if (billingStatus) {
+      const active = session.billingStatus === "active";
+      billingStatus.innerHTML = active
+        ? '<span style="color:var(--success)">● Activo</span>'
+        : (session.selectedPlan === "Explorer" ? "Sin suscripción" : session.billingStatus || "Pendiente");
+    }
+    if (billingPayment) billingPayment.textContent = session.billingStatus ? "Stripe" : "—";
 
     if (renewalDate) {
-      const base = session.createdAt ? new Date(session.createdAt) : new Date();
-      const next = new Date(base);
-      next.setMonth(next.getMonth() + 1);
-      while (next < new Date()) next.setMonth(next.getMonth() + 1);
-      renewalDate.textContent = next.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+      const next = session.billingCurrentPeriodEnd
+        ? new Date(Number(session.billingCurrentPeriodEnd) * 1000)
+        : null;
+      renewalDate.textContent = next
+        ? next.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
+        : "—";
     }
 
-    const planLevels = { "Free": 0, "Investor": 1, "Advisor Pro": 2, "Institutional Desk": 3 };
+    const planLevels = { "Explorer": 0, "Investor": 1, "Advisor Pro": 2, "Wealth Desk": 3 };
     const level = planLevels[session.selectedPlan] ?? 0;
     if (upgradeBtn) {
-      if (level >= 3 || session.isDemo) {
+      if (session.isDemo) {
         upgradeBtn.textContent = "Plan máximo activo";
         upgradeBtn.disabled = true;
+      } else if (level === 0) {
+        upgradeBtn.textContent = "Mejorar plan";
+        upgradeBtn.disabled = false;
+        upgradeBtn.onclick = () => { window.location.href = "index.html#plans"; };
       } else {
-        upgradeBtn.onclick = () => { window.location.href = "index.html#pricing"; };
+        upgradeBtn.textContent = "Gestionar suscripción";
+        upgradeBtn.disabled = false;
+        upgradeBtn.onclick = () => openStripePortal().catch(error => showToast(error.message, { type: "error" }));
       }
     }
   }
 
-  document.getElementById("invoiceHistoryBtn")?.addEventListener("click", function() {
-    this.textContent = "Sin facturas disponibles";
-    setTimeout(() => { this.textContent = "Ver facturas"; }, 2000);
+  document.getElementById("invoiceHistoryBtn")?.addEventListener("click", async function() {
+    const original = this.textContent;
+    this.disabled = true;
+    this.textContent = "Abriendo…";
+    try {
+      await openStripePortal();
+    } catch (error) {
+      showToast(error.message, { type: "error" });
+      this.disabled = false;
+      this.textContent = original;
+    }
   });
 
   // ── Active sessions ──────────────────────────────────────────────────────
@@ -12198,16 +14275,24 @@ changePasswordForm.addEventListener("submit", async e => {
   }
 
   // ── Refresh on nav click ─────────────────────────────────────────────────
-  function refresh() {
+  async function refresh() {
     const user = window.BlackPortfolioAuth.firebaseAuth.currentUser;
     if (!user) return;
     const session = window.BlackPortfolioAuth.buildSession(user);
-    refreshVerifiedBadge();
+    const emailVerified = refreshVerifiedBadge();
+    let twoFactorEnabled = false;
+    try {
+      twoFactorEnabled = await window.BlackPortfolioAuth.isTwoFactorEnabled(session.id);
+    } catch {
+      twoFactorEnabled = false;
+    }
+    renderSettingsOverview(session, { emailVerified, twoFactorEnabled });
     renderPlanBilling(session);
     renderActiveSessions(session);
     renderCurrencyBtns(session);
     renderActivityLog(session);
   }
+  window.BlackPortfolioRefreshSettings = refresh;
 
   document.querySelectorAll(".dashboard-nav-item[data-section='settings']").forEach(btn => {
     btn.addEventListener("click", refresh);
@@ -12225,5 +14310,378 @@ changePasswordForm.addEventListener("submit", async e => {
     el.setAttribute("data-tooltip", txt);
     if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", txt);
     el.removeAttribute("title"); // suppress duplicate native tooltip
+  });
+})();
+
+// ── Chart fullscreen mode ────────────────────────────────────────────────────────
+(function initChartFullscreen() {
+  const marketMainCol = document.querySelector(".market-main-col");
+  if (!chartFullscreenBtn || !marketMainCol) return;
+
+  function toggleFullscreen() {
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+
+    if (!isFullscreen) {
+      const enterFS = marketMainCol.requestFullscreen || marketMainCol.webkitRequestFullscreen || marketMainCol.mozRequestFullScreen || marketMainCol.msRequestFullscreen;
+      if (enterFS) {
+        enterFS.call(marketMainCol).catch(() => {
+          // Fallback to class-only fullscreen
+          syncFullscreenClass(true);
+        });
+      } else {
+        // Fallback for browsers without fullscreen API
+        syncFullscreenClass(true);
+      }
+    } else {
+      const exitFS = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      if (exitFS) {
+        exitFS.call(document).catch(() => {
+          // Fallback to class-only fullscreen
+          syncFullscreenClass(false);
+        });
+      } else {
+        // Fallback
+        syncFullscreenClass(false);
+      }
+    }
+  }
+
+  function syncFullscreenClass(forceState) {
+    const isFullscreen = typeof forceState === "boolean" ? forceState : !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+
+    if (isFullscreen) {
+      marketMainCol.classList.add("market-chart-fullscreen");
+      document.body.style.overflow = "hidden";
+      chartFullscreenBtn.title = "Salir de pantalla completa";
+    } else {
+      marketMainCol.classList.remove("market-chart-fullscreen");
+      document.body.style.overflow = "";
+      chartFullscreenBtn.title = "Pantalla completa";
+    }
+
+    if (tvChart) {
+      setTimeout(() => tvChart.applyOptions({ timeScale: { timeVisible: true } }), 100);
+    }
+  }
+
+  chartFullscreenBtn.addEventListener("click", toggleFullscreen);
+
+  // Sync state on native fullscreen change (e.g. if user presses Escape)
+  document.addEventListener("fullscreenchange", () => syncFullscreenClass());
+  document.addEventListener("webkitfullscreenchange", () => syncFullscreenClass());
+  document.addEventListener("mozfullscreenchange", () => syncFullscreenClass());
+  document.addEventListener("MSFullscreenChange", () => syncFullscreenClass());
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && marketMainCol.classList.contains("market-chart-fullscreen")) {
+      const isNativeFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+      if (!isNativeFS) {
+        // Fallback manual exit for browsers without native fullscreen
+        syncFullscreenClass(false);
+      }
+    }
+  });
+})();
+
+// Investor Profile Questionnaire
+(function initInvestorProfile() {
+  const modal = document.getElementById("investorProfileModal");
+  const questionStage = document.getElementById("investorProfileQuestionStage");
+  const resultStage = document.getElementById("investorProfileResultStage");
+  const title = document.getElementById("investorProfileModalTitle");
+  const help = document.getElementById("investorProfileQuestionHelp");
+  const options = document.getElementById("investorProfileOptions");
+  const progressLabel = document.getElementById("investorProfileProgressLabel");
+  const progressBar = document.getElementById("investorProfileProgressBar");
+  const backBtn = document.getElementById("investorProfileBackBtn");
+  const laterBtn = document.getElementById("investorProfileLaterBtn");
+  const nextBtn = document.getElementById("investorProfileNextBtn");
+  const closeBtn = document.getElementById("closeInvestorProfileBtn");
+  if (!modal || !questionStage || !resultStage || !options) return;
+
+  const questions = [
+    {
+      title: "¿Cuál es tu principal objetivo de inversión?",
+      help: "Selecciona la opción que mejor representa el propósito de este capital.",
+      options: [
+        ["Preservar capital", "Priorizar estabilidad y disponibilidad.", 0],
+        ["Generar ingresos", "Buscar flujos periódicos con variación limitada.", 1],
+        ["Equilibrar crecimiento y estabilidad", "Combinar apreciación con control de riesgo.", 2],
+        ["Maximizar crecimiento", "Priorizar apreciación de largo plazo.", 3]
+      ]
+    },
+    {
+      title: "¿Cuándo esperas utilizar la mayor parte de este capital?",
+      help: "El horizonte determina cuánto tiempo tiene la estrategia para atravesar ciclos de mercado.",
+      options: [
+        ["En menos de 2 años", "Necesidad de liquidez en el corto plazo.", 0],
+        ["Entre 2 y 5 años", "Horizonte corto a medio.", 1],
+        ["Entre 5 y 10 años", "Horizonte suficiente para tolerar ciclos.", 2],
+        ["En más de 10 años", "Objetivo claramente orientado al largo plazo.", 3]
+      ]
+    },
+    {
+      title: "¿Qué parte podrías necesitar durante los próximos 12 meses?",
+      help: "Considera gastos importantes, emergencias y compromisos ya previstos.",
+      options: [
+        ["Más del 50%", "Una parte considerable debe permanecer disponible.", 0],
+        ["Entre 20% y 50%", "Existe una necesidad relevante de liquidez.", 1],
+        ["Menos del 20%", "La mayor parte puede mantenerse invertida.", 2],
+        ["Ninguna", "Cuentas con liquidez separada para imprevistos.", 3]
+      ]
+    },
+    {
+      title: "¿Qué experiencia tienes administrando inversiones?",
+      help: "Evalúa tu familiaridad práctica con fluctuaciones, diversificación y riesgo.",
+      options: [
+        ["Ninguna", "Estoy comenzando a invertir.", 0],
+        ["Básica", "Conozco los conceptos principales.", 1],
+        ["Intermedia", "He gestionado una cartera durante varios ciclos.", 2],
+        ["Avanzada", "Analizo riesgo, asignación y rebalanceo con regularidad.", 3]
+      ]
+    },
+    {
+      title: "¿Cuál es el instrumento de renta variable más sofisticado en el que has invertido?",
+      help: "Considera únicamente operaciones realizadas por ti, no productos que solo conoces de forma teórica.",
+      options: [
+        ["Ninguno", "No he invertido en instrumentos de renta variable.", 0],
+        ["Fondos o ETF de renta variable", "He utilizado vehículos diversificados que agrupan múltiples emisoras.", 1],
+        ["Acciones individuales o FIBRAs / REIT", "He seleccionado y administrado posiciones directas.", 2],
+        ["Opciones, futuros o productos apalancados", "He operado instrumentos complejos con riesgos adicionales.", 3]
+      ]
+    },
+    {
+      title: "¿Cuál es el instrumento de renta fija más sofisticado en el que has invertido?",
+      help: "Selecciona la opción de mayor complejidad que hayas utilizado directamente.",
+      options: [
+        ["Ninguno", "No he invertido en instrumentos de renta fija.", 0],
+        ["CETES, pagarés o depósitos a plazo", "He utilizado instrumentos de deuda de estructura sencilla.", 1],
+        ["Bonos, fondos o ETF de deuda", "He invertido considerando plazo, duración o calidad crediticia.", 2],
+        ["Deuda privada, alto rendimiento o estructurados", "He evaluado instrumentos con riesgo crediticio o estructuras complejas.", 3]
+      ]
+    },
+    {
+      title: "Tu portafolio cae 15% en tres meses. ¿Qué harías?",
+      help: "Responde según tu reacción más probable, no según lo que consideres ideal.",
+      options: [
+        ["Vendería la mayor parte", "Buscaría detener las pérdidas cuanto antes.", 0],
+        ["Reduciría parcialmente", "Disminuiría exposición para sentir mayor control.", 1],
+        ["Mantendría la estrategia", "Esperaría sin cambiar la asignación.", 2],
+        ["Aumentaría la inversión", "Aprovecharía precios menores si el plan no cambió.", 3]
+      ]
+    },
+    {
+      title: "¿Qué caída temporal podrías tolerar sin abandonar el plan?",
+      help: "Las pérdidas temporales forman parte de invertir; elige un límite realista.",
+      options: [
+        ["Hasta 5%", "Prefiero variaciones muy reducidas.", 0],
+        ["Hasta 10%", "Acepto fluctuaciones moderadas.", 1],
+        ["Hasta 20%", "Tolero periodos relevantes de pérdida.", 2],
+        ["Más de 20%", "Acepto alta volatilidad por mayor crecimiento potencial.", 3]
+      ]
+    }
+  ];
+
+  const profiles = [
+    { max: 5, key: "conservative", name: "Conservador", description: "Prioriza la preservación del capital y una variación reducida, manteniendo exposición limitada al crecimiento.", allocation: { equity: 20, fixedIncome: 70, cash: 10 } },
+    { max: 11, key: "moderate", name: "Moderado", description: "Busca crecimiento gradual con una base amplia de estabilidad y liquidez para amortiguar fluctuaciones.", allocation: { equity: 40, fixedIncome: 55, cash: 5 } },
+    { max: 16, key: "balanced", name: "Balanceado", description: "Equilibra crecimiento de largo plazo y control de riesgo mediante una distribución diversificada.", allocation: { equity: 60, fixedIncome: 35, cash: 5 } },
+    { max: 20, key: "growth", name: "Crecimiento", description: "Prioriza la apreciación del capital y acepta fluctuaciones relevantes con un horizonte amplio.", allocation: { equity: 80, fixedIncome: 15, cash: 5 } },
+    { max: 24, key: "aggressive", name: "Agresivo", description: "Busca máximo crecimiento potencial y puede sostener periodos prolongados de alta volatilidad.", allocation: { equity: 95, fixedIncome: 5, cash: 0 } }
+  ];
+
+  const allocationLabels = {
+    equity: "Renta variable",
+    fixedIncome: "Renta fija",
+    cash: "Efectivo"
+  };
+
+  let step = 0;
+  let answers = new Array(questions.length).fill(null);
+  let pendingProfile = null;
+  let showingResult = false;
+
+  function getDeferredKey() {
+    const uid = window.BlackPortfolioAuth.firebaseAuth.currentUser?.uid || "guest";
+    return `bp-investor-profile-deferred-${uid}`;
+  }
+
+  function allocationMarkup(allocation) {
+    return Object.entries(allocation).map(([key, value]) => `
+      <div class="investor-allocation-item">
+        <div class="investor-allocation-label"><span>${allocationLabels[key]}</span><strong>${value}%</strong></div>
+        <div class="investor-allocation-bar"><span style="width:${value}%"></span></div>
+      </div>`).join("");
+  }
+
+  function calculateProfile() {
+    const score = answers.reduce((sum, value) => sum + Number(value || 0), 0);
+    let profileIndex = profiles.findIndex(profile => score <= profile.max);
+    if (profileIndex < 0) profileIndex = profiles.length - 1;
+    const initialIndex = profileIndex;
+    if (answers[1] === 0 || answers[2] === 0 || answers[7] === 0) profileIndex = Math.min(profileIndex, 0);
+    else {
+      if (answers[1] === 1) profileIndex = Math.min(profileIndex, 2);
+      if (answers[2] === 1 || answers[6] === 0 || answers[7] === 1) profileIndex = Math.min(profileIndex, 1);
+    }
+    const definition = profiles[profileIndex];
+    return {
+      version: 2,
+      score,
+      maxScore: questions.length * 3,
+      riskLevel: profileIndex + 1,
+      constraintApplied: profileIndex < initialIndex,
+      key: definition.key,
+      name: definition.name,
+      description: definition.description,
+      allocation: definition.allocation,
+      answers: [...answers],
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function renderQuestion() {
+    showingResult = false;
+    pendingProfile = null;
+    questionStage.classList.remove("hidden");
+    resultStage.classList.add("hidden");
+    const question = questions[step];
+    progressLabel.textContent = `Pregunta ${step + 1} de ${questions.length}`;
+    progressBar.style.width = `${((step + 1) / questions.length) * 100}%`;
+    title.textContent = question.title;
+    help.textContent = question.help;
+    options.innerHTML = question.options.map(([label, detail, score]) => `
+      <button class="investor-option${answers[step] === score ? " is-selected" : ""}" type="button" role="radio" aria-checked="${answers[step] === score}" data-score="${score}">
+        <span class="investor-option-marker" aria-hidden="true"></span>
+        <span><strong>${label}</strong><small>${detail}</small></span>
+      </button>`).join("");
+    backBtn.disabled = step === 0;
+    laterBtn.classList.remove("hidden");
+    nextBtn.disabled = answers[step] === null;
+    nextBtn.textContent = step === questions.length - 1 ? "Ver resultado" : "Continuar";
+  }
+
+  function renderResult() {
+    showingResult = true;
+    pendingProfile = calculateProfile();
+    questionStage.classList.add("hidden");
+    resultStage.classList.remove("hidden");
+    progressLabel.textContent = "Evaluación completada";
+    progressBar.style.width = "100%";
+    resultStage.innerHTML = `
+      <span class="settings-kicker">Resultado orientativo</span>
+      <h2>${pendingProfile.name}</h2>
+      <p>${pendingProfile.description}${pendingProfile.constraintApplied ? " La recomendación fue moderada por tu horizonte, liquidez o tolerancia declarada." : ""}</p>
+      <div class="investor-allocation-grid">${allocationMarkup(pendingProfile.allocation)}</div>
+      <p class="investor-profile-disclaimer">Esta asignación es una referencia educativa basada en tus respuestas. No recomienda activos específicos ni sustituye asesoría financiera profesional.</p>`;
+    backBtn.disabled = false;
+    laterBtn.classList.add("hidden");
+    nextBtn.disabled = false;
+    nextBtn.textContent = "Guardar perfil";
+  }
+
+  function renderSettingsSummary() {
+    const profile = window.BlackPortfolioAuth.getInvestorProfile?.();
+    const empty = document.getElementById("investorProfileEmpty");
+    const summary = document.getElementById("investorProfileSummary");
+    const status = document.getElementById("investorProfileStatus");
+    if (!empty || !summary || !status) return;
+    empty.classList.toggle("hidden", !!profile);
+    summary.classList.toggle("hidden", !profile);
+    status.textContent = profile ? "Completado" : "Pendiente";
+    status.classList.toggle("is-complete", !!profile);
+    if (!profile) return;
+    document.getElementById("investorProfileName").textContent = profile.name;
+    document.getElementById("investorProfileScore").textContent = `Nivel ${profile.riskLevel}/5`;
+    document.getElementById("investorProfileDescription").textContent = profile.description;
+    document.getElementById("investorAllocationGrid").innerHTML = allocationMarkup(profile.allocation);
+    document.getElementById("investorProfileUpdated").textContent = `Actualizado: ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" }).format(new Date(profile.updatedAt))}`;
+  }
+
+  function openProfile() {
+    const saved = window.BlackPortfolioAuth.getInvestorProfile?.();
+    answers = Array.isArray(saved?.answers) && saved.answers.length === questions.length
+      ? [...saved.answers]
+      : new Array(questions.length).fill(null);
+    step = 0;
+    modal.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    renderQuestion();
+    setTimeout(() => options.querySelector(".investor-option")?.focus(), 50);
+  }
+
+  function closeProfile(defer = false) {
+    if (defer && !window.BlackPortfolioAuth.getInvestorProfile?.()) {
+      localStorage.setItem(getDeferredKey(), "1");
+    }
+    modal.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+
+  options.addEventListener("click", event => {
+    const option = event.target.closest(".investor-option");
+    if (!option) return;
+    answers[step] = Number(option.dataset.score);
+    options.querySelectorAll(".investor-option").forEach(item => {
+      const selected = item === option;
+      item.classList.toggle("is-selected", selected);
+      item.setAttribute("aria-checked", String(selected));
+    });
+    nextBtn.disabled = false;
+  });
+
+  nextBtn.addEventListener("click", async () => {
+    if (showingResult) {
+      nextBtn.disabled = true;
+      nextBtn.textContent = "Guardando...";
+      try {
+        await window.BlackPortfolioAuth.saveInvestorProfile(pendingProfile);
+        localStorage.removeItem(getDeferredKey());
+        renderSettingsSummary();
+        closeProfile();
+        window.showToast?.("Perfil de inversionista guardado.", "success");
+      } catch {
+        nextBtn.disabled = false;
+        nextBtn.textContent = "Guardar perfil";
+        window.showToast?.("No fue posible guardar el perfil. Intenta de nuevo.", "error");
+      }
+      return;
+    }
+    if (answers[step] === null) return;
+    if (step < questions.length - 1) {
+      step += 1;
+      renderQuestion();
+    } else {
+      renderResult();
+    }
+  });
+
+  backBtn.addEventListener("click", () => {
+    if (showingResult) {
+      step = questions.length - 1;
+      renderQuestion();
+    } else if (step > 0) {
+      step -= 1;
+      renderQuestion();
+    }
+  });
+
+  laterBtn.addEventListener("click", () => closeProfile(true));
+  closeBtn.addEventListener("click", () => closeProfile(true));
+  document.getElementById("startInvestorProfileBtn")?.addEventListener("click", openProfile);
+  document.getElementById("retakeInvestorProfileBtn")?.addEventListener("click", openProfile);
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !modal.classList.contains("hidden")) closeProfile(true);
+  });
+
+  window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(user => {
+    if (!user) return;
+    renderSettingsSummary();
+    const session = window.BlackPortfolioAuth.buildSession(user);
+    if (!session.isDemo && !window.BlackPortfolioAuth.getInvestorProfile?.() && !localStorage.getItem(getDeferredKey())) {
+      setTimeout(() => {
+        if (window.BlackPortfolioAuth.firebaseAuth.currentUser?.uid === user.uid) openProfile();
+      }, 800);
+    }
   });
 })();
