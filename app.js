@@ -19,8 +19,13 @@ const statusDot = document.querySelector(".status-dot");
 function updatePriceDisplay() {
   const yearly = billingSwitch.checked;
   prices.forEach((priceElement) => {
-    const value = yearly ? priceElement.dataset.yearly : priceElement.dataset.monthly;
-    priceElement.textContent = `$${value}`;
+    const monthly = priceElement.dataset.monthly;
+    const value = yearly ? priceElement.dataset.yearly : monthly;
+    if (yearly && Number(monthly) > 0 && monthly !== value) {
+      priceElement.innerHTML = `$${value}<span class="price-old">$${monthly}</span>`;
+    } else {
+      priceElement.textContent = `$${value}`;
+    }
   });
 
   priceLabels.forEach((label) => {
@@ -35,7 +40,7 @@ function syncAccountCard() {
   accountCount.textContent = String(users.length);
 
   if (!session) {
-    accountStatus.textContent = "Aun no hay cuenta creada";
+    accountStatus.textContent = "Aún no hay cuenta creada";
     accountPlan.textContent = selectedPlanInput.value;
     checkoutState.textContent = "Pendiente";
     statusDot.style.background = "#ffb547";
@@ -59,7 +64,7 @@ function showFormMessage(text, type) {
 
 function buildCheckoutPayload(gateway) {
   const session = window.BlackPortfolioAuth.getSession();
-  const currentPlan = session?.selectedPlan ?? selectedPlanInput.value;
+  const currentPlan = selectedPlanInput.value;
   const providerConfig = window.BlackPortfolioAuth.paymentConfig[gateway];
 
   return {
@@ -91,9 +96,51 @@ window.BlackPortfolioPayments = {
   }
 };
 
+const PAID_PLANS = new Set(["Investor", "Advisor Pro", "Wealth Desk"]);
+
+function isPaidPlan(plan) {
+  return PAID_PLANS.has(plan);
+}
+
+// Redirige a Stripe Checkout. Lanza error si no se pudo iniciar.
+async function startStripeCheckout({ plan, billingCycle }) {
+  const RAILWAY_API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://127.0.0.1:8000"
+    : "https://blackportfolio-api-production.up.railway.app";
+  const firebaseUser = window.BlackPortfolioAuth.firebaseAuth.currentUser;
+  if (!firebaseUser) throw new Error("Tu sesion expiro. Inicia sesion nuevamente.");
+  const idToken = await firebaseUser.getIdToken();
+  const res = await fetch(`${RAILWAY_API}/api/billing/stripe/create-checkout-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ plan, billingCycle })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error al iniciar el pago");
+  }
+  const data = await res.json();
+  window.location.href = data.url;
+}
+
+// Tras registro/login: si el plan elegido es de pago, exige checkout antes de entrar.
+async function proceedAfterAuth() {
+  const plan = selectedPlanInput.value;
+  if (!isPaidPlan(plan)) {
+    window.location.href = "main.html";
+    return;
+  }
+  try {
+    showFormMessage("Plan de pago seleccionado. Redirigiendo al pago seguro…", "success");
+    await startStripeCheckout({ plan, billingCycle: billingSwitch.checked ? "yearly" : "monthly" });
+  } catch (err) {
+    showFormMessage((err.message || "No se pudo iniciar el pago.") + " Vuelve a elegir tu plan para reintentar.", "error");
+  }
+}
+
 function openPaymentModal(payload) {
   paymentDescription.textContent =
-    `Se genero el objeto base para conectar ${payload.provider}. Aqui puedes invocar tu backend o el SDK del proveedor.`;
+    `Se generó el objeto base para conectar ${payload.provider}. Aquí puedes invocar tu backend o el SDK del proveedor.`;
   paymentPayload.textContent = JSON.stringify(payload, null, 2);
   paymentModal.classList.remove("hidden");
 }
@@ -126,8 +173,8 @@ paymentButtons.forEach((button) => {
       return;
     }
 
-    if (session.selectedPlan === "Free") {
-      showFormMessage("Tu plan Free no requiere pago. Accede directamente al dashboard.", "success");
+    if (selectedPlanInput.value === "Explorer") {
+      showFormMessage("Tu plan Explorer no requiere pago. Accede directamente al dashboard.", "success");
       return;
     }
 
@@ -138,25 +185,8 @@ paymentButtons.forEach((button) => {
       const originalText = button.textContent;
       button.disabled = true;
       button.textContent = "Preparando pago…";
-      const RAILWAY_API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-        ? "http://127.0.0.1:8000"
-        : "https://blackportfolio-api-production.up.railway.app";
       try {
-        const res = await fetch(`${RAILWAY_API}/api/billing/stripe/create-checkout-session`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            plan: payload.plan,
-            billingCycle: payload.billingCycle,
-            user: payload.user
-          })
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || "Error al iniciar el pago");
-        }
-        const data = await res.json();
-        window.location.href = data.url;
+        await startStripeCheckout({ plan: payload.plan, billingCycle: payload.billingCycle });
       } catch (err) {
         showFormMessage(err.message || "Error al iniciar el pago. Intenta de nuevo.", "error");
         button.disabled = false;
@@ -181,11 +211,12 @@ signupForm.addEventListener("submit", async (event) => {
 
   const formData = new FormData(signupForm);
   const payload = Object.fromEntries(formData.entries());
+  const requestedPlan = payload.selectedPlan;
 
   try {
     const newUser = await window.BlackPortfolioAuth.createUser(payload);
     signupForm.reset();
-    selectedPlanInput.value = newUser.selectedPlan;
+    selectedPlanInput.value = requestedPlan;
     showFormMessage(`Cuenta creada con éxito para ${newUser.fullName}. Configura tu autenticador para mayor seguridad.`, "success");
     syncAccountCard();
     // Trigger 2FA setup flow for new accounts
@@ -279,9 +310,9 @@ function openTotpSetupModal(uid) {
 
     if (result.ok) {
       sessionStorage.setItem("totp_verified", uid);
-      msg.textContent = "✓ 2FA activado. Redirigiendo al dashboard…";
+      msg.textContent = "✓ 2FA activado. Continuando…";
       msg.className = "totp-setup-msg form-message success";
-      setTimeout(() => { window.location.href = "main.html"; }, 1200);
+      setTimeout(() => { proceedAfterAuth(); }, 1200);
       return;
     }
 
@@ -296,7 +327,7 @@ function openTotpSetupModal(uid) {
   skipBtn.addEventListener("click", () => {
     sessionStorage.setItem("totp_verified", uid);
     modal.classList.add("hidden");
-    window.location.href = "main.html";
+    proceedAfterAuth();
   });
 }
 
@@ -341,7 +372,10 @@ if (googleSignupBtn) {
       "success"
     );
     syncAccountCard();
-    window.setTimeout(() => { window.location.href = "main.html"; }, 1200);
+    window.setTimeout(() => {
+      if (result.isNew) proceedAfterAuth();
+      else window.location.href = "main.html";
+    }, 1200);
   });
 }
 
@@ -349,8 +383,8 @@ if (googleSignupBtn) {
 (function initInlineValidation() {
   const FIELD_MESSAGES = {
     fullName: "Por favor ingresa tu nombre completo.",
-    email:    "Ingresa un correo electronico valido.",
-    password: "La contrasena debe tener al menos 8 caracteres."
+    email:    "Ingresa un correo electrónico válido.",
+    password: "La contraseña debe tener al menos 8 caracteres."
   };
 
   Object.entries(FIELD_MESSAGES).forEach(([id, msg]) => {
@@ -532,6 +566,30 @@ if (googleSignupBtn) {
   document.querySelectorAll("[data-animate]").forEach(el => observer.observe(el));
 })();
 
+// ── Scrollspy: highlight active nav link ──────────────────────────────────────
+(function initScrollSpy() {
+  if (!window.IntersectionObserver) return;
+  const links = Array.from(document.querySelectorAll(".nav-links a[href^='#']"));
+  if (!links.length) return;
+  const map = new Map();
+  links.forEach(a => {
+    const sec = document.querySelector(a.getAttribute("href"));
+    if (sec) map.set(sec, a);
+  });
+
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove("active"));
+        const link = map.get(e.target);
+        if (link) link.classList.add("active");
+      }
+    });
+  }, { rootMargin: "-45% 0px -50% 0px", threshold: 0 });
+
+  map.forEach((_, sec) => obs.observe(sec));
+})();
+
 // ── Metric Counters ──────────────────────────────────────────────────────────
 (function initCounters() {
   const DURATION = 1600;
@@ -589,7 +647,7 @@ if (googleSignupBtn) {
     { key: 'special', regex: /[!-\/:-@[-`{-~]/ },
   ];
 
-  const LABELS = ['', 'Debil', 'Medio', 'Fuerte', 'Muy fuerte', 'Excelente'];
+  const LABELS = ['', 'Débil', 'Medio', 'Fuerte', 'Muy fuerte', 'Excelente'];
   const LABEL_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
 
   // Toggle visibility
@@ -598,7 +656,7 @@ if (googleSignupBtn) {
     pwInput.type = visible ? 'password' : 'text';
     eyeIcon.classList.toggle('hidden', !visible);
     eyeOffIcon.classList.toggle('hidden', visible);
-    pwToggle.setAttribute('aria-label', visible ? 'Mostrar contrasena' : 'Ocultar contrasena');
+    pwToggle.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
   });
 
   pwInput.addEventListener('input', () => {
@@ -622,6 +680,44 @@ if (googleSignupBtn) {
   });
 })();
 
+// ── Hero chart: draw-on-load + animated delta ──
+(function initHeroChart() {
+  const chart = document.querySelector(".hero-chart");
+  const delta = document.querySelector(".mini-chart-delta");
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) return;
+
+  if (chart) {
+    const line = chart.querySelector(".hc-line");
+    chart.classList.add("hc-init");
+    if (line && line.getTotalLength) {
+      const len = line.getTotalLength();
+      line.style.strokeDasharray = len;
+      line.style.strokeDashoffset = len;
+    }
+    requestAnimationFrame(() => {
+      chart.classList.add("hc-play");
+      if (line) {
+        line.style.transition = "stroke-dashoffset 1.6s cubic-bezier(0.16, 1, 0.3, 1)";
+        line.style.strokeDashoffset = "0";
+      }
+    });
+  }
+
+  if (delta) {
+    const target = 12.4;
+    const DURATION = 1600;
+    const ease = t => 1 - Math.pow(1 - t, 3);
+    const start = performance.now();
+    function step(now) {
+      const p = Math.min((now - start) / DURATION, 1);
+      delta.textContent = `+${(ease(p) * target).toFixed(1)}%`;
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+})();
+
 // ── Cursor-tracking glow ──
 (function () {
   document.addEventListener('pointermove', function (e) {
@@ -641,10 +737,10 @@ if (googleSignupBtn) {
     `<video autoplay muted loop playsinline preload="metadata">
        <source src="assets/gallery/video-1.mp4" type="video/mp4">
      </video>`,
-    `<img src="assets/gallery/photo-1.jpg" alt="Mercado financiero" loading="eager">`,
-    `<img src="assets/gallery/photo-2.jpg" alt="Trading charts" loading="eager">`,
-    `<img src="assets/gallery/photo-3.jpg" alt="Inversiones" loading="lazy">`,
-    `<img src="assets/gallery/photo-4.jpg" alt="Portafolio" loading="lazy">`,
+    `<img src="assets/gallery/photo-1.jpg" alt="Panel de mercados financieros en tiempo real" loading="eager" width="800" height="600">`,
+    `<img src="assets/gallery/photo-2.jpg" alt="Gráficas de trading y análisis técnico" loading="eager" width="800" height="600">`,
+    `<img src="assets/gallery/photo-3.jpg" alt="Análisis de cartera de inversiones" loading="lazy" width="800" height="600">`,
+    `<img src="assets/gallery/photo-4.jpg" alt="Composición y rendimiento de portafolio" loading="lazy" width="800" height="600">`,
     `<video autoplay muted loop playsinline preload="metadata">
        <source src="assets/gallery/video-2.mp4" type="video/mp4">
      </video>`,
@@ -704,5 +800,120 @@ if (googleSignupBtn) {
 
   window.addEventListener("resize", () => {
     if (window.innerWidth > 720) close();
+  });
+})();
+
+// ── Sticky mobile CTA — appears after scrolling past the hero ─────────────────
+(function initMobileCta() {
+  const cta = document.getElementById("mobileCta");
+  const hero = document.getElementById("hero");
+  if (!cta || !hero || !window.IntersectionObserver) return;
+  const register = document.getElementById("register");
+
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      // Show once the hero has scrolled out of view
+      cta.classList.toggle("is-visible", !e.isIntersecting);
+    });
+  }, { rootMargin: "-40% 0px 0px 0px" });
+  obs.observe(hero);
+
+  // Hide it while the register section (its target) is on screen
+  if (register) {
+    const obsReg = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) cta.classList.remove("is-visible");
+      });
+    }, { threshold: 0.15 });
+    obsReg.observe(register);
+  }
+})();
+
+// ── Compact header on scroll ──────────────────────────────────────────────────
+(function initCompactHeader() {
+  const header = document.querySelector(".site-header");
+  if (!header) return;
+  let ticking = false;
+  function update() {
+    header.classList.toggle("is-compact", window.scrollY > 80);
+    ticking = false;
+  }
+  window.addEventListener("scroll", () => {
+    if (!ticking) { requestAnimationFrame(update); ticking = true; }
+  }, { passive: true });
+})();
+
+// ── Scroll progress bar ───────────────────────────────────────────────────────
+(function initScrollProgress() {
+  const bar = document.getElementById("scrollProgressBar");
+  if (!bar) return;
+  let ticking = false;
+  function update() {
+    const doc = document.documentElement;
+    const max = doc.scrollHeight - doc.clientHeight;
+    const pct = max > 0 ? (doc.scrollTop / max) * 100 : 0;
+    bar.style.width = pct + "%";
+    ticking = false;
+  }
+  window.addEventListener("scroll", () => {
+    if (!ticking) { requestAnimationFrame(update); ticking = true; }
+  }, { passive: true });
+  update();
+})();
+
+// ── 3D tilt + magnetic interactions (skipped when reduced motion / touch) ─────
+(function initMicroInteractions() {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  if (reduce || coarse) return;
+
+  // Card tilt (featured pricing card excluded — it has a base transform)
+  const tiltCards = document.querySelectorAll(".feature-card, .pricing-card:not(.featured)");
+  tiltCards.forEach(card => {
+    card.addEventListener("pointerenter", () => {
+      card.style.transition = "transform 0.08s ease-out";
+    });
+    card.addEventListener("pointermove", e => {
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = `perspective(900px) rotateX(${(-py * 5).toFixed(2)}deg) rotateY(${(px * 6).toFixed(2)}deg) translateY(-5px)`;
+    });
+    card.addEventListener("pointerleave", () => {
+      card.style.transition = "";
+      card.style.transform = "";
+    });
+  });
+
+  // #6 3D tilt on the hero dashboard. Applied to .dashboard-preview
+  // (which has no CSS animation) so the inline transform isn't
+  // overridden by .panel-window's float / hero entrance animations.
+  const tiltArea = document.querySelector(".hero .panel-window");
+  const tiltTarget = document.querySelector(".hero .dashboard-preview");
+  if (tiltArea && tiltTarget) {
+    tiltArea.addEventListener("pointermove", e => {
+      const r = tiltArea.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      tiltTarget.style.transition = "transform 0.12s ease-out";
+      tiltTarget.style.transform =
+        `perspective(1000px) rotateX(${(-py * 5).toFixed(2)}deg) rotateY(${(px * 6).toFixed(2)}deg)`;
+    });
+    tiltArea.addEventListener("pointerleave", () => {
+      tiltTarget.style.transition = "transform 0.5s ease";
+      tiltTarget.style.transform = "";
+    });
+  }
+
+  // Magnetic primary CTAs in hero
+  const magnets = document.querySelectorAll(".hero-actions .button.primary");
+  magnets.forEach(btn => {
+    btn.addEventListener("pointermove", e => {
+      const r = btn.getBoundingClientRect();
+      const x = e.clientX - r.left - r.width / 2;
+      const y = e.clientY - r.top - r.height / 2;
+      btn.style.transform = `translate(${(x * 0.25).toFixed(1)}px, ${(y * 0.35).toFixed(1)}px)`;
+    });
+    btn.addEventListener("pointerleave", () => { btn.style.transform = ""; });
   });
 })();
