@@ -11,6 +11,27 @@ function showLoginMessage(text, type) {
   loginMessage.className = `form-message ${type}`;
 }
 
+// ── Trusted device: skip the 2FA code for ~3.5 days (≈ twice a week) ──────────
+const TRUSTED_DEVICE_TTL_MS = 3.5 * 24 * 60 * 60 * 1000;
+
+function isDeviceTrusted(uid) {
+  if (sessionStorage.getItem("totp_verified") === uid) return true;
+  try {
+    const ts = parseInt(localStorage.getItem("totp_trusted_" + uid) || "", 10);
+    if (!Number.isFinite(ts)) return false;
+    if (Date.now() - ts > TRUSTED_DEVICE_TTL_MS) {
+      localStorage.removeItem("totp_trusted_" + uid);
+      return false;
+    }
+    return true;
+  } catch { return false; }
+}
+
+function trustDevice(uid) {
+  sessionStorage.setItem("totp_verified", uid);
+  try { localStorage.setItem("totp_trusted_" + uid, String(Date.now())); } catch {}
+}
+
 function maybeShowForgotHint() {
   if (failedAttempts < 2) return;
   if (document.getElementById("forgotHint")) return;
@@ -29,7 +50,7 @@ if (window.BlackPortfolioAuth.isEmailSignInLink()) {
     if (res.ok) {
       const enabled = await window.BlackPortfolioAuth.isTwoFactorEnabled(res.uid);
       if (!enabled) { _loginFlowActive = true; showSetupOverlay(res.uid); return; }
-      sessionStorage.setItem("totp_verified", res.uid);
+      trustDevice(res.uid);
       window.location.replace("main.html");
     } else {
       _loginFlowActive = false;
@@ -41,8 +62,9 @@ if (window.BlackPortfolioAuth.isEmailSignInLink()) {
 // ── Redirect if already authenticated (with 2FA gate) ───────────────────────
 window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async user => {
   if (!user || _loginFlowActive) return;
-  // If we already verified 2FA this browser session, go straight to app
-  if (sessionStorage.getItem("totp_verified") === user.uid) {
+  // If this device is trusted (verified within the last ~3.5 days), skip 2FA
+  if (isDeviceTrusted(user.uid)) {
+    trustDevice(user.uid); // refresh the window so active users stay trusted
     window.location.href = "main.html";
     return;
   }
@@ -74,6 +96,14 @@ async function handlePostAuth(session) {
   if (!enabled) {
     showLoginMessage("", "");
     showSetupOverlay(session.id);
+    return;
+  }
+
+  // Trusted device within the ~3.5-day window: skip the code entirely
+  if (isDeviceTrusted(session.id)) {
+    trustDevice(session.id);
+    showLoginMessage(`Bienvenido, ${session.fullName}. Redirigiendo...`, "success");
+    setTimeout(() => { window.location.href = "main.html"; }, 600);
     return;
   }
 
@@ -291,7 +321,7 @@ function showOtpOverlay(uid) {
     const result = await window.BlackPortfolioAuth.verifyTwoFactor(code);
 
     if (result.valid) {
-      sessionStorage.setItem("totp_verified", uid);
+      trustDevice(uid);
       verifyBtn.textContent = "✓ Verificado";
       verifyBtn.classList.add("otp-verify-btn--success");
       setTimeout(() => { window.location.href = "main.html"; }, 600);
@@ -400,7 +430,7 @@ function showSetupOverlay(uid) {
 
     const result = await window.BlackPortfolioAuth.verifyTwoFactorSetup(code);
     if (result.ok) {
-      sessionStorage.setItem("totp_verified", uid);
+      trustDevice(uid);
       msg.textContent = "✓ 2FA activado. Redirigiendo…";
       msg.className = "totp-setup-msg form-message success";
       setTimeout(() => { window.location.href = "main.html"; }, 900);

@@ -398,25 +398,6 @@ def initialize_backup_scheduler():
 def health():
     return {"status": "ok"}
 
-@app.get("/api/debug/crypto")
-def debug_crypto():
-    """Verifica conectividad con CoinGecko desde Railway."""
-    results = {}
-    for sym in ["BTC-USD", "BNB-USD", "SOL"]:
-        p, prev = _crypto_price_and_prev(sym)
-        results[sym] = {"price": p, "prev": prev, "ok": p is not None}
-    try:
-        klines = _binanceus_klines("BTC-USD", "1d")
-        results["binanceus_test"] = {"candles": len(klines), "ok": len(klines) > 0}
-    except Exception as e:
-        results["binanceus_test"] = {"candles": 0, "ok": False, "error": str(e)}
-    try:
-        candles = _coingecko_ohlc("BTC-USD", "1mo")
-        results["coingecko_ohlc_test"] = {"candles": len(candles), "ok": len(candles) > 0}
-    except Exception as e:
-        results["coingecko_ohlc_test"] = {"candles": 0, "ok": False, "error": str(e)}
-    return results
-
 @app.get("/api/search")
 @limiter.limit("60/minute")
 def search(request: Request, q: str):

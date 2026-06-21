@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="theme-init.js"></script>
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body class="auth-page">
   <div class="background-orb orb-one"></div>
@@ -92,7 +92,20 @@
   <!-- OTP Verification Overlay (shown when 2FA is enabled) -->
   <div id="otpOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-label="Verificación en dos pasos">
     <div class="otp-card">
-      <div class="otp-shield-icon">🔐</div>
+      <div class="otp-shield-icon" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="56" height="56" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="otpShieldGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#8ea0ff"/>
+              <stop offset="1" stop-color="#5b6bff"/>
+            </linearGradient>
+          </defs>
+          <path d="M24 3.5l15 5.4v9.7c0 9.9-6.4 19.2-15 21.9-8.6-2.7-15-12-15-21.9V8.9l15-5.4z" fill="url(#otpShieldGrad)" fill-opacity="0.14" stroke="url(#otpShieldGrad)" stroke-width="1.6"/>
+          <rect x="16.5" y="22" width="15" height="12" rx="2.4" stroke="url(#otpShieldGrad)" stroke-width="1.8"/>
+          <path d="M19.5 22v-3.2a4.5 4.5 0 019 0V22" stroke="url(#otpShieldGrad)" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="24" cy="28" r="1.9" fill="url(#otpShieldGrad)"/>
+        </svg>
+      </div>
       <h2 class="otp-title" id="otpTitle">Verificación en dos pasos</h2>
       <p class="otp-subtitle" id="otpSubtitle">Ingresa el código de 6 dígitos de Google Authenticator</p>
 
@@ -169,7 +182,7 @@
   <script src="assets/qr-shim.js"></script>
   <script src="auth.js?v=8"></script>
   <script src="plan-picker.js?v=1"></script>
-  <script src="login.js?v=6"></script>
+  <script src="login.js?v=7"></script>
   <script>
     (function () {
       var btn = document.getElementById("themeToggle");
