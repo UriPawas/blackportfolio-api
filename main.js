@@ -5169,6 +5169,13 @@ async function portfolioApiRequest(path, options = {}) {
       window.location.href = "login.html";
       throw new Error("Verificación 2FA requerida.");
     }
+    // Beta cerrada: el correo no está en la allowlist. Cerrar sesión y enviar al login.
+    if (response.status === 403 && body.detail === "beta_closed") {
+      try { await window.BlackPortfolioAuth?.firebaseAuth?.signOut(); } catch {}
+      sessionStorage.clear();
+      window.location.href = "login.html?beta=closed";
+      throw new Error("beta_closed");
+    }
     // Email sin verificar: no se permite escribir/usar funciones premium.
     if (response.status === 403 && body.detail === "email_verification_required") {
       window.showToast?.("Verifica tu correo para guardar cambios. Revisa tu bandeja o reenvía el correo desde Ajustes.", "error");

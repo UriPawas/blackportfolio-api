@@ -9,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from persistence import (
     install_persistence, verify_firebase_user, require_2fa, get_session,
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
+    BetaAllowlist, BETA_CLOSED,
     normalize_plan, require_plan, upsert_user, utc_now, limiter,
 )
 import requests
@@ -1105,6 +1106,51 @@ def admin_set_feedback_status(
     fb.status = body.status
     session.commit()
     return {"ok": True, "id": fb.id, "status": fb.status}
+
+# ── Beta cerrada: gestión de la allowlist (solo admin) ────────────────────────
+class BetaAllowlistBody(BaseModel):
+    email: str = ""
+    note: str = ""
+
+@app.get("/api/admin/beta-allowlist")
+def admin_list_beta_allowlist(token: dict = Depends(require_admin), session=Depends(get_session)):
+    rows = session.query(BetaAllowlist).order_by(BetaAllowlist.created_at.desc()).all()
+    return {
+        "betaClosed": BETA_CLOSED,
+        "emails": [{
+            "email": r.email,
+            "addedBy": r.added_by,
+            "note": r.note,
+            "createdAt": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows],
+    }
+
+@app.post("/api/admin/beta-allowlist")
+def admin_add_beta_allowlist(body: BetaAllowlistBody, token: dict = Depends(require_admin), session=Depends(get_session)):
+    email = (body.email or "").strip().lower()
+    if "@" not in email or len(email) > 320:
+        raise HTTPException(status_code=400, detail="Correo no válido.")
+    entry = session.get(BetaAllowlist, email)
+    if entry is None:
+        entry = BetaAllowlist(
+            email=email,
+            added_by=token.get("email"),
+            note=(body.note or "").strip()[:200] or None,
+            created_at=utc_now(),
+        )
+        session.add(entry)
+        session.commit()
+    return {"ok": True, "email": email}
+
+@app.delete("/api/admin/beta-allowlist/{email}")
+def admin_remove_beta_allowlist(email: str, token: dict = Depends(require_admin), session=Depends(get_session)):
+    em = (email or "").strip().lower()
+    entry = session.get(BetaAllowlist, em)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Correo no encontrado en la allowlist.")
+    session.delete(entry)
+    session.commit()
+    return {"ok": True, "email": em}
 
 RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "")
 PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")

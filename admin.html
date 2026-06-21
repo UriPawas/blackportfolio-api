@@ -244,6 +244,30 @@
     <section class="promo-section">
       <div class="promo-head">
         <div>
+          <h2>Beta cerrada — allowlist <span id="beta-status" class="badge badge-demo" style="display:none"></span></h2>
+          <p>Solo los correos de esta lista (más admins y la cuenta demo) pueden usar la app mientras la beta esté cerrada. Quita un correo para revocar el acceso.</p>
+        </div>
+      </div>
+      <div class="promo-controls">
+        <input id="betaEmail" class="promo-input" type="email" placeholder="correo@dominio.com" maxlength="320" />
+        <input id="betaNote" class="promo-input" type="text" placeholder="Nota (opcional)" maxlength="200" />
+        <button id="betaAddBtn" class="primary-btn">+ Invitar correo</button>
+      </div>
+      <div id="beta-msg" class="promo-msg"></div>
+      <div class="table-wrap">
+        <table id="beta-table" style="display:none">
+          <thead>
+            <tr><th>Correo</th><th>Nota</th><th>Invitado por</th><th>Fecha</th><th></th></tr>
+          </thead>
+          <tbody id="beta-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="beta-empty" style="display:none">Aún no has invitado a nadie.</div>
+      </div>
+    </section>
+
+    <section class="promo-section">
+      <div class="promo-head">
+        <div>
           <h2>Códigos de descuento</h2>
           <p>Elige el tipo de descuento, su valor y la duración. Cada código es único y de un solo uso. El usuario lo ingresa en "Añadir código de promoción" en el checkout.</p>
         </div>
@@ -325,7 +349,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="auth.js"></script>
-  <script src="admin.js"></script>
+  <script src="auth.js?v=9"></script>
+  <script src="admin.js?v=2"></script>
 </body>
 </html>

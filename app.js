@@ -373,7 +373,12 @@ if (googleSignupBtn) {
     );
     syncAccountCard();
     window.setTimeout(async () => {
-      if (!result.isNew) { window.location.href = "main.html"; return; }
+      const needsPlanSelection = result.isNew || (
+        !result.user.planSelectionCompleted &&
+        result.user.selectedPlan === "Explorer" &&
+        result.user.billingStatus !== "active"
+      );
+      if (!needsPlanSelection) { window.location.href = "main.html"; return; }
       // Si ya eligió un plan de pago en la landing, va directo a Stripe.
       if (isPaidPlan(selectedPlanInput.value)) { proceedAfterAuth(); return; }
       // Si no, que elija plan: gratis → dashboard, de pago → Stripe (redirige).
@@ -383,7 +388,7 @@ if (googleSignupBtn) {
         });
         if (choice && !choice.paid) window.location.href = "main.html";
       } else {
-        window.location.href = "main.html";
+        showFormMessage("No se pudo cargar la selección de plan. Recarga la página e intenta de nuevo.", "error");
       }
     }, 1200);
   });

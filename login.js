@@ -11,6 +11,14 @@ function showLoginMessage(text, type) {
   loginMessage.className = `form-message ${type}`;
 }
 
+// ── Beta cerrada: aviso al llegar redirigido desde la app ────────────────────
+if (new URLSearchParams(window.location.search).get("beta") === "closed") {
+  showLoginMessage(
+    "BlackPortfolio está en beta cerrada. Tu correo aún no tiene acceso — escríbenos para solicitar una invitación.",
+    "error"
+  );
+}
+
 // ── Trusted device: skip the 2FA code for ~3.5 days (≈ twice a week) ──────────
 const TRUSTED_DEVICE_TTL_MS = 3.5 * 24 * 60 * 60 * 1000;
 
@@ -134,7 +142,17 @@ googleLoginBtn.addEventListener("click", async () => {
 
   // Usuario NUEVO con Google: que elija plan. Si es de pago, el selector redirige
   // a Stripe (no regresa). Si es gratis, continúa al alta normal (gate 2FA).
-  if (result.isNew && window.BlackPortfolioPlanPicker) {
+  const needsPlanSelection = result.isNew || (
+    !result.user.planSelectionCompleted &&
+    result.user.selectedPlan === "Explorer" &&
+    result.user.billingStatus !== "active"
+  );
+  if (needsPlanSelection && !window.BlackPortfolioPlanPicker) {
+    _loginFlowActive = false;
+    showLoginMessage("No se pudo cargar la selección de plan. Recarga la página e intenta de nuevo.", "error");
+    return;
+  }
+  if (needsPlanSelection) {
     const choice = await window.BlackPortfolioPlanPicker.run();
     if (choice && choice.paid) return; // redirigiendo a Stripe
   }

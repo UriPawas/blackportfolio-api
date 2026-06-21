@@ -42,6 +42,7 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async (user) => {
   authGuard.style.display = "none";
   adminPanel.style.display = "block";
   adminEmail.textContent = user.email;
+  loadBetaAllowlist();
   loadPromoCodes();
   loadFeedback();
 });
@@ -228,6 +229,106 @@ function renderTable(query) {
     btn.addEventListener("click", () => savePlan(btn));
   });
 }
+
+// ── Beta cerrada — allowlist ──────────────────────────────────────────────────
+const betaEmail   = document.getElementById("betaEmail");
+const betaNote    = document.getElementById("betaNote");
+const betaAddBtn  = document.getElementById("betaAddBtn");
+const betaMsg     = document.getElementById("beta-msg");
+const betaTable   = document.getElementById("beta-table");
+const betaTbody   = document.getElementById("beta-tbody");
+const betaEmpty   = document.getElementById("beta-empty");
+const betaStatus  = document.getElementById("beta-status");
+
+let betaEmails = [];
+
+function renderBetaAllowlist() {
+  betaTbody.innerHTML = "";
+  if (!betaEmails.length) {
+    betaEmpty.style.display = "block";
+    betaTable.style.display = "none";
+    return;
+  }
+  betaEmpty.style.display = "none";
+  betaTable.style.display = "table";
+
+  betaEmails.forEach(e => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span class="promo-code">${esc(e.email)}</span></td>
+      <td style="color:var(--muted)">${esc(e.note) || "—"}</td>
+      <td style="color:var(--muted);font-size:0.8rem">${esc(e.addedBy) || "—"}</td>
+      <td style="color:var(--muted);font-size:0.8rem">${formatDate(e.createdAt)}</td>
+      <td><button class="deact-btn beta-del-btn" data-email="${esc(e.email)}">Quitar</button></td>
+    `;
+    betaTbody.appendChild(tr);
+  });
+
+  betaTbody.querySelectorAll(".beta-del-btn").forEach(b =>
+    b.addEventListener("click", () => removeBetaEmail(b)));
+}
+
+async function loadBetaAllowlist() {
+  try {
+    const res = await adminFetch("/admin/beta-allowlist");
+    if (!res.ok) return;
+    const data = await res.json();
+    betaEmails = data.emails || [];
+    if (betaStatus) {
+      betaStatus.style.display = "inline-block";
+      betaStatus.textContent = data.betaClosed ? "Cerrada" : "Abierta (GA)";
+    }
+    renderBetaAllowlist();
+  } catch (err) {
+    console.error("No se pudo cargar la allowlist.", err);
+  }
+}
+
+async function addBetaEmail() {
+  const email = betaEmail.value.trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    betaMsg.style.color = "#ff6b6b";
+    betaMsg.textContent = "Ingresa un correo válido.";
+    return;
+  }
+  betaAddBtn.disabled = true;
+  betaAddBtn.textContent = "Invitando…";
+  betaMsg.textContent = "";
+  try {
+    const res = await adminFetch("/admin/beta-allowlist", {
+      method: "POST",
+      body: JSON.stringify({ email, note: betaNote.value.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    betaEmail.value = "";
+    betaNote.value = "";
+    betaMsg.style.color = "var(--success)";
+    betaMsg.textContent = `Acceso concedido a ${data.email}`;
+    await loadBetaAllowlist();
+  } catch (err) {
+    betaMsg.style.color = "#ff6b6b";
+    betaMsg.textContent = "Error: " + err.message;
+  } finally {
+    betaAddBtn.disabled = false;
+    betaAddBtn.textContent = "+ Invitar correo";
+  }
+}
+
+async function removeBetaEmail(btn) {
+  btn.disabled = true;
+  try {
+    const res = await adminFetch(`/admin/beta-allowlist/${encodeURIComponent(btn.dataset.email)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    betaEmails = betaEmails.filter(e => e.email !== btn.dataset.email);
+    renderBetaAllowlist();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Error";
+  }
+}
+
+betaAddBtn?.addEventListener("click", addBetaEmail);
 
 // ── Códigos de beta (Stripe Promotion Codes) ──────────────────────────────────
 const genPromoBtn   = document.getElementById("genPromoBtn");

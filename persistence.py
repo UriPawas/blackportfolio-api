@@ -128,6 +128,18 @@ class Feedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class BetaAllowlist(Base):
+    """Correos autorizados para la beta CERRADA. Si BETA_CLOSED está activo, solo
+    estos correos (más admins y exentos) pueden usar la app. El email se guarda
+    en minúsculas para comparación case-insensitive."""
+    __tablename__ = "beta_allowlist"
+
+    email: Mapped[str] = mapped_column(String(320), primary_key=True)
+    added_by: Mapped[str | None] = mapped_column(String(320))
+    note: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 def _database_url() -> str:
     if not DATABASE_URL:
         raise HTTPException(status_code=503, detail="PostgreSQL no esta configurado.")
@@ -300,17 +312,48 @@ def verify_2fa_token(raw_token: str, uid: str) -> bool:
         return False
 
 
+# ── Beta cerrada (allowlist) ──────────────────────────────────────────────────
+# Mientras BETA_CLOSED esté activo (def. cerrada), solo los correos en la tabla
+# beta_allowlist —más admins y exentos— pueden usar la app. Para abrir a GA basta
+# definir BETA_CLOSED=0 en el entorno; no requiere cambios de código.
+BETA_CLOSED = os.environ.get("BETA_CLOSED", "1").strip().lower() not in ("0", "false", "no", "off")
+
+# Admins y la cuenta demo nunca quedan fuera de la beta.
+_BETA_EXEMPT_EMAILS = {
+    e.strip().lower()
+    for e in (
+        os.environ.get("ADMIN_EMAILS", "furielpacheco@gmail.com")
+        + "," + os.environ.get("EMAIL_VERIFY_EXEMPT_EMAILS", "demo@blackportfolio.ai")
+    ).split(",")
+    if e.strip()
+}
+
+
+def is_beta_allowed(session: Session, email: str | None) -> bool:
+    if not BETA_CLOSED:
+        return True
+    em = (email or "").strip().lower()
+    if not em:
+        return False
+    if em in _BETA_EXEMPT_EMAILS:
+        return True
+    return session.get(BetaAllowlist, em) is not None
+
+
 def require_2fa(
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),
     x_2fa_token: str | None = Header(default=None, alias="X-2FA-Token"),
 ) -> dict[str, Any]:
     """Como verify_firebase_user, pero si la cuenta tiene 2FA activo exige además
-    un token de sesión 2FA válido. Cuentas sin 2FA pasan sin fricción."""
+    un token de sesión 2FA válido. Cuentas sin 2FA pasan sin fricción. Además, si
+    la beta está cerrada, exige que el correo esté en la allowlist."""
     cred = session.get(TotpCredential, token["uid"])
     if cred and cred.enabled:
         if not verify_2fa_token(x_2fa_token or "", token["uid"]):
             raise HTTPException(status_code=403, detail="2fa_required")
+    if not is_beta_allowed(session, token.get("email")):
+        raise HTTPException(status_code=403, detail="beta_closed")
     return token
 
 

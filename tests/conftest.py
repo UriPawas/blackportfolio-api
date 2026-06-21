@@ -17,6 +17,9 @@ _TEST_DB = pathlib.Path(tempfile.gettempdir()) / "blackportfolio_test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB.as_posix()}"
 os.environ["TWOFA_SECRET"] = "test-2fa-signing-key-not-for-prod"
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_dummy_secret")
+# Por defecto la beta corre ABIERTA en las pruebas; el test del gate la cierra
+# explícitamente vía monkeypatch (persistence.BETA_CLOSED).
+os.environ.setdefault("BETA_CLOSED", "0")
 # Sin SENTRY_DSN / BACKUP_* / STRIPE_SECRET_KEY: todo eso queda en no-op.
 
 import pytest  # noqa: E402

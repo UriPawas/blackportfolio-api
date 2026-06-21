@@ -138,6 +138,7 @@
       fullName: user.displayName || extra.fullName || "Usuario",
       email: user.email,
       selectedPlan: normalizePlan(extra.selectedPlan),
+      planSelectionCompleted: extra.planSelectionCompleted === true,
       isDemo: extra.isDemo || false,
       checkoutReady: extra.checkoutReady || false,
       billingStatus: extra.billingStatus || null,
@@ -284,6 +285,7 @@
           fullName: user.displayName,
           email: user.email,
           selectedPlan: "Explorer",
+          planSelectionCompleted: false,
           checkoutReady: false,
           isDemo: false,
           createdAt: new Date().toISOString()
@@ -319,6 +321,20 @@
       }
       return { ok: false, error: "Error al cambiar la contrasena." };
     }
+  }
+
+  async function completePlanSelection(plan = "Explorer") {
+    const user = firebaseAuth.currentUser;
+    if (!user) throw new Error("No hay una sesion activa.");
+    const data = {
+      planSelectionCompleted: true,
+      requestedPlan: normalizePlan(plan)
+    };
+    const response = await _2faApi("/account/profile", "PATCH", data);
+    if (response._status < 200 || response._status >= 300) {
+      throw new Error("No se pudo guardar la selección de plan.");
+    }
+    localStorage.setItem(EXTRA_KEY + user.uid, JSON.stringify({ ...getExtra(user.uid), ...data }));
   }
 
   function markCheckoutReady() {
@@ -551,6 +567,7 @@
     createUser,
     authenticate,
     authenticateWithGoogle,
+    completePlanSelection,
     syncFromFirestore,
     sanitizeSession: (u) => u,
     checkLockout: () => ({ locked: false, remainingMs: 0, attempts: 0 }),

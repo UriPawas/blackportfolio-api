@@ -132,8 +132,16 @@
       const plan = btn.dataset.plan;
       const paid = btn.dataset.paid === "true";
       if (!paid) {
-        cleanup();
-        if (resolver) resolver({ plan, paid: false, billingCycle: cycle });
+        grid.querySelectorAll(".bp-pp-pick").forEach(b => (b.disabled = true));
+        try {
+          await window.BlackPortfolioAuth.completePlanSelection(plan);
+          cleanup();
+          if (resolver) resolver({ plan, paid: false, billingCycle: cycle });
+        } catch (err) {
+          grid.querySelectorAll(".bp-pp-pick").forEach(b => (b.disabled = false));
+          msg.style.color = "#ff6b6b";
+          msg.textContent = err.message || "No se pudo guardar el plan. Intenta de nuevo.";
+        }
         return;
       }
       // Plan de pago → redirigir a Stripe Checkout.
