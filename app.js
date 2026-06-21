@@ -123,6 +123,10 @@ async function startStripeCheckout({ plan, billingCycle }) {
   window.location.href = data.url;
 }
 
+// Se pone en true cuando el usuario canjea un código de beta con éxito. La beta
+// otorga el plan gratis, así que NO debe pasar por Stripe: entra directo a la app.
+let _betaAccessGranted = false;
+
 // Canjea un código de beta (si el usuario ingresó uno) tras crear la cuenta.
 // Devuelve true si se canjeó con éxito. No lanza: muestra el error en el form.
 async function redeemBetaCodeIfPresent() {
@@ -146,6 +150,7 @@ async function redeemBetaCodeIfPresent() {
       showFormMessage(data.detail || "No se pudo canjear el código de beta.", "error");
       return false;
     }
+    _betaAccessGranted = true;
     showFormMessage(`✓ Código de beta canjeado: plan ${data.plan} hasta ${new Date(data.expiresAt).toLocaleDateString()}.`, "success");
     return true;
   } catch {
@@ -155,7 +160,12 @@ async function redeemBetaCodeIfPresent() {
 }
 
 // Tras registro/login: si el plan elegido es de pago, exige checkout antes de entrar.
+// Excepción: con acceso de beta canjeado, el plan ya es gratis → entra directo.
 async function proceedAfterAuth() {
+  if (_betaAccessGranted) {
+    window.location.href = "main.html";
+    return;
+  }
   const plan = selectedPlanInput.value;
   if (!isPaidPlan(plan)) {
     window.location.href = "main.html";
