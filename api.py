@@ -373,6 +373,23 @@ if _SENTRY_DSN:
     except Exception as _e:
         print(f"Sentry no se inicializó: {_e}")
 
+# ── Errores: loguear el detalle técnico, devolver mensaje genérico ────────────
+# Evita filtrar internals (rutas, SQL, nombres de tablas) al cliente. El detalle
+# queda en los logs y en Sentry para diagnóstico; el usuario ve algo genérico.
+import logging
+logger = logging.getLogger("blackportfolio.api")
+
+def _safe_error(exc: Exception, status_code: int = 500,
+                public_detail: str = "Error interno del servidor. Intenta de nuevo.") -> HTTPException:
+    logger.exception("Error en endpoint: %s", exc)
+    if _SENTRY_DSN:
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+    return HTTPException(status_code=status_code, detail=public_detail)
+
 app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -383,7 +400,7 @@ app.add_middleware(
         "https://portify-6467f.web.app",
         "https://portify-6467f.firebaseapp.com",
     ],
-    allow_methods=["GET", "POST", "PUT", "PATCH"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -450,7 +467,7 @@ def info(request: Request, symbol: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e)
 
 @app.get("/api/financials/{symbol}")
 @limiter.limit("20/minute")
@@ -597,7 +614,7 @@ def financials(request: Request, symbol: str):
         _FINANCIALS_CACHE.set(symbol, result)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e)
 
 @app.get("/api/holdings/{symbol}")
 @limiter.limit("20/minute")
@@ -639,7 +656,7 @@ def holdings(request: Request, symbol: str):
         _HOLDINGS_CACHE.set(symbol, out)
         return out
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e)
 
 def _valid_price(v):
     return v is not None and isinstance(v, (int, float)) and v == v and v > 0
@@ -1230,7 +1247,7 @@ def intraday_chart(request: Request, symbol: str, period: str = "1D"):
             timeout=12,
         )
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Error de conexión con RapidAPI: {e}")
+        raise _safe_error(e, 503, "Servicio de datos no disponible temporalmente. Intenta más tarde.")
 
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code, detail=f"RapidAPI error {res.status_code}")
@@ -1335,7 +1352,7 @@ def dividends(request: Request, symbol: str):
         return out
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e)
 
 
 @app.get("/api/risk-free-rate")
@@ -1389,7 +1406,7 @@ def stock_news(request: Request, symbol: str, language: str = "es"):
             timeout=10,
         )
     except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise _safe_error(e, 503, "Servicio de datos no disponible temporalmente. Intenta más tarde.")
 
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code, detail=f"RapidAPI error {res.status_code}")
@@ -1549,7 +1566,7 @@ def seasonality(request: Request, symbol: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e)
 
 
 @app.get("/api/chart/{symbol}")
@@ -1796,7 +1813,7 @@ async def stripe_create_session(
     except stripe.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _safe_error(e)
 
 
 class StripeConfirmRequest(BaseModel):

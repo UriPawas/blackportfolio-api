@@ -5169,6 +5169,13 @@ async function portfolioApiRequest(path, options = {}) {
       window.location.href = "login.html";
       throw new Error("Verificación 2FA requerida.");
     }
+    // Email sin verificar: no se permite escribir/usar funciones premium.
+    if (response.status === 403 && body.detail === "email_verification_required") {
+      window.showToast?.("Verifica tu correo para guardar cambios. Revisa tu bandeja o reenvía el correo desde Ajustes.", "error");
+      const err = new Error("email_verification_required");
+      err.code = "email_verification_required";
+      throw err;
+    }
     throw new Error(body.detail || `Error de persistencia (${response.status}).`);
   }
   return response.json();
@@ -14326,6 +14333,69 @@ changePasswordForm.addEventListener("submit", async e => {
       window.BlackPortfolioAuth.stopSessionTimeout();
       window.BlackPortfolioAuth.clearSession();
       window.location.href = "login.html";
+    }
+  });
+
+  // ── Datos y privacidad: exportar / eliminar cuenta ───────────────────────
+  const dataMsg = document.getElementById("dataPrivacyMessage");
+  function setDataMsg(text, kind = "") {
+    if (!dataMsg) return;
+    dataMsg.textContent = text;
+    dataMsg.className = "form-message" + (kind ? ` form-message--${kind}` : "");
+  }
+
+  document.getElementById("exportAccountDataBtn")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = "Generando…";
+    setDataMsg("");
+    try {
+      const data = await portfolioApiRequest("/account/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `blackportfolio-datos-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setDataMsg("Datos exportados correctamente.", "ok");
+    } catch (err) {
+      if (err?.code !== "email_verification_required") {
+        setDataMsg(err?.message || "No se pudo exportar. Intenta de nuevo.", "error");
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
+  document.getElementById("deleteAccountBtn")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    if (!confirm("¿Eliminar tu cuenta de forma permanente? Esto borra tu perfil, portafolios y toda tu actividad. Esta acción es irreversible.")) return;
+    const typed = prompt('Escribe ELIMINAR (en mayúsculas) para confirmar:');
+    if ((typed || "").trim() !== "ELIMINAR") {
+      setDataMsg("Eliminación cancelada.", "");
+      return;
+    }
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = "Eliminando…";
+    setDataMsg("");
+    try {
+      await portfolioApiRequest("/account", { method: "DELETE" });
+      try { await window.BlackPortfolioAuth.firebaseAuth.signOut(); } catch {}
+      window.BlackPortfolioAuth.stopSessionTimeout?.();
+      window.BlackPortfolioAuth.clearSession?.();
+      alert("Tu cuenta ha sido eliminada. Gracias por probar BlackPortfolio.");
+      window.location.href = "index.html";
+    } catch (err) {
+      setDataMsg(err?.message || "No se pudo eliminar la cuenta. Intenta de nuevo.", "error");
+      btn.disabled = false;
+      btn.textContent = original;
     }
   });
 

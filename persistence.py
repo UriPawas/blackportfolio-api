@@ -16,7 +16,7 @@ from firebase_admin import credentials
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine, delete, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
@@ -314,11 +314,28 @@ def require_2fa(
     return token
 
 
+# Cuentas exentas de la verificación de email (cuenta demo, soporte). Los inicios
+# con Google ya llegan con email_verified=True; esto solo cubre email/contraseña.
+_VERIFY_EXEMPT_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("EMAIL_VERIFY_EXEMPT_EMAILS", "demo@blackportfolio.ai").split(",")
+    if e.strip()
+}
+
+
+def require_verified_email(token: dict[str, Any] = Depends(require_2fa)) -> dict[str, Any]:
+    """Como require_2fa, pero además exige que el correo esté verificado. Bloquea
+    las escrituras y funciones premium hasta confirmar el email (anti-spam/abuso)."""
+    if token.get("email_verified") or (token.get("email") or "").lower() in _VERIFY_EXEMPT_EMAILS:
+        return token
+    raise HTTPException(status_code=403, detail="email_verification_required")
+
+
 def require_plan(*allowed_plans: str) -> Callable:
     allowed = {normalize_plan(plan) for plan in allowed_plans}
 
     def dependency(
-        token: dict[str, Any] = Depends(require_2fa),
+        token: dict[str, Any] = Depends(require_verified_email),
         session: Session = Depends(get_session),
     ) -> dict[str, Any]:
         user = upsert_user(session, token)
@@ -516,7 +533,7 @@ def account_bootstrap(
 @router.put("/portfolios")
 def replace_portfolios(
     payload: PortfolioWrite,
-    token: dict[str, Any] = Depends(require_2fa),
+    token: dict[str, Any] = Depends(require_verified_email),
     session: Session = Depends(get_session),
 ):
     encoded_size = len(json.dumps(payload.portfolios, ensure_ascii=False).encode("utf-8"))
@@ -581,6 +598,89 @@ def replace_portfolios(
     ))
     session.commit()
     return {"ok": True, "checksum": checksum, "version": snapshot.version, "unchanged": False}
+
+
+@router.get("/export")
+@limiter.limit("5/minute")
+def account_export(
+    request: Request,
+    token: dict[str, Any] = Depends(require_2fa),
+    session: Session = Depends(get_session),
+):
+    """Exporta TODOS los datos personales del usuario (portabilidad / GDPR).
+    No incluye el secreto TOTP. Requiere 2FA si la cuenta lo tiene activo."""
+    uid = token["uid"]
+    user = session.get(AppUser, uid)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada.")
+    snapshot = session.get(PortfolioSnapshot, uid)
+    activity = session.execute(
+        select(SecurityActivity).where(SecurityActivity.firebase_uid == uid)
+        .order_by(SecurityActivity.created_at.desc())
+    ).scalars().all()
+    feedback = session.execute(
+        select(Feedback).where(Feedback.firebase_uid == uid)
+        .order_by(Feedback.created_at.desc())
+    ).scalars().all()
+    return {
+        "exportedAt": utc_now().isoformat(),
+        "account": {
+            "id": user.firebase_uid,
+            "email": user.email,
+            "displayName": user.display_name,
+            "emailVerified": user.email_verified,
+            "role": user.role,
+            "plan": user.plan,
+            "createdAt": user.created_at.isoformat() if user.created_at else None,
+            "lastSeenAt": user.last_seen_at.isoformat() if user.last_seen_at else None,
+            "profile": user.profile_data or {},
+        },
+        "portfolios": snapshot.data if snapshot else [],
+        "securityActivity": [
+            {
+                "event": a.event,
+                "detail": a.detail,
+                "createdAt": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in activity
+        ],
+        "feedback": [
+            {
+                "category": f.category,
+                "message": f.message,
+                "status": f.status,
+                "createdAt": f.created_at.isoformat() if f.created_at else None,
+            }
+            for f in feedback
+        ],
+    }
+
+
+@router.delete("")
+@limiter.limit("3/minute")
+def account_delete(
+    request: Request,
+    token: dict[str, Any] = Depends(require_2fa),
+    session: Session = Depends(get_session),
+):
+    """Borra permanentemente la cuenta: datos en PostgreSQL + cuenta de Firebase Auth.
+    Requiere 2FA si la cuenta lo tiene activo. Acción irreversible."""
+    uid = token["uid"]
+    session.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.firebase_uid == uid))
+    session.execute(delete(SecurityActivity).where(SecurityActivity.firebase_uid == uid))
+    session.execute(delete(Feedback).where(Feedback.firebase_uid == uid))
+    session.execute(delete(TotpCredential).where(TotpCredential.firebase_uid == uid))
+    user = session.get(AppUser, uid)
+    if user is not None:
+        session.delete(user)
+    session.commit()
+    # La cuenta de autenticación se borra al final (best-effort): los datos ya no existen.
+    try:
+        initialize_firebase_admin()
+        firebase_auth.delete_user(uid)
+    except Exception:
+        pass
+    return {"ok": True}
 
 
 class FeedbackBody(BaseModel):
