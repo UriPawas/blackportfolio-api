@@ -13,7 +13,12 @@ import argparse
 import json
 from datetime import datetime
 
-from backup_service import _firebase_bucket, decrypt_backup, BACKUP_PREFIX, MODEL_TABLES
+from pathlib import Path
+
+from backup_service import (
+    _backup_dir, _firebase_bucket, _local_backups,
+    decrypt_backup, BACKUP_PREFIX, MODEL_TABLES,
+)
 from persistence import create_tables, get_session
 
 
@@ -27,6 +32,19 @@ def load_encrypted(*, file: str | None, latest: bool, remote: str | None) -> byt
     if file:
         with open(file, "rb") as handle:
             return handle.read()
+    backup_dir = _backup_dir()
+    if backup_dir:
+        if remote:
+            name = remote if remote.endswith(".bpbackup") else remote + ".bpbackup"
+            return (Path(backup_dir) / name).read_bytes()
+        if latest:
+            files = _local_backups(backup_dir)
+            if not files:
+                raise RuntimeError(f"No hay respaldos en BACKUP_DIR ({backup_dir}).")
+            newest = files[-1]
+            print(f"Respaldo seleccionado: {newest}")
+            return newest.read_bytes()
+        raise RuntimeError("Indica --file, --latest o --remote.")
     bucket = _firebase_bucket()
     if remote:
         name = remote if remote.startswith(BACKUP_PREFIX) else BACKUP_PREFIX + remote

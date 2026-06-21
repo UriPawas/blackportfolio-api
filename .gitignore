@@ -12,3 +12,8 @@ serviceAccount*.json
 # Stripe recovery / backup codes (NUNCA commitear)
 stripe_backup_code.txt
 
+# Respaldos cifrados (locales) y bases de prueba
+backups/
+*.bpbackup
+.pytest_cache/
+

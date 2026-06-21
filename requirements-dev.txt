@@ -1,0 +1,4 @@
+# Dependencias solo para pruebas locales (no se instalan en Railway).
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+pytest>=8,<9

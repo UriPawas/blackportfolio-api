@@ -43,10 +43,12 @@ El plan del usuario es autoritativo en PostgreSQL (`app_users.plan`); nunca se c
 ## Respaldos y restauración (PostgreSQL)
 
 Los respaldos cifrados se generan automáticamente al arrancar la API (`start_backup_scheduler`),
-cada `BACKUP_INTERVAL_HOURS` (def. 24), conservando `BACKUP_RETENTION_COUNT` (def. 30) en el
-bucket de Firebase Storage. Variables requeridas (ya configuradas en Railway):
-`BACKUP_ENCRYPTION_KEY` (Fernet), `FIREBASE_BACKUP_BUCKET`, `BACKUP_INTERVAL_HOURS`,
-`BACKUP_RETENTION_COUNT`, `FIREBASE_SERVICE_ACCOUNT_JSON`.
+cada `BACKUP_INTERVAL_HOURS` (def. 24), conservando `BACKUP_RETENTION_COUNT` (def. 30).
+
+**Destino:** si `BACKUP_DIR` está definido (recomendado: volumen persistente de Railway,
+p. ej. `/data/backups`), los respaldos se guardan en disco — no requiere Firebase Blaze.
+Si no, se usa `FIREBASE_BACKUP_BUCKET` (Firebase Storage, exige plan Blaze).
+Variable común requerida: `BACKUP_ENCRYPTION_KEY` (Fernet).
 
 Crear un respaldo manual:
 

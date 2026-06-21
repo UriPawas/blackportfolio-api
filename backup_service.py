@@ -101,15 +101,42 @@ def _firebase_bucket():
     return storage.bucket(bucket_name)
 
 
+def _backup_dir() -> str:
+    """Directorio de respaldos en disco (volumen persistente de Railway). Si está
+    definido, los respaldos se guardan aquí EN VEZ de Firebase Storage (que exige
+    el plan Blaze). Tiene prioridad sobre FIREBASE_BACKUP_BUCKET."""
+    return os.environ.get("BACKUP_DIR", "").strip()
+
+
+def _local_backups(directory: str) -> list:
+    """Archivos .bpbackup del directorio, del más antiguo al más reciente."""
+    base = Path(directory)
+    if not base.exists():
+        return []
+    return sorted(base.glob("*.bpbackup"), key=lambda f: f.stat().st_mtime)
+
+
 def create_backup(*, force: bool = False, upload: bool = True, output_dir: str | None = None) -> dict:
-    bucket = _firebase_bucket() if upload else None
+    backup_dir = _backup_dir()
+    use_local = bool(backup_dir) and upload
+    # Firebase solo si NO hay BACKUP_DIR (el volumen de Railway tiene prioridad).
+    bucket = _firebase_bucket() if (upload and not backup_dir) else None
     interval_hours = max(1, int(os.environ.get("BACKUP_INTERVAL_HOURS", "24")))
-    if bucket and not force:
-        latest = max(bucket.list_blobs(prefix=BACKUP_PREFIX), key=lambda blob: blob.time_created, default=None)
-        if latest:
-            age = datetime.now(timezone.utc) - latest.time_created
-            if age.total_seconds() < interval_hours * 3600:
-                return {"skipped": True, "reason": "recent_backup", "name": latest.name}
+    retention = max(2, int(os.environ.get("BACKUP_RETENTION_COUNT", "30")))
+
+    if not force and (use_local or bucket):
+        latest_time = latest_name = None
+        if use_local:
+            files = _local_backups(backup_dir)
+            if files:
+                latest_time = datetime.fromtimestamp(files[-1].stat().st_mtime, timezone.utc)
+                latest_name = files[-1].name
+        elif bucket:
+            latest = max(bucket.list_blobs(prefix=BACKUP_PREFIX), key=lambda blob: blob.time_created, default=None)
+            if latest:
+                latest_time, latest_name = latest.time_created, latest.name
+        if latest_time and (datetime.now(timezone.utc) - latest_time).total_seconds() < interval_hours * 3600:
+            return {"skipped": True, "reason": "recent_backup", "name": latest_name}
 
     payload = export_database()
     encrypted, checksum = encrypt_backup(payload)
@@ -124,12 +151,20 @@ def create_backup(*, force: bool = False, upload: bool = True, output_dir: str |
         local_path.write_bytes(encrypted)
 
     remote_name = None
-    if bucket:
+    if use_local:
+        base = Path(backup_dir)
+        base.mkdir(parents=True, exist_ok=True)
+        dest = base / filename
+        dest.write_bytes(encrypted)
+        remote_name = str(dest)
+        files = sorted(_local_backups(backup_dir), key=lambda f: f.stat().st_mtime, reverse=True)
+        for old in files[retention:]:
+            old.unlink(missing_ok=True)
+    elif bucket:
         remote_name = BACKUP_PREFIX + filename
         blob = bucket.blob(remote_name)
         blob.metadata = {"sha256": checksum, "schemaVersion": str(payload["schemaVersion"])}
         blob.upload_from_string(encrypted, content_type="application/octet-stream")
-        retention = max(2, int(os.environ.get("BACKUP_RETENTION_COUNT", "30")))
         blobs = sorted(bucket.list_blobs(prefix=BACKUP_PREFIX), key=lambda item: item.time_created, reverse=True)
         for old_blob in blobs[retention:]:
             old_blob.delete()
@@ -144,16 +179,29 @@ def create_backup(*, force: bool = False, upload: bool = True, output_dir: str |
 
 
 def start_backup_scheduler() -> bool:
-    if not os.environ.get("BACKUP_ENCRYPTION_KEY") or not os.environ.get("FIREBASE_BACKUP_BUCKET"):
-        LOGGER.warning("Backups desactivados: faltan BACKUP_ENCRYPTION_KEY o FIREBASE_BACKUP_BUCKET.")
+    if not os.environ.get("BACKUP_ENCRYPTION_KEY") or not (
+        os.environ.get("FIREBASE_BACKUP_BUCKET") or os.environ.get("BACKUP_DIR")
+    ):
+        LOGGER.warning(
+            "Backups desactivados: faltan BACKUP_ENCRYPTION_KEY o un destino "
+            "(BACKUP_DIR para volumen Railway, o FIREBASE_BACKUP_BUCKET)."
+        )
         return False
 
     def worker():
         while True:
             try:
                 LOGGER.info("Resultado de respaldo: %s", create_backup())
-            except Exception:
+            except Exception as exc:
+                # No dejar que el respaldo falle en silencio: además del log,
+                # reportar a Sentry si está configurado (p. ej. bucket inexistente).
                 LOGGER.exception("No se pudo crear el respaldo cifrado.")
+                if os.environ.get("SENTRY_DSN"):
+                    try:
+                        import sentry_sdk
+                        sentry_sdk.capture_exception(exc)
+                    except Exception:
+                        pass
             threading.Event().wait(max(1, int(os.environ.get("BACKUP_INTERVAL_HOURS", "24"))) * 3600)
 
     threading.Thread(target=worker, name="postgres-backup", daemon=True).start()
