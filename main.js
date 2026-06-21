@@ -5166,6 +5166,7 @@ async function portfolioApiRequest(path, options = {}) {
     // La cuenta tiene 2FA activo pero falta verificarlo en esta sesión: re-loguear.
     if (response.status === 403 && body.detail === "2fa_required") {
       sessionStorage.removeItem("totp_verified");
+      sessionStorage.removeItem("bp-2fa-token"); // token muerto: fuerza re-emisión vía OTP, evita el bucle login↔main
       window.location.href = "login.html";
       throw new Error("Verificación 2FA requerida.");
     }

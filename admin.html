@@ -305,6 +305,37 @@
     <section class="promo-section">
       <div class="promo-head">
         <div>
+          <h2>Códigos de acceso a beta</h2>
+          <p>El tester lo ingresa al registrarse y obtiene acceso completo (sin pagar) por la duración indicada. Distinto a los códigos de descuento de Stripe: este otorga acceso inmediato y caduca solo. Si después paga, su plan real prevalece.</p>
+        </div>
+        <button id="genBetaCodeBtn" class="primary-btn">+ Generar código</button>
+      </div>
+      <div class="promo-controls">
+        <input id="betaCodeCustom" class="promo-input" type="text" placeholder="Código personalizado (opcional)" maxlength="40" style="text-transform:uppercase" />
+        <select id="betaCodePlan" class="promo-input">
+          <option value="Advisor Pro" selected>Advisor Pro</option>
+          <option value="Wealth Desk">Wealth Desk</option>
+          <option value="Investor">Investor</option>
+        </select>
+        <input id="betaCodeDuration" class="promo-input" type="number" min="1" max="365" step="1" value="30" placeholder="Días" title="Días de acceso" />
+        <input id="betaCodeUses" class="promo-input" type="number" min="1" max="1000" step="1" value="1" placeholder="Usos" title="Máximo de canjes" />
+        <span class="promo-hint">Si dejas el código en blanco se genera uno aleatorio (BETA-…).</span>
+      </div>
+      <div id="betacode-msg" class="promo-msg"></div>
+      <div class="table-wrap">
+        <table id="betacode-table" style="display:none">
+          <thead>
+            <tr><th>Código</th><th>Plan</th><th>Duración</th><th>Usos</th><th>Estado</th><th></th></tr>
+          </thead>
+          <tbody id="betacode-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="betacode-empty" style="display:none">Aún no has generado códigos de beta.</div>
+      </div>
+    </section>
+
+    <section class="promo-section">
+      <div class="promo-head">
+        <div>
           <h2>Feedback de usuarios <span id="feedback-badge" class="badge badge-demo" style="display:none"></span></h2>
           <p>Comentarios, errores e ideas enviados desde la app. Marca como leído o resuelto.</p>
         </div>

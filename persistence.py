@@ -5,7 +5,7 @@ import json
 import os
 import struct
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from urllib.parse import quote
 
@@ -140,6 +140,25 @@ class BetaAllowlist(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class BetaCode(Base):
+    """Códigos de invitación a la beta. El usuario los canjea al registrarse y
+    obtiene un plan completo por `duration_days` (sin pagar). A diferencia de los
+    promo codes de Stripe (descuento en checkout), esto otorga acceso inmediato:
+    suma el correo a la allowlist y eleva el plan con caducidad. Si después el
+    usuario paga por Stripe, el plan real (billingStatus="active") prevalece."""
+    __tablename__ = "beta_codes"
+
+    code: Mapped[str] = mapped_column(String(40), primary_key=True)
+    plan: Mapped[str] = mapped_column(String(80), default="Advisor Pro")
+    duration_days: Mapped[int] = mapped_column(Integer, default=30)
+    max_redemptions: Mapped[int] = mapped_column(Integer, default=1)
+    redemptions: Mapped[int] = mapped_column(Integer, default=0)
+    active: Mapped[bool] = mapped_column(default=True)
+    created_by: Mapped[str | None] = mapped_column(String(320))
+    note: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 def _database_url() -> str:
     if not DATABASE_URL:
         raise HTTPException(status_code=503, detail="PostgreSQL no esta configurado.")
@@ -226,7 +245,87 @@ def upsert_user(session: Session, token: dict[str, Any]) -> AppUser:
         user.email_verified = bool(token.get("email_verified"))
         user.last_seen_at = current_time
         user.plan = normalize_plan(user.plan)
+        _maybe_expire_beta_grant(user)
     return user
+
+
+def _maybe_expire_beta_grant(user: "AppUser") -> None:
+    """Si el usuario tiene un acceso de beta caducado (y no pagó por Stripe),
+    lo degrada a Explorer. Se evalúa de forma perezosa en cada bootstrap/escritura,
+    así no hace falta un job en segundo plano."""
+    profile = user.profile_data or {}
+    grant = profile.get("betaGrant")
+    if not grant or grant.get("expired"):
+        return
+    if profile.get("billingStatus") == "active":
+        return  # pagó por Stripe: el plan real manda sobre la beta
+    expires_at = grant.get("expiresAt")
+    try:
+        expired = bool(expires_at) and datetime.fromisoformat(expires_at) < utc_now()
+    except (ValueError, TypeError):
+        expired = False
+    if not expired:
+        return
+    profile = dict(profile)
+    grant = dict(grant)
+    grant["expired"] = True
+    profile["betaGrant"] = grant
+    profile["billingStatus"] = "beta_expired"
+    user.profile_data = profile
+    user.plan = "Explorer"
+
+
+def redeem_beta_code(session: Session, token: dict[str, Any], raw_code: str) -> dict[str, Any]:
+    """Canjea un código de beta: eleva el plan del usuario por `duration_days`,
+    lo añade a la allowlist (para pasar el gate de beta cerrada) y consume un uso
+    del código. Idempotente frente a doble-canje: rechaza si ya hay beta activa."""
+    code = (raw_code or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Código requerido.")
+    bc = session.get(BetaCode, code)
+    if bc is None or not bc.active:
+        raise HTTPException(status_code=404, detail="Código inválido o inactivo.")
+    if bc.redemptions >= bc.max_redemptions:
+        raise HTTPException(status_code=409, detail="Este código ya alcanzó su límite de usos.")
+
+    user = upsert_user(session, token)
+    profile = dict(user.profile_data or {})
+    grant = profile.get("betaGrant")
+    if grant and not grant.get("expired") and profile.get("billingStatus") == "beta":
+        raise HTTPException(status_code=409, detail="Ya tienes un acceso de beta activo.")
+
+    plan = normalize_plan(bc.plan)
+    granted_at = utc_now()
+    expires_at = granted_at + timedelta(days=max(1, bc.duration_days))
+    profile["betaGrant"] = {
+        "code": code,
+        "plan": plan,
+        "grantedAt": granted_at.isoformat(),
+        "expiresAt": expires_at.isoformat(),
+        "expired": False,
+    }
+    profile["billingStatus"] = "beta"
+    user.profile_data = profile
+    user.plan = plan
+
+    email = (user.email or token.get("email") or "").strip().lower()
+    if email and session.get(BetaAllowlist, email) is None:
+        session.add(BetaAllowlist(
+            email=email,
+            added_by=f"beta_code:{code}",
+            note="canje de código de beta",
+            created_at=granted_at,
+        ))
+
+    bc.redemptions += 1
+    session.add(SecurityActivity(
+        firebase_uid=user.firebase_uid,
+        event="beta_code_redeemed",
+        detail=f"code={code}; plan={plan}; expires={expires_at.isoformat()}",
+        created_at=granted_at,
+    ))
+    session.commit()
+    return {"ok": True, "plan": plan, "expiresAt": expires_at.isoformat()}
 
 
 # ── 2FA / TOTP (server-side, sin dependencias externas) ───────────────────────

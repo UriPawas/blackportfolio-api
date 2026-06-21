@@ -123,6 +123,37 @@ async function startStripeCheckout({ plan, billingCycle }) {
   window.location.href = data.url;
 }
 
+// Canjea un código de beta (si el usuario ingresó uno) tras crear la cuenta.
+// Devuelve true si se canjeó con éxito. No lanza: muestra el error en el form.
+async function redeemBetaCodeIfPresent() {
+  const input = document.getElementById("betaCode");
+  const code = (input?.value || "").trim().toUpperCase();
+  if (!code) return false;
+  const RAILWAY_API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://127.0.0.1:8000"
+    : "https://blackportfolio-api-production.up.railway.app";
+  const firebaseUser = window.BlackPortfolioAuth.firebaseAuth.currentUser;
+  if (!firebaseUser) return false;
+  try {
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch(`${RAILWAY_API}/api/beta/redeem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showFormMessage(data.detail || "No se pudo canjear el código de beta.", "error");
+      return false;
+    }
+    showFormMessage(`✓ Código de beta canjeado: plan ${data.plan} hasta ${new Date(data.expiresAt).toLocaleDateString()}.`, "success");
+    return true;
+  } catch {
+    showFormMessage("No se pudo canjear el código de beta. Verifica tu conexión.", "error");
+    return false;
+  }
+}
+
 // Tras registro/login: si el plan elegido es de pago, exige checkout antes de entrar.
 async function proceedAfterAuth() {
   const plan = selectedPlanInput.value;
@@ -215,9 +246,17 @@ signupForm.addEventListener("submit", async (event) => {
 
   try {
     const newUser = await window.BlackPortfolioAuth.createUser(payload);
+    const betaCodeValue = (payload.betaCode || "").trim();
     signupForm.reset();
     selectedPlanInput.value = requestedPlan;
-    showFormMessage(`Cuenta creada con éxito para ${newUser.fullName}. Configura tu autenticador para mayor seguridad.`, "success");
+    // Canjea el código de beta antes de seguir (la cuenta ya está autenticada).
+    if (betaCodeValue) {
+      const bc = document.getElementById("betaCode");
+      if (bc) bc.value = betaCodeValue;
+      await redeemBetaCodeIfPresent();
+    } else {
+      showFormMessage(`Cuenta creada con éxito para ${newUser.fullName}. Configura tu autenticador para mayor seguridad.`, "success");
+    }
     syncAccountCard();
     // Trigger 2FA setup flow for new accounts
     openTotpSetupModal(newUser.id);
@@ -372,6 +411,9 @@ if (googleSignupBtn) {
       "success"
     );
     syncAccountCard();
+    // Si trae código de beta, canjéalo antes de decidir el destino (puede elevar el plan).
+    const redeemed = await redeemBetaCodeIfPresent();
+    if (redeemed) { window.location.href = "main.html"; return; }
     window.setTimeout(async () => {
       const needsPlanSelection = result.isNew || (
         !result.user.planSelectionCompleted &&

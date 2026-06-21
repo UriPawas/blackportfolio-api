@@ -70,8 +70,10 @@ if (window.BlackPortfolioAuth.isEmailSignInLink()) {
 // ── Redirect if already authenticated (with 2FA gate) ───────────────────────
 window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async user => {
   if (!user || _loginFlowActive) return;
-  // If this device is trusted (verified within the last ~3.5 days), skip 2FA
-  if (isDeviceTrusted(user.uid)) {
+  // Dispositivo de confianza CON un token de sesión 2FA vivo: salta directo a la
+  // app. El backend exige ese token (X-2FA-Token); sin él, main.html rebotaría al
+  // login en bucle, así que solo tomamos este atajo cuando el token existe.
+  if (isDeviceTrusted(user.uid) && sessionStorage.getItem("bp-2fa-token")) {
     trustDevice(user.uid); // refresh the window so active users stay trusted
     window.location.href = "main.html";
     return;
@@ -107,8 +109,10 @@ async function handlePostAuth(session) {
     return;
   }
 
-  // Trusted device within the ~3.5-day window: skip the code entirely
-  if (isDeviceTrusted(session.id)) {
+  // Trusted device within the ~3.5-day window: skip the code SOLO si todavía
+  // hay un token de sesión 2FA vivo. Sin él, el backend devuelve 403 y main.html
+  // rebota al login en bucle, así que caemos al overlay OTP para emitir uno nuevo.
+  if (isDeviceTrusted(session.id) && sessionStorage.getItem("bp-2fa-token")) {
     trustDevice(session.id);
     showLoginMessage(`Bienvenido, ${session.fullName}. Redirigiendo...`, "success");
     setTimeout(() => { window.location.href = "main.html"; }, 600);

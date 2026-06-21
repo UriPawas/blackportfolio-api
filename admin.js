@@ -44,6 +44,7 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async (user) => {
   adminEmail.textContent = user.email;
   loadBetaAllowlist();
   loadPromoCodes();
+  loadBetaCodes();
   loadFeedback();
 });
 
@@ -468,6 +469,115 @@ promoType?.addEventListener("change", () => {
 });
 
 genPromoBtn?.addEventListener("click", generatePromo);
+
+// ── Códigos de acceso a beta (acceso completo temporal, no Stripe) ────────────
+const genBetaCodeBtn   = document.getElementById("genBetaCodeBtn");
+const betaCodeCustom   = document.getElementById("betaCodeCustom");
+const betaCodePlan     = document.getElementById("betaCodePlan");
+const betaCodeDuration = document.getElementById("betaCodeDuration");
+const betaCodeUses     = document.getElementById("betaCodeUses");
+const betaCodeMsg      = document.getElementById("betacode-msg");
+const betaCodeTable    = document.getElementById("betacode-table");
+const betaCodeTbody    = document.getElementById("betacode-tbody");
+const betaCodeEmpty    = document.getElementById("betacode-empty");
+
+let betaCodes = [];
+
+function renderBetaCodes() {
+  betaCodeTbody.innerHTML = "";
+  if (!betaCodes.length) {
+    betaCodeEmpty.style.display = "block";
+    betaCodeTable.style.display = "none";
+    return;
+  }
+  betaCodeEmpty.style.display = "none";
+  betaCodeTable.style.display = "table";
+
+  betaCodes.forEach(c => {
+    const used = c.redemptions || 0;
+    const cap = c.maxRedemptions || 1;
+    const exhausted = used >= cap;
+    const status = !c.active
+      ? '<span class="badge badge-offline">Desactivado</span>'
+      : exhausted
+        ? '<span class="badge badge-neg">Agotado</span>'
+        : '<span class="badge badge-online">Disponible</span>';
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span class="promo-code">${esc(c.code)}</span>
+          <button class="copy-btn" data-code="${esc(c.code)}">Copiar</button></td>
+      <td>${esc(c.plan)}</td>
+      <td>${c.durationDays} día(s)</td>
+      <td>${used} / ${cap}</td>
+      <td>${status}</td>
+      <td>${c.active ? `<button class="deact-btn betacode-deact" data-code="${esc(c.code)}">Desactivar</button>` : "—"}</td>
+    `;
+    betaCodeTbody.appendChild(tr);
+  });
+
+  betaCodeTbody.querySelectorAll(".copy-btn").forEach(b => b.addEventListener("click", () => copyCode(b)));
+  betaCodeTbody.querySelectorAll(".betacode-deact").forEach(b => b.addEventListener("click", () => deactivateBetaCode(b)));
+}
+
+async function loadBetaCodes() {
+  try {
+    const res = await adminFetch("/admin/beta-codes");
+    if (!res.ok) return;
+    const data = await res.json();
+    betaCodes = data.codes || [];
+    renderBetaCodes();
+  } catch (err) {
+    console.error("No se pudieron cargar los códigos de beta.", err);
+  }
+}
+
+async function generateBetaCode() {
+  genBetaCodeBtn.disabled = true;
+  genBetaCodeBtn.textContent = "Generando…";
+  betaCodeMsg.textContent = "";
+  try {
+    const res = await adminFetch("/admin/beta-codes", {
+      method: "POST",
+      body: JSON.stringify({
+        code: betaCodeCustom.value.trim(),
+        plan: betaCodePlan.value,
+        durationDays: parseInt(betaCodeDuration.value, 10) || 30,
+        maxRedemptions: parseInt(betaCodeUses.value, 10) || 1,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    betaCodeCustom.value = "";
+    betaCodeMsg.style.color = "var(--success)";
+    betaCodeMsg.textContent = `Código creado: ${data.code}`;
+    betaCodes.unshift(data);
+    renderBetaCodes();
+  } catch (err) {
+    betaCodeMsg.style.color = "#ff6b6b";
+    betaCodeMsg.textContent = "Error: " + err.message;
+  } finally {
+    genBetaCodeBtn.disabled = false;
+    genBetaCodeBtn.textContent = "+ Generar código";
+  }
+}
+
+async function deactivateBetaCode(btn) {
+  btn.disabled = true;
+  try {
+    const res = await adminFetch(`/admin/beta-codes/${encodeURIComponent(btn.dataset.code)}/deactivate`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    const c = betaCodes.find(x => x.code === data.code);
+    if (c) Object.assign(c, data);
+    renderBetaCodes();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Error";
+  }
+}
+
+genBetaCodeBtn?.addEventListener("click", generateBetaCode);
 
 // ── Feedback de usuarios ──────────────────────────────────────────────────────
 const feedbackTable   = document.getElementById("feedback-table");

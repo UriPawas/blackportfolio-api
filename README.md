@@ -35,10 +35,11 @@ Endpoints reales del backend (FastAPI en Railway):
 
 El plan del usuario es autoritativo en PostgreSQL (`app_users.plan`); nunca se confía en el cliente.
 
-## Credenciales demo
+## Cuenta demo
 
-- Correo: `demo@blackportfolio.ai`
-- Contrasena: `Black2026!`
+Existe una cuenta de demostración para exploración rápida. Las credenciales **no**
+se publican en el repositorio; solicítalas al equipo (`furielpacheco@gmail.com`) o
+configúralas vía las variables de entorno de Firebase.
 
 ## Respaldos y restauración (PostgreSQL)
 

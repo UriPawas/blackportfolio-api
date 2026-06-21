@@ -605,6 +605,11 @@
                 <option value="Wealth Desk">Wealth Desk — $129/mes</option>
               </select>
             </div>
+            <div class="form-row">
+              <label for="betaCode">¿Tienes un código de beta? <span style="font-weight:400;opacity:.7">(opcional)</span></label>
+              <input id="betaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40" autocomplete="off" style="text-transform:uppercase">
+              <p class="pw-strength-label" style="margin-top:4px"><span id="betaCodeHint" style="opacity:.7">Canjéalo para desbloquear acceso completo durante la beta.</span></p>
+            </div>
             <button class="button primary submit-button" type="submit">Crear cuenta</button>
             <p id="formMessage" class="form-message" aria-live="polite"></p>
           </form>

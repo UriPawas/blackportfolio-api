@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from persistence import (
     install_persistence, verify_firebase_user, require_2fa, get_session,
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
-    BetaAllowlist, BETA_CLOSED,
+    BetaAllowlist, BetaCode, BETA_CLOSED, redeem_beta_code,
     normalize_plan, require_plan, upsert_user, utc_now, limiter,
 )
 import requests
@@ -1151,6 +1151,78 @@ def admin_remove_beta_allowlist(email: str, token: dict = Depends(require_admin)
     session.delete(entry)
     session.commit()
     return {"ok": True, "email": em}
+
+
+# ── Códigos de beta: el usuario los canjea al registrarse (acceso completo temporal) ─
+def _gen_beta_code() -> str:
+    alphabet = "".join(c for c in (string.ascii_uppercase + string.digits) if c not in "O0I1")
+    return "BETA-" + "".join(secrets.choice(alphabet) for _ in range(8))
+
+def _beta_code_dict(bc: BetaCode) -> dict:
+    return {
+        "code": bc.code,
+        "plan": bc.plan,
+        "durationDays": bc.duration_days,
+        "maxRedemptions": bc.max_redemptions,
+        "redemptions": bc.redemptions,
+        "active": bc.active,
+        "note": bc.note,
+        "createdBy": bc.created_by,
+        "createdAt": bc.created_at.isoformat() if bc.created_at else None,
+    }
+
+class BetaRedeemBody(BaseModel):
+    code: str = ""
+
+@app.post("/api/beta/redeem")
+@limiter.limit("10/minute")
+def beta_redeem(request: Request, body: BetaRedeemBody,
+                token: dict = Depends(verify_firebase_user), session=Depends(get_session)):
+    # Usa verify_firebase_user (no require_2fa): el usuario aún no está en la
+    # allowlist, así que el gate de beta cerrada lo bloquearía antes de canjear.
+    return redeem_beta_code(session, token, body.code)
+
+class BetaCodeBody(BaseModel):
+    code: str = ""
+    plan: str = "Advisor Pro"
+    durationDays: int = 30
+    maxRedemptions: int = 1
+    note: str = ""
+
+@app.post("/api/admin/beta-codes")
+def admin_create_beta_code(body: BetaCodeBody, token: dict = Depends(require_admin), session=Depends(get_session)):
+    plan = normalize_plan(body.plan)
+    code = (body.code or "").strip().upper() or _gen_beta_code()
+    if session.get(BetaCode, code) is not None:
+        raise HTTPException(status_code=409, detail="Ese código ya existe.")
+    bc = BetaCode(
+        code=code,
+        plan=plan,
+        duration_days=max(1, int(body.durationDays or 30)),
+        max_redemptions=max(1, int(body.maxRedemptions or 1)),
+        redemptions=0,
+        active=True,
+        created_by=token.get("email"),
+        note=(body.note or "").strip()[:200] or None,
+        created_at=utc_now(),
+    )
+    session.add(bc)
+    session.commit()
+    return _beta_code_dict(bc)
+
+@app.get("/api/admin/beta-codes")
+def admin_list_beta_codes(token: dict = Depends(require_admin), session=Depends(get_session)):
+    rows = session.query(BetaCode).order_by(BetaCode.created_at.desc()).all()
+    return {"codes": [_beta_code_dict(r) for r in rows]}
+
+@app.post("/api/admin/beta-codes/{code}/deactivate")
+def admin_deactivate_beta_code(code: str, token: dict = Depends(require_admin), session=Depends(get_session)):
+    bc = session.get(BetaCode, (code or "").strip().upper())
+    if bc is None:
+        raise HTTPException(status_code=404, detail="Código no encontrado.")
+    bc.active = False
+    session.commit()
+    return _beta_code_dict(bc)
 
 RAPIDAPI_KEY  = os.environ.get("RAPIDAPI_KEY", "")
 PEXELS_KEY    = os.environ.get("PEXELS_API_KEY", "")
