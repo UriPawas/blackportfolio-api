@@ -825,6 +825,70 @@ def account_delete(
     return {"ok": True}
 
 
+def purge_user(session: Session, uid: str | None = None, email: str | None = None) -> dict[str, Any]:
+    """Borra un usuario POR COMPLETO: filas en PostgreSQL + cuenta de Firebase Auth
+    + entrada en la allowlist. Acepta uid y/o email. Pensado para limpieza
+    administrativa (p.ej. cuentas de prueba). Resuelve el uid desde Firebase cuando
+    solo se da el correo, de modo que limpia identidades cuya fila ya no existe en
+    Postgres. Best-effort en Firebase: continúa aunque la cuenta ya no exista allí."""
+    email_l = (email or "").strip().lower() or None
+    uids: set[str] = set()
+    if uid:
+        uids.add(uid)
+
+    # Resuelve el uid de Firebase a partir del correo (caso típico: la fila de
+    # Postgres ya se borró a mano, pero la identidad sigue viva en Firebase Auth).
+    try:
+        initialize_firebase_admin()
+        if email_l:
+            try:
+                uids.add(firebase_auth.get_user_by_email(email_l).uid)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Añade uids que coincidan por correo en Postgres.
+    if email_l:
+        for u in session.query(AppUser).filter(AppUser.email == email_l).all():
+            uids.add(u.firebase_uid)
+
+    for u in uids:
+        session.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.firebase_uid == u))
+        session.execute(delete(SecurityActivity).where(SecurityActivity.firebase_uid == u))
+        session.execute(delete(Feedback).where(Feedback.firebase_uid == u))
+        session.execute(delete(TotpCredential).where(TotpCredential.firebase_uid == u))
+        app_user = session.get(AppUser, u)
+        if app_user is not None:
+            if not email_l:
+                email_l = (app_user.email or "").strip().lower() or None
+            session.delete(app_user)
+
+    # Quita el correo de la allowlist para que no quede autorizado tras el borrado.
+    if email_l:
+        entry = session.get(BetaAllowlist, email_l)
+        if entry is not None:
+            session.delete(entry)
+    session.commit()
+
+    # Borra cada identidad de Firebase Auth (best-effort, ya sin datos en Postgres).
+    fb_deleted: list[str] = []
+    for u in uids:
+        try:
+            initialize_firebase_admin()
+            firebase_auth.delete_user(u)
+            fb_deleted.append(u)
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "email": email_l,
+        "uidsRemoved": sorted(uids),
+        "firebaseDeleted": fb_deleted,
+    }
+
+
 class FeedbackBody(BaseModel):
     category: str = "general"
     message: str = ""

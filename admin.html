@@ -353,6 +353,20 @@
       </div>
     </section>
 
+    <section class="promo-section">
+      <div class="promo-head">
+        <div>
+          <h2>Eliminar cuenta por completo</h2>
+          <p>Borra la identidad en <strong>Firebase Auth</strong> + sus datos en PostgreSQL + la allowlist. Úsalo para cuentas de prueba que “siguen registradas” porque solo se borró la fila de la base de datos. Tras esto, ese correo vuelve a comportarse como NO registrado. Irreversible.</p>
+        </div>
+      </div>
+      <div class="promo-controls">
+        <input id="purgeEmail" class="promo-input" type="email" placeholder="correo@dominio.com" maxlength="320" />
+        <button id="purgeBtn" class="primary-btn" style="background:#b03a3a">Eliminar definitivamente</button>
+      </div>
+      <div id="purge-msg" class="promo-msg"></div>
+    </section>
+
     <input class="search-bar" id="searchInput" type="text" placeholder="Buscar por nombre o email…" />
 
     <div class="table-wrap">

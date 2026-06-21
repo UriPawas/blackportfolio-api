@@ -218,6 +218,7 @@ function renderTable(query) {
           ${selectOptions}
         </select>
         <button class="save-btn" data-uid="${user.uid}" data-original="${currentPlan}">Guardar</button>
+        ${user.isDemo ? "" : `<button class="deact-btn user-del-btn" data-uid="${user.uid}" data-email="${esc(user.email) || ""}">Eliminar</button>`}
       </td>
       <td style="color:var(--muted);font-size:0.8rem">${formatDate(user.createdAt)}</td>
       <td>${sessionBadge(user.lastSeen)}</td>
@@ -229,7 +230,70 @@ function renderTable(query) {
   usersTbody.querySelectorAll(".save-btn").forEach(btn => {
     btn.addEventListener("click", () => savePlan(btn));
   });
+  usersTbody.querySelectorAll(".user-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteUser(btn));
+  });
 }
+
+// Elimina un usuario por completo (PostgreSQL + Firebase Auth + allowlist).
+async function deleteUser(btn) {
+  const uid = btn.dataset.uid;
+  const email = btn.dataset.email || uid;
+  if (!confirm(`¿Eliminar definitivamente a ${email}?\n\nBorra su cuenta de Firebase, sus datos y la allowlist. Irreversible.`)) return;
+  btn.disabled = true;
+  btn.textContent = "Eliminando…";
+  try {
+    const res = await adminFetch(`/admin/users/${encodeURIComponent(uid)}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    await loadUsers();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Error";
+    console.error("No se pudo eliminar el usuario.", err);
+  }
+}
+
+// ── Purga por correo (identidad sin fila en Postgres, solo en Firebase) ───────
+const purgeEmail = document.getElementById("purgeEmail");
+const purgeBtn   = document.getElementById("purgeBtn");
+const purgeMsg   = document.getElementById("purge-msg");
+
+async function purgeUserByEmail() {
+  const email = (purgeEmail.value || "").trim().toLowerCase();
+  if (!email.includes("@")) {
+    purgeMsg.style.color = "#ff6b6b";
+    purgeMsg.textContent = "Ingresa un correo válido.";
+    return;
+  }
+  if (!confirm(`¿Eliminar definitivamente ${email} de Firebase, PostgreSQL y la allowlist?\n\nIrreversible.`)) return;
+  purgeBtn.disabled = true;
+  purgeBtn.textContent = "Eliminando…";
+  purgeMsg.textContent = "";
+  try {
+    const res = await adminFetch("/admin/users/purge-by-email", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    purgeEmail.value = "";
+    const fb = (data.firebaseDeleted || []).length;
+    purgeMsg.style.color = "var(--success)";
+    purgeMsg.textContent = fb
+      ? `Eliminado: identidad de Firebase borrada + datos purgados. Ya no está registrado.`
+      : `Datos purgados. No se halló identidad en Firebase para ese correo (puede que ya no existiera).`;
+    await loadUsers();
+  } catch (err) {
+    purgeMsg.style.color = "#ff6b6b";
+    purgeMsg.textContent = "Error: " + err.message;
+  } finally {
+    purgeBtn.disabled = false;
+    purgeBtn.textContent = "Eliminar definitivamente";
+  }
+}
+
+purgeBtn?.addEventListener("click", purgeUserByEmail);
 
 // ── Beta cerrada — allowlist ──────────────────────────────────────────────────
 const betaEmail   = document.getElementById("betaEmail");

@@ -10,7 +10,7 @@ from persistence import (
     install_persistence, verify_firebase_user, require_2fa, get_session,
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
     BetaAllowlist, BetaCode, BETA_CLOSED, redeem_beta_code,
-    normalize_plan, require_plan, upsert_user, utc_now, limiter,
+    normalize_plan, require_plan, upsert_user, utc_now, limiter, purge_user,
 )
 import requests
 import yfinance as yf
@@ -931,6 +931,29 @@ def admin_set_plan(
     ))
     session.commit()
     return {"ok": True, "plan": body.plan}
+
+@app.delete("/api/admin/users/{uid}")
+def admin_delete_user(uid: str, token: dict = Depends(require_admin), session=Depends(get_session)):
+    """Elimina un usuario por completo (PostgreSQL + Firebase Auth + allowlist).
+    Tras esto, ese correo vuelve a comportarse como NO registrado."""
+    if uid == token.get("uid"):
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu propia cuenta de admin desde aquí.")
+    return purge_user(session, uid=uid)
+
+class PurgeEmailBody(BaseModel):
+    email: str = ""
+
+@app.post("/api/admin/users/purge-by-email")
+def admin_purge_user_by_email(body: PurgeEmailBody, token: dict = Depends(require_admin), session=Depends(get_session)):
+    """Purga una identidad por correo, incluso si ya no tiene fila en Postgres
+    (resuelve el uid desde Firebase Auth). Para limpiar cuentas de prueba que
+    'siguen registradas' porque solo se borró la fila de la base de datos."""
+    em = (body.email or "").strip().lower()
+    if "@" not in em or len(em) > 320:
+        raise HTTPException(status_code=400, detail="Correo no válido.")
+    if em == (token.get("email") or "").strip().lower():
+        raise HTTPException(status_code=400, detail="No puedes purgar tu propia cuenta de admin.")
+    return purge_user(session, email=em)
 
 # ── Cupones / Promotion Codes ─────────────────────────────────────────────────
 # Cada código que genera el admin es un Promotion Code ÚNICO (max_redemptions
