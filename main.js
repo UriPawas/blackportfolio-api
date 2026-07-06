@@ -6138,7 +6138,9 @@ function initAiChat() {
 // Tolera tanto el formato antiguo (solo viñetas) como el nuevo (secciones con encabezados).
 function _mdToBulletsHtml(md) {
   const esc  = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const bold = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Normaliza <strong>/<b> literales (propios o de la IA) a ** para que no se
+  // muestren escapados como texto en el PDF.
+  const bold = s => esc(s.replace(/<\/?(?:strong|b)>/gi, "**")).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   const lines = md.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   let html = "", openUl = false;
   const closeUl = () => { if (openUl) { html += "</ul>"; openUl = false; } };
@@ -6175,6 +6177,7 @@ function _parseAISections(md) {
   const keyFor = t => {
     const s = (t || "").toLowerCase();
     if (/tesis|diagn[oó]stico/.test(s)) return "tesis";
+    if (/puente|reconcil|capital/.test(s)) return "atribucion";
     if (/atribuci[oó]n|resultado/.test(s)) return "atribucion";
     if (/riesgo/.test(s)) return "riesgos";
     if (/benchmark|desempe[ñn]o/.test(s)) return "benchmark";
@@ -6522,22 +6525,6 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
     txInWindow, totalTxCount: allTx.length, totalComm, dividends, totalDividends,
     missingPrices, fxExposure,
   };
-}
-
-// Carga perezosa de html2pdf.js (html2canvas + jsPDF) para descargar el reporte
-// como archivo PDF sin abrir pestañas ni pasar por el diálogo de impresión.
-let _html2pdfPromise = null;
-function _loadHtml2Pdf() {
-  if (window.html2pdf) return Promise.resolve();
-  if (_html2pdfPromise) return _html2pdfPromise;
-  _html2pdfPromise = new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js";
-    s.onload = () => resolve();
-    s.onerror = () => { _html2pdfPromise = null; reject(new Error("No se pudo cargar el generador de PDF (revisa tu conexión).")); };
-    document.head.appendChild(s);
-  });
-  return _html2pdfPromise;
 }
 
 async function exportPortfolioPDF(startStr, endStr) {
@@ -7053,17 +7040,38 @@ async function exportPortfolioPDF(startStr, endStr) {
     iframe.contentDocument.open();
     iframe.contentDocument.write(html);
     iframe.contentDocument.close();
-    await _loadHtml2Pdf();
+    // html2pdf debe ejecutarse DENTRO del iframe: si corre en la ventana
+    // principal clona el reporte al documento del dashboard (tema oscuro) y
+    // main.css pisa los estilos blancos del reporte (fondos negros, layout roto).
+    await new Promise((resolve, reject) => {
+      const s = iframe.contentDocument.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("No se pudo cargar el generador de PDF (revisa tu conexión)."));
+      iframe.contentDocument.head.appendChild(s);
+    });
     await new Promise(r => setTimeout(r, 400)); // deja renderizar fuentes y SVGs
     const safeName = (portfolio.name || "portafolio").replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, "_");
-    await window.html2pdf().set({
-      margin: [16, 0, 16, 0],
-      filename: `Reporte_${safeName}_${startStr}_a_${endStr}.pdf`,
+    // El margen debe crearse con el Array del iframe: html2pdf valida
+    // margin.constructor === Array y un array de otra ventana no lo cumple.
+    // El PDF se saca como blob y la descarga se dispara desde la ventana
+    // principal: un .save() dentro del iframe muere al remover el iframe
+    // (el click diferido y el blob URL pertenecen a ese documento).
+    const blob = await iframe.contentWindow.html2pdf().set({
+      margin: new iframe.contentWindow.Array(16, 0, 16, 0),
       image: { type: "jpeg", quality: 0.95 },
       html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 794 },
       jsPDF: { unit: "px", format: [794, 1123], orientation: "portrait", hotfixes: ["px_scaling"] },
       pagebreak: { mode: ["css", "legacy"] },
-    }).from(iframe.contentDocument.body).save();
+    }).from(iframe.contentDocument.body).outputPdf("blob");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Reporte_${safeName}_${startStr}_a_${endStr}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
     alert("No se pudo descargar el PDF: " + ((e && e.message) || e));
   } finally {

@@ -2283,7 +2283,7 @@ def _openrouter_chat(models, messages):
                     "X-Title": "BlackPortfolio",
                 },
                 json={"model": model, "messages": messages,
-                      "temperature": 0.4, "max_tokens": 1500},
+                      "temperature": 0.4, "max_tokens": 2200},
                 timeout=45,
             )
         except requests.RequestException as e:
@@ -2312,23 +2312,50 @@ def ai_insights(
     models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
-        "Eres un analista financiero senior (CFA), objetivo y prudente, que redacta el análisis "
-        "de un reporte profesional para un gestor de inversión. "
-        "No das recomendaciones personalizadas de compra/venta ni garantías de rentabilidad; "
-        "ofreces observaciones educativas y accionables sobre riesgo, diversificación, atribución "
-        "y estructura del portafolio. Te apoyas SIEMPRE en los números provistos y citas cifras "
-        "concretas. No inventes datos que no estén en el JSON."
+        "Eres un analista financiero senior (CFA), objetivo y prudente, que redacta la sección de "
+        "análisis de un reporte profesional para un gestor de inversión.\n"
+        "Reglas de estilo y rigor:\n"
+        "1) Escribe en PROSA narrativa que EXPLIQUE qué pasó con el dinero, contando una historia "
+        "con causa y efecto — no listas de datos sueltos ni frases inconexas.\n"
+        "2) Traduce SIEMPRE los porcentajes y los puntos de contribución (pp) a dinero real usando "
+        "'total_invertido' y 'valor_actual' en la moneda del portafolio. Di primero el dinero y luego "
+        "el porcentaje: 'ganó $X (Y%)'.\n"
+        "3) Cada frase debe apoyarse en una cifra concreta del JSON. Prohibido el lenguaje de plantilla "
+        "y los consejos genéricos ('es importante diversificar', 'mantener una cartera equilibrada'). "
+        "Si no hay dato para algo, no lo menciones.\n"
+        "4) Da SIGNIFICADO a cada métrica, no la cites sin interpretar: Sharpe <1 pobre / 1-2 aceptable / "
+        ">2 excelente; Sortino se lee igual pero solo penaliza caídas; HHI >0.25 = concentrado; beta >1 = "
+        "más volátil que el mercado; interpreta el drawdown frente al retorno logrado.\n"
+        "5) Prioriza lo material: posición >10% del portafolio, contribución >1 pp, exposición por divisa/"
+        "sector/región >20%. No repartas atención por igual entre cosas irrelevantes.\n"
+        "6) En atribución explica la cadena causa→efecto: por qué una posición aportó o restó "
+        "('pesaba Z% y se movió W%, por eso aportó N pp ≈ $M').\n"
+        "7) No das recomendaciones personalizadas de compra/venta ni garantías de rentabilidad; tus "
+        "observaciones son educativas. No inventes datos que no estén en el JSON."
     )
     user_msg = (
         f"Analiza el siguiente portafolio y redacta el análisis en {lang_name}, en Markdown, "
-        "organizado EXACTAMENTE en estas secciones con encabezado '## ':\n"
-        "## Tesis y diagnóstico — 2-3 frases sobre el estado general (retorno, riesgo, perfil).\n"
-        "## Atribución de resultados — qué posiciones aportaron o restaron más al retorno (usa los datos de 'atribucion').\n"
-        "## Riesgos clave — concentración, volatilidad, drawdown, divisa; nombra la posición/sector causante.\n"
-        "## Desempeño vs benchmark — compara retorno, exceso (alpha) y tracking error si hay datos.\n"
-        "## Acciones de rebalanceo sugeridas — 2-3 viñetas concretas (sobreponderar/reducir y por qué), en términos educativos, sin órdenes de compra/venta personalizadas.\n\n"
-        "Cada sección: 1-3 viñetas breves con cifras. Sé concreto, profesional y conciso. "
-        "Omite una sección solo si no hay datos para ella.\n\n"
+        "organizado EXACTAMENTE en estas secciones con encabezado '## '. Cada sección (salvo la última) "
+        "es un PÁRRAFO narrativo de 3-5 frases, NO viñetas:\n"
+        "## Tesis y diagnóstico — Estado general en dinero y en perfil: cuánto se invirtió, cuánto vale "
+        "hoy, cuánto se ganó o perdió (en $ y %) y qué tipo de portafolio es (riesgo, concentración, CAGR).\n"
+        "## Puente del dinero — Reconstruye paso a paso qué pasó con el capital: partiste de "
+        "'total_invertido'; el mercado aportó o restó $X de P&L; se cobraron 'dividendos_cobrados' en "
+        "dividendos; se pagaron 'comisiones_totales' en comisiones; hoy el portafolio vale 'valor_actual'. "
+        "Calcula el P&L de mercado como el residual coherente con esas cifras y cierra con el efecto neto "
+        "en una frase.\n"
+        "## Atribución de resultados — Qué posiciones movieron la aguja, con la cadena causa→efecto "
+        "(peso × movimiento → contribución en pp y en $). Nombra los mayores contribuidores y detractores "
+        "de 'atribucion' y explica el porqué.\n"
+        "## Riesgos clave — Concentración (HHI, top3, mayor posición), volatilidad, drawdown, VaR y riesgo "
+        "divisa/sector/región. Nombra la posición, divisa o sector causante e interpreta si el nivel es alto "
+        "o razonable.\n"
+        "## Desempeño vs benchmark — Compara el retorno del portafolio vs el benchmark, el exceso (alpha) en "
+        "pp y en $, el tracking error y la beta. Di si se batió al mercado y a costa de cuánto riesgo "
+        "relativo. Omite esta sección solo si 'comparacion_benchmark' es null.\n"
+        "## Acciones de rebalanceo sugeridas — 2-3 viñetas concretas (qué sobreponderar o reducir y por qué), "
+        "en términos educativos, sin órdenes de compra/venta personalizadas.\n\n"
+        "Sé concreto y profesional. Omite una sección solo si de verdad no hay datos para ella.\n\n"
         f"Datos del portafolio (JSON):\n{json.dumps(body.metrics, ensure_ascii=False)}"
     )
 
