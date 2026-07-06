@@ -336,6 +336,31 @@
     <section class="promo-section">
       <div class="promo-head">
         <div>
+          <h2>Analítica de uso (beta)</h2>
+          <p>Qué módulos usan los usuarios y dónde se concentran. Datos propios (Postgres), sin servicios externos.</p>
+        </div>
+        <button id="analyticsRefreshBtn" class="copy-btn">↻ Actualizar</button>
+      </div>
+      <div class="stats-grid" style="margin-top:14px">
+        <div class="stat-card"><div class="label">Eventos totales</div><div class="value" id="an-total">—</div></div>
+        <div class="stat-card"><div class="label">Usuarios activos</div><div class="value" id="an-users">—</div></div>
+        <div class="stat-card"><div class="label">Eventos (7 días)</div><div class="value" id="an-week">—</div></div>
+      </div>
+      <div class="table-wrap" style="margin-top:14px">
+        <table id="analytics-table" style="display:none">
+          <thead>
+            <tr><th>Evento</th><th>Veces</th><th>Usuarios únicos</th></tr>
+          </thead>
+          <tbody id="analytics-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="analytics-empty" style="display:none">Aún no hay eventos registrados.</div>
+        <div id="analytics-loading" class="empty-state">Cargando analítica…</div>
+      </div>
+    </section>
+
+    <section class="promo-section">
+      <div class="promo-head">
+        <div>
           <h2>Feedback de usuarios <span id="feedback-badge" class="badge badge-demo" style="display:none"></span></h2>
           <p>Comentarios, errores e ideas enviados desde la app. Marca como leído o resuelto.</p>
         </div>

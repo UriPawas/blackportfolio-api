@@ -11,12 +11,64 @@ function showLoginMessage(text, type) {
   loginMessage.className = `form-message ${type}`;
 }
 
+// ── Código de invitación en el login ─────────────────────────────────────────
+// Permite canjear un código beta/promocional al iniciar sesión: el endpoint de
+// canje no exige estar en la allowlist (el canje mismo añade el correo), así
+// que un usuario invitado nunca queda fuera aunque el registro no lo canjeara.
+const PENDING_BETA_KEY = "bp-pending-beta-code";
+const betaToggle = document.getElementById("loginBetaToggle");
+const betaRow    = document.getElementById("loginBetaRow");
+const betaInput  = document.getElementById("loginBetaCode");
+
+betaToggle?.addEventListener("click", () => {
+  betaRow.classList.toggle("hidden");
+  if (!betaRow.classList.contains("hidden")) betaInput.focus();
+});
+betaInput?.addEventListener("input", () => {
+  betaInput.value = betaInput.value.toUpperCase().replace(/\s+/g, "");
+});
+
+// Prellena desde la URL (?code= / ?codigo= / ?beta= distinto de "closed") o desde
+// un canje pendiente que quedó guardado de un registro interrumpido.
+(function initLoginBetaCode() {
+  const params = new URLSearchParams(window.location.search);
+  const rawBeta = params.get("beta") || "";
+  const urlCode = (params.get("code") || params.get("codigo") || (rawBeta !== "closed" ? rawBeta : "") || "").trim().toUpperCase();
+  const pending = (localStorage.getItem(PENDING_BETA_KEY) || "").trim().toUpperCase();
+  const code = urlCode || pending;
+  if (code && betaInput) {
+    betaInput.value = code;
+    betaRow.classList.remove("hidden");
+  }
+})();
+
+// Canjea el código (del campo o pendiente) tras autenticarse. Devuelve sin
+// bloquear el login: si el canje falla por código inválido se muestra el error,
+// pero el flujo continúa (el correo puede ya estar en la allowlist).
+async function redeemLoginBetaCode() {
+  const code = (betaInput?.value || localStorage.getItem(PENDING_BETA_KEY) || "").trim().toUpperCase();
+  if (!code) return false;
+  const res = await window.BlackPortfolioAuth.redeemBetaCode(code);
+  if (res.ok) {
+    localStorage.removeItem(PENDING_BETA_KEY);
+    showLoginMessage(`✓ Código canjeado: plan ${res.plan} activado.`, "success");
+    return true;
+  }
+  // 409 = ya tiene beta activa: el acceso ya existe, no es un error para el login.
+  if (res.status === 409) { localStorage.removeItem(PENDING_BETA_KEY); return true; }
+  // Código inválido/agotado: descarta el pendiente para no reintentar por siempre.
+  if (res.status && res.status !== 0) localStorage.removeItem(PENDING_BETA_KEY);
+  showLoginMessage(res.error || "No se pudo canjear el código de invitación.", "error");
+  return false;
+}
+
 // ── Beta cerrada: aviso al llegar redirigido desde la app ────────────────────
 if (new URLSearchParams(window.location.search).get("beta") === "closed") {
   showLoginMessage(
-    "BlackPortfolio está en beta cerrada. Tu correo aún no tiene acceso — escríbenos para solicitar una invitación.",
+    "BlackPortfolio está en beta cerrada. Si tienes un código de invitación, ingrésalo abajo y vuelve a entrar; si no, escríbenos para solicitar uno.",
     "error"
   );
+  betaRow?.classList.remove("hidden");
 }
 
 // ── Trusted device: skip the 2FA code for ~3.5 days (≈ twice a week) ──────────
@@ -73,7 +125,7 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async user => {
   // Dispositivo de confianza CON un token de sesión 2FA vivo: salta directo a la
   // app. El backend exige ese token (X-2FA-Token); sin él, main.html rebotaría al
   // login en bucle, así que solo tomamos este atajo cuando el token existe.
-  if (isDeviceTrusted(user.uid) && sessionStorage.getItem("bp-2fa-token")) {
+  if (isDeviceTrusted(user.uid) && localStorage.getItem("bp-2fa-token")) {
     trustDevice(user.uid); // refresh the window so active users stay trusted
     window.location.href = "main.html";
     return;
@@ -112,7 +164,7 @@ async function handlePostAuth(session) {
   // Trusted device within the ~3.5-day window: skip the code SOLO si todavía
   // hay un token de sesión 2FA vivo. Sin él, el backend devuelve 403 y main.html
   // rebota al login en bucle, así que caemos al overlay OTP para emitir uno nuevo.
-  if (isDeviceTrusted(session.id) && sessionStorage.getItem("bp-2fa-token")) {
+  if (isDeviceTrusted(session.id) && localStorage.getItem("bp-2fa-token")) {
     trustDevice(session.id);
     showLoginMessage(`Bienvenido, ${session.fullName}. Redirigiendo...`, "success");
     setTimeout(() => { window.location.href = "main.html"; }, 600);
@@ -143,6 +195,11 @@ googleLoginBtn.addEventListener("click", async () => {
     showLoginMessage(result.error, "error");
     return;
   }
+
+  // Canjea código de invitación si hay uno (campo o pendiente). Con canje
+  // exitoso el plan ya quedó otorgado: se salta la selección de plan.
+  const betaRedeemed = await redeemLoginBetaCode();
+  if (betaRedeemed) { await handlePostAuth(result.user); return; }
 
   // Usuario NUEVO con Google: que elija plan. Si es de pago, el selector redirige
   // a Stripe (no regresa). Si es gratis, continúa al alta normal (gate 2FA).
@@ -187,6 +244,7 @@ loginForm.addEventListener("submit", async (event) => {
 
   failedAttempts = 0;
   document.getElementById("forgotHint")?.remove();
+  await redeemLoginBetaCode();
   await handlePostAuth(result.user);
   submitButton.disabled = false;
 });
@@ -273,12 +331,45 @@ loginForm.addEventListener("submit", async (event) => {
   });
 })();
 
+// ── Códigos de respaldo: render + acciones (copiar / descargar) ──────────────
+function renderBackupCodes(codes, gridEl) {
+  if (!gridEl) return;
+  gridEl.innerHTML = "";
+  (codes || []).forEach(c => {
+    const span = document.createElement("span");
+    span.className = "backup-code-chip";
+    span.textContent = c;
+    gridEl.appendChild(span);
+  });
+}
+
+function backupCodesAsText(codes) {
+  return "BlackPortfolio · Códigos de respaldo 2FA\n"
+    + "Cada código sirve UNA sola vez. Guárdalos en un lugar seguro.\n\n"
+    + (codes || []).join("\n") + "\n";
+}
+
+function wireBackupCodeActions(codes, copyBtn, downloadBtn) {
+  if (copyBtn) copyBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText((codes || []).join("\n")); copyBtn.textContent = "✓ Copiado"; }
+    catch { copyBtn.textContent = "No se pudo copiar"; }
+    setTimeout(() => { copyBtn.textContent = "Copiar"; }, 1500);
+  };
+  if (downloadBtn) downloadBtn.onclick = () => {
+    const blob = new Blob([backupCodesAsText(codes)], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "blackportfolio-codigos-respaldo.txt";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+
 // ── OTP Overlay ──────────────────────────────────────────────────────────────
 function showOtpOverlay(uid) {
   const overlay  = document.getElementById("otpOverlay");
   const grid     = document.getElementById("otpGrid");
-  const verifyBtn = document.getElementById("otpVerifyBtn");
-  const clearBtn  = document.getElementById("otpClearBtn");
+  const statusMsg = document.getElementById("otpStatus");
   const errorMsg  = document.getElementById("otpError");
   const fallbackBtn = document.getElementById("otpEmailFallbackBtn");
   const fallbackMsg = document.getElementById("otpFallbackMsg");
@@ -289,10 +380,9 @@ function showOtpOverlay(uid) {
 
   function getCode() { return boxes.map(b => b.value).join(""); }
 
-  function syncVerifyBtn() {
-    const complete = boxes.every(b => b.value !== "");
-    verifyBtn.disabled = !complete;
-    boxes.forEach(b => b.classList.toggle("otp-box--complete", complete));
+  function setStatus(text) {
+    statusMsg.textContent = text || "";
+    statusMsg.classList.toggle("hidden", !text);
   }
 
   function clearError() {
@@ -301,13 +391,46 @@ function showOtpOverlay(uid) {
     boxes.forEach(b => b.classList.remove("otp-box--error"));
   }
 
+  // Sin botones: al completar el 6º dígito se verifica solo; si falla, se
+  // limpian las casillas para reintentar de inmediato.
+  let _verifying = false;
+
+  async function submitCode() {
+    if (_verifying || !boxes.every(b => b.value !== "")) return;
+    _verifying = true;
+    boxes.forEach(b => { b.disabled = true; b.classList.add("otp-box--complete"); });
+    clearError();
+    setStatus("Verificando…");
+
+    const result = await window.BlackPortfolioAuth.verifyTwoFactor(getCode());
+
+    if (result.valid) {
+      trustDevice(uid);
+      setStatus("✓ Verificado. Entrando…");
+      window.location.href = "main.html";
+      return;
+    }
+
+    setStatus("");
+    errorMsg.textContent = result.error || "Código incorrecto. Comprueba la app y vuelve a intentarlo.";
+    errorMsg.classList.remove("hidden");
+    boxes.forEach(b => {
+      b.disabled = false;
+      b.value = "";
+      b.classList.remove("otp-box--complete");
+      b.classList.add("otp-box--error");
+    });
+    boxes[0].focus();
+    _verifying = false;
+  }
+
   boxes.forEach((box, i) => {
     box.addEventListener("input", e => {
       // Accept only digit
       box.value = box.value.replace(/\D/g, "").slice(-1);
       clearError();
       if (box.value && i < 5) boxes[i + 1].focus();
-      syncVerifyBtn();
+      submitCode();
     });
 
     box.addEventListener("keydown", e => {
@@ -321,42 +444,10 @@ function showOtpOverlay(uid) {
       const digits = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
       digits.split("").forEach((d, j) => { if (boxes[j]) boxes[j].value = d; });
       clearError();
-      syncVerifyBtn();
       const nextEmpty = boxes.findIndex(b => !b.value);
       (nextEmpty === -1 ? boxes[5] : boxes[nextEmpty]).focus();
+      submitCode();
     });
-  });
-
-  clearBtn.addEventListener("click", () => {
-    boxes.forEach(b => { b.value = ""; b.classList.remove("otp-box--complete", "otp-box--error"); });
-    clearError();
-    syncVerifyBtn();
-    boxes[0].focus();
-  });
-
-  verifyBtn.addEventListener("click", async () => {
-    const code = getCode();
-    verifyBtn.disabled = true;
-    verifyBtn.textContent = "Verificando…";
-    clearError();
-
-    const result = await window.BlackPortfolioAuth.verifyTwoFactor(code);
-
-    if (result.valid) {
-      trustDevice(uid);
-      verifyBtn.textContent = "✓ Verificado";
-      verifyBtn.classList.add("otp-verify-btn--success");
-      setTimeout(() => { window.location.href = "main.html"; }, 600);
-      return;
-    }
-
-    errorMsg.textContent = result.error || "Código incorrecto. Comprueba la app y vuelve a intentarlo.";
-    errorMsg.classList.remove("hidden");
-    boxes.forEach(b => b.classList.add("otp-box--error"));
-    boxes.forEach(b => { b.value = ""; });
-    verifyBtn.textContent = "Verificar código";
-    verifyBtn.disabled = true;
-    boxes[0].focus();
   });
 
   // ── Fallback: acceso por enlace mágico al correo ──────────────────────────
@@ -376,6 +467,46 @@ function showOtpOverlay(uid) {
     }
 
     fallbackMsg.textContent = `Te enviamos un enlace de acceso a ${res.email}. Ábrelo desde este dispositivo para entrar (revisa también spam).`;
+  });
+
+  // ── Fallback: código de respaldo de un solo uso ───────────────────────────
+  const backupToggle  = document.getElementById("otpBackupToggle");
+  const backupWrap    = document.getElementById("otpBackupWrap");
+  const backupInput   = document.getElementById("otpBackupInput");
+  const backupVerify  = document.getElementById("otpBackupVerifyBtn");
+
+  backupToggle?.addEventListener("click", () => {
+    backupWrap.classList.toggle("hidden");
+    if (!backupWrap.classList.contains("hidden")) backupInput.focus();
+  });
+
+  backupVerify?.addEventListener("click", async () => {
+    const code = (backupInput.value || "").trim();
+    if (!code) { backupInput.focus(); return; }
+    backupVerify.disabled = true;
+    backupVerify.textContent = "Verificando…";
+    clearError();
+
+    const result = await window.BlackPortfolioAuth.verifyTwoFactor(code);
+    if (result.valid) {
+      trustDevice(uid);
+      backupVerify.textContent = "✓ Verificado";
+      const left = result.backupCodesRemaining;
+      if (typeof left === "number") {
+        fallbackMsg.classList.remove("hidden");
+        fallbackMsg.className = "otp-fallback-msg";
+        fallbackMsg.textContent = `Te quedan ${left} código(s) de respaldo. Genera nuevos desde Ajustes → Seguridad.`;
+      }
+      setTimeout(() => { window.location.href = "main.html"; }, 800);
+      return;
+    }
+
+    errorMsg.textContent = "Código de respaldo inválido o ya usado.";
+    errorMsg.classList.remove("hidden");
+    backupInput.value = "";
+    backupVerify.textContent = "Entrar con código de respaldo";
+    backupVerify.disabled = false;
+    backupInput.focus();
   });
 }
 
@@ -421,6 +552,10 @@ function showSetupOverlay(uid) {
 
   function clearError() { msg.textContent = ""; msg.className = "totp-setup-msg"; boxes.forEach(b => b.classList.remove("otp-box--error")); }
   function syncBtn() { verifyBtn.disabled = !boxes.every(b => b.value !== ""); }
+  // Auto-verifica al completar el sexto dígito.
+  function maybeAutoVerify() {
+    if (boxes.every(b => b.value !== "") && !verifyBtn.disabled) verifyBtn.onclick();
+  }
 
   boxes.forEach((box, i) => {
     box.addEventListener("input", () => {
@@ -428,6 +563,7 @@ function showSetupOverlay(uid) {
       clearError();
       if (box.value && i < 5) boxes[i + 1].focus();
       syncBtn();
+      maybeAutoVerify();
     });
     box.addEventListener("keydown", e => {
       if (e.key === "Backspace" && !box.value && i > 0) boxes[i - 1].focus();
@@ -442,6 +578,7 @@ function showSetupOverlay(uid) {
       syncBtn();
       const nextEmpty = boxes.findIndex(b => !b.value);
       (nextEmpty === -1 ? boxes[5] : boxes[nextEmpty]).focus();
+      maybeAutoVerify();
     });
   });
 
@@ -453,9 +590,29 @@ function showSetupOverlay(uid) {
     const result = await window.BlackPortfolioAuth.verifyTwoFactorSetup(code);
     if (result.ok) {
       trustDevice(uid);
-      msg.textContent = "✓ 2FA activado. Redirigiendo…";
-      msg.className = "totp-setup-msg form-message success";
-      setTimeout(() => { window.location.href = "main.html"; }, 900);
+      // Muestra los códigos de respaldo antes de entrar (solo se ven una vez).
+      const backupView = document.getElementById("totpSetupBackupView");
+      const codesGrid  = document.getElementById("totpSetupBackupCodes");
+      const ack        = document.getElementById("totpSetupBackupAck");
+      const continueBtn = document.getElementById("totpSetupBackupContinue");
+      if (backupView && (result.backupCodes || []).length) {
+        renderBackupCodes(result.backupCodes, codesGrid);
+        wireBackupCodeActions(
+          result.backupCodes,
+          document.getElementById("totpSetupBackupCopy"),
+          document.getElementById("totpSetupBackupDownload"),
+        );
+        content.classList.add("hidden");
+        backupView.classList.remove("hidden");
+        ack.checked = false;
+        continueBtn.disabled = true;
+        ack.onchange = () => { continueBtn.disabled = !ack.checked; };
+        continueBtn.onclick = () => { window.location.href = "main.html"; };
+      } else {
+        msg.textContent = "✓ 2FA activado. Redirigiendo…";
+        msg.className = "totp-setup-msg form-message success";
+        setTimeout(() => { window.location.href = "main.html"; }, 900);
+      }
       return;
     }
 

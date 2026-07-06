@@ -1607,7 +1607,7 @@ const AnalyzerModule = (() => {
       const _user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
       if (!_user) throw new Error("No hay una sesion autenticada.");
       const _idToken = await _user.getIdToken();
-      const _twofaToken = sessionStorage.getItem("bp-2fa-token");
+      const _twofaToken = localStorage.getItem("bp-2fa-token");
       const r = await fetch(`${API}/ai/analyzer`, {
         method: "POST",
         headers: {

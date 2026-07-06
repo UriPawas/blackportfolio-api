@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import struct
 import time
 from datetime import datetime, timedelta, timezone
@@ -16,7 +17,7 @@ from firebase_admin import credentials
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine, delete, select
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, delete, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
@@ -109,6 +110,20 @@ class TotpCredential(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class TotpBackupCode(Base):
+    """Códigos de respaldo de un solo uso para el 2FA. Se guardan SOLO como hash
+    (SHA-256); el texto plano se muestra al usuario una única vez al generarlos.
+    Permiten recuperar el acceso si pierde el autenticador."""
+    __tablename__ = "totp_backup_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    firebase_uid: Mapped[str] = mapped_column(String(128), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    used: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Feedback(Base):
     """Feedback in-app enviado por usuarios durante la beta. El email/nombre/plan
     se capturan server-side desde app_users (no se confía en el cliente)."""
@@ -157,6 +172,63 @@ class BetaCode(Base):
     created_by: Mapped[str | None] = mapped_column(String(320))
     note: Mapped[str | None] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PortfolioShare(Base):
+    """Enlace público de solo lectura de un portafolio. El token es opaco y mapea
+    a (uid, portfolio_id). Revocable. La vista pública sanea los datos: muestra
+    asignación y desempeño, nunca credenciales ni datos de cuenta."""
+    __tablename__ = "portfolio_shares"
+
+    token: Mapped[str] = mapped_column(String(32), primary_key=True)
+    firebase_uid: Mapped[str] = mapped_column(String(128), index=True)
+    portfolio_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class UserAlert(Base):
+    """Alerta de precio definida por el usuario. Un scheduler la evalúa
+    periódicamente y, al dispararse, genera una notificación in-app (y email si
+    SMTP está configurado)."""
+    __tablename__ = "user_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    firebase_uid: Mapped[str] = mapped_column(String(128), index=True)
+    symbol: Mapped[str] = mapped_column(String(40))
+    kind: Mapped[str] = mapped_column(String(20), default="price_above")  # price_above | price_below
+    threshold: Mapped[float] = mapped_column(Float)
+    note: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    active: Mapped[bool] = mapped_column(default=True)
+    triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class UserNotification(Base):
+    """Notificación in-app para el usuario (p. ej. una alerta disparada)."""
+    __tablename__ = "user_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    firebase_uid: Mapped[str] = mapped_column(String(128), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    body: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    kind: Mapped[str] = mapped_column(String(30), default="alert")
+    read: Mapped[bool] = mapped_column(default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AnalyticsEvent(Base):
+    """Analítica de producto first-party (sin dependencias externas). Registra qué
+    hacen los usuarios durante la beta (qué módulos usan, dónde abandonan). El uid y
+    el plan se toman server-side; el cliente solo envía el nombre del evento y props."""
+    __tablename__ = "analytics_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    firebase_uid: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True)
+    event: Mapped[str] = mapped_column(String(60), index=True)
+    props: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    plan: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    path: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 def _database_url() -> str:
@@ -370,10 +442,67 @@ def _verify_totp(secret: str, token: str) -> bool:
     return False
 
 
+# ── Códigos de respaldo (recuperación si se pierde el autenticador) ───────────
+_BACKUP_CODE_COUNT = 10
+
+
+def _hash_backup_code(code: str) -> str:
+    norm = (code or "").strip().lower().replace(" ", "").replace("-", "")
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+
+def _generate_backup_codes(n: int = _BACKUP_CODE_COUNT) -> list[str]:
+    codes: list[str] = []
+    for _ in range(n):
+        s = base64.b32encode(os.urandom(5)).decode("ascii").rstrip("=").lower()[:8]
+        codes.append(f"{s[:4]}-{s[4:8]}")
+    return codes
+
+
+def _store_backup_codes(session: Session, uid: str, codes: list[str]) -> None:
+    session.execute(delete(TotpBackupCode).where(TotpBackupCode.firebase_uid == uid))
+    now = utc_now()
+    for c in codes:
+        session.add(TotpBackupCode(
+            firebase_uid=uid, code_hash=_hash_backup_code(c), used=False, created_at=now,
+        ))
+
+
+def _consume_backup_code(session: Session, uid: str, code: str) -> bool:
+    """Si `code` coincide con un código de respaldo sin usar, lo marca usado y
+    devuelve True. Un solo uso. NO hace commit (lo hace el endpoint)."""
+    code = (code or "").strip()
+    if not code or len(code.replace("-", "").replace(" ", "")) < 6:
+        return False
+    row = session.execute(
+        select(TotpBackupCode).where(
+            TotpBackupCode.firebase_uid == uid,
+            TotpBackupCode.code_hash == _hash_backup_code(code),
+            TotpBackupCode.used == False,  # noqa: E712
+        )
+    ).scalars().first()
+    if not row:
+        return False
+    row.used = True
+    row.used_at = utc_now()
+    session.add(row)
+    return True
+
+
+def _backup_codes_remaining(session: Session, uid: str) -> int:
+    return len(session.execute(
+        select(TotpBackupCode.id).where(
+            TotpBackupCode.firebase_uid == uid,
+            TotpBackupCode.used == False,  # noqa: E712
+        )
+    ).scalars().all())
+
+
 # Token de sesión "2FA verificado": prueba que el usuario pasó el segundo factor.
 # Se exige en los endpoints de datos cuando la cuenta tiene 2FA activo, de modo
 # que tener solo la contraseña (token Firebase) NO basta para leer/escribir datos.
-_TWOFA_TTL_SECONDS = 12 * 3600
+# 3.5 días: el usuario solo re-verifica el código ~2 veces por semana.
+_TWOFA_TTL_SECONDS = int(3.5 * 24 * 3600)
 
 
 def _twofa_signing_key() -> bytes:
@@ -506,7 +635,11 @@ def twofa_status(
     session: Session = Depends(get_session),
 ):
     cred = session.get(TotpCredential, token["uid"])
-    return {"enabled": bool(cred and cred.enabled)}
+    enabled = bool(cred and cred.enabled)
+    return {
+        "enabled": enabled,
+        "backupCodesRemaining": _backup_codes_remaining(session, token["uid"]) if enabled else 0,
+    }
 
 
 @twofa_router.post("/setup")
@@ -560,8 +693,10 @@ def twofa_verify_setup(
     session.add(SecurityActivity(
         firebase_uid=uid, event="2fa_enabled", detail="totp", created_at=utc_now(),
     ))
+    codes = _generate_backup_codes()
+    _store_backup_codes(session, uid, codes)
     session.commit()
-    return {"ok": True, "token": issue_2fa_token(uid)}
+    return {"ok": True, "token": issue_2fa_token(uid), "backupCodes": codes}
 
 
 @twofa_router.post("/verify")
@@ -576,9 +711,21 @@ def twofa_verify(
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="2FA no está activo en esta cuenta.")
-    if not _verify_totp(cred.secret, body.code):
-        return {"valid": False}
-    return {"valid": True, "token": issue_2fa_token(uid)}
+    if _verify_totp(cred.secret, body.code):
+        return {"valid": True, "token": issue_2fa_token(uid)}
+    # Plan B: código de respaldo de un solo uso (recuperación sin autenticador).
+    if _consume_backup_code(session, uid, body.code):
+        session.add(SecurityActivity(
+            firebase_uid=uid, event="2fa_backup_used", detail="login", created_at=utc_now(),
+        ))
+        session.commit()
+        return {
+            "valid": True,
+            "token": issue_2fa_token(uid),
+            "usedBackupCode": True,
+            "backupCodesRemaining": _backup_codes_remaining(session, uid),
+        }
+    return {"valid": False}
 
 
 @twofa_router.post("/disable")
@@ -593,17 +740,43 @@ def twofa_disable(
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="No hay 2FA activo.")
-    if not _verify_totp(cred.secret, body.code):
+    if not (_verify_totp(cred.secret, body.code) or _consume_backup_code(session, uid, body.code)):
         raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
     cred.secret = None
     cred.pending_secret = None
     cred.enabled = False
     cred.updated_at = utc_now()
+    session.execute(delete(TotpBackupCode).where(TotpBackupCode.firebase_uid == uid))
     session.add(SecurityActivity(
         firebase_uid=uid, event="2fa_disabled", detail="totp", created_at=utc_now(),
     ))
     session.commit()
     return {"ok": True}
+
+
+@twofa_router.post("/backup-codes/regenerate")
+@limiter.limit("5/minute")
+def twofa_regenerate_backup_codes(
+    request: Request,
+    body: TotpCodeBody,
+    token: dict[str, Any] = Depends(verify_firebase_user),
+    session: Session = Depends(get_session),
+):
+    """Genera un juego nuevo de códigos de respaldo (invalida los anteriores).
+    Requiere un código TOTP válido del autenticador para autorizar."""
+    uid = token["uid"]
+    cred = session.get(TotpCredential, uid)
+    if not cred or not cred.enabled or not cred.secret:
+        raise HTTPException(status_code=400, detail="2FA no está activo en esta cuenta.")
+    if not _verify_totp(cred.secret, body.code):
+        raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
+    codes = _generate_backup_codes()
+    _store_backup_codes(session, uid, codes)
+    session.add(SecurityActivity(
+        firebase_uid=uid, event="2fa_backup_regenerated", detail="totp", created_at=utc_now(),
+    ))
+    session.commit()
+    return {"ok": True, "backupCodes": codes}
 
 
 @twofa_router.post("/migrate")
@@ -742,6 +915,181 @@ def replace_portfolios(
     return {"ok": True, "checksum": checksum, "version": snapshot.version, "unchanged": False}
 
 
+# ── Compartir portafolio (#12) ─────────────────────────────────────────────
+def _find_portfolio(session: Session, uid: str, portfolio_id: str):
+    snapshot = session.get(PortfolioSnapshot, uid)
+    portfolios = snapshot.data if snapshot and isinstance(snapshot.data, list) else []
+    return next((p for p in portfolios if str(p.get("id")) == str(portfolio_id)), None)
+
+
+@router.post("/portfolios/{portfolio_id}/share")
+def create_share(
+    portfolio_id: str,
+    token: dict[str, Any] = Depends(require_verified_email),
+    session: Session = Depends(get_session),
+):
+    uid = token["uid"]
+    if _find_portfolio(session, uid, portfolio_id) is None:
+        raise HTTPException(status_code=404, detail="Portafolio no encontrado.")
+    existing = session.execute(
+        select(PortfolioShare).where(
+            PortfolioShare.firebase_uid == uid,
+            PortfolioShare.portfolio_id == str(portfolio_id),
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return {"token": existing.token}
+    tok = secrets.token_urlsafe(16)[:22]
+    session.add(PortfolioShare(
+        token=tok, firebase_uid=uid, portfolio_id=str(portfolio_id), created_at=utc_now(),
+    ))
+    session.commit()
+    return {"token": tok}
+
+
+@router.get("/portfolios/{portfolio_id}/share")
+def get_share(
+    portfolio_id: str,
+    token: dict[str, Any] = Depends(require_2fa),
+    session: Session = Depends(get_session),
+):
+    existing = session.execute(
+        select(PortfolioShare).where(
+            PortfolioShare.firebase_uid == token["uid"],
+            PortfolioShare.portfolio_id == str(portfolio_id),
+        )
+    ).scalar_one_or_none()
+    return {"token": existing.token if existing else None}
+
+
+@router.delete("/portfolios/{portfolio_id}/share")
+def revoke_share(
+    portfolio_id: str,
+    token: dict[str, Any] = Depends(require_verified_email),
+    session: Session = Depends(get_session),
+):
+    session.execute(delete(PortfolioShare).where(
+        PortfolioShare.firebase_uid == token["uid"],
+        PortfolioShare.portfolio_id == str(portfolio_id),
+    ))
+    session.commit()
+    return {"ok": True}
+
+
+# ── Alertas de precio (#5) ─────────────────────────────────────────────────
+class AlertCreate(BaseModel):
+    symbol: str
+    kind: str = "price_above"  # price_above | price_below
+    threshold: float
+    note: str | None = None
+
+
+def _alert_to_dict(a: "UserAlert") -> dict[str, Any]:
+    return {
+        "id": a.id,
+        "symbol": a.symbol,
+        "kind": a.kind,
+        "threshold": a.threshold,
+        "note": a.note,
+        "active": a.active,
+        "triggeredAt": a.triggered_at.isoformat() if a.triggered_at else None,
+        "createdAt": a.created_at.isoformat() if a.created_at else None,
+    }
+
+
+@router.get("/alerts")
+def list_alerts(
+    token: dict[str, Any] = Depends(require_2fa),
+    session: Session = Depends(get_session),
+):
+    rows = session.execute(
+        select(UserAlert).where(UserAlert.firebase_uid == token["uid"]).order_by(UserAlert.created_at.desc())
+    ).scalars().all()
+    return {"alerts": [_alert_to_dict(a) for a in rows]}
+
+
+@router.post("/alerts")
+@limiter.limit("30/minute")
+def create_alert(
+    request: Request,
+    body: AlertCreate,
+    token: dict[str, Any] = Depends(require_verified_email),
+    session: Session = Depends(get_session),
+):
+    symbol = (body.symbol or "").strip().upper()[:40]
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Símbolo requerido.")
+    if body.kind not in ("price_above", "price_below"):
+        raise HTTPException(status_code=400, detail="Tipo de alerta no válido.")
+    if not (body.threshold and body.threshold > 0):
+        raise HTTPException(status_code=400, detail="El umbral debe ser mayor a 0.")
+    count = session.execute(
+        select(UserAlert).where(UserAlert.firebase_uid == token["uid"], UserAlert.active == True)  # noqa: E712
+    ).scalars().all()
+    if len(count) >= 50:
+        raise HTTPException(status_code=403, detail="Límite de 50 alertas activas alcanzado.")
+    alert = UserAlert(
+        firebase_uid=token["uid"], symbol=symbol, kind=body.kind,
+        threshold=float(body.threshold), note=(body.note or "")[:120] or None,
+        active=True, created_at=utc_now(),
+    )
+    session.add(alert)
+    session.commit()
+    return {"alert": _alert_to_dict(alert)}
+
+
+@router.delete("/alerts/{alert_id}")
+def delete_alert(
+    alert_id: int,
+    token: dict[str, Any] = Depends(require_2fa),
+    session: Session = Depends(get_session),
+):
+    session.execute(delete(UserAlert).where(
+        UserAlert.id == alert_id, UserAlert.firebase_uid == token["uid"],
+    ))
+    session.commit()
+    return {"ok": True}
+
+
+# ── Notificaciones in-app (#5) ──────────────────────────────────────────────
+@router.get("/notifications")
+def list_notifications(
+    token: dict[str, Any] = Depends(require_2fa),
+    session: Session = Depends(get_session),
+):
+    rows = session.execute(
+        select(UserNotification).where(UserNotification.firebase_uid == token["uid"])
+        .order_by(UserNotification.created_at.desc()).limit(50)
+    ).scalars().all()
+    unread = sum(1 for n in rows if not n.read)
+    return {
+        "unread": unread,
+        "notifications": [
+            {
+                "id": n.id, "title": n.title, "body": n.body, "kind": n.kind,
+                "read": n.read, "createdAt": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in rows
+        ],
+    }
+
+
+@router.post("/notifications/read")
+def mark_notifications_read(
+    token: dict[str, Any] = Depends(require_2fa),
+    session: Session = Depends(get_session),
+):
+    rows = session.execute(
+        select(UserNotification).where(
+            UserNotification.firebase_uid == token["uid"], UserNotification.read == False,  # noqa: E712
+        )
+    ).scalars().all()
+    for n in rows:
+        n.read = True
+    session.commit()
+    return {"ok": True, "marked": len(rows)}
+
+
 @router.get("/export")
 @limiter.limit("5/minute")
 def account_export(
@@ -812,6 +1160,7 @@ def account_delete(
     session.execute(delete(SecurityActivity).where(SecurityActivity.firebase_uid == uid))
     session.execute(delete(Feedback).where(Feedback.firebase_uid == uid))
     session.execute(delete(TotpCredential).where(TotpCredential.firebase_uid == uid))
+    session.execute(delete(TotpBackupCode).where(TotpBackupCode.firebase_uid == uid))
     user = session.get(AppUser, uid)
     if user is not None:
         session.delete(user)
@@ -858,6 +1207,7 @@ def purge_user(session: Session, uid: str | None = None, email: str | None = Non
         session.execute(delete(SecurityActivity).where(SecurityActivity.firebase_uid == u))
         session.execute(delete(Feedback).where(Feedback.firebase_uid == u))
         session.execute(delete(TotpCredential).where(TotpCredential.firebase_uid == u))
+        session.execute(delete(TotpBackupCode).where(TotpBackupCode.firebase_uid == u))
         app_user = session.get(AppUser, u)
         if app_user is not None:
             if not email_l:
@@ -933,10 +1283,50 @@ def submit_feedback(
     return {"ok": True, "id": fb.id}
 
 
+# ── Vista pública de portafolio compartido (#12) ────────────────────────────
+public_router = APIRouter(prefix="/api/public", tags=["public"])
+
+
+@public_router.get("/portfolio/{token}")
+@limiter.limit("60/minute")
+def public_portfolio(request: Request, token: str, session: Session = Depends(get_session)):
+    share = session.get(PortfolioShare, token)
+    if not share:
+        raise HTTPException(status_code=404, detail="Enlace no válido o revocado.")
+    p = _find_portfolio(session, share.firebase_uid, share.portfolio_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="El portafolio ya no está disponible.")
+    owner = session.get(AppUser, share.firebase_uid)
+    # Saneado: solo composición de inversión. Sin datos de cuenta ni credenciales.
+    positions = []
+    for pos in (p.get("positions") or []):
+        try:
+            qty = float(pos.get("quantity") or 0)
+            avg = float(pos.get("avgPrice") or 0)
+        except (TypeError, ValueError):
+            qty, avg = 0, 0
+        if qty <= 0:
+            continue
+        positions.append({
+            "ticker": pos.get("ticker"),
+            "quantity": qty,
+            "avgPrice": avg,
+            "currency": pos.get("currency") or p.get("currency") or "USD",
+        })
+    return {
+        "name": p.get("name") or "Portafolio",
+        "currency": p.get("currency", "USD"),
+        "ownerName": (owner.display_name if owner else None) or "Un inversor",
+        "positions": positions,
+        "sharedAt": share.created_at.isoformat() if share.created_at else None,
+    }
+
+
 def install_persistence(app) -> None:
     app.include_router(router)
     app.include_router(twofa_router)
     app.include_router(feedback_router)
+    app.include_router(public_router)
 
     @app.on_event("startup")
     def initialize_persistence_tables():

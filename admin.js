@@ -46,13 +46,14 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async (user) => {
   loadPromoCodes();
   loadBetaCodes();
   loadFeedback();
+  loadAnalytics();
 });
 
 async function adminFetch(path, options = {}) {
   const user = window.BlackPortfolioAuth.firebaseAuth.currentUser;
   if (!user) return { ok: false, status: 401 };
   const token = await user.getIdToken();
-  const twofaToken = sessionStorage.getItem("bp-2fa-token");
+  const twofaToken = localStorage.getItem("bp-2fa-token");
   return fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -99,7 +100,7 @@ async function fetchPortfolioOverview() {
     const user = window.BlackPortfolioAuth.firebaseAuth.currentUser;
     if (!user) return;
     const token = await user.getIdToken();
-    const twofaToken = sessionStorage.getItem("bp-2fa-token");
+    const twofaToken = localStorage.getItem("bp-2fa-token");
     const res = await fetch(`${API_BASE_URL}/admin/portfolio-overview`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -739,6 +740,41 @@ async function setFeedbackStatus(btn) {
 }
 
 feedbackRefresh?.addEventListener("click", loadFeedback);
+
+// ── Analítica de uso (#1) ─────────────────────────────────────────────────────
+async function loadAnalytics() {
+  const loading = document.getElementById("analytics-loading");
+  const table = document.getElementById("analytics-table");
+  const tbody = document.getElementById("analytics-tbody");
+  const empty = document.getElementById("analytics-empty");
+  try {
+    const res = await adminFetch("/admin/analytics");
+    if (!res.ok) { if (loading) loading.textContent = "No se pudo cargar la analítica."; return; }
+    const data = await res.json();
+    document.getElementById("an-total").textContent = data.total ?? 0;
+    document.getElementById("an-users").textContent = data.activeUsers ?? 0;
+    const week = (data.last7Days || []).reduce((sum, d) => sum + (d.count || 0), 0);
+    document.getElementById("an-week").textContent = week;
+
+    const rows = data.byEvent || [];
+    if (loading) loading.style.display = "none";
+    if (!rows.length) {
+      if (table) table.style.display = "none";
+      if (empty) empty.style.display = "block";
+      return;
+    }
+    if (empty) empty.style.display = "none";
+    if (table) table.style.display = "table";
+    tbody.innerHTML = rows.map(r =>
+      `<tr><td>${esc(r.event)}</td><td>${r.count}</td><td>${r.users}</td></tr>`
+    ).join("");
+  } catch (err) {
+    console.error("No se pudo cargar la analítica.", err);
+    if (loading) loading.textContent = "Error al cargar la analítica.";
+  }
+}
+
+document.getElementById("analyticsRefreshBtn")?.addEventListener("click", loadAnalytics);
 
 async function savePlan(btn) {
   const uid = btn.dataset.uid;

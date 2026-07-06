@@ -133,6 +133,9 @@ async function redeemBetaCodeIfPresent() {
   const input = document.getElementById("betaCode");
   const code = (input?.value || "").trim().toUpperCase();
   if (!code) return false;
+  // Respaldo: si el flujo se interrumpe antes del canje (error, cierre de
+  // pestaña), login.js lo retoma desde este pendiente y lo canjea al entrar.
+  try { localStorage.setItem("bp-pending-beta-code", code); } catch {}
   const RAILWAY_API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ? "http://127.0.0.1:8000"
     : "https://blackportfolio-api-production.up.railway.app";
@@ -147,9 +150,13 @@ async function redeemBetaCodeIfPresent() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      // El servidor rechazó el código (inválido/agotado/ya activo): no reintentar.
+      try { localStorage.removeItem("bp-pending-beta-code"); } catch {}
+      if (res.status === 409) { _betaAccessGranted = true; return true; } // ya tiene beta activa
       showFormMessage(data.detail || "No se pudo canjear el código de beta.", "error");
       return false;
     }
+    try { localStorage.removeItem("bp-pending-beta-code"); } catch {}
     _betaAccessGranted = true;
     showFormMessage(`✓ Código de beta canjeado: plan ${data.plan} hasta ${new Date(data.expiresAt).toLocaleDateString()}.`, "success");
     return true;
@@ -158,6 +165,37 @@ async function redeemBetaCodeIfPresent() {
     return false;
   }
 }
+
+// ── Registro simple: código de invitación por URL + plan oculto si hay código ─
+// Un enlace index.html?code=BETA-XXXX (o ?beta= / ?codigo=) prellena el código y
+// lo canjea sin que el usuario tenga que teclearlo. Con código presente, el
+// selector de plan se oculta: el canje otorga el plan completo por sí solo.
+(function initBetaCodeUX() {
+  const input = document.getElementById("betaCode");
+  if (!input) return;
+  const planRow = selectedPlanInput?.closest(".form-row");
+  const hint = document.getElementById("betaCodeHint");
+
+  function syncPlanRow() {
+    const hasCode = input.value.trim() !== "";
+    if (planRow) planRow.style.display = hasCode ? "none" : "";
+    if (hasCode) selectedPlanInput.value = "Explorer";
+  }
+
+  input.addEventListener("input", () => {
+    input.value = input.value.toUpperCase().replace(/\s+/g, "");
+    syncPlanRow();
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const code = (params.get("code") || params.get("beta") || params.get("codigo") || "").trim().toUpperCase();
+  if (code) {
+    input.value = code;
+    if (hint) hint.textContent = "✓ Código de invitación detectado: se aplicará automáticamente al crear tu cuenta.";
+    syncPlanRow();
+    setTimeout(() => document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+  }
+})();
 
 // Tras registro/login: si el plan elegido es de pago, exige checkout antes de entrar.
 // Excepción: con acceso de beta canjeado, el plan ya es gratis → entra directo.
@@ -326,12 +364,18 @@ function openTotpSetupModal(uid) {
     boxes.forEach(b => b.classList.remove("otp-box--error"));
   }
 
+  // Auto-verifica al completar el sexto dígito (sin clic en el botón).
+  function maybeAutoVerify() {
+    if (boxes.every(b => b.value !== "") && !verifyBtn.disabled) verifyBtn.click();
+  }
+
   boxes.forEach((box, i) => {
     box.addEventListener("input", () => {
       box.value = box.value.replace(/\D/g, "").slice(-1);
       clearError();
       if (box.value && i < 5) boxes[i + 1].focus();
       syncBtn();
+      maybeAutoVerify();
     });
     box.addEventListener("keydown", e => {
       if (e.key === "Backspace" && !box.value && i > 0) boxes[i - 1].focus();
@@ -346,6 +390,7 @@ function openTotpSetupModal(uid) {
       syncBtn();
       const next = boxes.findIndex(b => !b.value);
       (next === -1 ? boxes[5] : boxes[next]).focus();
+      maybeAutoVerify();
     });
   });
 
@@ -359,6 +404,7 @@ function openTotpSetupModal(uid) {
 
     if (result.ok) {
       sessionStorage.setItem("totp_verified", uid);
+      try { localStorage.setItem("totp_trusted_" + uid, String(Date.now())); } catch {}
       msg.textContent = "✓ 2FA activado. Continuando…";
       msg.className = "totp-setup-msg form-message success";
       setTimeout(() => { proceedAfterAuth(); }, 1200);
@@ -725,6 +771,17 @@ if (googleSignupBtn) {
     eyeOffIcon.classList.toggle('hidden', visible);
     pwToggle.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
   });
+
+  // Menos ruido visual: la checklist de requisitos solo aparece al usar el campo.
+  const pwReqsList = document.getElementById('pwReqs');
+  if (pwReqsList) {
+    pwReqsList.style.display = 'none';
+    pwInput.addEventListener('focus', () => { pwReqsList.style.display = ''; });
+    pwInput.addEventListener('blur', () => {
+      const allMet = RULES.every(r => r.regex.test(pwInput.value));
+      if (!pwInput.value || allMet) pwReqsList.style.display = 'none';
+    });
+  }
 
   pwInput.addEventListener('input', () => {
     const val = pwInput.value;

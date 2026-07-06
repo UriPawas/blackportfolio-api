@@ -50,7 +50,7 @@ body {
     radial-gradient(ellipse 70% 50% at 50% 120%, rgba(var(--violet-rgb), 0.07), transparent 60%),
     linear-gradient(180deg, #06070d 0%, #050509 28%, #020206 64%, #010103 100%);
   color: var(--text);
-  min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
 }
 
@@ -2054,7 +2054,7 @@ h1, h2, h3,
 }
 
 .auth-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   position: relative;
   overflow-x: hidden;
   isolation: isolate;
@@ -2099,7 +2099,7 @@ h1, h2, h3,
 }
 
 .auth-main {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 40px 16px;
@@ -3387,6 +3387,7 @@ h1, h2, h3,
 }
 
 .otp-overlay.hidden { display: none; }
+#loginBetaRow.hidden { display: none; }
 
 @keyframes otp-fade-in {
   from { opacity: 0; transform: scale(0.97); }
@@ -3490,24 +3491,15 @@ h1, h2, h3,
 
 .otp-error-msg.hidden { display: none; }
 
-.otp-verify-btn {
-  width: 100%;
-  margin-bottom: 10px;
-  transition: background 0.2s, transform 0.15s;
+.otp-status-msg {
+  color: var(--success, #4ade80);
+  font-size: 0.86rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  line-height: 1.4;
 }
 
-.otp-verify-btn:not(:disabled):hover { transform: translateY(-1px); }
-
-.otp-verify-btn--success {
-  background: var(--success) !important;
-  border-color: var(--success) !important;
-}
-
-.otp-clear-btn {
-  width: 100%;
-  font-size: 0.85rem;
-  opacity: 0.7;
-}
+.otp-status-msg.hidden { display: none; }
 
 .otp-help {
   font-size: 0.78rem;
@@ -3578,7 +3570,7 @@ h1, h2, h3,
   padding: 34px 32px 28px;
   max-width: 420px;
   width: 100%;
-  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   overflow-y: auto;
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
@@ -4812,4 +4804,58 @@ h1, h2 { text-wrap: balance; }
   .disclaimer-panel {
     padding: 22px;
   }
+}
+
+/* ── iOS zoom fix: inputs/selects must be ≥16px or Safari auto-zooms on focus ── */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+/* ── Códigos de respaldo 2FA (login) ──────────────────────────────────────── */
+#otpBackupWrap.hidden,
+#totpSetupBackupView.hidden { display: none; }
+
+.otp-backup-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+.otp-backup-input {
+  text-align: center;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 1px;
+}
+.backup-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 14px 0;
+}
+.backup-code-chip {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  text-align: center;
+  padding: 9px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  user-select: all;
+}
+.backup-codes-actions { display: flex; gap: 8px; }
+.backup-codes-actions .button { flex: 1; }
+.backup-codes-ack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: var(--muted, #9aa);
+  margin-top: 12px;
+  cursor: pointer;
+}
+@media (max-width: 480px) {
+  .backup-codes-grid { grid-template-columns: 1fr; }
 }

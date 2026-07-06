@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portafolio compartido | BlackPortfolio</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function(){
+      var s=localStorage.getItem('bp-theme');
+      var d=window.matchMedia('(prefers-color-scheme:dark)').matches;
+      document.documentElement.setAttribute('data-theme', s || (d ? 'dark' : 'light'));
+    })();
+  </script>
+  <style>
+    body { margin:0; min-height:100vh; }
+    .pub-wrap { max-width:760px; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+    .pub-header { display:flex; align-items:center; gap:0.6rem; margin-bottom:1.75rem; }
+    .pub-logo { font-weight:800; font-size:1.05rem; letter-spacing:-0.02em; }
+    .pub-readonly { margin-left:auto; font-size:0.72rem; font-weight:600; letter-spacing:0.05em;
+      padding:0.25rem 0.7rem; border-radius:999px; text-transform:uppercase;
+      background:rgba(111,134,255,0.15); color:#6f86ff; border:1px solid rgba(111,134,255,0.3); }
+    .pub-card { background:var(--surface, rgba(255,255,255,0.04)); border:1px solid var(--border, rgba(255,255,255,0.08));
+      border-radius:20px; padding:1.75rem; box-shadow:0 24px 60px rgba(0,0,0,0.25); }
+    .pub-title { font-size:1.7rem; margin:0 0 0.35rem; letter-spacing:-0.03em; }
+    .pub-owner { color:var(--muted); font-size:0.9rem; margin:0 0 1.5rem; }
+    .pub-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin-bottom:1.75rem; }
+    .pub-kpi { background:rgba(var(--primary-rgb),0.04); border:1px solid var(--border); border-radius:12px; padding:0.9rem 1rem; }
+    .pub-kpi span { display:block; font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.3rem; }
+    .pub-kpi strong { font-size:1.15rem; font-weight:700; }
+    .pub-section-title { font-size:0.78rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin:0 0 0.9rem; }
+    .alloc-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.85rem; }
+    .alloc-ticker { width:90px; font-weight:600; font-size:0.9rem; flex-shrink:0; }
+    .alloc-bar-track { flex:1; height:10px; border-radius:6px; background:rgba(var(--primary-rgb),0.08); overflow:hidden; }
+    .alloc-bar-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,#6f86ff,#32d6a2); }
+    .alloc-pct { width:56px; text-align:right; font-size:0.85rem; font-weight:600; flex-shrink:0; }
+    .pub-foot { text-align:center; margin-top:2rem; }
+    .pub-foot a { color:#6f86ff; }
+    .pub-state { text-align:center; padding:3rem 1rem; color:var(--muted); }
+    .pub-state h1 { color:var(--text); font-size:1.4rem; margin-bottom:0.5rem; }
+    @media (max-width:560px){ .pub-kpis{ grid-template-columns:1fr; } .alloc-ticker{ width:70px; } }
+  </style>
+</head>
+<body>
+  <div class="background-orb orb-one"></div>
+  <div class="background-orb orb-two"></div>
+  <div class="grid-overlay"></div>
+
+  <div class="pub-wrap">
+    <div class="pub-header">
+      <span class="pub-logo">◆ BlackPortfolio</span>
+      <span class="pub-readonly">Solo lectura</span>
+    </div>
+
+    <div id="pubContent">
+      <div class="pub-state"><h1>Cargando…</h1><p>Obteniendo el portafolio compartido.</p></div>
+    </div>
+
+    <div class="pub-foot">
+      <p style="color:var(--muted);font-size:0.85rem">¿Quieres crear y dar seguimiento al tuyo? <a href="index.html">Empieza en BlackPortfolio →</a></p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const _IS_LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+      const API_BASE = _IS_LOCAL ? "http://127.0.0.1:8000" : "https://blackportfolio-api-production.up.railway.app";
+      const content = document.getElementById("pubContent");
+      const token = new URLSearchParams(location.search).get("t");
+
+      function fmt(v, cur) {
+        try { return new Intl.NumberFormat("es-MX", { style: "currency", currency: cur || "USD", maximumFractionDigits: 0 }).format(v); }
+        catch { return (cur || "USD") + " " + Math.round(v).toLocaleString("es-MX"); }
+      }
+      function errorState(title, msg) {
+        content.innerHTML = `<div class="pub-card"><div class="pub-state"><h1>${title}</h1><p>${msg}</p></div></div>`;
+      }
+
+      if (!token) { errorState("Enlace incompleto", "Falta el identificador del portafolio en el enlace."); return; }
+
+      (async function () {
+        let data;
+        try {
+          const res = await fetch(`${API_BASE}/api/public/portfolio/${encodeURIComponent(token)}`);
+          if (res.status === 404) { errorState("Enlace no disponible", "Este enlace fue revocado o el portafolio ya no existe."); return; }
+          if (!res.ok) throw new Error("fetch failed");
+          data = await res.json();
+        } catch {
+          errorState("No se pudo cargar", "Ocurrió un error al obtener el portafolio. Intenta de nuevo más tarde.");
+          return;
+        }
+
+        const cur = data.currency || "USD";
+        const positions = data.positions || [];
+        if (!positions.length) { errorState("Portafolio vacío", "Este portafolio aún no tiene posiciones."); return; }
+
+        // Precios en vivo para valuar; fallback a costo promedio
+        let prices = {};
+        try {
+          const syms = [...new Set(positions.map(p => p.ticker).filter(Boolean))].join(",");
+          const pr = await fetch(`${API_BASE}/api/prices?symbols=${encodeURIComponent(syms)}`);
+          if (pr.ok) prices = await pr.json();
+        } catch {}
+
+        let total = 0;
+        const rows = positions.map(p => {
+          const live = prices[p.ticker] && prices[p.ticker].price;
+          const px = (live && isFinite(live)) ? live : p.avgPrice;
+          const value = (p.quantity || 0) * (px || 0);
+          total += value;
+          return { ticker: p.ticker, value };
+        }).sort((a, b) => b.value - a.value);
+
+        const allocHtml = rows.map(r => {
+          const pct = total > 0 ? (r.value / total * 100) : 0;
+          return `<div class="alloc-row">
+            <span class="alloc-ticker">${r.ticker}</span>
+            <span class="alloc-bar-track"><span class="alloc-bar-fill" style="width:${pct.toFixed(1)}%"></span></span>
+            <span class="alloc-pct">${pct.toFixed(1)}%</span>
+          </div>`;
+        }).join("");
+
+        content.innerHTML = `
+          <div class="pub-card">
+            <h1 class="pub-title">${data.name || "Portafolio"}</h1>
+            <p class="pub-owner">Compartido por ${data.ownerName || "un inversor"}</p>
+            <div class="pub-kpis">
+              <div class="pub-kpi"><span>Valor estimado</span><strong>${fmt(total, cur)}</strong></div>
+              <div class="pub-kpi"><span>Posiciones</span><strong>${positions.length}</strong></div>
+              <div class="pub-kpi"><span>Moneda</span><strong>${cur}</strong></div>
+            </div>
+            <p class="pub-section-title">Composición</p>
+            ${allocHtml}
+          </div>`;
+      })();
+    })();
+  </script>
+</body>
+</html>

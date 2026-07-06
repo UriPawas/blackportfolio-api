@@ -1,5 +1,13 @@
 const navItems = document.querySelectorAll(".dashboard-nav-item");
 const sections = document.querySelectorAll(".dashboard-section");
+const mobileBottomNavItems = document.querySelectorAll("[data-mobile-section]");
+const mobileMoreButton = document.getElementById("mobileMoreButton");
+const mobileActionDock = document.getElementById("mobileActionDock");
+const mobilePrimaryAction = document.getElementById("mobilePrimaryAction");
+const mobilePrimaryActionLabel = document.getElementById("mobilePrimaryActionLabel");
+const mobileDataStatus = document.getElementById("mobileDataStatus");
+const mobileDataStatusText = document.getElementById("mobileDataStatusText");
+const mobileDataRetryButton = document.getElementById("mobileDataRetryButton");
 const logoutButton = document.getElementById("logoutButton");
 const logoutButtonSecondary = document.getElementById("logoutButtonSecondary");
 
@@ -308,6 +316,7 @@ function applyPlanRestrictions(session) {
       item.appendChild(icon);
     }
   });
+  syncMobileNavigationRestrictions();
 
   // Range buttons
   document.querySelectorAll("#rangeSegmented [data-range]").forEach((btn) => {
@@ -484,6 +493,224 @@ function updateHeading(sectionId) {
   mainHeading.textContent = sectionHeadings[sectionId] ?? "Centro de control";
 }
 
+function syncMobileNavigationRestrictions() {
+  mobileBottomNavItems.forEach((item) => {
+    const source = document.querySelector(`.dashboard-nav-item[data-section="${item.dataset.mobileSection}"]`);
+    const locked = source?.dataset.locked === "1";
+    item.classList.toggle("is-locked", locked);
+    item.setAttribute("aria-disabled", locked ? "true" : "false");
+  });
+}
+
+function syncMobileNavigation(sectionId) {
+  mobileBottomNavItems.forEach((item) => {
+    const selected = item.dataset.mobileSection === sectionId;
+    item.classList.toggle("active", selected);
+    item.setAttribute("aria-current", selected ? "page" : "false");
+  });
+  const secondarySection = !["home", "tracker", "markets"].includes(sectionId);
+  mobileMoreButton?.classList.toggle("active", secondarySection);
+  mobileMoreButton?.setAttribute("aria-current", secondarySection ? "page" : "false");
+}
+
+function getMobilePrimaryAction(sectionId) {
+  if (sectionId === "home") return { target: "hubAddWidgetBtn", label: "Agregar widget" };
+  if (sectionId === "tracker") {
+    const detailOpen = !document.getElementById("trackerDashView")?.classList.contains("hidden");
+    return detailOpen
+      ? { target: "addPositionBtn", label: "Agregar posición" }
+      : { target: "newPortfolioBtn", label: "Nuevo portafolio" };
+  }
+  if (sectionId === "markets") return { target: "tickerInput", label: "Buscar activo", focus: true };
+  if (sectionId === "markowitz") return { target: "mkwRunBtn", label: "Optimizar portafolio" };
+  if (sectionId === "analyzer") return { target: "analyzerRunBtn", label: "Analizar activos" };
+  return null;
+}
+
+function syncMobilePrimaryAction(sectionId = activeSection) {
+  const config = getMobilePrimaryAction(sectionId);
+  const target = config ? document.getElementById(config.target) : null;
+  const visible = window.innerWidth <= 720 && target;
+  mobileActionDock?.classList.toggle("hidden", !visible);
+  if (!visible || !mobilePrimaryAction) return;
+  mobilePrimaryAction.dataset.target = config.target;
+  mobilePrimaryAction.dataset.focusTarget = config.focus ? "1" : "0";
+  mobilePrimaryAction.disabled = Boolean(target.disabled);
+  mobilePrimaryActionLabel.textContent = config.label;
+}
+
+function initMobileDisclosures() {
+  const analyzerCards = Array.from(document.querySelectorAll("#analyzerResults > .anlz-card"))
+    .filter((card, index) => index > 0 && !card.classList.contains("anlz-decision-card") && !card.classList.contains("anlz-ai-card"));
+  const cards = [
+    document.getElementById("mkwCalcCard"),
+    document.getElementById("marketWlSidebar"),
+    document.getElementById("marketStatsRail"),
+    ...analyzerCards
+  ].filter(Boolean);
+
+  cards.forEach((card, index) => {
+    if (card.dataset.mobileDisclosure === "ready") return;
+    card.dataset.mobileDisclosure = "ready";
+    card.classList.add("mobile-collapsible");
+    const header = card.querySelector(":scope > .card-header, :scope > .anlz-card-header, :scope > .market-wl-head, :scope > .stats-rail-head");
+    if (!header) return;
+    const button = document.createElement("button");
+    button.className = "mobile-disclosure-toggle";
+    button.type = "button";
+    const heading = header.querySelector("h2, h3, h4")?.textContent?.trim() || `sección ${index + 1}`;
+    button.setAttribute("aria-label", `Mostrar detalles de ${heading}`);
+    button.setAttribute("aria-expanded", "false");
+    button.innerHTML = '<span>Mostrar</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>';
+    button.addEventListener("click", () => {
+      const collapsed = card.classList.toggle("is-mobile-collapsed");
+      button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      button.setAttribute("aria-label", `${collapsed ? "Mostrar" : "Ocultar"} detalles de ${heading}`);
+      button.querySelector("span").textContent = collapsed ? "Mostrar" : "Ocultar";
+    });
+    header.appendChild(button);
+  });
+
+  const mobileQuery = window.matchMedia("(max-width: 720px)");
+  const applyMode = () => {
+    const mobile = mobileQuery.matches;
+    cards.forEach((card) => {
+      const button = card.querySelector(":scope > .card-header .mobile-disclosure-toggle, :scope > .anlz-card-header .mobile-disclosure-toggle, :scope > .market-wl-head .mobile-disclosure-toggle, :scope > .stats-rail-head .mobile-disclosure-toggle");
+      if (!button) return;
+      card.classList.toggle("is-mobile-collapsed", mobile);
+      button.setAttribute("aria-expanded", mobile ? "false" : "true");
+      const heading = card.querySelector(":scope > .card-header h2, :scope > .card-header h3, :scope > .anlz-card-header h2, :scope > .anlz-card-header h3")?.textContent?.trim() || "esta sección";
+      button.setAttribute("aria-label", `${mobile ? "Mostrar" : "Ocultar"} detalles de ${heading}`);
+      button.querySelector("span").textContent = mobile ? "Mostrar" : "Ocultar";
+    });
+  };
+  applyMode();
+  if (mobileQuery.addEventListener) mobileQuery.addEventListener("change", applyMode);
+  else mobileQuery.addListener(applyMode);
+}
+
+let mobileDataStatusTimer = null;
+function showMobileDataStatus(message, state = "info", persistent = false) {
+  if (!mobileDataStatus || !mobileDataStatusText) return;
+  clearTimeout(mobileDataStatusTimer);
+  mobileDataStatusText.textContent = message;
+  mobileDataStatus.dataset.state = state;
+  mobileDataStatus.classList.remove("hidden");
+  mobileDataRetryButton.hidden = state !== "offline" && state !== "error";
+  if (!persistent) {
+    mobileDataStatusTimer = setTimeout(() => mobileDataStatus.classList.add("hidden"), 2800);
+  }
+}
+
+function retryMobileData() {
+  if (!navigator.onLine) {
+    showMobileDataStatus("Sigues sin conexión. Revisa tu red e inténtalo nuevamente.", "offline", true);
+    return;
+  }
+  const targets = {
+    tracker: "refreshPricesBtn",
+    markets: "applyTickerButton",
+    topdown: "tdRefreshBtn",
+    markowitz: "mkwRunBtn",
+    analyzer: "analyzerRunBtn"
+  };
+  if (activeSection === "home") {
+    document.querySelectorAll('.hub-widget-btn[title="Actualizar"]').forEach((button) => button.click());
+  } else {
+    const target = document.getElementById(targets[activeSection]);
+    if (target && !target.disabled) target.click();
+  }
+  showMobileDataStatus("Reintento solicitado. Conservamos los últimos datos visibles.", "loading");
+}
+
+function initMobileDataStatus() {
+  window.addEventListener("offline", () => {
+    showMobileDataStatus("Sin conexión. Se muestran los últimos datos disponibles.", "offline", true);
+  });
+  window.addEventListener("online", () => {
+    showMobileDataStatus("Conexión restablecida. Puedes actualizar los datos.", "online");
+  });
+  mobileDataRetryButton?.addEventListener("click", retryMobileData);
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest?.("#refreshPricesBtn, #applyTickerButton, #tdRefreshBtn, .hub-widget-btn[title='Actualizar']")) return;
+    showMobileDataStatus("Actualizando datos…", "loading");
+  });
+  ["dashPriceStatus", "marketChartStatus", "perfChartStatus", "investmentValueStatus"].forEach((id) => {
+    const source = document.getElementById(id);
+    if (!source) return;
+    const reflectStatus = () => {
+      const message = source.textContent.trim();
+      if (!message) return;
+      if (/error|no se pudo|no disponible|desactualiz/i.test(message)) {
+        showMobileDataStatus(`${message} Puedes reintentar sin perder la vista actual.`, "error", true);
+      } else if (/actualizad|correctamente|completad/i.test(message)) {
+        showMobileDataStatus(message, "online");
+      }
+    };
+    new MutationObserver(reflectStatus).observe(source, { childList: true, characterData: true, subtree: true, attributes: true });
+  });
+  if (!navigator.onLine) {
+    showMobileDataStatus("Sin conexión. Se muestran los últimos datos disponibles.", "offline", true);
+  }
+}
+
+function initMobileQuickStart() {
+  document.getElementById("mobileQuickStart")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mobile-quick]");
+    if (!button) return;
+    const action = button.dataset.mobileQuick;
+    if (action === "tracker") {
+      activateSection("tracker");
+      requestAnimationFrame(() => document.getElementById("newPortfolioBtn")?.click());
+      return;
+    }
+    if (action === "profile") {
+      activateSection("settings");
+      requestAnimationFrame(() => {
+        document.querySelector("[data-settings-tab='investor']")?.click();
+        document.getElementById("startInvestorProfileBtn")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      return;
+    }
+    if (action === "markets") {
+      activateSection("markets");
+      requestAnimationFrame(() => {
+        const input = document.getElementById("tickerInput");
+        input?.scrollIntoView({ behavior: "smooth", block: "center" });
+        input?.focus();
+      });
+    }
+  });
+}
+
+function applyMobileTableLabels() {
+  const labelSets = [
+    ["#positionsTableBody > .pos-row", ["Activo", "Fecha", "Precio prom.", "Precio actual", "Cantidad", "Costo total", "Valor actual", "Retorno", "Acciones"]],
+    ["#txTableBody > tr", ["Fecha", "Tipo", "Ticker", "Cantidad", "Precio", "Comision", "Total neto", "Acciones"]],
+    ["#summaryTableBody > tr", ["Activo", "Valor", "Peso"]],
+    ["#watchlistTableBody > tr", ["Activo", "Precio", "Cambio", "Acciones"]],
+    ["#divByTickerTable tbody > tr", ["Ticker", "Dividendos", "Monto", "Ultimo pago"]],
+    ["#divForecastTable tbody > tr", ["Ticker", "Fecha", "Monto estimado", "Estado"]],
+    ["#rebalTable tbody > tr", ["Activo", "Actual", "Objetivo", "Diferencia", "Operacion"]]
+  ];
+  labelSets.forEach(([selector, labels]) => {
+    document.querySelectorAll(selector).forEach((row) => {
+      Array.from(row.children).forEach((cell, index) => {
+        if (cell.tagName !== "TD" || cell.dataset.label) return;
+        cell.dataset.label = labels[index] || "";
+      });
+    });
+  });
+}
+
+function initMobileTableLabels() {
+  applyMobileTableLabels();
+  ["positionsTableBody", "txTableBody", "summaryTableBody", "watchlistTableBody", "divByTickerTable", "divForecastTable", "rebalTable"].forEach((id) => {
+    const element = document.getElementById(id);
+    if (element) new MutationObserver(applyMobileTableLabels).observe(element, { childList: true, subtree: true });
+  });
+}
+
 function activateSection(sectionId) {
   document.getElementById("planUpgradeOverlay")?.remove();
   const navItem = document.querySelector(`.dashboard-nav-item[data-section="${sectionId}"]`);
@@ -502,6 +729,7 @@ function activateSection(sectionId) {
 
   activeSection = sectionId;
   updateHeading(sectionId);
+  window.bpTrack?.("section_view", { section: sectionId });
 
   navItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.section === sectionId);
@@ -510,6 +738,9 @@ function activateSection(sectionId) {
   sections.forEach((section) => {
     section.classList.toggle("active", section.id === `section-${sectionId}`);
   });
+
+  syncMobileNavigation(sectionId);
+  syncMobilePrimaryAction(sectionId);
 
   if (sectionId === "markets") {
     requestAnimationFrame(() => {
@@ -3821,7 +4052,16 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async function(user) {
   if (sessionStorage.getItem("totp_verified") !== user.uid) {
     let isDemo = false;
     try { isDemo = JSON.parse(localStorage.getItem("bp-extra-" + user.uid) || "{}").isDemo === true; } catch {}
-    if (!isDemo && await window.BlackPortfolioAuth.isTwoFactorEnabled(user.uid)) {
+    // Dispositivo de confianza (verificó el código hace <3.5 días) con token de
+    // sesión 2FA vivo: no rebotar al login, el backend valida el token igualmente.
+    let trusted = false;
+    try {
+      const ts = parseInt(localStorage.getItem("totp_trusted_" + user.uid) || "", 10);
+      trusted = Number.isFinite(ts)
+        && (Date.now() - ts) <= 3.5 * 24 * 60 * 60 * 1000
+        && !!localStorage.getItem("bp-2fa-token");
+    } catch {}
+    if (!isDemo && !trusted && await window.BlackPortfolioAuth.isTwoFactorEnabled(user.uid)) {
       window.location.href = "login.html";
       return;
     }
@@ -3837,8 +4077,123 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async function(user) {
     updateHeading("home");
     window.BlackPortfolioAuth.startSessionTimeout();
     recordActivityEntry(user.uid);
+    maybeStartOnboarding(user.uid);
+    initNotifications();
+    initAlertsUI();
   }
 });
+
+document.getElementById("replayTourButton")?.addEventListener("click", () => startOnboarding());
+
+// ── #3 Onboarding / tour de bienvenida ─────────────────────────────────────
+const ONBOARDING_STEPS = [
+  { selector: null, title: "Bienvenido a BlackPortfolio", text: "Te muestro en 30 segundos las herramientas clave. Puedes saltar el tour cuando quieras." },
+  { selector: '.dashboard-nav-item[data-section="tracker"]', title: "Portafolio Tracker", text: "Registra tus posiciones reales y sigue rendimiento, XIRR, dividendos, correlación y rebalanceo." },
+  { selector: '.dashboard-nav-item[data-section="markowitz"]', title: "Creación de portafolio", text: "Optimiza la mezcla riesgo/retorno (Markowitz) y valídala con un backtest walk-forward." },
+  { selector: '.dashboard-nav-item[data-section="topdown"]', title: "Análisis Top-Down", text: "Lee el régimen macro del mercado y el mapa de fuerza relativa por sectores." },
+  { selector: '.dashboard-nav-item[data-section="markets"]', title: "Mercados", text: "Busca cualquier ticker y analiza su gráfico con más de 12 indicadores técnicos." },
+  { selector: '.dashboard-nav-item[data-section="analyzer"]', title: "Analizador", text: "Valora una acción por flujos descontados (DCF) y simula su precio con Monte Carlo." },
+  { selector: null, title: "¿Lo probamos con un ejemplo?", text: "Cargo un portafolio de muestra en “Creación de portafolio” y ejecuto una optimización para que lo veas en acción.", cta: "Cargar ejemplo" },
+];
+let _onbIdx = 0;
+function onboardingKey(uid) { return `bp-onboarding-done-${uid || "anon"}`; }
+function _currentUid() {
+  try { return window.BlackPortfolioAuth?.firebaseAuth?.currentUser?.uid || "anon"; } catch { return "anon"; }
+}
+function maybeStartOnboarding(uid) {
+  try { if (localStorage.getItem(onboardingKey(uid))) return; } catch {}
+  setTimeout(() => startOnboarding(), 600); // deja que el layout/sidebar pinte
+}
+function startOnboarding() {
+  if (document.getElementById("bpOnbOverlay")) return;
+  _onbIdx = 0;
+  const overlay = document.createElement("div");
+  overlay.id = "bpOnbOverlay";
+  overlay.innerHTML = `
+    <div id="bpOnbRing"></div>
+    <div id="bpOnbTip" role="dialog" aria-modal="true">
+      <div id="bpOnbStepCount"></div>
+      <h3 id="bpOnbTitle"></h3>
+      <p id="bpOnbText"></p>
+      <div class="bp-onb-actions">
+        <button id="bpOnbSkip" class="bp-onb-skip" type="button">Saltar</button>
+        <div class="bp-onb-nav">
+          <button id="bpOnbPrev" class="button ghost" type="button">Atrás</button>
+          <button id="bpOnbNext" class="button primary" type="button">Siguiente</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById("bpOnbSkip").addEventListener("click", () => endOnboarding(true));
+  document.getElementById("bpOnbPrev").addEventListener("click", () => { if (_onbIdx > 0) { _onbIdx--; renderOnboardingStep(); } });
+  document.getElementById("bpOnbNext").addEventListener("click", onboardingNext);
+  overlay.addEventListener("click", e => { if (e.target.id === "bpOnbOverlay") endOnboarding(true); });
+  window.addEventListener("resize", _onbReposition);
+  document.addEventListener("keydown", _onbKey);
+  renderOnboardingStep();
+}
+function onboardingNext() {
+  const step = ONBOARDING_STEPS[_onbIdx];
+  if (step.cta) { loadOnboardingExample(); return; }
+  if (_onbIdx < ONBOARDING_STEPS.length - 1) { _onbIdx++; renderOnboardingStep(); }
+  else endOnboarding(true);
+}
+function _onbKey(e) {
+  if (e.key === "Escape") endOnboarding(true);
+  else if (e.key === "ArrowRight" || e.key === "Enter") onboardingNext();
+  else if (e.key === "ArrowLeft" && _onbIdx > 0) { _onbIdx--; renderOnboardingStep(); }
+}
+function renderOnboardingStep() {
+  const step = ONBOARDING_STEPS[_onbIdx];
+  if (!document.getElementById("bpOnbTip")) return;
+  document.getElementById("bpOnbStepCount").textContent = `Paso ${_onbIdx + 1} de ${ONBOARDING_STEPS.length}`;
+  document.getElementById("bpOnbTitle").textContent = step.title;
+  document.getElementById("bpOnbText").textContent = step.text;
+  document.getElementById("bpOnbPrev").style.visibility = _onbIdx === 0 ? "hidden" : "visible";
+  document.getElementById("bpOnbNext").textContent = step.cta ? step.cta : (_onbIdx === ONBOARDING_STEPS.length - 1 ? "Finalizar" : "Siguiente");
+  _onbReposition();
+}
+function _onbReposition() {
+  const step = ONBOARDING_STEPS[_onbIdx];
+  const tip = document.getElementById("bpOnbTip");
+  const ring = document.getElementById("bpOnbRing");
+  if (!tip || !ring) return;
+  const target = step.selector ? document.querySelector(step.selector) : null;
+  const r = target ? target.getBoundingClientRect() : null;
+  if (r && r.width > 0 && r.left >= 0) {
+    const pad = 6;
+    ring.classList.remove("bp-onb-ring-center");
+    ring.style.top = `${r.top - pad}px`;
+    ring.style.left = `${r.left - pad}px`;
+    ring.style.width = `${r.width + pad * 2}px`;
+    ring.style.height = `${r.height + pad * 2}px`;
+    tip.style.transform = "none";
+    const tipW = 320;
+    let left = r.right + 16, top = r.top;
+    if (left + tipW > window.innerWidth - 12) { left = Math.min(r.left, window.innerWidth - tipW - 12); top = r.bottom + 14; }
+    top = Math.max(12, Math.min(top, window.innerHeight - 230));
+    tip.style.left = `${Math.max(12, left)}px`;
+    tip.style.top = `${top}px`;
+  } else {
+    ring.classList.add("bp-onb-ring-center");
+    tip.style.left = "50%"; tip.style.top = "50%";
+    tip.style.transform = "translate(-50%, -50%)";
+  }
+}
+function endOnboarding(markDone) {
+  window.removeEventListener("resize", _onbReposition);
+  document.removeEventListener("keydown", _onbKey);
+  document.getElementById("bpOnbOverlay")?.remove();
+  if (markDone) { try { localStorage.setItem(onboardingKey(_currentUid()), "1"); } catch {} }
+}
+function loadOnboardingExample() {
+  endOnboarding(true);
+  activateSection("markowitz");
+  setTimeout(() => {
+    document.querySelector('#section-markowitz .mkw-preset-card')?.click();
+    setTimeout(() => document.getElementById("mkwRunBtn")?.click(), 350);
+  }, 250);
+}
 
 navItems.forEach((item) => {
   item.addEventListener("click", () => {
@@ -3849,6 +4204,40 @@ navItems.forEach((item) => {
     }
   });
 });
+
+mobileBottomNavItems.forEach((item) => {
+  item.addEventListener("click", () => {
+    activateSection(item.dataset.mobileSection);
+    mainHeading.setAttribute("tabindex", "-1");
+    mainHeading.focus({ preventScroll: true });
+  });
+});
+
+mobileMoreButton?.addEventListener("click", () => {
+  if (!mobileSidebarOpen) handleSidebarToggle();
+});
+
+mobilePrimaryAction?.addEventListener("click", () => {
+  const target = document.getElementById(mobilePrimaryAction.dataset.target || "");
+  if (!target || target.disabled) return;
+  if (mobilePrimaryAction.dataset.focusTarget === "1") {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.focus();
+    return;
+  }
+  target.click();
+});
+
+["trackerListView", "trackerDashView", "analyzerRunBtn"].forEach((id) => {
+  const element = document.getElementById(id);
+  if (element) new MutationObserver(() => syncMobilePrimaryAction()).observe(element, { attributes: true, attributeFilter: ["class", "disabled"] });
+});
+syncMobileNavigation(activeSection);
+syncMobilePrimaryAction(activeSection);
+initMobileDisclosures();
+initMobileDataStatus();
+initMobileQuickStart();
+initMobileTableLabels();
 
 resetHomeButton.addEventListener("click", () => {
   if (confirm("¿Restablecer el inicio? Se perderán todos los espacios y tarjetas personalizadas.")) {
@@ -3875,6 +4264,7 @@ function hideMobileSidebar() {
   dashboardSidebarShell.style.transform = "translateX(-110%)";
   dashboardSidebarShell.style.pointerEvents = "none";
   sidebarBackdrop.classList.remove("active");
+  document.querySelectorAll('[aria-controls="dashboardSidebar"]').forEach((control) => control.setAttribute("aria-expanded", "false"));
 }
 
 function showMobileSidebar() {
@@ -3883,6 +4273,7 @@ function showMobileSidebar() {
   dashboardSidebarShell.style.transform = "translateX(0)";
   dashboardSidebarShell.style.pointerEvents = "auto";
   sidebarBackdrop.classList.add("active");
+  document.querySelectorAll('[aria-controls="dashboardSidebar"]').forEach((control) => control.setAttribute("aria-expanded", "true"));
 }
 
 function clearMobileStyles() {
@@ -3934,6 +4325,7 @@ window.addEventListener("resize", () => {
     hideMobileSidebar();
   }
   wasDesktop = isDesktopNow;
+  syncMobilePrimaryAction();
 });
 
 // ── Theme Toggle ──────────────────────────────────────────────────────────────
@@ -5083,10 +5475,12 @@ let pendingDeleteId = null;
 let trackerInitialized = false;
 let _dashRefreshTimer = null;
 let perfTabLoaded = false;
+let summaryValueLoaded = false;
 let perfDailyReturns = null;
 let perfCurrentConf = 0.95;
 let mcTabLoaded = false;
 let corrTabLoaded = false;
+let goalTabLoaded = false;
 let whatifRafId = null;
 let mcYears = 10;
 let mcRafId = null;
@@ -5151,7 +5545,7 @@ async function portfolioApiRequest(path, options = {}) {
   const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
   if (!user) throw new Error("No hay una sesion autenticada.");
   const token = await user.getIdToken();
-  const twofaToken = sessionStorage.getItem("bp-2fa-token");
+  const twofaToken = localStorage.getItem("bp-2fa-token");
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -5166,7 +5560,8 @@ async function portfolioApiRequest(path, options = {}) {
     // La cuenta tiene 2FA activo pero falta verificarlo en esta sesión: re-loguear.
     if (response.status === 403 && body.detail === "2fa_required") {
       sessionStorage.removeItem("totp_verified");
-      sessionStorage.removeItem("bp-2fa-token"); // token muerto: fuerza re-emisión vía OTP, evita el bucle login↔main
+      localStorage.removeItem("bp-2fa-token"); // token muerto: fuerza re-emisión vía OTP, evita el bucle login↔main
+      sessionStorage.removeItem("bp-2fa-token");
       window.location.href = "login.html";
       throw new Error("Verificación 2FA requerida.");
     }
@@ -5495,7 +5890,7 @@ async function fetchAIInsights(metrics, lang) {
   const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
   if (!user) throw new Error("No hay una sesion autenticada.");
   const token = await user.getIdToken();
-  const twofaToken = sessionStorage.getItem("bp-2fa-token");
+  const twofaToken = localStorage.getItem("bp-2fa-token");
   const res = await fetch(`${API_BASE_URL}/ai/insights`, {
     method: "POST",
     headers: {
@@ -5505,9 +5900,238 @@ async function fetchAIInsights(metrics, lang) {
     },
     body: JSON.stringify({ metrics, lang: lang || "es" }),
   });
-  if (!res.ok) throw new Error("HTTP " + res.status);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).detail || ""; } catch (_) {}
+    throw new Error(`HTTP ${res.status}${detail ? " — " + detail : ""}`);
+  }
   const data = await res.json();
   return { text: (data.insights || "").trim(), model: data.model || "" };
+}
+
+// ── Asistente IA conversacional (Portafolio Tracker · DeepSeek) ────────────────
+let aiChatHistory = [];   // [{ role: "user"|"assistant"|"typing", content }]
+let aiChatBusy = false;
+let aiChatWelcomed = false;
+
+function _aiChatEsc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Snapshot ligero del portafolio activo para anclar las respuestas del modelo.
+function buildChatContext() {
+  const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
+  if (!portfolio) return null;
+  const currency = portfolio.currency || "USD";
+  const positions = (portfolio.positions || []).filter(p => (p.quantity || 0) > 0);
+
+  let totalInvested = 0, totalCurrent = 0, priced = 0;
+  const rows = positions.map(pos => {
+    const posCur = getPosCurrency(pos, currency);
+    const t = calcPositionTotals(pos);
+    const invested = convertAmount(t.total, posCur, currency) ?? t.total;
+    totalInvested += invested;
+    const price = getCachedPrice(pos.ticker);
+    let curVal = null, pnlPct = null;
+    if (price !== null) {
+      curVal = convertAmount(price * (pos.quantity || 0), posCur, currency) ?? price * (pos.quantity || 0);
+      totalCurrent += curVal;
+      priced++;
+      pnlPct = invested > 0 ? +(((curVal - invested) / invested) * 100).toFixed(2) : null;
+    }
+    return { pos, posCur, invested, curVal, pnlPct };
+  });
+
+  const cash = portfolio.cashBalance || 0;
+  const valued = rows.filter(r => r.curVal !== null && r.curVal > 0);
+  const hhi = totalCurrent > 0 ? valued.reduce((s, r) => s + Math.pow(r.curVal / totalCurrent, 2), 0) : 0;
+  const sortedW = [...valued].sort((a, b) => b.curVal - a.curVal);
+  const base = totalCurrent > 0 ? totalCurrent : totalInvested;
+
+  return {
+    portafolio: portfolio.name,
+    moneda: currency,
+    benchmark: portfolio.benchmark || null,
+    posiciones_activas: positions.length,
+    efectivo: +cash.toFixed(2),
+    total_invertido: +totalInvested.toFixed(2),
+    valor_actual: +(totalCurrent + cash).toFixed(2),
+    retorno_total_pct: (totalInvested > 0 && totalCurrent > 0)
+      ? +(((totalCurrent - totalInvested) / totalInvested) * 100).toFixed(2) : null,
+    precios_disponibles: `${priced}/${positions.length}`,
+    concentracion: {
+      hhi: +hhi.toFixed(3),
+      nivel: hhi > 0.25 ? "alta" : hhi > 0.15 ? "moderada" : "baja",
+      holdings_efectivos: hhi > 0 ? +(1 / hhi).toFixed(1) : null,
+      mayor_posicion_pct: (sortedW.length && totalCurrent > 0)
+        ? +((sortedW[0].curVal / totalCurrent) * 100).toFixed(1) : null,
+    },
+    posiciones: rows
+      .sort((a, b) => (b.curVal ?? b.invested) - (a.curVal ?? a.invested))
+      .slice(0, 25)
+      .map(r => ({
+        ticker: r.pos.ticker,
+        divisa: r.posCur,
+        cantidad: r.pos.quantity,
+        precio_promedio: r.pos.avgPrice,
+        peso_pct: base > 0 ? +(((r.curVal ?? r.invested) / base) * 100).toFixed(1) : null,
+        pnl_pct: r.pnlPct,
+        sector: getTickerSector(r.pos.ticker),
+      })),
+  };
+}
+
+function _aiChatRender() {
+  const box = document.getElementById("aiChatMessages");
+  if (!box) return;
+  box.innerHTML = aiChatHistory.map(m => {
+    if (m.role === "user") {
+      return `<div class="ai-chat-msg ai-chat-msg-user"><div class="ai-chat-bubble">${_aiChatEsc(m.content)}</div></div>`;
+    }
+    if (m.role === "typing") {
+      return `<div class="ai-chat-msg ai-chat-msg-bot"><div class="ai-chat-bubble ai-chat-typing"><span></span><span></span><span></span></div></div>`;
+    }
+    const html = (typeof _mdToBulletsHtml === "function") ? _mdToBulletsHtml(m.content) : _aiChatEsc(m.content);
+    return `<div class="ai-chat-msg ai-chat-msg-bot"><div class="ai-chat-bubble ai-chat-bubble-bot">${html}</div></div>`;
+  }).join("");
+  box.scrollTop = box.scrollHeight;
+}
+
+async function _aiChatSend(text) {
+  text = (text || "").trim();
+  if (!text || aiChatBusy) return;
+  const ctx = buildChatContext();
+  if (!ctx) {
+    aiChatHistory.push({ role: "assistant", content: "Abre un portafolio con posiciones para que pueda analizarlo." });
+    _aiChatRender();
+    return;
+  }
+
+  aiChatHistory.push({ role: "user", content: text });
+  aiChatHistory.push({ role: "typing", content: "" });
+  _aiChatRender();
+  const sugg = document.getElementById("aiChatSuggestions");
+  if (sugg) sugg.style.display = "none";
+  aiChatBusy = true;
+  const sendBtn = document.getElementById("aiChatSendBtn");
+  if (sendBtn) sendBtn.disabled = true;
+
+  const apiMessages = aiChatHistory
+    .filter(m => m.role === "user" || m.role === "assistant")
+    .map(m => ({ role: m.role, content: m.content }));
+
+  try {
+    const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
+    if (!user) throw new Error("sin sesión");
+    const token = await user.getIdToken();
+    const twofaToken = localStorage.getItem("bp-2fa-token");
+    const res = await fetch(`${API_BASE_URL}/ai/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(twofaToken ? { "X-2FA-Token": twofaToken } : {}),
+      },
+      body: JSON.stringify({ context: ctx, messages: apiMessages, lang: "es" }),
+    });
+    aiChatHistory = aiChatHistory.filter(m => m.role !== "typing");
+    if (res.status === 403) {
+      aiChatHistory.push({ role: "assistant", content: "El **Asistente IA** está disponible en los planes **Advisor Pro** y **Wealth Desk**. Actívalo en Ajustes → Plan y facturación." });
+    } else if (res.status === 503) {
+      aiChatHistory.push({ role: "assistant", content: "El asistente aún no está configurado en el servidor. Inténtalo más tarde." });
+    } else if (!res.ok) {
+      aiChatHistory.push({ role: "assistant", content: "No pude generar una respuesta ahora mismo. Inténtalo de nuevo en unos segundos." });
+    } else {
+      const data = await res.json();
+      aiChatHistory.push({ role: "assistant", content: (data.reply || "").trim() || "No recibí contenido del modelo." });
+    }
+  } catch (_) {
+    aiChatHistory = aiChatHistory.filter(m => m.role !== "typing");
+    aiChatHistory.push({ role: "assistant", content: "Error de conexión con el asistente. Revisa tu red e inténtalo de nuevo." });
+  } finally {
+    aiChatBusy = false;
+    if (sendBtn) sendBtn.disabled = false;
+    _aiChatRender();
+  }
+}
+
+function _aiChatOpen() {
+  const panel = document.getElementById("aiChatPanel");
+  if (!panel) return;
+  panel.classList.add("open");
+  panel.classList.remove("minimized");
+  panel.setAttribute("aria-hidden", "false");
+  if (!aiChatWelcomed) {
+    const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
+    const name = portfolio ? portfolio.name : "tu portafolio";
+    aiChatHistory.push({ role: "assistant", content: `¡Hola! Soy tu asistente de inversión. Puedo analizar **${name}**: diversificación, concentración, riesgo, atribución de resultados y más. ¿Qué te gustaría saber?` });
+    aiChatWelcomed = true;
+    _aiChatRender();
+  }
+  setTimeout(() => document.getElementById("aiChatInput")?.focus(), 60);
+}
+
+function _aiChatClose() {
+  const panel = document.getElementById("aiChatPanel");
+  if (!panel) return;
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function _aiChatRestore() {
+  const panel = document.getElementById("aiChatPanel");
+  if (!panel) return;
+  panel.classList.remove("minimized");
+  setTimeout(() => document.getElementById("aiChatInput")?.focus(), 60);
+}
+
+function initAiChat() {
+  const btn = document.getElementById("trackerAiChatBtn");
+  const panel = document.getElementById("aiChatPanel");
+  if (!btn || !panel) return;
+  // Reubicar el panel como hijo directo de <body>: así el position:fixed es
+  // relativo al viewport (sigue el scroll) y no queda atrapado por un ancestro
+  // con transform/filter dentro del dashboard.
+  if (panel.parentElement !== document.body) document.body.appendChild(panel);
+
+  btn.addEventListener("click", () => {
+    if (panel.classList.contains("open")) {
+      if (panel.classList.contains("minimized")) _aiChatRestore();
+      else _aiChatClose();
+    } else {
+      _aiChatOpen();
+    }
+  });
+  document.getElementById("aiChatMinBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    panel.classList.toggle("minimized");
+  });
+  // Restaurar al hacer clic en la barra de cabecera (no en sus botones) cuando está minimizado
+  document.getElementById("aiChatHeader")?.addEventListener("click", (e) => {
+    if (panel.classList.contains("minimized") && !e.target.closest("button")) _aiChatRestore();
+  });
+  document.getElementById("aiChatCloseBtn")?.addEventListener("click", _aiChatClose);
+  const form = document.getElementById("aiChatForm");
+  form?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = document.getElementById("aiChatInput");
+    const v = input.value;
+    input.value = "";
+    input.style.height = "auto";
+    _aiChatSend(v);
+  });
+  const input = document.getElementById("aiChatInput");
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form?.requestSubmit(); }
+  });
+  input?.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  });
+  document.getElementById("aiChatSuggestions")?.addEventListener("click", (e) => {
+    const chip = e.target.closest(".ai-chat-chip");
+    if (chip) _aiChatSend(chip.dataset.q);
+  });
 }
 
 // Convierte markdown (encabezados ##, viñetas, **negritas**) a HTML seguro para el reporte.
@@ -5900,14 +6524,25 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
   };
 }
 
+// Carga perezosa de html2pdf.js (html2canvas + jsPDF) para descargar el reporte
+// como archivo PDF sin abrir pestañas ni pasar por el diálogo de impresión.
+let _html2pdfPromise = null;
+function _loadHtml2Pdf() {
+  if (window.html2pdf) return Promise.resolve();
+  if (_html2pdfPromise) return _html2pdfPromise;
+  _html2pdfPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => { _html2pdfPromise = null; reject(new Error("No se pudo cargar el generador de PDF (revisa tu conexión).")); };
+    document.head.appendChild(s);
+  });
+  return _html2pdfPromise;
+}
+
 async function exportPortfolioPDF(startStr, endStr) {
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
-
-  // Abrir la ventana YA (dentro del gesto del click) para evitar el bloqueo de popups.
-  const win = window.open("", "_blank");
-  if (!win) { alert("Permite ventanas emergentes para exportar el PDF."); return; }
-  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generando reporte…</title><style>body{font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#444}.sp{width:34px;height:34px;border:3px solid #e6e8f5;border-top-color:#6f86ff;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 14px}@keyframes r{to{transform:rotate(360deg)}}</style></head><body><div style="text-align:center"><div class="sp"></div><div>Generando reporte con análisis de IA…</div></div></body></html>');
 
   const currency = portfolio.currency || "USD";
   const today    = new Date().toLocaleDateString("es-MX", { year:"numeric", month:"long", day:"numeric" });
@@ -5917,7 +6552,7 @@ async function exportPortfolioPDF(startStr, endStr) {
   try {
     data = await computeHistoricalReport(portfolio, startStr, endStr);
   } catch (e) {
-    win.document.body.innerHTML = '<div style="font-family:Segoe UI,Arial;padding:40px;color:#a44;text-align:center">No se pudo generar el reporte.<br><small>' + ((e && e.message) || e) + '</small></div>';
+    alert("No se pudo generar el reporte: " + ((e && e.message) || e));
     return;
   }
 
@@ -6153,11 +6788,15 @@ async function exportPortfolioPDF(startStr, endStr) {
     } : null,
   };
 
-  let aiSections = {}, aiModel = "";
+  let aiSections = {}, aiModel = "", aiError = "";
   try {
     const ai = await fetchAIInsights(aiMetrics, "es");
     if (ai.text) { aiSections = _parseAISections(ai.text); aiModel = ai.model || ""; }
-  } catch (_) { /* Sin insights: el PDF se genera igual. */ }
+    if (!Object.keys(aiSections).length) aiError = "la IA devolvió una respuesta vacía";
+  } catch (e) {
+    aiError = (e && e.message) || String(e);
+    console.warn("[Reporte PDF] Análisis IA no disponible:", aiError);
+  }
   // Nota de IA intercalable junto a un gráfico/sección
   const aiNote = (key) => aiSections[key]
     ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections[key]}</div>` : "";
@@ -6239,12 +6878,14 @@ async function exportPortfolioPDF(startStr, endStr) {
     .disclaimer{background:#fff8e7;border-left:3px solid var(--amber);border-radius:6px;padding:10px 13px;margin-bottom:16px;font-size:10.5px;color:#7a6020}
     .alerts{background:#fff3f3;border:1px solid #f3c9c9;border-left:3px solid var(--red);border-radius:7px;padding:9px 13px;font-size:10.5px;color:#a44;margin-bottom:12px;line-height:1.7}
     .footer{margin-top:8px;padding-top:11px;border-top:1px solid var(--border);font-size:9.5px;color:var(--faint);display:flex;justify-content:space-between;align-items:center}
+    /* Saltos de página: fuera de @media print para que html2pdf (renderiza en
+       medio "screen") los respete al paginar el PDF descargado. */
+    section,.kpis,.metrics,.g2,.g-perf,.g3,.chart,.kpi,.metric{page-break-inside:avoid;break-inside:avoid}
+    .sec{page-break-after:avoid;break-after:avoid}
+    table{page-break-inside:auto}
+    tr{page-break-inside:avoid;break-inside:avoid}
     @media print{
       body{padding:18px 22px}
-      section,.kpis,.metrics,.g2,.g-perf,.g3,.chart,.kpi,.metric{page-break-inside:avoid}
-      .sec{page-break-after:avoid}
-      table{page-break-inside:auto}
-      tr{page-break-inside:avoid}
       thead{display:table-header-group}
     }
   </style>
@@ -6276,7 +6917,7 @@ async function exportPortfolioPDF(startStr, endStr) {
     <h2 class="sec"><span class="n">1</span>Resumen ejecutivo</h2>
     <div class="${(aiSections.tesis || aiSections.general) ? "g2" : ""}" style="margin-bottom:16px">
       <div class="exec">${execSummary}</div>
-      ${aiNote("tesis") || (aiSections.general ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections.general}</div>` : "")}
+      ${aiNote("tesis") || (aiSections.general ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections.general}</div>` : (aiError ? `<div class="warn" style="margin-bottom:0">⚠ Análisis IA no disponible: ${String(aiError).replace(/&/g,"&amp;").replace(/</g,"&lt;")}. El resto del reporte se generó con normalidad.</div>` : ""))}
     </div>
     <div class="kpis">
       <div class="kpi"><span>Total invertido</span><strong>${totalInvestedTxt}</strong></div>
@@ -6401,13 +7042,33 @@ async function exportPortfolioPDF(startStr, endStr) {
     <span>BlackPortfolio · blackportfolio.ai</span>
     <span>Generado el ${today}</span>
   </div>
-  <script>setTimeout(function(){window.focus();window.print();},350);<\/script>
 </body>
 </html>`;
 
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
+  // Render en iframe oculto (ancho A4 @96dpi) y descarga directa como PDF.
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;visibility:hidden";
+  document.body.appendChild(iframe);
+  try {
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    await _loadHtml2Pdf();
+    await new Promise(r => setTimeout(r, 400)); // deja renderizar fuentes y SVGs
+    const safeName = (portfolio.name || "portafolio").replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, "_");
+    await window.html2pdf().set({
+      margin: [16, 0, 16, 0],
+      filename: `Reporte_${safeName}_${startStr}_a_${endStr}.pdf`,
+      image: { type: "jpeg", quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 794 },
+      jsPDF: { unit: "px", format: [794, 1123], orientation: "portrait", hotfixes: ["px_scaling"] },
+      pagebreak: { mode: ["css", "legacy"] },
+    }).from(iframe.contentDocument.body).save();
+  } catch (e) {
+    alert("No se pudo descargar el PDF: " + ((e && e.message) || e));
+  } finally {
+    iframe.remove();
+  }
 }
 
 // Marca la flecha de orden en el encabezado activo (L2.2)
@@ -6479,7 +7140,7 @@ function renderTransactionsTab() {
   noMsg.classList.add("hidden");
 
   if (!txs.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Sin resultados para los filtros aplicados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Sin resultados para los filtros aplicados.</td></tr>`;
     return;
   }
 
@@ -6490,13 +7151,145 @@ function renderTransactionsTab() {
     const sym = CURRENCY_SYMBOLS[tx.currency] || "$";
     const isCash = tx.type === "DEPOSITO" || tx.type === "RETIRO";
     return `<tr>
-      <td>${date}</td>
-      <td><span class="tx-badge ${typeClass}">${tx.type}</span></td>
-      <td><strong>${isCash ? "Efectivo" : tx.ticker}</strong></td>
-      <td>${isCash ? "—" : tx.quantity}</td>
-      <td>${isCash ? "—" : sym + tx.price.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
-      <td>${isCash ? "—" : sym + tx.commCost.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ` (${tx.commissionPercent.toFixed(2)}%)`}</td>
-      <td><strong>${sym}${tx.net.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+      <td data-label="Fecha">${date}</td>
+      <td data-label="Tipo"><span class="tx-badge ${typeClass}">${tx.type}</span></td>
+      <td data-label="Activo"><strong>${isCash ? "Efectivo" : tx.ticker}</strong></td>
+      <td data-label="Cantidad">${isCash ? "—" : tx.quantity}</td>
+      <td data-label="Precio">${isCash ? "—" : sym + tx.price.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
+      <td data-label="Comisión">${isCash ? "—" : sym + tx.commCost.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ` (${tx.commissionPercent.toFixed(2)}%)`}</td>
+      <td data-label="Total"><strong>${sym}${tx.net.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+      <td data-label="Acciones" class="tx-actions-cell">
+        <button type="button" class="tx-action-btn" onclick="openEditTxModal('${tx.id}')" title="Editar" aria-label="Editar">✎</button>
+        <button type="button" class="tx-action-btn tx-action-del" onclick="confirmDeleteTx('${tx.id}')" title="Eliminar" aria-label="Eliminar">🗑</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  renderClosedTradesTab(portfolio);
+}
+
+// ── Operaciones cerradas / round-trips (#7) ─────────────────────────────────
+// Empareja cada VENTA con sus COMPRAS por FIFO y calcula P/L realizada,
+// retorno y tiempo de tenencia por operación. Convierte a la moneda del portafolio.
+function computeClosedTrades(portfolio) {
+  const cur = (portfolio && portfolio.currency) || "USD";
+  const txs = (portfolio && portfolio.transactions ? portfolio.transactions : [])
+    .filter((t) => t.type === "COMPRA" || t.type === "VENTA")
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const lots = {}; // ticker -> [{qty, unitCost, cur, date}]
+  const trades = [];
+  for (const tx of txs) {
+    const tkr = tx.ticker;
+    const txCur = tx.currency || cur;
+    if (!lots[tkr]) lots[tkr] = [];
+    if (tx.type === "COMPRA") {
+      const qty = tx.quantity || 0;
+      if (qty <= 0) continue;
+      lots[tkr].push({ qty, unitCost: (tx.net || 0) / qty, cur: txCur, date: (tx.date || "").slice(0, 10) });
+    } else { // VENTA
+      const sellQty = tx.quantity || 0;
+      if (sellQty <= 0) continue;
+      const sellDate = (tx.date || "").slice(0, 10);
+      const proceedsTotal = convertAmount(tx.net || 0, txCur, cur) ?? (tx.net || 0);
+      const sellPricePer = convertAmount(tx.price || 0, txCur, cur) ?? (tx.price || 0);
+      const arr = lots[tkr];
+      let remaining = sellQty;
+      let matchedCost = 0, matchedQty = 0, weightedDays = 0, earliestBuy = null;
+      while (remaining > 1e-8 && arr.length) {
+        const lot = arr[0];
+        const use = Math.min(lot.qty, remaining);
+        matchedCost += convertAmount(lot.unitCost * use, lot.cur, cur) ?? (lot.unitCost * use);
+        matchedQty += use;
+        weightedDays += Math.max(0, (new Date(sellDate) - new Date(lot.date)) / 86400000) * use;
+        if (!earliestBuy || (lot.date && lot.date < earliestBuy)) earliestBuy = lot.date;
+        lot.qty -= use;
+        remaining -= use;
+        if (lot.qty <= 1e-8) arr.shift();
+      }
+      if (matchedQty <= 0) continue;
+      const proceeds = proceedsTotal * (matchedQty / sellQty);
+      const pnl = proceeds - matchedCost;
+      trades.push({
+        ticker: tkr,
+        buyDate: earliestBuy,
+        sellDate,
+        qty: matchedQty,
+        buyPrice: matchedCost / matchedQty,
+        sellPrice: sellPricePer,
+        cost: matchedCost,
+        proceeds,
+        pnl,
+        pnlPct: matchedCost > 0 ? pnl / matchedCost * 100 : null,
+        holdingDays: Math.round(weightedDays / matchedQty),
+      });
+    }
+  }
+  return trades.sort((a, b) => new Date(b.sellDate) - new Date(a.sellDate));
+}
+
+function _fmtHolding(days) {
+  if (days == null || !isFinite(days)) return "—";
+  if (days < 31) return `${days} d`;
+  if (days < 365) return `${Math.round(days / 30.44)} m`;
+  const y = days / 365.25;
+  return `${y.toFixed(1)} a`;
+}
+
+function renderClosedTradesTab(portfolio) {
+  portfolio = portfolio || getPortfolios().find((p) => p.id === activePortfolioId);
+  const body = document.getElementById("closedTradesBody");
+  const shell = document.getElementById("closedTradesShell");
+  const emptyMsg = document.getElementById("noClosedTradesMsg");
+  const summary = document.getElementById("closedTradesSummary");
+  if (!body || !portfolio) return;
+  const cur = portfolio.currency || "USD";
+  const trades = computeClosedTrades(portfolio);
+
+  if (!trades.length) {
+    body.innerHTML = "";
+    if (shell) shell.classList.add("hidden");
+    if (summary) summary.innerHTML = "";
+    if (emptyMsg) emptyMsg.style.display = "";
+    return;
+  }
+  if (shell) shell.classList.remove("hidden");
+  if (emptyMsg) emptyMsg.style.display = "none";
+
+  const totalPnl = trades.reduce((s, t) => s + t.pnl, 0);
+  const totalCost = trades.reduce((s, t) => s + t.cost, 0);
+  const winners = trades.filter((t) => t.pnl > 0).length;
+  const winRate = trades.length ? winners / trades.length * 100 : 0;
+  const avgHold = trades.reduce((s, t) => s + (t.holdingDays || 0), 0) / trades.length;
+  const best = trades.reduce((m, t) => (t.pnlPct != null && (m == null || t.pnlPct > m.pnlPct)) ? t : m, null);
+  const totalRetPct = totalCost > 0 ? totalPnl / totalCost * 100 : null;
+
+  if (summary) {
+    const pnlCls = totalPnl >= 0 ? "return-pos" : "return-neg";
+    summary.innerHTML = `
+      <div class="cts-item"><span>Operaciones</span><strong>${trades.length}</strong></div>
+      <div class="cts-item"><span>P/L realizada</span><strong class="${pnlCls}">${totalPnl >= 0 ? "+" : ""}${formatCurrency(totalPnl, cur)}</strong></div>
+      <div class="cts-item"><span>Retorno realizado</span><strong class="${totalRetPct != null && totalRetPct >= 0 ? "return-pos" : "return-neg"}">${totalRetPct != null ? (totalRetPct >= 0 ? "+" : "") + totalRetPct.toFixed(2) + "%" : "—"}</strong></div>
+      <div class="cts-item"><span>Tasa de acierto</span><strong>${winRate.toFixed(0)}% <small class="cts-days">(${winners}/${trades.length})</small></strong></div>
+      <div class="cts-item"><span>Tenencia prom.</span><strong>${_fmtHolding(avgHold)}</strong></div>
+      <div class="cts-item"><span>Mejor operación</span><strong class="return-pos">${best && best.pnlPct != null ? best.ticker + " +" + best.pnlPct.toFixed(1) + "%" : "—"}</strong></div>`;
+  }
+
+  body.innerHTML = trades.map((t) => {
+    const cls = t.pnl >= 0 ? "return-pos" : "return-neg";
+    const sign = t.pnl >= 0 ? "+" : "";
+    const buyD = t.buyDate ? new Date(t.buyDate + "T12:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
+    const sellD = t.sellDate ? new Date(t.sellDate + "T12:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
+    const qtyStr = t.qty.toLocaleString("es-MX", { maximumFractionDigits: 6 });
+    return `<tr>
+      <td data-label="Ticker"><strong>${t.ticker}</strong></td>
+      <td data-label="Compra">${buyD}</td>
+      <td data-label="Venta">${sellD}</td>
+      <td data-label="Tenencia"><span class="cts-days">${_fmtHolding(t.holdingDays)}</span></td>
+      <td data-label="Cantidad">${qtyStr}</td>
+      <td data-label="P. compra">${formatCurrency(t.buyPrice, cur)}</td>
+      <td data-label="P. venta">${formatCurrency(t.sellPrice, cur)}</td>
+      <td data-label="P/L realizada"><span class="${cls}">${sign}${formatCurrency(t.pnl, cur)}</span></td>
+      <td data-label="Retorno"><span class="${cls}">${t.pnlPct != null ? sign + t.pnlPct.toFixed(2) + "%" : "—"}</span></td>
     </tr>`;
   }).join("");
 }
@@ -6511,6 +7304,215 @@ function clearTxFilters() {
   if (from)   from.value   = "";
   if (to)     to.value     = "";
   renderTransactionsTab();
+}
+
+// ── Editar / Eliminar transacciones ───────────────────────────────────────────
+// Modelo: las transacciones son la bitácora; las posiciones se guardan aparte.
+// avgPrice y commissionPercent son promedios ponderados SOLO por compras (no
+// cambian al vender). Al editar/eliminar una COMPRA/VENTA reconstruimos la
+// posición del activo afectado replayando su historial y sembrando un "baseline"
+// para la porción importada por CSV que no tiene transacción asociada.
+
+// Efecto neto de una transacción sobre el efectivo, en moneda del portafolio.
+function txCashEffect(tx, portfolioCur) {
+  const cur = tx.currency || portfolioCur;
+  const net = tx.net || 0;
+  const conv = cur !== portfolioCur ? (convertAmount(net, cur, portfolioCur) ?? net) : net;
+  const sign = (tx.type === "COMPRA" || tx.type === "RETIRO") ? -1 : 1; // VENTA/DIVIDENDO/DEPOSITO suman
+  return sign * conv;
+}
+
+// Porción de una posición NO representada en el historial de transacciones
+// (p. ej. importada por CSV). Se calcula ANTES de mutar las transacciones.
+function captureTickerBaseline(portfolio, ticker) {
+  const pos = (portfolio.positions || []).find((p) => p.ticker === ticker);
+  if (!pos) return null;
+  const txs = (portfolio.transactions || []).filter((t) => t.ticker === ticker && (t.type === "COMPRA" || t.type === "VENTA"));
+  let txBoughtQty = 0, txBoughtInvested = 0, txBoughtComm = 0, txSoldQty = 0;
+  for (const t of txs) {
+    if (t.type === "COMPRA") {
+      txBoughtQty += t.quantity || 0;
+      txBoughtInvested += (t.price || 0) * (t.quantity || 0);
+      txBoughtComm += t.commCost || 0;
+    } else {
+      txSoldQty += t.quantity || 0;
+    }
+  }
+  const boughtQtyBefore = (pos.quantity || 0) + txSoldQty; // cantidad total comprada = actual + vendida
+  const baselineQty = boughtQtyBefore - txBoughtQty;
+  if (baselineQty <= 1e-9) {
+    return { qty: 0, invested: 0, comm: 0, currency: getPosCurrency(pos, portfolio.currency || "USD"),
+             applyIva: pos.applyIva, ivaRate: pos.ivaRate, purchaseDate: pos.purchaseDate, id: pos.id };
+  }
+  // Reversa exacta del avg/comisión ponderados para aislar la porción baseline.
+  const baselineInvested = (pos.avgPrice || 0) * (baselineQty + txBoughtQty) - txBoughtInvested;
+  const baselineComm = (pos.commissionPercent || 0) / 100 * (pos.avgPrice || 0) * (baselineQty + txBoughtQty) - txBoughtComm;
+  return {
+    qty: baselineQty,
+    invested: Math.max(0, baselineInvested),
+    comm: Math.max(0, baselineComm),
+    currency: getPosCurrency(pos, portfolio.currency || "USD"),
+    applyIva: pos.applyIva, ivaRate: pos.ivaRate, purchaseDate: pos.purchaseDate, id: pos.id
+  };
+}
+
+// Reconstruye la posición abierta de un ticker replayando su historial con la
+// MISMA semántica de promedio móvil incremental que usa addPosition/withdraw:
+// la compra pondera contra la cantidad tenida al momento; la venta solo reduce
+// cantidad (avg y comisión no cambian). Se siembra con la porción baseline
+// (importada por CSV) si existe.
+function rebuildOpenPositionForTicker(portfolio, ticker, baseline) {
+  const txs = (portfolio.transactions || [])
+    .filter((t) => t.ticker === ticker && (t.type === "COMPRA" || t.type === "VENTA"))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  let qty = 0, avg = 0, commPct = 0;
+  let currency = portfolio.currency || "USD";
+  let earliestDate = null;
+  if (baseline && baseline.qty > 1e-9) {
+    qty = baseline.qty;
+    avg = baseline.invested / baseline.qty;
+    commPct = baseline.invested > 0 ? (baseline.comm / baseline.invested) * 100 : 0;
+    currency = baseline.currency;
+    earliestDate = baseline.purchaseDate || null;
+  }
+
+  for (const tx of txs) {
+    currency = tx.currency || currency;
+    if (tx.type === "COMPRA") {
+      const oldInvested = avg * qty;
+      const newInvested = (tx.price || 0) * (tx.quantity || 0);
+      const oldComm = oldInvested * commPct / 100;
+      const newComm = tx.commCost || 0;
+      qty += tx.quantity || 0;
+      avg = qty > 0 ? (oldInvested + newInvested) / qty : 0;
+      const totInvested = oldInvested + newInvested;
+      commPct = totInvested > 0 ? (oldComm + newComm) / totInvested * 100 : commPct;
+      const d = (tx.date || "").slice(0, 10);
+      if (d && (!earliestDate || d < earliestDate)) earliestDate = d;
+    } else { // VENTA: solo reduce cantidad (igual que el handler de retiro)
+      qty = Math.max(0, qty - (tx.quantity || 0));
+    }
+  }
+
+  qty = parseFloat(qty.toFixed(10));
+  const positions = portfolio.positions || (portfolio.positions = []);
+  const idx = positions.findIndex((p) => p.ticker === ticker);
+
+  if (qty <= 1e-9) {
+    if (idx !== -1) positions.splice(idx, 1); // posición cerrada
+    return;
+  }
+
+  if (idx !== -1) {
+    positions[idx].quantity = qty;
+    positions[idx].avgPrice = avg;
+    positions[idx].commissionPercent = commPct;
+    positions[idx].currency = currency;
+    if (earliestDate) positions[idx].purchaseDate = earliestDate;
+  } else {
+    positions.push({
+      id: generateId(),
+      ticker,
+      avgPrice: avg,
+      quantity: qty,
+      commissionPercent: commPct,
+      applyIva: baseline ? baseline.applyIva || false : false,
+      ivaRate: baseline ? baseline.ivaRate || 0 : 0,
+      purchaseDate: earliestDate,
+      currency
+    });
+  }
+}
+
+// Aplica una edición (newTx) o eliminación (newTx === null) de una transacción,
+// recalculando posición(es) y efectivo afectados.
+function applyTxMutation(portfolio, oldTx, newTx) {
+  const portfolioCur = portfolio.currency || "USD";
+  portfolio.transactions = portfolio.transactions || [];
+
+  // Tickers cuya posición hay que reconstruir (solo COMPRA/VENTA afectan posición).
+  const affected = new Set();
+  if (oldTx.type === "COMPRA" || oldTx.type === "VENTA") affected.add(oldTx.ticker);
+  if (newTx && (newTx.type === "COMPRA" || newTx.type === "VENTA")) affected.add(newTx.ticker);
+
+  // Baselines calculados con el estado PRE-edición.
+  const baselines = {};
+  affected.forEach((tk) => { baselines[tk] = captureTickerBaseline(portfolio, tk); });
+
+  // Ajuste de efectivo por el delta del efecto de la transacción (nunca negativo,
+  // igual que el resto de la app).
+  const cashDelta = (newTx ? txCashEffect(newTx, portfolioCur) : 0) - txCashEffect(oldTx, portfolioCur);
+  portfolio.cashBalance = Math.max(0, (portfolio.cashBalance || 0) + cashDelta);
+
+  // Mutar el arreglo de transacciones.
+  const i = portfolio.transactions.findIndex((t) => t.id === oldTx.id);
+  if (i === -1) return false;
+  if (newTx) portfolio.transactions[i] = newTx;
+  else portfolio.transactions.splice(i, 1);
+
+  // Reconstruir posiciones afectadas.
+  affected.forEach((tk) => rebuildOpenPositionForTicker(portfolio, tk, baselines[tk]));
+
+  // El P/L realizado es función pura de las transacciones.
+  portfolio.realizedPnL = reconstructRealizedPnL(portfolio);
+  return true;
+}
+
+// Muestra/oculta campos del modal según el tipo de transacción.
+function updateEditTxFields(type) {
+  const isCash = type === "DEPOSITO" || type === "RETIRO";
+  const isDiv = type === "DIVIDENDO";
+  document.getElementById("editTxTickerRow").classList.toggle("hidden", isCash);
+  document.getElementById("editTxQtyRow").classList.toggle("hidden", isCash);
+  document.getElementById("editTxCommRow").classList.toggle("hidden", isCash || isDiv);
+  document.getElementById("editTxPriceLabel").textContent =
+    isCash ? "Monto" : (isDiv ? "Dividendo por acción" : "Precio");
+}
+
+function openEditTxModal(txId) {
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  const tx = portfolio ? (portfolio.transactions || []).find((t) => t.id === txId) : null;
+  if (!tx) return;
+  document.getElementById("editTxId").value = tx.id;
+  document.getElementById("editTxType").value = tx.type;
+  document.getElementById("editTxDate").value = (tx.date || "").slice(0, 10);
+  document.getElementById("editTxTicker").value = (tx.type === "DEPOSITO" || tx.type === "RETIRO") ? "" : (tx.ticker || "");
+  document.getElementById("editTxQuantity").value = tx.quantity ?? "";
+  document.getElementById("editTxPrice").value = tx.price ?? "";
+  document.getElementById("editTxCommission").value = tx.commissionPercent ?? 0;
+  document.getElementById("editTxError").classList.add("hidden");
+  updateEditTxFields(tx.type);
+  openModal("editTxModal");
+}
+
+// Construye el objeto de transacción a partir de los campos del formulario.
+function buildTxFromForm(oldTx, type, dateStr, ticker, quantity, price, commissionPercent) {
+  const base = { id: oldTx.id, date: new Date(dateStr + "T12:00:00").toISOString(), type, currency: oldTx.currency || "USD" };
+  if (type === "DEPOSITO" || type === "RETIRO") {
+    return { ...base, ticker: "CASH", quantity: 1, price, commissionPercent: 0, commCost: 0, net: price };
+  }
+  if (type === "DIVIDENDO") {
+    return { ...base, ticker, quantity, price, commissionPercent: 0, commCost: 0, net: price * quantity };
+  }
+  const commCost = price * quantity * (commissionPercent / 100);
+  const gross = price * quantity;
+  const net = type === "COMPRA" ? gross + commCost : gross - commCost;
+  return { ...base, ticker, quantity, price, commissionPercent, commCost, net };
+}
+
+function confirmDeleteTx(txId) {
+  const portfolios = getPortfolios();
+  const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+  const tx = portfolio ? (portfolio.transactions || []).find((t) => t.id === txId) : null;
+  if (!tx) return;
+  const label = (tx.type === "DEPOSITO" || tx.type === "RETIRO") ? tx.type : `${tx.type} ${tx.ticker}`;
+  if (!confirm(`¿Eliminar la transacción "${label}"? Se recalcularán la posición y el efectivo afectados.`)) return;
+  applyTxMutation(portfolio, tx, null);
+  savePortfolios(portfolios);
+  renderPortfolioDashboard();
+  renderTransactionsTab();
+  showToast("Transacción eliminada.", { type: "success" });
 }
 
 function formatCurrency(n, currency) {
@@ -6673,7 +7675,17 @@ function detectCurrencyFromTicker(ticker) {
 }
 
 function getPosCurrency(pos, fallback) {
-  return pos.currency || detectCurrencyFromTicker(pos.ticker) || fallback || "USD";
+  // El sufijo del ticker (.MX, .DE, etc.) es autoritativo: Yahoo cotiza esos
+  // mercados SIEMPRE en su divisa local, sin importar lo que se haya guardado.
+  return detectCurrencyFromTicker(pos.ticker) || pos.currency || fallback || "USD";
+}
+
+// Precio promedio EFECTIVO por acción: incluye comisión de entrada e IVA,
+// para acercarse al costo real que reporta el broker. No altera avgPrice.
+function effectiveAvgPrice(pos) {
+  const qty = pos.quantity || 0;
+  if (qty <= 0) return pos.avgPrice || 0;
+  return calcPositionTotals(pos).total / qty;
 }
 
 function reconstructRealizedPnL(portfolio) {
@@ -6783,6 +7795,7 @@ function showTrackerDashView(portfolioId) {
   const _posSearchEl = document.getElementById("positionsSearchInput");
   if (_posSearchEl) _posSearchEl.value = "";
   perfTabLoaded = false;
+  summaryValueLoaded = false;
   perfDailyReturns = null;
   perfReportData = null;
   mcTabLoaded = false;
@@ -6795,11 +7808,13 @@ function showTrackerDashView(portfolioId) {
   document.getElementById("tabPanelDesempeno").style.display = "none";
   document.getElementById("tabPanelTransacciones").style.display = "none";
   document.getElementById("tabPanelProyeccion").style.display = "none";
+  document.getElementById("tabPanelMetas").style.display = "none";
   document.getElementById("tabPanelDividendos").style.display = "none";
   document.getElementById("tabPanelRebalanceo").style.display = "none";
   document.getElementById("tabPanelCorrelacion").style.display = "none";
   document.getElementById("tabPanelWhatif").style.display = "none";
   corrTabLoaded = false;
+  goalTabLoaded = false;
   document.getElementById("trackerListView").classList.add("hidden");
   document.getElementById("trackerDashView").classList.remove("hidden");
   renderPortfolioDashboard();
@@ -6811,6 +7826,11 @@ function showTrackerDashView(portfolioId) {
       if (tabBtn) tabBtn.click();
     }
   } catch {}
+  // Cargar la gráfica de valor si el Resumen quedó visible (#1)
+  if (!summaryValueLoaded && document.getElementById("tabPanelSummary").style.display !== "none") {
+    const p = getPortfolios().find((q) => q.id === portfolioId);
+    if (p) loadSummaryValueChart(p);
+  }
   _dashRefreshTimer = setInterval(() => {
     const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
     if (!portfolio) return;
@@ -7184,6 +8204,7 @@ function _doRenderDashboard(portfolio) {
 
   let totalCurrentValue = 0;
   let totalCostPriced = 0;
+  let prevValue = 0;
   let hasAnyPrice = false;
   let pricedCount = 0;
   positions.forEach((pos) => {
@@ -7192,8 +8213,12 @@ function _doRenderDashboard(portfolio) {
     if (price !== null) {
       hasAnyPrice = true;
       pricedCount++;
-      totalCurrentValue += convertAmount(price * (pos.quantity || 0), posCur, currency) ?? (price * (pos.quantity || 0));
+      const qty = pos.quantity || 0;
+      totalCurrentValue += convertAmount(price * qty, posCur, currency) ?? (price * qty);
       totalCostPriced += convertAmount(calcPositionTotals(pos).total, posCur, currency) ?? calcPositionTotals(pos).total;
+      const prev = getCachedPrev(pos.ticker);
+      const pv = (prev !== null ? prev : price) * qty;
+      prevValue += convertAmount(pv, posCur, currency) ?? pv;
     }
   });
 
@@ -7299,12 +8324,36 @@ function _doRenderDashboard(portfolio) {
     }
   }
 
+  // ── Cambio de hoy (variación vs cierre anterior, solo posiciones con precio) ──
+  const dayAmtEl = document.getElementById("dashDayChangeAmt");
+  const dayPctEl = document.getElementById("dashDayChangePct");
+  if (dayAmtEl && dayPctEl) {
+    const dayChangeAmt = hasAnyPrice ? totalCurrentValue - prevValue : null;
+    const dayChangePct = dayChangeAmt !== null && prevValue > 0 ? dayChangeAmt / prevValue * 100 : null;
+    if (dayChangeAmt !== null) {
+      const sign = dayChangeAmt >= 0 ? "+" : "";
+      dayAmtEl.textContent = sign + formatCurrency(dayChangeAmt, currency);
+      dayAmtEl.className = dayChangeAmt >= 0 ? "return-pos" : "return-neg";
+      if (dayChangePct !== null) {
+        dayPctEl.textContent = `${sign}${dayChangePct.toFixed(2)}% hoy`;
+        dayPctEl.className = dayChangePct >= 0 ? "return-pos" : "return-neg";
+      } else {
+        dayPctEl.textContent = "";
+        dayPctEl.className = "";
+      }
+    } else {
+      dayAmtEl.textContent = "—"; dayAmtEl.className = "";
+      dayPctEl.textContent = ""; dayPctEl.className = "";
+    }
+  }
+
   renderSummaryTable(positions, totalInvested, currency, cashBalance);
   renderPositionsTable(positions, totalInvested, currency, portfolio.transactions || []);
   if (positions.length) drawAllSparklines(positions);
   drawDonutChart(document.getElementById("portfolioDonutChart"), positions, totalInvested, currency, cashBalance);
   renderDonutLegend(positions, totalInvested, currency, cashBalance);
   drawHoldingsBarChart(document.getElementById("holdingsBarChart"), positions, currency);
+  renderHoldingsTreemap(positions, currency);
   renderAllocationCharts(positions, totalInvested, currency, cashBalance);
 }
 
@@ -7350,21 +8399,21 @@ function renderSummaryTable(positions, totalInvested, currency, cashBalance) {
     }
 
     return `<tr>
-      <td><span class="pos-ticker-dot" style="background:${color}"></span>${pos.ticker}${currTag}</td>
-      <td>${priceCell}</td>
-      <td>${changeAbsCell}</td>
-      <td>${changePctCell}</td>
-      <td>${posValueCell}</td>
+      <td data-label="Activo"><span class="pos-ticker-dot" style="background:${color}"></span>${pos.ticker}${currTag}</td>
+      <td data-label="Precio">${priceCell}</td>
+      <td data-label="Cambio">${changeAbsCell}</td>
+      <td data-label="Cambio %">${changePctCell}</td>
+      <td data-label="Valor">${posValueCell}</td>
     </tr>`;
   });
 
   if (cash > 0) {
     rows.push(`<tr>
-      <td><span class="pos-ticker-dot" style="background:#4ade80"></span><strong>Cash</strong></td>
-      <td>—</td>
-      <td>—</td>
-      <td>—</td>
-      <td>${formatCurrency(cash, currency)}</td>
+      <td data-label="Activo"><span class="pos-ticker-dot" style="background:#4ade80"></span><strong>Cash</strong></td>
+      <td data-label="Precio">—</td>
+      <td data-label="Cambio">—</td>
+      <td data-label="Cambio %">—</td>
+      <td data-label="Valor">${formatCurrency(cash, currency)}</td>
     </tr>`);
   }
 
@@ -7407,7 +8456,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       switch (key) {
         case "ticker": return pos.ticker || "";
         case "date": return pos.purchaseDate || "";
-        case "avg": return pos.avgPrice || 0;
+        case "avg": return effectiveAvgPrice(pos);
         case "price": return price ?? -Infinity;
         case "qty": return pos.quantity || 0;
         case "cost": return cost;
@@ -7468,19 +8517,19 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       </div></td></tr>` : "";
 
     return `<tr class="pos-row">
-      <td>
+      <td data-label="Activo">
         ${txs.length ? `<button class="pos-expand-btn" type="button" data-lots-for="${pos.id}" aria-label="Ver lotes"><svg class="pos-expand-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>` : ""}
         ${posTickerLogoHtml(pos.ticker, color)}<strong>${pos.ticker}</strong>${currTag}
       </td>
-      <td class="td-sparkline"><canvas class="pos-sparkline" data-ticker="${pos.ticker}" width="80" height="28"></canvas></td>
-      <td>${dateStr}</td>
-      <td>${formatCurrency(pos.avgPrice, posCur)}</td>
-      <td>${currentPrice !== null ? `<span class="price-fresh-dot price-fresh-dot--${fr.cls}" title="${fr.title}"></span>` + formatCurrency(currentPrice, posCur) : '<span class="muted-val" title="Precio cargando o no disponible">…</span>'}</td>
-      <td>${parseFloat(pos.quantity.toFixed(5))}</td>
-      <td>${formatCurrency(costConverted, currency)}</td>
-      <td>${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
-      <td>${retCell}</td>
-      <td class="pos-actions-cell">
+      <td class="td-sparkline" data-label="30 días"><canvas class="pos-sparkline" data-ticker="${pos.ticker}" width="80" height="28"></canvas></td>
+      <td data-label="Fecha">${dateStr}</td>
+      <td data-label="Precio promedio">${formatCurrency(effectiveAvgPrice(pos), posCur)}<small class="fx-tag" title="Incluye comisión de entrada e IVA">c/com</small></td>
+      <td data-label="Precio actual">${currentPrice !== null ? `<span class="price-fresh-dot price-fresh-dot--${fr.cls}" title="${fr.title}"></span>` + formatCurrency(currentPrice, posCur) : '<span class="muted-val" title="Precio cargando o no disponible">…</span>'}</td>
+      <td data-label="Cantidad">${parseFloat(pos.quantity.toFixed(5))}</td>
+      <td data-label="Costo total">${formatCurrency(costConverted, currency)}</td>
+      <td data-label="Valor actual">${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
+      <td data-label="Retorno">${retCell}</td>
+      <td class="pos-actions-cell" data-label="Acciones">
         <button class="pos-withdraw-btn" type="button" data-pos-id="${pos.id}" title="Retirar posicion">Retirar</button>
         <button class="pos-delete-btn" type="button" data-pos-id="${pos.id}" title="Eliminar">✕</button>
       </td>
@@ -7825,11 +8874,16 @@ async function renderCorrelationTab(portfolio) {
   const setMetric = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   ["corrAvgValue", "corrDivScore", "corrMaxPair", "corrMaxVal"].forEach((id) => setMetric(id, "—"));
   setMetric("corrDivLabel", "—");
+  const rcWrap = document.getElementById("riskContribWrap");
+  const rcStatus = document.getElementById("riskContribStatus");
+  if (rcWrap) rcWrap.innerHTML = "";
+  if (rcStatus) { rcStatus.style.display = ""; rcStatus.textContent = "Calculando contribución al riesgo…"; }
 
   const tickers = [...new Set((portfolio.positions || []).filter((p) => (p.quantity || 0) > 0).map((p) => p.ticker))];
   if (tickers.length < 2) {
     wrap.innerHTML = "";
     status.style.display = ""; status.textContent = "Necesitas al menos 2 activos para calcular correlaciones.";
+    if (rcStatus) rcStatus.textContent = "Necesitas al menos 2 activos para calcular la contribución al riesgo.";
     corrTabLoaded = false; return;
   }
   status.style.display = ""; status.textContent = "Descargando históricos y calculando correlaciones…";
@@ -7842,11 +8896,11 @@ async function renderCorrelationTab(portfolio) {
     (h || []).forEach((d) => { maps[t][new Date(d.ts).toISOString().slice(0, 10)] = d.close; });
   });
   const valid = tickers.filter((t) => Object.keys(maps[t]).length > 5);
-  if (valid.length < 2) { status.textContent = "No se pudieron obtener suficientes datos históricos."; corrTabLoaded = false; return; }
+  if (valid.length < 2) { status.textContent = "No se pudieron obtener suficientes datos históricos."; if (rcStatus) rcStatus.textContent = "No se pudieron obtener suficientes datos históricos."; corrTabLoaded = false; return; }
 
   const sets = valid.map((t) => new Set(Object.keys(maps[t])));
   const common = [...sets[0]].filter((d) => sets.every((s) => s.has(d))).sort();
-  if (common.length < 3) { status.textContent = "Fechas en común insuficientes para calcular correlaciones."; corrTabLoaded = false; return; }
+  if (common.length < 3) { status.textContent = "Fechas en común insuficientes para calcular correlaciones."; if (rcStatus) rcStatus.textContent = "Fechas insuficientes para la contribución al riesgo."; corrTabLoaded = false; return; }
 
   const rets = {};
   valid.forEach((t) => {
@@ -7891,6 +8945,9 @@ async function renderCorrelationTab(portfolio) {
   html += "</tbody></table>";
   wrap.innerHTML = html;
   status.style.display = "none";
+
+  try { renderRiskContribution(portfolio, valid, rets, M); }
+  catch (e) { if (rcStatus) { rcStatus.style.display = ""; rcStatus.textContent = "No se pudo calcular la contribución al riesgo."; } }
 }
 
 // ── Watchlist global (vigilar sin poseer) ──────────────────────────────────────
@@ -8077,6 +9134,10 @@ function getRebalRows() {
 }
 
 function renderRebalanceTab() {
+  ["rebalOptSummary", "rebalAiPanel", "rebalDisclaimer"].forEach((id) => {
+    const e = document.getElementById(id);
+    if (e) e.style.display = "none";
+  });
   const { rows, cur, totalValue } = getRebalRows();
   const tbody = document.querySelector("#rebalTable tbody");
   const table = document.getElementById("rebalTable");
@@ -8148,6 +9209,222 @@ function recomputeRebalance() {
   const off = Math.abs(weightSum - 100) > 0.1;
   sumEl.textContent = `Suma objetivo: ${weightSum.toFixed(1)}%`;
   sumEl.style.color = off ? "var(--danger, #ff6b81)" : "var(--success, #32d6a2)";
+}
+
+// Reescala los objetivos para que sumen 100% conservando sus proporciones relativas.
+function normalizeRebalTargets() {
+  const { rows, totalValue } = getRebalRows();
+  if (!rows.length || totalValue <= 0) return;
+  const sum = rows.reduce((s, r) => s + (rebalTargets[r.ticker] || 0), 0);
+  if (sum <= 0) {
+    const eq = 100 / rows.length;
+    rows.forEach((r) => { rebalTargets[r.ticker] = eq; });
+  } else {
+    rows.forEach((r) => { rebalTargets[r.ticker] = ((rebalTargets[r.ticker] || 0) / sum) * 100; });
+  }
+  renderRebalanceTab();
+}
+
+// Exporta el plan de rebalanceo (objetivos vs actual + acciones) como CSV.
+function exportRebalancePlan() {
+  const { rows, cur, totalValue } = getRebalRows();
+  if (!rows.length || totalValue <= 0) {
+    showRebalOptMsg("Agrega posiciones con precio antes de exportar el plan.", "warn");
+    return;
+  }
+  const extra = parseFloat(document.getElementById("rebalExtraCash")?.value) || 0;
+  const targetTotal = totalValue + extra;
+  const esc = (v) => {
+    const s = String(v ?? "");
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [];
+  lines.push(["Plan de rebalanceo · BlackPortfolio"]);
+  lines.push(["Generado", new Date().toLocaleString()]);
+  lines.push(["Moneda", cur]);
+  lines.push(["Valor actual", totalValue.toFixed(2), "Aporte adicional", extra.toFixed(2), "Valor objetivo", targetTotal.toFixed(2)]);
+  lines.push([]);
+  lines.push(["Ticker", "Valor actual", "Peso actual %", "Objetivo %", "Valor objetivo", "Accion", "Monto", "Unidades aprox."]);
+  rows.forEach((r) => {
+    const curW = (r.value / totalValue) * 100;
+    const target = rebalTargets[r.ticker] || 0;
+    const targetVal = targetTotal * (target / 100);
+    const delta = targetVal - r.value;
+    let accion = "Mantener", monto = 0, unidades = "";
+    if (!r.hasPrice) { accion = "Sin precio"; }
+    else if (Math.abs(delta) >= targetTotal * 0.005) {
+      accion = delta > 0 ? "Comprar" : "Vender";
+      monto = Math.abs(delta);
+      unidades = (Math.abs(delta) / r.priceConv).toFixed(4);
+    }
+    lines.push([r.ticker, r.value.toFixed(2), curW.toFixed(1), target.toFixed(1), targetVal.toFixed(2), accion, monto ? monto.toFixed(2) : "", unidades]);
+  });
+  const csv = lines.map((row) => row.map(esc).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `rebalanceo_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ── Rebalanceo asistido: optimización cuantitativa + explicación con IA ────────
+const REBAL_OPT_PERIOD = "2y";
+function rebalPeriodLabel(p) {
+  return ({
+    "1y": "el último año", "2y": "los últimos 2 años",
+    "5y": "los últimos 5 años", "10y": "los últimos 10 años",
+  })[p] || "el periodo analizado";
+}
+function showRebalOptMsg(msg, type) {
+  const el = document.getElementById("rebalOptSummary");
+  if (!el) return;
+  el.className = "rebal-opt-summary" + (type ? " rebal-opt-" + type : "");
+  el.innerHTML = `<div class="rebal-opt-msg">${msg}</div>`;
+  el.style.display = "";
+}
+
+async function runRebalanceOptimization() {
+  const btn = document.getElementById("rebalOptimizeBtn");
+  const { rows, cur, totalValue } = getRebalRows();
+  const priced = rows.filter((r) => r.hasPrice);
+  if (priced.length < 2 || totalValue <= 0) {
+    showRebalOptMsg("Necesitas al menos 2 posiciones con precio actualizado para optimizar.", "warn");
+    return;
+  }
+  if (typeof window.computeOptimalWeights !== "function") {
+    showRebalOptMsg("El motor de optimización no está disponible. Recarga la página.", "warn");
+    return;
+  }
+  const mode = document.getElementById("rebalOptMode")?.value || "maxsharpe";
+  const currentWeights = {};
+  priced.forEach((r) => { currentWeights[r.ticker] = r.value / totalValue; });
+
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="mkw-spinner"></span> Optimizando…`;
+  try {
+    const res = await window.computeOptimalWeights({
+      tickers: priced.map((r) => r.ticker),
+      mode, period: REBAL_OPT_PERIOD, cap: 0.35, currentWeights,
+    });
+    if (!res.ok) { showRebalOptMsg(res.error || "No se pudo optimizar.", "warn"); return; }
+
+    // Reserva el peso actual de los activos sin datos y reparte el presupuesto
+    // restante según los pesos óptimos (la suma objetivo se mantiene ≈100%).
+    const skippedSet = new Set(res.skipped || []);
+    let skippedW = 0;
+    priced.forEach((r) => { if (skippedSet.has(r.ticker)) skippedW += r.value / totalValue; });
+    const budget = Math.max(0, 1 - skippedW);
+    priced.forEach((r) => {
+      rebalTargets[r.ticker] = skippedSet.has(r.ticker)
+        ? (r.value / totalValue) * 100
+        : (res.weights[r.ticker] || 0) * budget * 100;
+    });
+
+    renderRebalanceTab();
+    renderRebalSummary(res, cur);
+    renderRebalDisclaimer(res);
+    fetchRebalanceExplanation(res, priced, totalValue);
+  } catch (e) {
+    showRebalOptMsg("Error al optimizar: " + (e.message || e), "warn");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function renderRebalSummary(res, cur) {
+  const el = document.getElementById("rebalOptSummary");
+  if (!el) return;
+  const pct = (x) => (x * 100).toFixed(1) + "%";
+  const o = res.optimal, c = res.current;
+  el.className = "rebal-opt-summary";
+  el.innerHTML = `
+    <div class="rebal-opt-summary-title">Proyección con datos de ${rebalPeriodLabel(res.period)} · ${res.tickers.length} activos${res.skipped.length ? ` · ${res.skipped.length} sin datos (peso sin cambios)` : ""}</div>
+    <table class="rebal-opt-table">
+      <thead><tr><th>Métrica</th><th>Actual</th><th>Sugerido</th></tr></thead>
+      <tbody>
+        <tr><td>Retorno esperado anual</td><td>${c ? pct(c.ret) : "—"}</td><td>${pct(o.ret)}</td></tr>
+        <tr><td>Volatilidad anual</td><td>${c ? pct(c.vol) : "—"}</td><td>${pct(o.vol)}</td></tr>
+        <tr><td>Sharpe (rentabilidad/riesgo)</td><td>${c ? c.sharpe.toFixed(2) : "—"}</td><td>${o.sharpe.toFixed(2)}</td></tr>
+      </tbody>
+    </table>`;
+  el.style.display = "";
+}
+
+function renderRebalDisclaimer(res) {
+  const el = document.getElementById("rebalDisclaimer");
+  if (!el) return;
+  el.textContent =
+    `Las opciones presentadas se basan en datos históricos de ${rebalPeriodLabel(res.period)} y en las condiciones económicas vigentes ` +
+    `(tasa libre de riesgo, volatilidad y correlaciones observadas en ese periodo). Los rendimientos pasados no garantizan rendimientos futuros. ` +
+    `Esta es una herramienta de simulación educativa: no constituye asesoría de inversión ni una recomendación personalizada de compra o venta.`;
+  el.style.display = "";
+}
+
+async function fetchRebalanceExplanation(res, priced, totalValue) {
+  const panel = document.getElementById("rebalAiPanel");
+  const body = document.getElementById("rebalAiBody");
+  if (!panel || !body) return;
+  const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
+  if (!user) return; // sin sesión: la parte cuantitativa ya se mostró
+  panel.style.display = "";
+  body.innerHTML = `<span class="mkw-spinner"></span> Generando explicación…`;
+
+  const moves = res.tickers.map((t) => {
+    const r = priced.find((x) => x.ticker === t);
+    const curW = r ? r.value / totalValue : 0;
+    return {
+      ticker: t,
+      actual_pct: +(curW * 100).toFixed(1),
+      sugerido_pct: +((res.weights[t] || 0) * 100).toFixed(1),
+    };
+  });
+  const metrics = {
+    objetivo: res.mode === "minvar" ? "mínima volatilidad" : "máxima relación rentabilidad/riesgo (Sharpe)",
+    periodo: rebalPeriodLabel(res.period),
+    actual: res.current ? {
+      retorno_anual_pct: +(res.current.ret * 100).toFixed(1),
+      volatilidad_pct: +(res.current.vol * 100).toFixed(1),
+      sharpe: +res.current.sharpe.toFixed(2),
+    } : null,
+    sugerido: {
+      retorno_anual_pct: +(res.optimal.ret * 100).toFixed(1),
+      volatilidad_pct: +(res.optimal.vol * 100).toFixed(1),
+      sharpe: +res.optimal.sharpe.toFixed(2),
+    },
+    movimientos: moves,
+  };
+
+  try {
+    const token = await user.getIdToken();
+    const twofaToken = localStorage.getItem("bp-2fa-token");
+    const r = await fetch(`${API_BASE_URL}/ai/rebalance`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(twofaToken ? { "X-2FA-Token": twofaToken } : {}),
+      },
+      body: JSON.stringify({ metrics, lang: "es" }),
+    });
+    if (r.status === 403) {
+      body.innerHTML = `<p class="rebal-ai-locked">La explicación con IA está disponible en los planes Advisor Pro y Wealth Desk. La optimización cuantitativa de arriba funciona en tu plan actual.</p>`;
+      return;
+    }
+    if (!r.ok) {
+      body.innerHTML = `<p class="rebal-ai-locked">No se pudo generar la explicación (HTTP ${r.status}).</p>`;
+      return;
+    }
+    const data = await r.json();
+    body.innerHTML = _mdToBulletsHtml((data.explanation || "").trim());
+  } catch {
+    body.innerHTML = `<p class="rebal-ai-locked">No se pudo generar la explicación con IA en este momento.</p>`;
+  }
 }
 
 const portfolioDonutStates = new WeakMap();
@@ -8238,7 +9515,7 @@ function setPortfolioDonutHover(canvas, index, point) {
 function ensurePortfolioDonutInteractions(canvas) {
   if (canvas.dataset.interactive === "true") return;
   canvas.dataset.interactive = "true";
-  canvas.addEventListener("pointermove", (event) => {
+  const updateFromPointer = (event) => {
     const state = portfolioDonutStates.get(canvas);
     if (!state) return;
     const rect = canvas.getBoundingClientRect();
@@ -8252,10 +9529,18 @@ function ensurePortfolioDonutInteractions(canvas) {
       : -1;
     canvas.style.cursor = index >= 0 ? "pointer" : "default";
     setPortfolioDonutHover(canvas, index >= 0 ? index : null, { x, y });
-  });
-  canvas.addEventListener("pointerleave", () => {
+  };
+  canvas.addEventListener("pointerdown", updateFromPointer);
+  canvas.addEventListener("pointermove", updateFromPointer);
+  canvas.addEventListener("pointerleave", (event) => {
+    if (event.pointerType === "touch") return;
     canvas.style.cursor = "default";
     setPortfolioDonutHover(canvas, null);
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target !== canvas && !event.target.closest?.("#donutLegend .donut-legend-item")) {
+      setPortfolioDonutHover(canvas, null);
+    }
   });
   document.addEventListener("pointermove", (event) => {
     if (event.target !== canvas && !event.target.closest?.("#donutLegend .donut-legend-item")) {
@@ -8363,6 +9648,37 @@ function getTickerGeo(ticker) {
   // Sin sufijo de bolsa extranjera reconocido: se asume listado en EE.UU. (caso más común).
   return "EE.UU.";
 }
+
+// Conjuntos curados para clasificar la clase de activo (heurística, como SECTOR_MAP/GEO_MAP).
+const BOND_ETFS = new Set([
+  "BND","AGG","TLT","IEF","SHY","LQD","HYG","TIP","BNDX","VGIT","VCIT","MUB","BIL",
+  "GOVT","SCHZ","SPTL","VGLT","VGSH","EMB","JNK","VTEB","MBB","IGSB","SHV","VCSH",
+  "CETETRC.MX","CETETRCISHRS.MX"
+]);
+const EQUITY_ETFS = new Set([
+  "SPY","IVV","VOO","VTI","SCHB","ITOT","QQQ","ARKK","VGT","XLK","SOXX","SMH",
+  "XLF","XLV","XLE","XLY","XLP","XLI","XLB","XLU","XLC","VNQ","IYR","USO","GLD","IAU","SLV","GDX",
+  "VEA","VWO","EFA","EEM","ACWI","VT","VEU","VXUS","IEFA","FXI","EWG","EWU","VGK","AAXJ","EWJ",
+  "VHT","VDE","VCR","VDC","VFH","VPU","VIS","VAW","VOX","KRE","NAFTRAC.MX","NAFTRAC"
+]);
+
+// Devuelve la clase de activo de un ticker: Cripto, ETF, Bonos o Acciones.
+function getTickerAssetClass(ticker) {
+  const t = (ticker || "").toUpperCase();
+  const base = t.split(".")[0];
+  if (t.endsWith("-USD") || t.endsWith("-USDT") || t.endsWith("-USDC")) return "Cripto";
+  if (BOND_ETFS.has(t) || BOND_ETFS.has(base)) return "Bonos";
+  if (EQUITY_ETFS.has(t) || EQUITY_ETFS.has(base)) return "ETF";
+  return "Acciones";
+}
+
+const ASSET_CLASS_COLORS = {
+  "Acciones": "#6f86ff",
+  "ETF": "#39d0ff",
+  "Cripto": "#f5b84c",
+  "Bonos": "#32d6a2",
+  "Cash": "#4ade80",
+};
 
 const ALLOC_COLORS = [
   "#6f86ff","#39d0ff","#32d6a2","#f5b84c","#ff6b81",
@@ -8506,6 +9822,15 @@ function renderAllocationCharts(positions, totalInvested, currency, cashBalance)
   renderAllocationLegend(document.getElementById("sectorDonutLegend"), sectorData, grandTotal);
   renderGeoWorldMap(geoMapEl, geoData, totalInvested);
   renderAllocationLegend(document.getElementById("geoDonutLegend"), geoData, totalInvested);
+
+  // ── Clase de activo (#3): colores estables por clase ──
+  const assetCanvas = document.getElementById("assetClassDonutChart");
+  if (assetCanvas) {
+    const assetData = buildAllocationData(positions, totalInvested, currency, getTickerAssetClass, cash)
+      .map((d) => ({ ...d, color: ASSET_CLASS_COLORS[d.label] || d.color }));
+    drawAllocationDonut(assetCanvas, assetData, grandTotal, "clases");
+    renderAllocationLegend(document.getElementById("assetClassDonutLegend"), assetData, grandTotal);
+  }
 }
 
 function drawHoldingsBarChart(canvas, positions, currency) {
@@ -8580,8 +9905,397 @@ function drawHoldingsBarChart(canvas, positions, currency) {
   });
 }
 
+// ── #1 Contribución al retorno (attribution) ───────────────────────────────────
+function renderAttributionChart(portfolio) {
+  const wrap = document.getElementById("attributionChartWrap");
+  const status = document.getElementById("attributionStatus");
+  if (!wrap) return;
+  const currency = portfolio.currency || "USD";
+  const positions = (portfolio.positions || []).filter((p) => (p.quantity || 0) > 0);
+
+  const byTicker = {};
+  let totalCostPriced = 0;
+  positions.forEach((pos) => {
+    const price = getCachedPrice(pos.ticker);
+    if (price === null) return;
+    const posCur = getPosCurrency(pos, currency);
+    const cost = convertAmount(calcPositionTotals(pos).total, posCur, currency) ?? calcPositionTotals(pos).total;
+    const value = convertAmount(price * pos.quantity, posCur, currency) ?? (price * pos.quantity);
+    totalCostPriced += cost;
+    if (!byTicker[pos.ticker]) byTicker[pos.ticker] = { ticker: pos.ticker, pnl: 0 };
+    byTicker[pos.ticker].pnl += (value - cost);
+  });
+
+  const rows = Object.values(byTicker);
+  if (!rows.length || totalCostPriced <= 0) {
+    wrap.innerHTML = "";
+    if (status) { status.style.display = ""; status.textContent = "Actualiza precios para ver la contribución de cada activo."; }
+    return;
+  }
+  rows.forEach((r) => { r.pp = r.pnl / totalCostPriced * 100; });
+  rows.sort((a, b) => b.pp - a.pp);
+  const maxAbs = Math.max(...rows.map((r) => Math.abs(r.pp)), 0.01);
+
+  wrap.innerHTML = rows.map((r) => {
+    const pos = r.pp >= 0;
+    const w = Math.max(2, Math.abs(r.pp) / maxAbs * 50);
+    return `<div class="attrib-row">
+      <span class="attrib-ticker" title="${r.ticker}">${r.ticker}</span>
+      <span class="attrib-track"><span class="attrib-bar ${pos ? "pos" : "neg"}" style="width:${w.toFixed(1)}%"></span></span>
+      <span class="attrib-val ${pos ? "pos" : "neg"}">${pos ? "+" : ""}${r.pp.toFixed(2)} pp</span>
+    </div>`;
+  }).join("");
+
+  if (status) {
+    const totalPp = rows.reduce((s, r) => s + r.pp, 0);
+    status.style.display = "";
+    status.textContent = `Contribución total no realizada: ${totalPp >= 0 ? "+" : ""}${totalPp.toFixed(2)} pp · sobre el costo invertido de posiciones con precio`;
+  }
+}
+
+// ── #4 Mapa de calor (treemap squarificado) ────────────────────────────────────
+function _treemapHeatColor(chg) {
+  if (chg === null || isNaN(chg)) return "rgba(120,128,150,0.55)";
+  const c = Math.max(-3, Math.min(3, chg)) / 3;
+  const a = (0.32 + Math.abs(c) * 0.5).toFixed(2);
+  return c >= 0 ? `rgba(0,168,112,${a})` : `rgba(217,64,64,${a})`;
+}
+
+function _squarify(items, x, y, w, h) {
+  const result = [];
+  const data = items.slice();
+  const worst = (row, len) => {
+    const areaSum = row.reduce((s, r) => s + r.area, 0);
+    const maxA = Math.max(...row.map((r) => r.area));
+    const minA = Math.min(...row.map((r) => r.area));
+    const len2 = len * len, areaSum2 = areaSum * areaSum;
+    if (areaSum2 === 0 || minA === 0) return Infinity;
+    return Math.max(len2 * maxA / areaSum2, areaSum2 / (len2 * minA));
+  };
+  let rx = x, ry = y, rw = w, rh = h, i = 0;
+  while (i < data.length) {
+    const vertical = rw >= rh;
+    const len = vertical ? rh : rw;
+    if (len <= 0) break;
+    let row = [data[i]]; i++;
+    while (i < data.length && worst(row, len) >= worst(row.concat(data[i]), len)) {
+      row = row.concat(data[i]); i++;
+    }
+    const rowArea = row.reduce((s, r) => s + r.area, 0);
+    const thick = rowArea / len;
+    let off = vertical ? ry : rx;
+    row.forEach((r) => {
+      const cell = thick > 0 ? r.area / thick : 0;
+      if (vertical) result.push({ ...r, x: rx, y: off, w: thick, h: cell });
+      else result.push({ ...r, x: off, y: ry, w: cell, h: thick });
+      off += cell;
+    });
+    if (vertical) { rx += thick; rw -= thick; } else { ry += thick; rh -= thick; }
+  }
+  return result;
+}
+
+function renderHoldingsTreemap(positions, currency) {
+  const el = document.getElementById("holdingsTreemap");
+  const empty = document.getElementById("heatmapEmptyMsg");
+  if (!el) return;
+
+  const byTicker = {};
+  (positions || []).forEach((pos) => {
+    const price = getCachedPrice(pos.ticker);
+    if (price === null || !(pos.quantity > 0)) return;
+    const posCur = getPosCurrency(pos, currency);
+    const value = convertAmount(price * pos.quantity, posCur, currency) ?? (price * pos.quantity);
+    const prev = getCachedPrev(pos.ticker);
+    const chg = (prev !== null && prev > 0) ? (price - prev) / prev * 100 : null;
+    if (!byTicker[pos.ticker]) byTicker[pos.ticker] = { ticker: pos.ticker, value: 0, chgW: 0, chgV: 0 };
+    const t = byTicker[pos.ticker];
+    t.value += value;
+    if (chg !== null) { t.chgW += chg * value; t.chgV += value; }
+  });
+
+  const items = Object.values(byTicker)
+    .filter((t) => t.value > 0)
+    .map((t) => ({ ticker: t.ticker, value: t.value, chg: t.chgV > 0 ? t.chgW / t.chgV : null }))
+    .sort((a, b) => b.value - a.value);
+
+  if (!items.length) {
+    el.innerHTML = ""; el.style.display = "none";
+    if (empty) empty.classList.remove("hidden");
+    return;
+  }
+  el.style.display = ""; if (empty) empty.classList.add("hidden");
+
+  const W = el.clientWidth || 600, H = el.clientHeight || 280;
+  const total = items.reduce((s, t) => s + t.value, 0);
+  const scaled = items.map((t) => ({ ...t, area: t.value / total * W * H }));
+  const tiles = _squarify(scaled, 0, 0, W, H);
+
+  el.innerHTML = tiles.map((t) => {
+    const small = (t.w < 56 || t.h < 42);
+    const tiny = (t.w < 40 || t.h < 26);
+    const cls = ["treemap-tile", small ? "is-small" : "", tiny ? "is-tiny" : ""].filter(Boolean).join(" ");
+    const chgTxt = t.chg !== null ? `${t.chg >= 0 ? "+" : ""}${t.chg.toFixed(2)}%` : "—";
+    const pctPort = (t.value / total * 100).toFixed(1);
+    return `<div class="${cls}" style="left:${t.x.toFixed(1)}px;top:${t.y.toFixed(1)}px;width:${t.w.toFixed(1)}px;height:${t.h.toFixed(1)}px;background:${_treemapHeatColor(t.chg)}" title="${t.ticker} · ${pctPort}% del portafolio · hoy ${chgTxt}">
+      <span class="treemap-tile-ticker">${t.ticker}</span>
+      <span class="treemap-tile-chg">${chgTxt}</span>
+    </div>`;
+  }).join("");
+}
+
+// ── #7 Contribución al riesgo por posición ─────────────────────────────────────
+function renderRiskContribution(portfolio, valid, rets, M) {
+  const wrap = document.getElementById("riskContribWrap");
+  const status = document.getElementById("riskContribStatus");
+  if (!wrap) return;
+  const currency = portfolio.currency || "USD";
+
+  const valueByTicker = {};
+  (portfolio.positions || []).forEach((pos) => {
+    if (!valid.includes(pos.ticker) || !(pos.quantity > 0)) return;
+    const posCur = getPosCurrency(pos, currency);
+    const price = getCachedPrice(pos.ticker);
+    const raw = price !== null ? price * pos.quantity : calcPositionTotals(pos).total;
+    const val = convertAmount(raw, posCur, currency) ?? raw;
+    valueByTicker[pos.ticker] = (valueByTicker[pos.ticker] || 0) + val;
+  });
+  const totalVal = valid.reduce((s, t) => s + (valueByTicker[t] || 0), 0);
+  if (totalVal <= 0) {
+    wrap.innerHTML = "";
+    if (status) { status.style.display = ""; status.textContent = "Actualiza precios para calcular la contribución al riesgo."; }
+    return;
+  }
+  const w = valid.map((t) => (valueByTicker[t] || 0) / totalVal);
+  const sigma = valid.map((t) => {
+    const r = rets[t], n = r.length, m = r.reduce((s, x) => s + x, 0) / n;
+    return Math.sqrt(r.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, n - 1));
+  });
+  const n = valid.length;
+  const Sw = new Array(n).fill(0);
+  let portVar = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) Sw[i] += w[j] * (M[i][j] * sigma[i] * sigma[j]);
+    portVar += w[i] * Sw[i];
+  }
+  if (portVar <= 0) {
+    wrap.innerHTML = "";
+    if (status) { status.style.display = ""; status.textContent = "Datos insuficientes para la contribución al riesgo."; }
+    return;
+  }
+  const rc = valid.map((t, i) => ({ ticker: t, weight: w[i] * 100, risk: w[i] * Sw[i] / portVar * 100 }))
+    .sort((a, b) => b.risk - a.risk);
+  const maxV = Math.max(...rc.map((r) => Math.max(r.risk, r.weight)), 1);
+
+  wrap.innerHTML = rc.map((r) => {
+    const alert = r.risk > r.weight + 8;
+    return `<div class="rc-row ${alert ? "rc-alert" : ""}">
+      <span class="rc-ticker" title="${r.ticker}">${r.ticker}</span>
+      <div class="rc-bars">
+        <div class="rc-line"><span class="rc-tag">Peso</span><span class="rc-track"><span class="rc-fill weight" style="width:${(r.weight / maxV * 100).toFixed(1)}%"></span></span><span class="rc-val">${r.weight.toFixed(1)}%</span></div>
+        <div class="rc-line"><span class="rc-tag">Riesgo</span><span class="rc-track"><span class="rc-fill risk" style="width:${(r.risk / maxV * 100).toFixed(1)}%"></span></span><span class="rc-val">${r.risk.toFixed(1)}%</span></div>
+      </div>
+    </div>`;
+  }).join("") + `<div class="rc-legend"><span><i class="weight"></i>Peso (capital)</span><span><i class="risk"></i>Contribución al riesgo</span></div>`;
+  if (status) status.style.display = "none";
+}
+
 function openModal(id) { document.getElementById(id).classList.remove("hidden"); }
 function closeModal(id) { document.getElementById(id).classList.add("hidden"); }
+
+// ── Compartir portafolio (#12) ─────────────────────────────────────────────
+function _shareUrlForToken(tok) {
+  return `${window.location.origin}/p.html?t=${encodeURIComponent(tok)}`;
+}
+
+function _wireShareModal() {
+  if (_wireShareModal._done) return;
+  _wireShareModal._done = true;
+  document.querySelector('#shareModal [data-close-modal="shareModal"]')
+    ?.addEventListener("click", () => closeModal("shareModal"));
+  document.getElementById("shareModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "shareModal") closeModal("shareModal");
+  });
+  document.getElementById("shareCopyBtn")?.addEventListener("click", async () => {
+    const inp = document.getElementById("shareLinkInput");
+    if (!inp.value) return;
+    try {
+      await navigator.clipboard.writeText(inp.value);
+      const btn = document.getElementById("shareCopyBtn");
+      btn.textContent = "✓ Copiado";
+      setTimeout(() => { btn.textContent = "Copiar"; }, 1800);
+    } catch {
+      inp.select();
+      showToast("Copia el enlace manualmente (Ctrl+C).", { type: "info" });
+    }
+  });
+  document.getElementById("shareRevokeBtn")?.addEventListener("click", async () => {
+    if (!activePortfolioId) return;
+    const statusEl = document.getElementById("shareModalStatus");
+    statusEl.textContent = "Revocando…";
+    try {
+      await portfolioApiRequest(`/account/portfolios/${activePortfolioId}/share`, { method: "DELETE" });
+      closeModal("shareModal");
+      showToast("Enlace revocado. Ya no es accesible.", { type: "success" });
+    } catch (err) {
+      statusEl.textContent = "No se pudo revocar el enlace.";
+    }
+  });
+}
+
+async function openShareModal() {
+  if (!activePortfolioId) return;
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  if (!portfolio || !(portfolio.positions || []).length) {
+    showToast("Agrega al menos una posición antes de compartir.", { type: "info" });
+    return;
+  }
+  const inp = document.getElementById("shareLinkInput");
+  const statusEl = document.getElementById("shareModalStatus");
+  const openLink = document.getElementById("shareOpenLink");
+  inp.value = "";
+  statusEl.textContent = "";
+  openModal("shareModal");
+  inp.placeholder = "Generando enlace…";
+  try {
+    const res = await portfolioApiRequest(`/account/portfolios/${activePortfolioId}/share`, { method: "POST" });
+    const url = _shareUrlForToken(res.token);
+    inp.value = url;
+    openLink.href = url;
+    statusEl.textContent = "Enlace activo · cualquiera con él puede ver este portafolio.";
+  } catch (err) {
+    statusEl.textContent = "No se pudo generar el enlace. Intenta de nuevo.";
+    inp.placeholder = "—";
+  }
+}
+
+// ── Notificaciones in-app (#5) ─────────────────────────────────────────────
+let _notifTimer = null;
+
+function _timeAgo(iso) {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "ahora";
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.round(h / 24);
+  return `hace ${d} d`;
+}
+
+async function refreshNotifications() {
+  try {
+    const data = await portfolioApiRequest("/account/notifications");
+    const badge = document.getElementById("notifBadge");
+    const list = document.getElementById("notifList");
+    const empty = document.getElementById("notifEmpty");
+    if (badge) {
+      if (data.unread > 0) { badge.textContent = data.unread > 9 ? "9+" : String(data.unread); badge.hidden = false; }
+      else { badge.hidden = true; }
+    }
+    const notifs = data.notifications || [];
+    if (list) {
+      list.innerHTML = notifs.map((n) => `
+        <div class="notif-item ${n.read ? "" : "is-unread"}">
+          <div class="notif-item-title">${(n.title || "").replace(/</g, "&lt;")}</div>
+          ${n.body ? `<div class="notif-item-body">${n.body.replace(/</g, "&lt;")}</div>` : ""}
+          <div class="notif-item-time">${_timeAgo(n.createdAt)}</div>
+        </div>`).join("");
+    }
+    if (empty) empty.style.display = notifs.length ? "none" : "";
+  } catch { /* silencioso: no romper el dashboard si falla */ }
+}
+
+function initNotifications() {
+  const bell = document.getElementById("notifBellBtn");
+  const panel = document.getElementById("notifPanel");
+  if (!bell || !panel) return;
+
+  bell.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = panel.classList.toggle("hidden");
+    bell.setAttribute("aria-expanded", String(!open));
+    if (!open) refreshNotifications();
+  });
+  document.addEventListener("click", (e) => {
+    if (!panel.classList.contains("hidden") && !panel.contains(e.target) && e.target !== bell) {
+      panel.classList.add("hidden");
+      bell.setAttribute("aria-expanded", "false");
+    }
+  });
+  document.getElementById("notifMarkRead")?.addEventListener("click", async () => {
+    try {
+      await portfolioApiRequest("/account/notifications/read", { method: "POST" });
+      refreshNotifications();
+    } catch {}
+  });
+
+  refreshNotifications();
+  if (_notifTimer) clearInterval(_notifTimer);
+  _notifTimer = setInterval(refreshNotifications, 120000); // cada 2 min
+}
+
+// ── Alertas de precio (#5) ─────────────────────────────────────────────────
+function _alertLabel(a) {
+  const cond = a.kind === "price_above" ? "≥" : "≤";
+  return `${a.symbol} ${cond} ${Number(a.threshold).toLocaleString("es-MX")}`;
+}
+
+async function refreshAlerts() {
+  const list = document.getElementById("alertsList");
+  const empty = document.getElementById("alertsEmpty");
+  if (!list) return;
+  try {
+    const data = await portfolioApiRequest("/account/alerts");
+    const alerts = data.alerts || [];
+    list.innerHTML = alerts.map((a) => `
+      <div class="alert-item ${a.active ? "" : "is-triggered"}">
+        <div class="alert-item-main">
+          <span class="alert-item-label">${_alertLabel(a)}</span>
+          <span class="alert-item-status">${a.active ? "Activa" : "Disparada · " + _timeAgo(a.triggeredAt)}</span>
+        </div>
+        <button class="alert-del-btn" type="button" data-alert-id="${a.id}" aria-label="Eliminar alerta">✕</button>
+      </div>`).join("");
+    if (empty) empty.style.display = alerts.length ? "none" : "";
+    list.querySelectorAll(".alert-del-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await portfolioApiRequest(`/account/alerts/${btn.dataset.alertId}`, { method: "DELETE" });
+          refreshAlerts();
+        } catch { showToast("No se pudo eliminar la alerta.", { type: "error" }); }
+      });
+    });
+  } catch { /* silencioso */ }
+}
+
+function initAlertsUI() {
+  const form = document.getElementById("alertForm");
+  if (!form) return;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById("alertFormStatus");
+    const symbol = (document.getElementById("alertSymbol").value || "").trim().toUpperCase();
+    const kind = document.getElementById("alertKind").value;
+    const threshold = parseFloat(document.getElementById("alertThreshold").value);
+    if (!symbol) { statusEl.textContent = "Ingresa un activo."; return; }
+    if (!isFinite(threshold) || threshold <= 0) { statusEl.textContent = "Ingresa un precio objetivo válido."; return; }
+    statusEl.textContent = "Creando…";
+    try {
+      await portfolioApiRequest("/account/alerts", {
+        method: "POST",
+        body: JSON.stringify({ symbol, kind, threshold }),
+      });
+      form.reset();
+      statusEl.textContent = "Alerta creada ✓";
+      refreshAlerts();
+      setTimeout(() => { statusEl.textContent = ""; }, 2500);
+    } catch (err) {
+      statusEl.textContent = err.message || "No se pudo crear la alerta.";
+    }
+  });
+  refreshAlerts();
+}
 
 function initCustomSelects() {
   document.querySelectorAll(".custom-select:not([data-cs-init])").forEach((wrapper) => {
@@ -8680,6 +10394,7 @@ function initializeTrackerModule() {
     const currency = document.getElementById("portfolioCurrencyInput").value;
     portfolios.push({ id: generateId(), name, description: desc, benchmark, currency, createdAt: new Date().toISOString(), positions: [] });
     savePortfolios(portfolios);
+    window.bpTrack?.("portfolio_created", { benchmark, currency });
     closeModal("newPortfolioModal");
     e.target.reset();
     renderPortfolioCards();
@@ -8739,9 +10454,12 @@ function initializeTrackerModule() {
   });
 
   document.getElementById("exportCsvBtn")?.addEventListener("click", exportTransactionsCSV);
-  document.getElementById("exportPdfBtn")?.addEventListener("click", openReportRangeModal);
+  document.getElementById("exportPdfBtn")?.addEventListener("click", () => { window.bpTrack?.("pdf_report_open"); openReportRangeModal(); });
   _wireReportRangeModal();
   document.getElementById("exportPositionsBtn")?.addEventListener("click", exportPositionsCSV);
+  document.getElementById("sharePortfolioBtn")?.addEventListener("click", openShareModal);
+  _wireShareModal();
+  initAiChat();
 
   // ── Watchlist ──────────────────────────────────────────────────────────────
   document.getElementById("watchlistForm")?.addEventListener("submit", (e) => {
@@ -8784,10 +10502,13 @@ function initializeTrackerModule() {
     rows.forEach((r) => { rebalTargets[r.ticker] = (r.value / totalValue) * 100; });
     renderRebalanceTab();
   });
+  document.getElementById("rebalNormalizeBtn")?.addEventListener("click", normalizeRebalTargets);
+  document.getElementById("rebalExportBtn")?.addEventListener("click", exportRebalancePlan);
   document.getElementById("rebalExtraCash")?.addEventListener("input", recomputeRebalance);
   document.querySelector("#rebalTable")?.addEventListener("input", (e) => {
     if (e.target.classList.contains("rebal-target-input")) recomputeRebalance();
   });
+  document.getElementById("rebalOptimizeBtn")?.addEventListener("click", runRebalanceOptimization);
   document.getElementById("backToListBtn").addEventListener("click", showTrackerListView);
   document.getElementById("refreshPricesBtn").addEventListener("click", () => {
     perfTabLoaded = false;
@@ -9035,12 +10756,17 @@ function initializeTrackerModule() {
       document.getElementById("tabPanelDesempeno").style.display = tab === "desempeno" ? "" : "none";
       document.getElementById("tabPanelTransacciones").style.display = tab === "transacciones" ? "" : "none";
       document.getElementById("tabPanelProyeccion").style.display = tab === "proyeccion" ? "" : "none";
+      document.getElementById("tabPanelMetas").style.display = tab === "metas" ? "" : "none";
       document.getElementById("tabPanelDividendos").style.display = tab === "dividendos" ? "" : "none";
       document.getElementById("tabPanelRebalanceo").style.display = tab === "rebalanceo" ? "" : "none";
       document.getElementById("tabPanelCorrelacion").style.display = tab === "correlacion" ? "" : "none";
       document.getElementById("tabPanelWhatif").style.display = tab === "whatif" ? "" : "none";
       // Recordar la pestaña activa por portafolio (L2.4)
       try { localStorage.setItem(`bp_activeTab_${activePortfolioId}`, tab); } catch {}
+      if (tab === "summary" && !summaryValueLoaded) {
+        const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+        if (portfolio) loadSummaryValueChart(portfolio);
+      }
       if (tab === "transacciones") renderTransactionsTab();
       if (tab === "dividendos") renderDividendsTab();
       if (tab === "rebalanceo") renderRebalanceTab();
@@ -9061,6 +10787,10 @@ function initializeTrackerModule() {
         const ms = document.getElementById("mcStatus");
         if (ms) ms.innerHTML = `<span class="inline-spinner"></span> Simulando escenarios…`;
         if (portfolio) loadMonteCarloTab(portfolio);
+      }
+      if (tab === "metas" && !goalTabLoaded) {
+        const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+        if (portfolio) initGoalsTab(portfolio);
       }
     });
   });
@@ -9177,11 +10907,22 @@ function initializeTrackerModule() {
   document.getElementById("tabPanelDesempeno").addEventListener("click", (e) => {
     const btn = e.target.closest(".perf-period-btn");
     if (!btn) return;
-    document.querySelectorAll(".perf-period-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll("#tabPanelDesempeno .perf-period-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     perfTabLoaded = false;
     const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
     if (portfolio) loadPerformanceTab(portfolio);
+  });
+
+  // ── Period buttons de la gráfica de valor del Resumen (#1) ─────────────────
+  document.getElementById("valueChartPeriodNav")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".perf-period-btn");
+    if (!btn) return;
+    document.querySelectorAll("#valueChartPeriodNav .perf-period-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    summaryValueLoaded = false;
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (portfolio) loadSummaryValueChart(portfolio);
   });
 
   // ── Accesibilidad: cerrar cualquier modal del tracker con ESC (L2.6) ───────
@@ -9267,6 +11008,48 @@ function _wireCashModal() {
     closeModal("cashModal");
     showToast(op === "DEPOSITO" ? `Aporte de ${formatCurrency(amount, cur)} registrado.` : `Retiro de ${formatCurrency(amount, cur)} registrado.`, { type: "success" });
     renderPortfolioDashboard();
+  });
+
+  // ── Editar transacción ──────────────────────────────────────────────────
+  document.getElementById("closeEditTxModalBtn")?.addEventListener("click", () => closeModal("editTxModal"));
+  document.getElementById("editTxModal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeModal("editTxModal");
+  });
+  document.getElementById("editTxType")?.addEventListener("change", (e) => updateEditTxFields(e.target.value));
+  document.getElementById("editTxForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("editTxError");
+    const showErr = (msg) => { errEl.textContent = msg; errEl.classList.remove("hidden"); };
+    errEl.classList.add("hidden");
+
+    const txId = document.getElementById("editTxId").value;
+    const type = document.getElementById("editTxType").value;
+    const dateStr = document.getElementById("editTxDate").value;
+    const ticker = document.getElementById("editTxTicker").value.trim().toUpperCase();
+    const quantity = parseFloat(document.getElementById("editTxQuantity").value) || 0;
+    const price = parseFloat(document.getElementById("editTxPrice").value) || 0;
+    const commissionPercent = parseFloat(document.getElementById("editTxCommission").value) || 0;
+
+    if (!dateStr) return showErr("Ingresa una fecha.");
+    if (dateStr > new Date().toISOString().slice(0, 10)) return showErr("La fecha no puede ser futura.");
+    const isCash = type === "DEPOSITO" || type === "RETIRO";
+    if (!isCash && !ticker) return showErr("Ingresa el ticker del activo.");
+    if (!isCash && quantity <= 0) return showErr("La cantidad debe ser mayor a cero.");
+    if (price <= 0) return showErr(isCash ? "El monto debe ser mayor a cero." : "El precio debe ser mayor a cero.");
+
+    const portfolios = getPortfolios();
+    const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+    if (!portfolio) return;
+    const oldTx = (portfolio.transactions || []).find((t) => t.id === txId);
+    if (!oldTx) return showErr("No se encontró la transacción.");
+
+    const newTx = buildTxFromForm(oldTx, type, dateStr, ticker, quantity, price, commissionPercent);
+    applyTxMutation(portfolio, oldTx, newTx);
+    savePortfolios(portfolios);
+    closeModal("editTxModal");
+    renderPortfolioDashboard();
+    renderTransactionsTab();
+    showToast("Transacción actualizada.", { type: "success" });
   });
 }
 
@@ -9845,7 +11628,7 @@ function setInvestmentValueHover(canvas, index) {
 function ensureInvestmentValueInteractions(canvas) {
   if (canvas.dataset.interactive === "true") return;
   canvas.dataset.interactive = "true";
-  canvas.addEventListener("pointermove", (event) => {
+  const updateFromPointer = (event) => {
     const state = investmentValueChartStates.get(canvas);
     if (!state || !state.points.length) return;
     const rect = canvas.getBoundingClientRect();
@@ -9856,8 +11639,15 @@ function ensureInvestmentValueInteractions(canvas) {
     }
     const index = Math.max(0, Math.min(state.points.length - 1, Math.round((x - state.pad.left) / state.chartWidth * (state.points.length - 1))));
     setInvestmentValueHover(canvas, index);
+  };
+  canvas.addEventListener("pointerdown", updateFromPointer);
+  canvas.addEventListener("pointermove", updateFromPointer);
+  canvas.addEventListener("pointerleave", (event) => {
+    if (event.pointerType !== "touch") setInvestmentValueHover(canvas, null);
   });
-  canvas.addEventListener("pointerleave", () => setInvestmentValueHover(canvas, null));
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target !== canvas) setInvestmentValueHover(canvas, null);
+  });
   document.addEventListener("pointermove", (event) => {
     if (event.target !== canvas) setInvestmentValueHover(canvas, null);
   });
@@ -9936,6 +11726,205 @@ function buildAllPositionHistory(portfolio) {
   return result;
 }
 
+// ── Gráfica de valor del portafolio (Resumen, #1) ───────────────────────────
+const portfolioValueChartStates = new WeakMap();
+
+async function loadSummaryValueChart(portfolio) {
+  portfolio = portfolio || getPortfolios().find((p) => p.id === activePortfolioId);
+  if (!portfolio) return;
+  summaryValueLoaded = true;
+  const canvas = document.getElementById("portfolioValueChart");
+  const statusEl = document.getElementById("valueChartStatus");
+  const latestEl = document.getElementById("valueChartLatest");
+  const deltaEl = document.getElementById("valueChartDelta");
+  if (!canvas) return;
+  const portfolioCur = portfolio.currency || "USD";
+  const activeBtn = document.querySelector("#valueChartPeriodNav .perf-period-btn.active");
+  const range = activeBtn?.dataset.range || "1y";
+  const interval = activeBtn?.dataset.interval || "1d";
+
+  const resetReadout = (msg) => {
+    drawPortfolioValueChart(canvas, [], portfolioCur);
+    if (statusEl) statusEl.textContent = msg;
+    if (latestEl) latestEl.textContent = "—";
+    if (deltaEl) { deltaEl.textContent = ""; deltaEl.className = "value-chart-delta"; }
+  };
+
+  const allPositions = buildAllPositionHistory(portfolio);
+  if (!allPositions.length) {
+    resetReadout("Agrega posiciones para ver la evolución de tu portafolio.");
+    return;
+  }
+  if (statusEl) statusEl.innerHTML = `<span class="inline-spinner"></span> Calculando evolución del valor…`;
+
+  const uniqueTickers = [...new Set(allPositions.map((p) => p.ticker))];
+  const histories = await Promise.all(uniqueTickers.map((t) =>
+    fetchHistoricalCloses(t, range, interval).then((h) => ({ t, h })).catch(() => ({ t, h: [] }))
+  ));
+
+  const tickerDateMaps = {};
+  const allDates = new Set();
+  histories.forEach(({ t, h }) => {
+    tickerDateMaps[t] = {};
+    (h || []).forEach((d) => {
+      const ds = new Date(d.ts).toISOString().slice(0, 10);
+      tickerDateMaps[t][ds] = d.close;
+      allDates.add(ds);
+    });
+  });
+  const dates = [...allDates].sort();
+  // Forward-fill: cada ticker toma su último cierre conocido en las fechas sin dato,
+  // evitando caídas falsas cuando los calendarios de bolsa difieren (p. ej. .MX vs EE.UU.).
+  histories.forEach(({ t }) => {
+    const map = tickerDateMaps[t];
+    let last = null;
+    for (const ds of dates) {
+      if (map[ds] != null) last = map[ds];
+      else if (last != null) map[ds] = last;
+    }
+  });
+  const series = buildInvestmentValueSeries(allPositions, dates, tickerDateMaps, portfolioCur);
+  const points = series.map((p) => ({ date: p.date, value: p.market })).filter((p) => p.value > 0);
+
+  if (points.length < 2) {
+    resetReadout("No hay suficientes datos históricos para este periodo.");
+    summaryValueLoaded = false;
+    return;
+  }
+
+  drawPortfolioValueChart(canvas, points, portfolioCur);
+  const first = points[0].value, last = points[points.length - 1].value;
+  const diff = last - first;
+  const pct = first > 0 ? diff / first * 100 : 0;
+  if (latestEl) latestEl.textContent = formatCurrency(last, portfolioCur);
+  if (deltaEl) {
+    const up = diff >= 0;
+    deltaEl.textContent = `${up ? "+" : ""}${formatCurrency(diff, portfolioCur)} (${up ? "+" : ""}${pct.toFixed(2)}%) · ${activeBtn?.textContent || ""}`;
+    deltaEl.className = "value-chart-delta " + (up ? "return-pos" : "return-neg");
+  }
+  if (statusEl) statusEl.textContent = "";
+}
+
+function drawPortfolioValueChart(canvas, points, currency) {
+  if (!canvas) return;
+  const width = canvas.parentElement?.clientWidth || 700;
+  const height = width < 560 ? 240 : 300;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  portfolioValueChartStates.set(canvas, { width, height, dpr, points, currency, hoverIndex: null });
+  document.getElementById("portfolioValueTooltip")?.classList.add("hidden");
+  paintPortfolioValueChart(canvas);
+  ensurePortfolioValueInteractions(canvas);
+}
+
+function paintPortfolioValueChart(canvas) {
+  const state = portfolioValueChartStates.get(canvas);
+  if (!state) return;
+  const { width, height, dpr, points, currency, hoverIndex } = state;
+  const ctx = canvas.getContext("2d");
+  const lightMode = document.body.classList.contains("light-mode");
+  const pad = { left: 64, right: 20, top: 20, bottom: 34 };
+  const chartWidth = width - pad.left - pad.right;
+  const chartHeight = height - pad.top - pad.bottom;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  if (points.length < 2) {
+    ctx.fillStyle = lightMode ? "rgba(23,32,51,0.5)" : "rgba(226,232,255,0.45)";
+    ctx.font = "500 13px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Sin datos históricos suficientes", width / 2, height / 2);
+    return;
+  }
+  const values = points.map((p) => p.value);
+  const rawMin = Math.min(...values), rawMax = Math.max(...values);
+  const valPad = (rawMax - rawMin) * 0.12 || Math.max(rawMax * 0.08, 1);
+  const minV = Math.max(0, rawMin - valPad), maxV = rawMax + valPad;
+  const vRange = Math.max(maxV - minV, 1);
+  const toX = (i) => pad.left + (i / Math.max(points.length - 1, 1)) * chartWidth;
+  const toY = (v) => pad.top + chartHeight * (1 - (v - minV) / vRange);
+  state.toX = toX; state.toY = toY; state.pad = pad; state.chartWidth = chartWidth;
+
+  const up = values[values.length - 1] >= values[0];
+  const lineColor = up ? "#32d6a2" : "#ff6b81";
+  const gridColor = lightMode ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.07)";
+  const axisColor = lightMode ? "rgba(23,32,51,0.48)" : "rgba(226,232,255,0.42)";
+
+  ctx.font = "500 10px Inter, sans-serif";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let s = 0; s <= 4; s++) {
+    const v = minV + (vRange / 4) * s;
+    const y = toY(v);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y);
+    ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.setLineDash([4, 5]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = axisColor; ctx.fillText(formatCurrencyCompact(v, currency), pad.left - 10, y);
+  }
+  const labelIdx = [...new Set([0, Math.round((points.length - 1) * 0.25), Math.round((points.length - 1) * 0.5), Math.round((points.length - 1) * 0.75), points.length - 1])];
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  labelIdx.forEach((i) => {
+    const d = new Date(points[i].date + "T12:00:00");
+    ctx.fillStyle = axisColor;
+    ctx.fillText(d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" }), toX(i), height - pad.bottom + 10);
+  });
+
+  const grad = ctx.createLinearGradient(0, pad.top, 0, height - pad.bottom);
+  grad.addColorStop(0, up ? "rgba(50,214,162,0.22)" : "rgba(255,107,129,0.20)");
+  grad.addColorStop(1, up ? "rgba(50,214,162,0)" : "rgba(255,107,129,0)");
+  ctx.beginPath();
+  points.forEach((p, i) => ctx[i ? "lineTo" : "moveTo"](toX(i), toY(p.value)));
+  ctx.lineTo(toX(points.length - 1), height - pad.bottom);
+  ctx.lineTo(toX(0), height - pad.bottom);
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath();
+  points.forEach((p, i) => ctx[i ? "lineTo" : "moveTo"](toX(i), toY(p.value)));
+  ctx.strokeStyle = lineColor; ctx.lineWidth = 2.4; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.stroke();
+
+  if (hoverIndex !== null && points[hoverIndex]) {
+    const x = toX(hoverIndex);
+    ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, height - pad.bottom);
+    ctx.strokeStyle = lightMode ? "rgba(15,23,42,0.22)" : "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(x, toY(points[hoverIndex].value), 4, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = lightMode ? "#ffffff" : "#0d0f17"; ctx.stroke();
+  }
+}
+
+function setPortfolioValueHover(canvas, index) {
+  const state = portfolioValueChartStates.get(canvas);
+  if (!state) return;
+  if (state.hoverIndex !== index) { state.hoverIndex = index; paintPortfolioValueChart(canvas); }
+  const tip = document.getElementById("portfolioValueTooltip");
+  if (!tip) return;
+  if (index === null || !state.points[index]) { tip.classList.add("hidden"); return; }
+  const p = state.points[index];
+  tip.innerHTML = `<strong>${new Date(p.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}</strong><span>${formatCurrency(p.value, state.currency)}</span>`;
+  const x = state.toX(index);
+  tip.style.left = `${Math.min(Math.max(x + 12, 12), state.width - 150)}px`;
+  tip.style.top = `${Math.max(12, state.toY(p.value) - 16)}px`;
+  tip.classList.remove("hidden");
+}
+
+function ensurePortfolioValueInteractions(canvas) {
+  if (canvas.dataset.interactive === "true") return;
+  canvas.dataset.interactive = "true";
+  const upd = (e) => {
+    const state = portfolioValueChartStates.get(canvas);
+    if (!state || state.points.length < 2) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (state.width / rect.width);
+    if (x < state.pad.left || x > state.width - state.pad.right) { setPortfolioValueHover(canvas, null); return; }
+    const i = Math.max(0, Math.min(state.points.length - 1, Math.round((x - state.pad.left) / state.chartWidth * (state.points.length - 1))));
+    setPortfolioValueHover(canvas, i);
+  };
+  canvas.addEventListener("pointerdown", upd);
+  canvas.addEventListener("pointermove", upd);
+  canvas.addEventListener("pointerleave", (e) => { if (e.pointerType !== "touch") setPortfolioValueHover(canvas, null); });
+}
+
 async function loadPerformanceTab(portfolio) {
   perfTabLoaded = true;
   const statusEl = document.getElementById("perfChartStatus");
@@ -9945,7 +11934,7 @@ async function loadPerformanceTab(portfolio) {
   const portfolioCur = portfolio.currency || "USD";
   if (investmentStatus) investmentStatus.textContent = "Calculando evolución del capital...";
 
-  const activePeriodBtn = document.querySelector(".perf-period-btn.active");
+  const activePeriodBtn = document.querySelector("#tabPanelDesempeno .perf-period-btn.active");
   const range = activePeriodBtn?.dataset.range || "1y";
   const interval = activePeriodBtn?.dataset.interval || "1d";
 
@@ -9961,8 +11950,13 @@ async function loadPerformanceTab(portfolio) {
   document.getElementById("varValue").textContent = "—";
   document.getElementById("betaValue").textContent = "—";
   document.getElementById("maxDrawdownValue").textContent = "—";
+  ["sortinoValue", "calmarValue", "alphaValue", "infoRatioValue", "captureValue"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = "—"; el.className = "perf-metric-value"; }
+  });
 
   const positions = portfolio.positions || [];
+  renderAttributionChart(portfolio);
   const allPositions = buildAllPositionHistory(portfolio);
   if (!allPositions.length) {
     statusEl.textContent = "Agrega posiciones para ver el rendimiento.";
@@ -10150,6 +12144,19 @@ async function loadPerformanceTab(portfolio) {
   const maxDD = calcMaxDrawdown(dailyPortfolioReturns);
   document.getElementById("maxDrawdownValue").textContent = maxDD !== null ? "-" + maxDD.toFixed(2) + "%" : "—";
 
+  // Tracking error: desviación estándar anualizada de la diferencia diaria (portafolio − benchmark)
+  let trackingError = null;
+  if (dailyBenchmarkReturns.length >= 2) {
+    const nTE = Math.min(dailyPortfolioReturns.length, dailyBenchmarkReturns.length);
+    const diff = [];
+    for (let i = 0; i < nTE; i++) diff.push(dailyPortfolioReturns[i] - dailyBenchmarkReturns[i]);
+    const mTE = diff.reduce((s, r) => s + r, 0) / nTE;
+    const vTE = diff.reduce((s, r) => s + (r - mTE) ** 2, 0) / Math.max(1, nTE - 1);
+    trackingError = Math.sqrt(vTE) * Math.sqrt(252) * 100;
+  }
+  document.getElementById("trackingErrorValue").textContent = trackingError !== null ? trackingError.toFixed(2) + "%" : "—";
+  document.getElementById("trackingErrorLabel").textContent = `vs ${benchmarkLabel}`;
+
   // TWR (Time-Weighted Return): acumulado del periodo y, si abarca ~1 año o más, anualizado (L1.8)
   const twrEl = document.getElementById("twrValue");
   const twrSubEl = document.getElementById("twrSubLabel");
@@ -10175,6 +12182,74 @@ async function loadPerformanceTab(portfolio) {
       if (twrSubEl) twrSubEl.textContent = "Ponderado por tiempo";
     }
   }
+
+  // ── #2/#6 Métricas adicionales: Sortino, Calmar, Alpha, Information Ratio, Captura ──
+  const _nR = dailyPortfolioReturns.length;
+  const _meanP = _nR ? dailyPortfolioReturns.reduce((s, r) => s + r, 0) / _nR : 0;
+  const _dailyRfr = (perfRfr.rate / 100) / 252;
+  const setMetricCard = (id, txt, signVal) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = txt;
+    el.className = "perf-metric-value" + (signVal === null || signVal === undefined ? "" : (signVal >= 0 ? " return-pos" : " return-neg"));
+  };
+
+  // Sortino: exceso de retorno ÷ desviación a la baja (respecto a la tasa libre de riesgo)
+  let sortino = null;
+  {
+    const downs = dailyPortfolioReturns.filter((r) => r < _dailyRfr);
+    const dd = downs.length ? Math.sqrt(downs.reduce((s, r) => s + (r - _dailyRfr) ** 2, 0) / downs.length) : 0;
+    sortino = dd > 0 ? (_meanP - _dailyRfr) / dd * Math.sqrt(252) : null;
+  }
+  setMetricCard("sortinoValue", sortino !== null ? sortino.toFixed(2) : "—", sortino);
+
+  // Retorno anualizado del periodo (para Calmar)
+  let annReturn = null;
+  if (portfolioCumulative.length && returnDates.length >= 2) {
+    const totPct = portfolioCumulative[portfolioCumulative.length - 1].value / 100;
+    const yrs = (new Date(returnDates[returnDates.length - 1]) - new Date(returnDates[0])) / (365.25 * 864e5);
+    if (yrs > 0.02 && totPct > -1) annReturn = Math.pow(1 + totPct, 1 / yrs) - 1;
+  }
+  // Calmar = retorno anualizado ÷ |Max Drawdown|
+  let calmar = null;
+  if (annReturn !== null && maxDD !== null && maxDD > 0) calmar = annReturn / (maxDD / 100);
+  setMetricCard("calmarValue", calmar !== null ? calmar.toFixed(2) : "—", calmar);
+
+  // Métricas relativas al benchmark (Alpha, IR, Captura)
+  let alpha = null, infoRatio = null, upCapture = null, downCapture = null;
+  const hasBench = dailyBenchmarkReturns.length >= 2;
+  if (hasBench) {
+    const nB = Math.min(_nR, dailyBenchmarkReturns.length);
+    const pR = dailyPortfolioReturns.slice(-nB);
+    const bR = dailyBenchmarkReturns.slice(-nB);
+    const meanB = bR.reduce((s, r) => s + r, 0) / nB;
+    // Alpha de Jensen anualizado: α = R̄ₚ − [Rƒ + β(R̄ₘ − Rƒ)]
+    if (beta !== null) alpha = ((_meanP - _dailyRfr) - beta * (meanB - _dailyRfr)) * 252 * 100;
+    // Information Ratio: retorno activo medio ÷ desviación del activo, anualizado
+    const active = pR.map((r, i) => r - bR[i]);
+    const meanAct = active.reduce((s, r) => s + r, 0) / nB;
+    const stdAct = Math.sqrt(active.reduce((s, r) => s + (r - meanAct) ** 2, 0) / Math.max(1, nB - 1));
+    infoRatio = stdAct > 0 ? meanAct / stdAct * Math.sqrt(252) : null;
+    // Captura al alza / a la baja
+    let upP = 0, upB = 0, upN = 0, dnP = 0, dnB = 0, dnN = 0;
+    for (let i = 0; i < nB; i++) {
+      if (bR[i] > 0) { upP += pR[i]; upB += bR[i]; upN++; }
+      else if (bR[i] < 0) { dnP += pR[i]; dnB += bR[i]; dnN++; }
+    }
+    if (upN && upB !== 0) upCapture = (upP / upN) / (upB / upN) * 100;
+    if (dnN && dnB !== 0) downCapture = (dnP / dnN) / (dnB / dnN) * 100;
+  }
+  setMetricCard("alphaValue", alpha !== null ? (alpha >= 0 ? "+" : "") + alpha.toFixed(2) + "%" : "—", alpha);
+  const alphaLbl = document.getElementById("alphaLabel");
+  if (alphaLbl) alphaLbl.textContent = hasBench ? `vs ${benchmarkLabel} · anualizado` : "Requiere benchmark";
+  setMetricCard("infoRatioValue", infoRatio !== null ? infoRatio.toFixed(2) : "—", infoRatio);
+  const irLbl = document.getElementById("infoRatioLabel");
+  if (irLbl) irLbl.textContent = hasBench ? "Retorno activo ÷ Tracking Error" : "Requiere benchmark";
+  const capEl = document.getElementById("captureValue");
+  if (capEl) capEl.textContent = (upCapture !== null && downCapture !== null)
+    ? `${upCapture.toFixed(0)}% / ${downCapture.toFixed(0)}%` : "—";
+  const capLbl = document.getElementById("captureLabel");
+  if (capLbl) capLbl.textContent = hasBench ? "Mercado al alza vs a la baja" : "Requiere benchmark";
 
   // Compute per-asset beta vs benchmark for info popup
   const assetBetas = [];
@@ -10263,6 +12338,7 @@ async function loadPerformanceTab(portfolio) {
     var: metrics.var,
     beta,
     maxDD,
+    trackingError,
     n,
     mean,
     std,
@@ -10273,6 +12349,14 @@ async function loadPerformanceTab(portfolio) {
     horizon: perfVarHorizon,
     benchmarkLabel,
     assetBetas,
+    sortino,
+    calmar,
+    annReturn,
+    alpha,
+    infoRatio,
+    upCapture,
+    downCapture,
+    hasBench,
   };
 
   // Persistir series + extras para el reporte PDF
@@ -10697,6 +12781,187 @@ function renderMCStats(sim, years, currency, initVal) {
   `).join("");
 }
 
+// ── Metas financieras (#6) ────────────────────────────────────────────────
+// Reutiliza el motor Monte Carlo (runMonteCarlo + computeDailyReturnsForMC) para
+// estimar la probabilidad de alcanzar una meta y el aporte mensual requerido.
+let _goalsWired = false;
+
+function initGoalsTab(portfolio) {
+  goalTabLoaded = true;
+  const goal = portfolio.goal || null;
+
+  // Poblar el formulario con la meta guardada (si existe)
+  const nameEl = document.getElementById("goalName");
+  const targetEl = document.getElementById("goalTarget");
+  const yearsEl = document.getElementById("goalYears");
+  const monthlyEl = document.getElementById("goalMonthly");
+  const inflEl = document.getElementById("goalInflEnabled");
+  const clearBtn = document.getElementById("goalClearBtn");
+
+  if (goal) {
+    nameEl.value = goal.name || "";
+    targetEl.value = goal.target ?? "";
+    yearsEl.value = goal.years ?? 10;
+    monthlyEl.value = goal.monthly ?? 0;
+    inflEl.checked = !!goal.inflation;
+    clearBtn.style.display = "";
+  } else {
+    nameEl.value = ""; targetEl.value = ""; yearsEl.value = 10;
+    monthlyEl.value = 0; inflEl.checked = false;
+    clearBtn.style.display = "none";
+  }
+
+  // Conectar los handlers una sola vez
+  if (!_goalsWired) {
+    _goalsWired = true;
+    document.getElementById("goalForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const p = getPortfolios().find((pp) => pp.id === activePortfolioId);
+      if (p) renderGoalsTab(p, { save: true });
+    });
+    clearBtn.addEventListener("click", () => {
+      const p = getPortfolios().find((pp) => pp.id === activePortfolioId);
+      if (!p) return;
+      delete p.goal;
+      savePortfolios(getPortfolios());
+      document.getElementById("goalForm").reset();
+      document.getElementById("goalYears").value = 10;
+      document.getElementById("goalResult").style.display = "none";
+      document.getElementById("goalEmptyState").style.display = "";
+      document.getElementById("goalStatus").textContent = "";
+      clearBtn.style.display = "none";
+    });
+  }
+
+  // Si ya hay meta guardada, calcular automáticamente al abrir
+  if (goal && goal.target > 0) {
+    renderGoalsTab(portfolio, { save: false });
+  } else {
+    document.getElementById("goalResult").style.display = "none";
+    document.getElementById("goalEmptyState").style.display = "";
+  }
+}
+
+// Aporte mensual requerido (anualidad: FV = PV·(1+i)^n + PMT·[((1+i)^n−1)/i])
+function requiredMonthlyContribution(initVal, target, years, annualReturn) {
+  const n = Math.max(1, Math.round(years * 12));
+  const i = Math.pow(1 + annualReturn, 1 / 12) - 1;
+  const fvInitial = initVal * Math.pow(1 + i, n);
+  const remaining = target - fvInitial;
+  if (remaining <= 0) return 0; // el capital inicial solo ya basta
+  if (Math.abs(i) < 1e-9) return remaining / n;
+  return (remaining * i) / (Math.pow(1 + i, n) - 1);
+}
+
+async function renderGoalsTab(portfolio, { save } = { save: false }) {
+  const statusEl = document.getElementById("goalStatus");
+  const resultEl = document.getElementById("goalResult");
+  const emptyEl = document.getElementById("goalEmptyState");
+  const clearBtn = document.getElementById("goalClearBtn");
+
+  const name = (document.getElementById("goalName").value || "").trim();
+  const target = parseFloat(document.getElementById("goalTarget").value);
+  const years = Math.max(1, Math.min(40, parseInt(document.getElementById("goalYears").value, 10) || 10));
+  const monthly = parseFloat(document.getElementById("goalMonthly").value) || 0;
+  const inflation = document.getElementById("goalInflEnabled").checked;
+
+  if (!isFinite(target) || target <= 0) {
+    statusEl.textContent = "Ingresa un monto objetivo válido.";
+    return;
+  }
+
+  // Persistir la meta en el portafolio
+  if (save) {
+    portfolio.goal = { name, target, years, monthly, inflation };
+    savePortfolios(getPortfolios());
+    clearBtn.style.display = "";
+  }
+
+  emptyEl.style.display = "none";
+  resultEl.style.display = "none";
+  statusEl.innerHTML = `<span class="inline-spinner"></span> Calculando probabilidad…`;
+
+  const cur = portfolio.currency || "USD";
+  const dailyReturns = await computeDailyReturnsForMC(portfolio, "2y");
+  if (!dailyReturns || dailyReturns.length < 20) {
+    statusEl.textContent = "Datos históricos insuficientes. Agrega posiciones con histórico de precios.";
+    return;
+  }
+
+  const initVal = (_lastPortfolioCurrentValue && _lastPortfolioCurrentValue > 0)
+    ? _lastPortfolioCurrentValue
+    : calcPortfolioTotals(portfolio.positions || [], cur).totalInvested;
+
+  if (initVal <= 0) {
+    statusEl.textContent = "El portafolio no tiene valor actual. Agrega posiciones primero.";
+    return;
+  }
+
+  const inflRate = inflation ? 0.035 : 0;
+  const sim = runMonteCarlo(dailyReturns, initVal, years, {
+    numSims: 4000, contribution: monthly, model: "gbm", inflationRate: inflRate, goal: target,
+  });
+
+  // Probabilidad de alcanzar la meta desde la distribución simulada
+  let goalCount = 0;
+  for (let k = 0; k < sim.finals.length; k++) if (sim.finals[k] >= target) goalCount++;
+  const prob = Math.round((goalCount / sim.finals.length) * 100);
+
+  // Retorno anual (real si se ajusta por inflación) para el aporte requerido
+  const nominalAnnual = Math.exp(sim.mu * 252) - 1;
+  const annualForCalc = inflation ? (1 + nominalAnnual) / (1 + inflRate) - 1 : nominalAnnual;
+  const reqMonthly = requiredMonthlyContribution(initVal, target, years, annualForCalc);
+
+  const median = sim.bands[3][sim.steps];
+  const progressPct = Math.min(100, Math.max(0, (initVal / target) * 100));
+
+  // ── Render tarjeta de progreso ──
+  document.getElementById("goalProgressName").textContent = name || "Tu meta";
+  document.getElementById("goalProgressCurrent").textContent = formatCurrency(initVal, cur);
+  document.getElementById("goalProgressTarget").textContent = `de ${formatCurrency(target, cur)}`;
+  document.getElementById("goalProgressFill").style.width = progressPct.toFixed(1) + "%";
+
+  const probValEl = document.getElementById("goalProbValue");
+  probValEl.textContent = prob + "%";
+  const badge = document.getElementById("goalProbBadge");
+  badge.classList.remove("is-high", "is-mid", "is-low");
+  badge.classList.add(prob >= 70 ? "is-high" : prob >= 40 ? "is-mid" : "is-low");
+
+  const metaBits = [`${progressPct.toFixed(0)}% del objetivo ya cubierto con tu valor actual`];
+  if (monthly > 0) metaBits.push(`aportando ${formatCurrency(monthly, cur)}/mes durante ${years} año${years > 1 ? "s" : ""}`);
+  document.getElementById("goalProgressMeta").textContent = metaBits.join(" · ");
+
+  // ── Tarjetas de estadísticas ──
+  const cards = [
+    { label: "Probabilidad de lograrla", value: prob + "%", sub: inflation ? "en poder adquisitivo de hoy" : `en ${years} año${years > 1 ? "s" : ""}`, cls: prob >= 50 ? "pos" : "neg" },
+    { label: "Proyección mediana", value: formatCurrency(median, cur), sub: median >= target ? "supera la meta" : "por debajo de la meta", cls: median >= target ? "pos" : "neg" },
+  ];
+
+  if (reqMonthly <= 0) {
+    cards.push({ label: "Aporte mensual requerido", value: formatCurrency(0, cur), sub: "tu capital actual ya alcanza la meta", cls: "pos" });
+  } else {
+    const delta = reqMonthly - monthly;
+    cards.push({
+      label: "Aporte mensual requerido",
+      value: formatCurrency(reqMonthly, cur),
+      sub: monthly > 0 && delta > 1 ? `${formatCurrency(delta, cur)} más que tu aporte actual` : "para llegar en el horizonte fijado",
+      cls: delta <= 1 ? "pos" : "neg",
+    });
+  }
+  cards.push({ label: "Faltante hoy", value: formatCurrency(Math.max(0, target - initVal), cur), sub: `meta: ${formatCurrencyCompact(target, cur)}`, cls: "" });
+
+  document.getElementById("goalStatsGrid").innerHTML = cards.map((c) => `
+    <div class="mc-stat-card">
+      <div class="mc-stat-label">${c.label}</div>
+      <div class="mc-stat-value ${c.cls}">${c.value}</div>
+      <div class="mc-stat-sub">${c.sub}</div>
+    </div>
+  `).join("");
+
+  resultEl.style.display = "";
+  statusEl.textContent = save ? "Meta guardada ✓" : "";
+}
+
 function normalCDF(z) {
   // Abramowitz & Stegun approximation
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
@@ -10841,6 +13106,104 @@ function buildPerfInfoContent(metric) {
   MDD = max(dd) × 100</div>
         <div class="perf-info-result">Max Drawdown = ${d.maxDD !== null ? "-" + d.maxDD.toFixed(2) + "%" : "—"}</div>
         <p class="perf-info-note">Representa la mayor caída porcentual desde un máximo histórico hasta el punto más bajo subsiguiente, en el período analizado. No indica cuándo ocurrió ni cuánto tardó en recuperarse.</p>
+      `
+    };
+  }
+
+  if (metric === "trackingerror") {
+    return {
+      title: "Tracking Error — Cálculo",
+      body: `
+        <div class="perf-info-formula">TE = σ(r_port − r_bench) × √252 × 100</div>
+        <div class="perf-info-values">
+          <div class="perf-info-row"><span class="perf-info-row-label">Benchmark</span><span class="perf-info-row-val">${d.benchmarkLabel}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Observaciones (días)</span><span class="perf-info-row-val">${d.n}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Factor de anualización</span><span class="perf-info-row-val">√252</span></div>
+        </div>
+        <div class="perf-info-formula">Algoritmo:
+  dₜ = r_portₜ − r_benchₜ
+  σ = desviación estándar muestral de dₜ
+  TE = σ × √252 × 100</div>
+        <div class="perf-info-result">Tracking Error = ${d.trackingError !== null && d.trackingError !== undefined ? d.trackingError.toFixed(2) + "%" : "—"}</div>
+        <p class="perf-info-note">Mide qué tan de cerca sigue el portafolio a su benchmark: es la volatilidad anualizada de la diferencia de retornos diarios. Un valor bajo indica seguimiento estrecho; uno alto, una gestión más activa que se aparta del índice. Requiere un benchmark configurado en Ajustes.</p>
+      `
+    };
+  }
+
+  if (metric === "sortino") {
+    return {
+      title: "Sortino Ratio — Cálculo",
+      body: `
+        <div class="perf-info-formula">Sortino = (R̄ₚ − Rƒ) / σ_downside × √252</div>
+        <div class="perf-info-values">
+          <div class="perf-info-row"><span class="perf-info-row-label">Retorno diario promedio (R̄ₚ)</span><span class="perf-info-row-val">${pct(d.mean, 4)}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Tasa libre de riesgo diaria (Rƒ)</span><span class="perf-info-row-val">${pct(d.daily_rfr, 4)}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Observaciones (días)</span><span class="perf-info-row-val">${d.n}</span></div>
+        </div>
+        <div class="perf-info-result">Sortino Ratio = ${d.sortino !== null && d.sortino !== undefined ? d.sortino.toFixed(2) : "—"}</div>
+        <p class="perf-info-note">Igual que el Sharpe, pero penaliza solo la volatilidad <strong>a la baja</strong> (retornos por debajo de la tasa libre de riesgo), ignorando las subidas. Es más justo para portafolios con retornos asimétricos: un Sortino más alto que el Sharpe indica que la volatilidad proviene sobre todo de movimientos al alza.</p>
+      `
+    };
+  }
+
+  if (metric === "calmar") {
+    return {
+      title: "Calmar Ratio — Cálculo",
+      body: `
+        <div class="perf-info-formula">Calmar = Retorno anualizado / |Max Drawdown|</div>
+        <div class="perf-info-values">
+          <div class="perf-info-row"><span class="perf-info-row-label">Retorno anualizado del periodo</span><span class="perf-info-row-val">${d.annReturn !== null && d.annReturn !== undefined ? (d.annReturn * 100).toFixed(2) + "%" : "—"}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Max Drawdown</span><span class="perf-info-row-val">${d.maxDD !== null ? "-" + d.maxDD.toFixed(2) + "%" : "—"}</span></div>
+        </div>
+        <div class="perf-info-result">Calmar Ratio = ${d.calmar !== null && d.calmar !== undefined ? d.calmar.toFixed(2) : "—"}</div>
+        <p class="perf-info-note">Mide el retorno obtenido por cada unidad de la peor caída sufrida. Un Calmar &gt; 1 es sólido; cuanto más alto, mejor recompensa el portafolio el riesgo de caída máxima. Muy usado para estrategias donde importa el dolor de las pérdidas, no solo la volatilidad.</p>
+      `
+    };
+  }
+
+  if (metric === "alpha") {
+    return {
+      title: "Alpha de Jensen — Cálculo",
+      body: `
+        <div class="perf-info-formula">α = R̄ₚ − [Rƒ + β·(R̄ₘ − Rƒ)] (anualizado)</div>
+        <div class="perf-info-values">
+          <div class="perf-info-row"><span class="perf-info-row-label">Benchmark</span><span class="perf-info-row-val">${d.benchmarkLabel}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Beta (regresión)</span><span class="perf-info-row-val">${d.beta !== null ? d.beta.toFixed(4) : "—"}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Observaciones (días)</span><span class="perf-info-row-val">${d.n}</span></div>
+        </div>
+        <div class="perf-info-result">Alpha anualizada = ${d.alpha !== null && d.alpha !== undefined ? (d.alpha >= 0 ? "+" : "") + d.alpha.toFixed(2) + "%" : "—"}</div>
+        <p class="perf-info-note">El exceso de retorno del portafolio por encima de lo que "debería" rendir según su beta y el comportamiento del mercado. Alpha positiva = valor añadido frente a simplemente replicar el índice con el mismo riesgo sistemático. ${d.hasBench ? "" : "Requiere un benchmark configurado en el portafolio."}</p>
+      `
+    };
+  }
+
+  if (metric === "inforatio") {
+    return {
+      title: "Information Ratio — Cálculo",
+      body: `
+        <div class="perf-info-formula">IR = (R̄ₚ − R̄ₘ) / σ(Rₚ − Rₘ) × √252</div>
+        <div class="perf-info-values">
+          <div class="perf-info-row"><span class="perf-info-row-label">Benchmark</span><span class="perf-info-row-val">${d.benchmarkLabel}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Tracking Error</span><span class="perf-info-row-val">${d.trackingError !== null && d.trackingError !== undefined ? d.trackingError.toFixed(2) + "%" : "—"}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Observaciones (días)</span><span class="perf-info-row-val">${d.n}</span></div>
+        </div>
+        <div class="perf-info-result">Information Ratio = ${d.infoRatio !== null && d.infoRatio !== undefined ? d.infoRatio.toFixed(2) : "—"}</div>
+        <p class="perf-info-note">Retorno activo (por encima del benchmark) por cada unidad de riesgo activo (tracking error). Responde: ¿la desviación respecto al índice está siendo recompensada? IR &gt; 0.5 es bueno; &gt; 1 es excelente y raro. ${d.hasBench ? "" : "Requiere un benchmark configurado."}</p>
+      `
+    };
+  }
+
+  if (metric === "capture") {
+    return {
+      title: "Captura al alza / a la baja — Cálculo",
+      body: `
+        <div class="perf-info-formula">Captura ↑ = R̄ₚ(días ↑) / R̄ₘ(días ↑) · Captura ↓ = R̄ₚ(días ↓) / R̄ₘ(días ↓)</div>
+        <div class="perf-info-values">
+          <div class="perf-info-row"><span class="perf-info-row-label">Benchmark</span><span class="perf-info-row-val">${d.benchmarkLabel}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Captura al alza</span><span class="perf-info-row-val">${d.upCapture !== null && d.upCapture !== undefined ? d.upCapture.toFixed(1) + "%" : "—"}</span></div>
+          <div class="perf-info-row"><span class="perf-info-row-label">Captura a la baja</span><span class="perf-info-row-val">${d.downCapture !== null && d.downCapture !== undefined ? d.downCapture.toFixed(1) + "%" : "—"}</span></div>
+        </div>
+        <p class="perf-info-note">Compara cómo se mueve tu portafolio los días que el mercado sube vs los días que baja. Lo ideal: captura al alza &gt; 100% (subes más que el índice) y captura a la baja &lt; 100% (caes menos). Una captura a la baja de 70% significa que cuando el mercado cae 1%, tú caes ~0.7%. ${d.hasBench ? "" : "Requiere un benchmark configurado."}</p>
       `
     };
   }
@@ -11101,6 +13464,37 @@ changePasswordForm.addEventListener("submit", async e => {
 });
 
 // ── Two-Factor Auth management (Settings section) ────────────────────────────
+// ── Códigos de respaldo 2FA: render + acciones (copiar / descargar) ──────────
+function _bpRenderBackupCodes(codes, gridEl) {
+  if (!gridEl) return;
+  gridEl.innerHTML = "";
+  (codes || []).forEach(c => {
+    const span = document.createElement("span");
+    span.className = "backup-code-chip";
+    span.textContent = c;
+    gridEl.appendChild(span);
+  });
+}
+
+function _bpWireBackupActions(codes, copyBtn, downloadBtn) {
+  if (copyBtn) copyBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText((codes || []).join("\n")); copyBtn.textContent = "✓ Copiado"; }
+    catch { copyBtn.textContent = "No se pudo copiar"; }
+    setTimeout(() => { copyBtn.textContent = "Copiar"; }, 1500);
+  };
+  if (downloadBtn) downloadBtn.onclick = () => {
+    const text = "BlackPortfolio · Códigos de respaldo 2FA\n"
+      + "Cada código sirve UNA sola vez. Guárdalos en un lugar seguro.\n\n"
+      + (codes || []).join("\n") + "\n";
+    const blob = new Blob([text], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "blackportfolio-codigos-respaldo.txt";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+
 (function init2FASettings() {
   const statusEl  = document.getElementById("twoFaStatus");
   const actionsEl = document.getElementById("twoFaActions");
@@ -11141,9 +13535,24 @@ changePasswordForm.addEventListener("submit", async e => {
     const enabled = await window.BlackPortfolioAuth.isTwoFactorEnabled(session.id);
 
     if (enabled) {
-      statusEl.innerHTML = '<span style="color:var(--success)">● Activo</span> — Tu cuenta está protegida con Google Authenticator.';
-      actionsEl.innerHTML = '<button id="disable2FABtn" class="button secondary" type="button" style="color:#ff8ca4;border-color:#ff8ca4">Desactivar 2FA</button>';
+      let remainingNote = "";
+      try {
+        const st = await window.BlackPortfolioAuth.getTwoFactorStatus();
+        if (typeof st.backupCodesRemaining === "number") {
+          const n = st.backupCodesRemaining;
+          const warn = n <= 2;
+          remainingNote = `<div style="margin-top:8px;font-size:0.82rem;color:${warn ? "var(--warning)" : "var(--muted)"}">`
+            + `Códigos de respaldo disponibles: <strong>${n}</strong>`
+            + (warn ? " — te quedan pocos, conviene regenerarlos." : "")
+            + `</div>`;
+        }
+      } catch {}
+      statusEl.innerHTML = '<span style="color:var(--success)">● Activo</span> — Tu cuenta está protegida con Google Authenticator.' + remainingNote;
+      actionsEl.innerHTML =
+        '<button id="regenBackupBtn" class="button secondary" type="button">Regenerar códigos de respaldo</button>'
+        + '<button id="disable2FABtn" class="button secondary" type="button" style="color:#ff8ca4;border-color:#ff8ca4">Desactivar 2FA</button>';
       document.getElementById("disable2FABtn").addEventListener("click", openDisableModal);
+      document.getElementById("regenBackupBtn").addEventListener("click", openRegenModal);
     } else {
       statusEl.innerHTML = '<span style="color:var(--warning)">● Inactivo</span> — Tu cuenta no tiene verificación en dos pasos.';
       actionsEl.innerHTML = '<button id="enable2FABtn" class="button primary" type="button">Activar Google Authenticator</button>';
@@ -11203,9 +13612,28 @@ changePasswordForm.addEventListener("submit", async e => {
 
       const result = await window.BlackPortfolioAuth.verifyTwoFactorSetup(code);
       if (result.ok) {
-        msg.textContent = "✓ 2FA activado correctamente.";
-        msg.className = "totp-setup-msg form-message success";
-        setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); window.BlackPortfolioRefreshSettings?.(); }, 1200);
+        const backupView = document.getElementById("mainTotpBackupView");
+        if (backupView && (result.backupCodes || []).length) {
+          _bpRenderBackupCodes(result.backupCodes, document.getElementById("mainTotpBackupCodes"));
+          _bpWireBackupActions(
+            result.backupCodes,
+            document.getElementById("mainTotpBackupCopy"),
+            document.getElementById("mainTotpBackupDownload"),
+          );
+          content.classList.add("hidden");
+          backupView.classList.remove("hidden");
+          document.getElementById("mainTotpBackupDone").onclick = () => {
+            modal.classList.add("hidden");
+            backupView.classList.add("hidden");
+            content.classList.remove("hidden");
+            refresh2FAStatus();
+            window.BlackPortfolioRefreshSettings?.();
+          };
+        } else {
+          msg.textContent = "✓ 2FA activado correctamente.";
+          msg.className = "totp-setup-msg form-message success";
+          setTimeout(() => { modal.classList.add("hidden"); refresh2FAStatus(); window.BlackPortfolioRefreshSettings?.(); }, 1200);
+        }
         return;
       }
 
@@ -11257,6 +13685,62 @@ changePasswordForm.addEventListener("submit", async e => {
       msg.className = "totp-setup-msg form-message error";
       boxes.forEach(b => { b.value = ""; b.classList.add("otp-box--error"); });
       confirmBtn.textContent = "Confirmar desactivación";
+      confirmBtn.disabled = true;
+      boxes[0].focus();
+    };
+
+    cancelBtn.onclick = () => modal.classList.add("hidden");
+  }
+
+  function openRegenModal() {
+    const modal      = document.getElementById("mainBackupRegenModal");
+    const formView   = document.getElementById("mainBackupRegenForm");
+    const resultView = document.getElementById("mainBackupRegenResult");
+    const grid       = document.getElementById("mainBackupRegenOtpGrid");
+    const confirmBtn = document.getElementById("mainBackupRegenConfirm");
+    const cancelBtn  = document.getElementById("mainBackupRegenCancel");
+    const msg        = document.getElementById("mainBackupRegenMsg");
+    const boxes      = Array.from(grid.querySelectorAll(".otp-box"));
+
+    boxes.forEach(b => { b.value = ""; b.classList.remove("otp-box--complete", "otp-box--error"); });
+    msg.textContent = "";
+    msg.className = "totp-setup-msg";
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Generar nuevos";
+    formView.classList.remove("hidden");
+    resultView.classList.add("hidden");
+    modal.classList.remove("hidden");
+
+    makeOtpBoxListeners(boxes,
+      () => { confirmBtn.disabled = !boxes.every(b => b.value !== ""); },
+      () => { msg.textContent = ""; msg.className = "totp-setup-msg"; boxes.forEach(b => b.classList.remove("otp-box--error")); }
+    );
+
+    confirmBtn.onclick = async () => {
+      const code = boxes.map(b => b.value).join("");
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Generando…";
+
+      const result = await window.BlackPortfolioAuth.regenerateBackupCodes(code);
+      if (result.ok) {
+        _bpRenderBackupCodes(result.backupCodes, document.getElementById("mainBackupRegenCodes"));
+        _bpWireBackupActions(
+          result.backupCodes,
+          document.getElementById("mainBackupRegenCopy"),
+          document.getElementById("mainBackupRegenDownload"),
+        );
+        formView.classList.add("hidden");
+        resultView.classList.remove("hidden");
+        document.getElementById("mainBackupRegenDone").onclick = () => {
+          modal.classList.add("hidden");
+          refresh2FAStatus();
+        };
+        return;
+      }
+      msg.textContent = result.error || "Código incorrecto.";
+      msg.className = "totp-setup-msg form-message error";
+      boxes.forEach(b => { b.value = ""; b.classList.add("otp-box--error"); });
+      confirmBtn.textContent = "Generar nuevos";
       confirmBtn.disabled = true;
       boxes[0].focus();
     };
@@ -11494,6 +13978,24 @@ changePasswordForm.addEventListener("submit", async e => {
 
     const controls = document.createElement("div");
     controls.className = "hub-widget-controls";
+    [
+      { direction: -1, label: "Subir widget", icon: "↑" },
+      { direction: 1, label: "Bajar widget", icon: "↓" }
+    ].forEach(({ direction, label, icon }) => {
+      const orderBtn = mkBtn(icon, label);
+      orderBtn.classList.add("hub-mobile-order-btn");
+      orderBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const widgets = activeSpace().widgets;
+        const index = widgets.findIndex((item) => item.id === widget.id);
+        const nextIndex = index + direction;
+        if (index < 0 || nextIndex < 0 || nextIndex >= widgets.length) return;
+        [widgets[index], widgets[nextIndex]] = [widgets[nextIndex], widgets[index]];
+        saveHubState();
+        renderAll();
+      });
+      controls.appendChild(orderBtn);
+    });
     const refreshBtn = mkBtn(`<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`, "Actualizar");
     refreshBtn.addEventListener("click", e => { e.stopPropagation(); const r = widgetRefs.get(widget.id); if (r && r.refresh) r.refresh(); });
     controls.appendChild(refreshBtn);
@@ -11539,11 +14041,12 @@ changePasswordForm.addEventListener("submit", async e => {
     renderWidgetBody(widget, body, ref);
   }
 
-  function mkBtn(html, title, danger) {
+function mkBtn(html, title, danger) {
     const b = document.createElement("button");
     b.className = "hub-widget-btn" + (danger ? " danger" : "");
     b.type = "button";
     b.title = title;
+    b.setAttribute("aria-label", title);
     b.innerHTML = html;
     return b;
   }
@@ -14030,6 +16533,27 @@ changePasswordForm.addEventListener("submit", async e => {
   closeBtn?.addEventListener("click", close);
   modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
 
+  // Botón flotante de feedback (siempre visible durante la beta).
+  document.getElementById("feedbackFab")?.addEventListener("click", open);
+
+  // Bienvenida a la beta: se muestra una sola vez por dispositivo.
+  (function initBetaWelcome() {
+    const wm = document.getElementById("betaWelcomeModal");
+    if (!wm) return;
+    const KEY = "bp-beta-welcome-v1";
+    const dismiss = () => { wm.classList.add("hidden"); try { localStorage.setItem(KEY, "1"); } catch {} };
+    document.getElementById("betaWelcomeStart")?.addEventListener("click", dismiss);
+    document.getElementById("betaWelcomeClose")?.addEventListener("click", dismiss);
+    wm.addEventListener("click", (e) => { if (e.target === wm) dismiss(); });
+    document.getElementById("betaWelcomeFeedback")?.addEventListener("click", () => { dismiss(); open(); });
+    let seen = false;
+    try { seen = localStorage.getItem(KEY) === "1"; } catch {}
+    if (!seen) {
+      const sess = window.BlackPortfolioAuth?.getSession?.();
+      if (!sess || !sess.isDemo) setTimeout(() => wm.classList.remove("hidden"), 700);
+    }
+  })();
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = (message?.value || "").trim();
@@ -14045,7 +16569,7 @@ changePasswordForm.addEventListener("submit", async e => {
     submitBtn.textContent = "Enviando…";
     try {
       const idToken = await user.getIdToken();
-      const twofaToken = sessionStorage.getItem("bp-2fa-token");
+      const twofaToken = localStorage.getItem("bp-2fa-token");
       const activeSection = document.querySelector(".dashboard-nav-item.active")?.dataset.section || "";
       const res = await fetch(`${API_BASE_URL}/feedback`, {
         method: "POST",

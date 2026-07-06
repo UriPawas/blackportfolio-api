@@ -11,6 +11,7 @@ from persistence import (
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
     BetaAllowlist, BetaCode, BETA_CLOSED, redeem_beta_code,
     normalize_plan, require_plan, upsert_user, utc_now, limiter, purge_user,
+    UserAlert, UserNotification, AnalyticsEvent,
 )
 import requests
 import yfinance as yf
@@ -412,6 +413,11 @@ install_persistence(app)
 def initialize_backup_scheduler():
     start_backup_scheduler()
 
+
+@app.on_event("startup")
+def initialize_alerts_scheduler():
+    start_alerts_scheduler()
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -747,6 +753,126 @@ def prices_batch(request: Request, symbols: str):
         if p is not None:
             result[sym] = {"price": p, "prev": prev}
     return result
+
+
+# ── Alertas de precio: email (SMTP pluggable) + scheduler (#5) ─────────────────
+# El email es OPCIONAL: si no hay SMTP_HOST configurado, las alertas siguen
+# funcionando como notificaciones in-app (degradación elegante, igual que los
+# backups). Para activar el correo, define SMTP_HOST/PORT/USER/PASS/FROM.
+def _send_email(to_addr: str, subject: str, body_text: str) -> bool:
+    host = os.environ.get("SMTP_HOST", "").strip()
+    if not host or not to_addr:
+        return False
+    import smtplib
+    from email.message import EmailMessage
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ.get("SMTP_USER", "").strip()
+    password = os.environ.get("SMTP_PASS", "").strip()
+    sender = os.environ.get("SMTP_FROM", user or "no-reply@blackportfolio.ai").strip()
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = sender
+        msg["To"] = to_addr
+        msg.set_content(body_text)
+        with smtplib.SMTP(host, port, timeout=15) as server:
+            server.ehlo()
+            try:
+                server.starttls()
+                server.ehlo()
+            except Exception:
+                pass
+            if user and password:
+                server.login(user, password)
+            server.send_message(msg)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[alerts] email a {to_addr} falló: {exc}", flush=True)
+        return False
+
+
+def _evaluate_alerts_once() -> int:
+    """Evalúa todas las alertas activas una vez. Devuelve cuántas se dispararon."""
+    from sqlalchemy import select
+    gen = get_session()
+    session = next(gen)
+    triggered = 0
+    try:
+        alerts = session.execute(
+            select(UserAlert).where(UserAlert.active == True)  # noqa: E712
+        ).scalars().all()
+        if not alerts:
+            return 0
+        symbols = sorted({a.symbol for a in alerts if a.symbol})
+        prices: dict[str, float] = {}
+        for sym in symbols:
+            p, _prev = _price_and_prev_for_ticker(sym)
+            if p is not None:
+                prices[sym] = float(p)
+        now = utc_now()
+        for a in alerts:
+            price = prices.get(a.symbol)
+            if price is None:
+                continue
+            hit = (a.kind == "price_above" and price >= a.threshold) or \
+                  (a.kind == "price_below" and price <= a.threshold)
+            if not hit:
+                continue
+            arrow = "subió a" if a.kind == "price_above" else "bajó a"
+            title = f"{a.symbol} {arrow} {price:,.2f}"
+            cond = "por encima de" if a.kind == "price_above" else "por debajo de"
+            body = f"Tu alerta para {a.symbol} se activó: el precio ({price:,.2f}) está {cond} {a.threshold:,.2f}."
+            session.add(UserNotification(
+                firebase_uid=a.firebase_uid, title=title, body=body, kind="alert",
+                read=False, created_at=now,
+            ))
+            a.active = False
+            a.triggered_at = now
+            triggered += 1
+            owner = session.get(AppUser, a.firebase_uid)
+            if owner and owner.email:
+                _send_email(owner.email, f"🔔 Alerta de precio: {title}", body)
+        session.commit()
+        return triggered
+    except Exception as exc:  # noqa: BLE001
+        print(f"[alerts] evaluación falló: {exc}", flush=True)
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return 0
+    finally:
+        try:
+            gen.close()
+        except Exception:
+            pass
+
+
+def start_alerts_scheduler() -> bool:
+    if os.environ.get("ALERTS_ENABLED", "1") not in ("1", "true", "True"):
+        return False
+    if not os.environ.get("DATABASE_URL"):
+        return False
+    import threading
+
+    interval_min = max(1, int(os.environ.get("ALERT_INTERVAL_MINUTES", "15")))
+
+    def worker():
+        # Espera inicial para no competir con el arranque
+        threading.Event().wait(60)
+        while True:
+            try:
+                n = _evaluate_alerts_once()
+                if n:
+                    print(f"[alerts] {n} alerta(s) disparada(s)", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[alerts] ciclo falló: {exc}", flush=True)
+            threading.Event().wait(interval_min * 60)
+
+    threading.Thread(target=worker, name="price-alerts", daemon=True).start()
+    print(f"[alerts] scheduler iniciado (cada {interval_min} min)", flush=True)
+    return True
+
 
 # ── Panel de administración ───────────────────────────────────────────────────
 # Solo el/los correos en ADMIN_EMAILS pueden consultar el resumen de portafolios.
@@ -1129,6 +1255,91 @@ def admin_set_feedback_status(
     fb.status = body.status
     session.commit()
     return {"ok": True, "id": fb.id, "status": fb.status}
+
+# ── Analítica de producto first-party (#1) ────────────────────────────────────
+# Ingesta server-side (sin servicios externos): el cliente solo manda el nombre
+# del evento; uid y plan se resuelven aquí. Permite saber qué módulos usa la beta.
+class AnalyticsEventBody(BaseModel):
+    event: str = ""
+    props: Optional[dict] = None
+    path: Optional[str] = None
+
+@app.post("/api/analytics/event")
+def track_event(
+    body: AnalyticsEventBody,
+    token: dict = Depends(verify_firebase_user),
+    session=Depends(get_session),
+):
+    name = (body.event or "").strip()[:60]
+    if not name:
+        raise HTTPException(status_code=400, detail="Falta el nombre del evento.")
+    uid = token.get("uid")
+    user = session.get(AppUser, uid) if uid else None
+    ev = AnalyticsEvent(
+        firebase_uid=uid,
+        event=name,
+        props=body.props if isinstance(body.props, dict) else None,
+        plan=normalize_plan(user.plan) if user else None,
+        path=(body.path or "").strip()[:200] or None,
+        created_at=utc_now(),
+    )
+    session.add(ev)
+    session.commit()
+    return {"ok": True}
+
+@app.get("/api/admin/analytics")
+def admin_analytics(token: dict = Depends(require_admin), session=Depends(get_session)):
+    from sqlalchemy import func
+    from datetime import timedelta
+
+    total = session.query(func.count(AnalyticsEvent.id)).scalar() or 0
+    active_users = session.query(
+        func.count(func.distinct(AnalyticsEvent.firebase_uid))
+    ).scalar() or 0
+
+    rows = (
+        session.query(
+            AnalyticsEvent.event,
+            func.count(AnalyticsEvent.id),
+            func.count(func.distinct(AnalyticsEvent.firebase_uid)),
+        )
+        .group_by(AnalyticsEvent.event)
+        .order_by(func.count(AnalyticsEvent.id).desc())
+        .all()
+    )
+    by_event = [{"event": e, "count": c, "users": u} for e, c, u in rows]
+
+    # Últimos 7 días: agrupamos en Python para no depender del dialecto (SQLite/PG).
+    since = utc_now() - timedelta(days=7)
+    recent_rows = (
+        session.query(AnalyticsEvent)
+        .filter(AnalyticsEvent.created_at >= since)
+        .order_by(AnalyticsEvent.created_at.desc())
+        .all()
+    )
+    by_day: dict[str, int] = {}
+    for ev in recent_rows:
+        if not ev.created_at:
+            continue
+        day = ev.created_at.date().isoformat()
+        by_day[day] = by_day.get(day, 0) + 1
+    last7 = [{"day": d, "count": by_day[d]} for d in sorted(by_day.keys())]
+
+    recent = [{
+        "event": ev.event,
+        "uid": ev.firebase_uid,
+        "plan": ev.plan,
+        "path": ev.path,
+        "createdAt": ev.created_at.isoformat() if ev.created_at else None,
+    } for ev in recent_rows[:40]]
+
+    return {
+        "total": total,
+        "activeUsers": active_users,
+        "byEvent": by_event,
+        "last7Days": last7,
+        "recent": recent,
+    }
 
 # ── Beta cerrada: gestión de la allowlist (solo admin) ────────────────────────
 class BetaAllowlistBody(BaseModel):
@@ -1710,6 +1921,21 @@ def seasonality(request: Request, symbol: str):
         raise _safe_error(e)
 
 
+def _chart_has_usable_closes(data) -> bool:
+    """True if a Yahoo chart payload has enough real price variation to be worth
+    caching. Guards against intermittent empty/flat/placeholder responses that
+    would otherwise be pinned for the full cache TTL."""
+    try:
+        r = data["chart"]["result"][0]
+        closes = [c for c in (r["indicators"]["quote"][0].get("close") or [])
+                  if c is not None and c > 0]
+        if len(closes) < 5:
+            return False
+        return (max(closes) - min(closes)) > max(closes) * 1e-6
+    except Exception:
+        return False
+
+
 @app.get("/api/chart/{symbol}")
 @limiter.limit("30/minute")
 def chart(request: Request, symbol: str, range: str = "1d", interval: str = "5m"):
@@ -1793,7 +2019,11 @@ def chart(request: Request, symbol: str, range: str = "1d", interval: str = "5m"
     if res.status_code != 200:
         raise HTTPException(status_code=res.status_code, detail="Error de Yahoo Finance")
     data = res.json()
-    _CHART_CACHE.set(cache_key, data)
+    # Only cache responses that carry usable price history. Yahoo intermittently
+    # returns 200s with empty/flat/placeholder closes; caching those would pin the
+    # bad data for the full TTL and make charts/optimizer fail across reloads.
+    if _chart_has_usable_closes(data):
+        _CHART_CACHE.set(cache_key, data)
     return data
 
 # ── Pexels gallery proxy (la clave nunca sale al frontend) ────────────────────
@@ -2033,7 +2263,7 @@ def stripe_customer_portal(
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL   = os.environ.get(
     "OPENROUTER_MODEL",
-    "google/gemma-4-26b-a4b-it:free,google/gemma-4-26b-a4b-it",
+    "deepseek/deepseek-v4-flash",
 )
 
 class InsightsRequest(BaseModel):
@@ -2181,6 +2411,108 @@ def ai_analyzer(
     if not text:
         raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
     return {"verdict": text, "model": info}
+
+
+class RebalanceAIRequest(BaseModel):
+    metrics: dict
+    lang: str = "es"
+
+@app.post("/api/ai/rebalance")
+@limiter.limit("10/minute")
+def ai_rebalance(
+    request: Request,
+    body: RebalanceAIRequest,
+    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+):
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
+
+    models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
+    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    periodo = body.metrics.get("periodo", "el periodo analizado")
+    system_msg = (
+        "Eres un analista financiero senior (CFA), objetivo y prudente. Recibes el resultado de un "
+        "optimizador de portafolio media-varianza (Markowitz) que propone una redistribución de pesos a "
+        "partir de retornos, volatilidades y correlaciones históricas. Explicas, en términos educativos, "
+        "por qué el rebalanceo sugerido tiene sentido. Reglas: (1) Te apoyas SIEMPRE en las cifras del JSON "
+        "y las citas. (2) NUNCA inventes datos que no estén en el JSON. (3) NO das órdenes personalizadas de "
+        "compra/venta ni garantías de rentabilidad. (4) Recuerda explícitamente que se basa en datos "
+        "históricos y que el desempeño pasado no garantiza resultados futuros."
+    )
+    user_msg = (
+        f"Explica el siguiente rebalanceo en {lang_name}, en Markdown, en 3-5 viñetas concretas. "
+        "Comenta: (a) cómo cambia el perfil riesgo/retorno (retorno esperado, volatilidad y Sharpe) entre "
+        "'actual' y 'sugerido', citando las cifras; (b) qué posiciones se sobreponderan o se reducen "
+        "(usa 'movimientos': actual_pct vs sugerido_pct) y la lógica (diversificación, menor volatilidad o "
+        "mejor relación rentabilidad/riesgo); (c) cierra con una advertencia breve de que se basa en datos de "
+        f"{periodo} y en factores económicos vigentes, y que los rendimientos pasados no garantizan "
+        "rendimientos futuros. Sé conciso, profesional y cita SIEMPRE cifras.\n\n"
+        f"Datos (JSON):\n{json.dumps(body.metrics, ensure_ascii=False)}"
+    )
+
+    text, info = _openrouter_chat(models, [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg},
+    ])
+    if not text:
+        raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
+    return {"explanation": text, "model": info}
+
+
+# ── Asistente IA conversacional (OpenRouter · DeepSeek v4 Flash) ───────────────
+# Chat del Portafolio Tracker. Recibe un snapshot del portafolio (context) y el
+# historial de la conversación (messages); responde anclado SIEMPRE a esas cifras.
+class ChatAIRequest(BaseModel):
+    context: dict
+    messages: list
+    lang: str = "es"
+
+@app.post("/api/ai/chat")
+@limiter.limit("20/minute")
+def ai_chat(
+    request: Request,
+    body: ChatAIRequest,
+    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+):
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
+
+    # Sanear el historial: solo roles válidos, recortar longitud y conservar los últimos turnos
+    history = []
+    for m in body.messages[-12:]:
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        if role not in ("user", "assistant"):
+            role = "user"
+        content = str(m.get("content", "")).strip()[:4000]
+        if content:
+            history.append({"role": role, "content": content})
+    if not history:
+        raise HTTPException(status_code=400, detail="Sin mensajes")
+
+    models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
+    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    system_msg = (
+        "Eres el asistente de inversión de BlackPortfolio: un analista financiero senior (CFA), "
+        "objetivo, prudente y didáctico, que conversa con el dueño de un portafolio dentro de la "
+        f"aplicación. Respondes SIEMPRE en {lang_name}, de forma breve y clara (Markdown con "
+        "viñetas y **negritas** cuando ayuden). Reglas estrictas: (1) Te apoyas EXCLUSIVAMENTE en "
+        "los datos del portafolio del JSON de contexto y citas cifras concretas (pesos, P/L, "
+        "concentración, sectores, etc.). (2) NUNCA inventes posiciones, precios ni cifras que no "
+        "estén en el contexto; si falta un dato, dilo y sugiere dónde verlo en la app (pestañas "
+        "Desempeño, Correlación, Monte Carlo…). (3) Ofreces observaciones educativas sobre riesgo, "
+        "diversificación, concentración, atribución y estructura; NO das órdenes personalizadas de "
+        "compra/venta ni garantías de rentabilidad. (4) Si preguntan algo ajeno al portafolio o a "
+        "finanzas, responde con brevedad y reconduce al análisis del portafolio. (5) Al dar "
+        "perspectivas a futuro, recuerda que el desempeño pasado no garantiza resultados futuros.\n\n"
+        f"CONTEXTO DEL PORTAFOLIO (JSON):\n{json.dumps(body.context, ensure_ascii=False)}"
+    )
+
+    text, info = _openrouter_chat(models, [{"role": "system", "content": system_msg}] + history)
+    if not text:
+        raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
+    return {"reply": text, "model": info}
 
 
 # Servir estáticos solo en local — en Railway lo hace Firebase Hosting

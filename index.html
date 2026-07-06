@@ -599,16 +599,16 @@
             <div class="form-row">
               <label for="selectedPlan">Plan inicial</label>
               <select id="selectedPlan" name="selectedPlan">
-                <option value="Explorer">Explorer (gratis)</option>
+                <option value="Explorer" selected>Explorer (gratis)</option>
                 <option value="Investor">Investor — $19/mes</option>
-                <option value="Advisor Pro" selected>Advisor Pro — $59/mes</option>
+                <option value="Advisor Pro">Advisor Pro — $59/mes</option>
                 <option value="Wealth Desk">Wealth Desk — $129/mes</option>
               </select>
             </div>
-            <div class="form-row">
-              <label for="betaCode">¿Tienes un código de beta? <span style="font-weight:400;opacity:.7">(opcional)</span></label>
+            <div class="form-row" id="betaCodeRow">
+              <label for="betaCode">Código de invitación o promocional <span style="font-weight:400;opacity:.7">(opcional)</span></label>
               <input id="betaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40" autocomplete="off" style="text-transform:uppercase">
-              <p class="pw-strength-label" style="margin-top:4px"><span id="betaCodeHint" style="opacity:.7">Canjéalo para desbloquear acceso completo durante la beta.</span></p>
+              <p class="pw-strength-label" style="margin-top:4px"><span id="betaCodeHint" style="opacity:.7">Pégalo aquí y se aplicará solo al crear tu cuenta — sin pasos extra.</span></p>
             </div>
             <button class="button primary submit-button" type="submit">Crear cuenta</button>
             <p id="formMessage" class="form-message" aria-live="polite"></p>

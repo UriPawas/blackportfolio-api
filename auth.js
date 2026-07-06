@@ -16,6 +16,12 @@
 
   const EXTRA_KEY = "bp-extra-";
   const DEMO_ENSURED_KEY = "bp-demo-ok";
+  // Marca de actividad fresca: tras un login/alta exitoso, evita que el chequeo
+  // "reapertura tras inactividad" de startSessionTimeout cierre la sesión recién
+  // iniciada por un timestamp viejo de una sesión anterior.
+  const markFreshLogin = () => {
+    try { localStorage.setItem("bp-last-activity", Date.now()); } catch {}
+  };
   const PLAN_ALIASES = { Free: "Explorer", "Institutional Desk": "Wealth Desk" };
   const normalizePlan = (plan) => {
     const canonical = PLAN_ALIASES[plan] || plan;
@@ -49,6 +55,19 @@
     } catch {
       return { _status: 0, detail: "network" };
     }
+  }
+
+  // Canjea un código de beta/invitación. Funciona aunque el correo aún no esté
+  // en la allowlist: el endpoint solo exige el ID token de Firebase y el propio
+  // canje añade el correo a la allowlist.
+  async function redeemBetaCode(code) {
+    const clean = (code || "").trim().toUpperCase();
+    if (!clean) return { ok: false, error: "Código requerido." };
+    const r = await _2faApi("/beta/redeem", "POST", { code: clean });
+    if (r._status === 200 && r.ok) {
+      return { ok: true, plan: r.plan, expiresAt: r.expiresAt };
+    }
+    return { ok: false, status: r._status, error: r.detail || "No se pudo canjear el código." };
   }
 
   // Migra el secreto TOTP heredado (doc Firestore legible por el cliente) al backend.
@@ -217,6 +236,7 @@
   async function authenticate(email, password) {
     try {
       const result = await firebaseAuth.signInWithEmailAndPassword(email, password);
+      markFreshLogin();
       await syncFromFirestore(result.user.uid);
       writeLastSeen(result.user.uid);
       return { ok: true, user: buildSession(result.user) };
@@ -235,6 +255,7 @@
   async function createUser(payload) {
     try {
       const result = await firebaseAuth.createUserWithEmailAndPassword(payload.email, payload.password);
+      markFreshLogin();
       const user = result.user;
       await user.updateProfile({ displayName: payload.fullName });
       // Envía el correo de verificación (best-effort: no bloquea el alta si falla).
@@ -278,6 +299,7 @@
     const provider = new firebase.auth.GoogleAuthProvider();
     try {
       const result = await firebaseAuth.signInWithPopup(provider);
+      markFreshLogin();
       const user = result.user;
       const isNew = result.additionalUserInfo?.isNewUser;
       if (isNew) {
@@ -414,8 +436,8 @@
   async function verifyTwoFactorSetup(token) {
     const r = await _2faApi("/2fa/verify-setup", "POST", { code: token });
     if (r._status === 200 && r.ok) {
-      if (r.token) sessionStorage.setItem(TWOFA_TOKEN_KEY, r.token);
-      return { ok: true };
+      if (r.token) localStorage.setItem(TWOFA_TOKEN_KEY, r.token);
+      return { ok: true, backupCodes: Array.isArray(r.backupCodes) ? r.backupCodes : [] };
     }
     return { ok: false, error: r.detail || "Código incorrecto. Intenta de nuevo." };
   }
@@ -423,15 +445,39 @@
   async function verifyTwoFactor(token) {
     const r = await _2faApi("/2fa/verify", "POST", { code: token });
     if (r._status === 200 && r.valid) {
-      if (r.token) sessionStorage.setItem(TWOFA_TOKEN_KEY, r.token);
-      return { valid: true };
+      if (r.token) localStorage.setItem(TWOFA_TOKEN_KEY, r.token);
+      return {
+        valid: true,
+        usedBackupCode: r.usedBackupCode === true,
+        backupCodesRemaining: typeof r.backupCodesRemaining === "number" ? r.backupCodesRemaining : null,
+      };
     }
     return { valid: false, error: r.detail || "Código incorrecto. Comprueba la app e intenta de nuevo." };
+  }
+
+  async function regenerateBackupCodes(token) {
+    const r = await _2faApi("/2fa/backup-codes/regenerate", "POST", { code: token });
+    if (r._status === 200 && r.ok) {
+      return { ok: true, backupCodes: Array.isArray(r.backupCodes) ? r.backupCodes : [] };
+    }
+    return { ok: false, error: r.detail || "Código incorrecto. Intenta de nuevo." };
+  }
+
+  async function getTwoFactorStatus() {
+    const r = await _2faApi("/2fa/status", "GET");
+    if (r._status === 200 && typeof r.enabled === "boolean") {
+      return {
+        enabled: r.enabled,
+        backupCodesRemaining: typeof r.backupCodesRemaining === "number" ? r.backupCodesRemaining : null,
+      };
+    }
+    return { enabled: false, backupCodesRemaining: null };
   }
 
   async function disableTwoFactor(token) {
     const r = await _2faApi("/2fa/disable", "POST", { code: token });
     if (r._status === 200 && r.ok) {
+      localStorage.removeItem(TWOFA_TOKEN_KEY);
       sessionStorage.removeItem(TWOFA_TOKEN_KEY);
       return { ok: true };
     }
@@ -483,6 +529,7 @@
       if (!email) email = window.prompt("Confirma tu correo para completar el acceso:");
       if (!email) return { ok: false, error: "Correo requerido para continuar." };
       const result = await firebaseAuth.signInWithEmailLink(email, window.location.href);
+      markFreshLogin();
       localStorage.removeItem(EMAIL_FOR_SIGNIN_KEY);
       return { ok: true, uid: result.user.uid };
     } catch (err) {
@@ -567,6 +614,7 @@
     createUser,
     authenticate,
     authenticateWithGoogle,
+    redeemBetaCode,
     completePlanSelection,
     syncFromFirestore,
     sanitizeSession: (u) => u,
@@ -584,6 +632,8 @@
     verifyTwoFactorSetup,
     verifyTwoFactor,
     disableTwoFactor,
+    regenerateBackupCodes,
+    getTwoFactorStatus,
     isTwoFactorEnabled,
     sendRecoveryEmailLink,
     isEmailSignInLink,

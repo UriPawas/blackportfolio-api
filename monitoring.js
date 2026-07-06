@@ -34,3 +34,34 @@
   script.onerror = function () { console.warn("No se pudo cargar el SDK de Sentry."); };
   document.head.appendChild(script);
 })();
+
+// ── Analítica de producto first-party (#1) ────────────────────────────────────
+// Tracker propio: manda eventos de uso al backend (Railway/Postgres). Sin SDKs ni
+// servicios externos. Es fire-and-forget: nunca bloquea ni rompe la UI si falla.
+// Uso:  window.bpTrack("section_view", { section: "tracker" });
+(function initProductAnalytics() {
+  var IS_LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+  var API_BASE = (IS_LOCAL
+    ? "http://127.0.0.1:8000"
+    : "https://blackportfolio-api-production.up.railway.app") + "/api";
+
+  window.bpTrack = function bpTrack(event, props) {
+    try {
+      var auth = window.BlackPortfolioAuth && window.BlackPortfolioAuth.firebaseAuth;
+      var user = auth && auth.currentUser;
+      if (!user) return; // solo eventos de usuarios autenticados (uso dentro de la app)
+      user.getIdToken().then(function (idToken) {
+        fetch(API_BASE + "/analytics/event", {
+          method: "POST",
+          keepalive: true,
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
+          body: JSON.stringify({
+            event: String(event || "").slice(0, 60),
+            props: props && typeof props === "object" ? props : undefined,
+            path: location.pathname.slice(0, 200),
+          }),
+        }).catch(function () {});
+      }).catch(function () {});
+    } catch (e) { /* nunca romper la UI por analítica */ }
+  };
+})();

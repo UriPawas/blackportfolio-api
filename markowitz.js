@@ -197,6 +197,17 @@
     document.getElementById("mkwDeleteSavedBtn")?.addEventListener("click", deleteSelectedPortfolio);
     document.getElementById("mkwExportCsvBtn")?.addEventListener("click", exportResultCsv);
 
+    // Compare saved portfolios
+    document.getElementById("mkwCompareBtn")?.addEventListener("click", openCompareModal);
+    document.getElementById("mkwCompareCloseBtn")?.addEventListener("click", closeCompareModal);
+    document.getElementById("mkwCompareRunBtn")?.addEventListener("click", runComparison);
+    document.getElementById("mkwCompareModal")?.addEventListener("click", e => {
+      if (e.target.id === "mkwCompareModal") closeCompareModal();
+    });
+    document.getElementById("mkwCompareList")?.addEventListener("change", e => {
+      if (e.target.classList.contains("mkw-compare-check")) updateCompareHint();
+    });
+
     // Auto-persist the working draft (asset list + params) so it survives reloads
     ["mkwPeriod", "mkwRfr", "mkwNSim", "mkwVarConf", "mkwFiEnabled", "mkwFiMin",
      "mkwFiMax", "mkwMaxWeightEnabled", "mkwMaxWeight"].forEach(id => {
@@ -693,6 +704,14 @@
       dataMap[ticker] = { timestamps: pairs.map(p => p.ts), closes: pairs.map(p => p.price) };
       if (dataMap[ticker].closes.length < 40)
         throw new Error(`Datos insuficientes para ${ticker} (${dataMap[ticker].closes.length} velas)`);
+      // Reject incomplete/placeholder feeds: a real instrument is never perfectly
+      // flat over a multi-month window. A flat series means Yahoo returned partial
+      // data — bail before caching (mkwOhlcvCache.set runs only after all resolve)
+      // so a retry recovers instead of collapsing the whole frontier to one point.
+      const cl = dataMap[ticker].closes;
+      const lo = Math.min(...cl), hi = Math.max(...cl);
+      if (hi - lo < hi * 1e-4)
+        throw new Error(`Datos de mercado incompletos para ${ticker} (serie plana). Reintenta en unos segundos.`);
     }));
     mkwOhlcvCache.set(cacheKey, dataMap);
     return Object.fromEntries(tickers.map(t => [t, dataMap[t]]));
@@ -1038,6 +1057,7 @@
       showStatus("Agrega al menos 2 activos.", "error"); return;
     }
     const mode = getActiveMode();
+    window.bpTrack?.("optimize_run", { mode, assets: mkwAssets.length });
     if (mode === "smartbeta") { await runSmartBeta(); return; }
     if (mode === "blacklitterman") { await runBlackLitterman(); return; }
 
@@ -1066,7 +1086,7 @@
       const N = tickers.length;
       const aligned = alignAndComputeReturns(dataMap, tickers);
       if (!aligned) throw new Error("No hay suficientes fechas comunes entre los activos seleccionados (mínimo 40 semanas alineadas).");
-      const { returnsMatrix } = aligned;
+      const { returnsMatrix, commonDates } = aligned;
       const T = returnsMatrix[0].length;
 
       // Annualised mean (×52 for weekly)
@@ -1135,7 +1155,7 @@
         maxSharpePortfolio = refineMaxSharpe(mu, cov, N, rfr, useFi ? fiIdx : null, fiMin, fiMax);
       }
 
-      mkwResult = { portfolios, minVarPortfolio, maxSharpePortfolio, mu, cov, covRaw, tickers, rfr, returnsMatrix, nObs: T };
+      mkwResult = { portfolios, minVarPortfolio, maxSharpePortfolio, mu, cov, covRaw, tickers, rfr, returnsMatrix, commonDates, nObs: T };
 
       // ── 5. Render ──────────────────────────────────────────────────────
       showStatus("", "");
@@ -1163,6 +1183,84 @@
       }
     }
   }
+
+  // ── Headless optimizer (no DOM/UI side-effects) ────────────────────────────
+  // Reuses the same μ/Σ + Markowitz pipeline as runOptimization, but returns
+  // plain data so other modules (the tracker's Rebalanceo tab) can request
+  // optimal weights without opening the optimizer section.
+  window.computeOptimalWeights = async function ({ tickers, mode = "maxsharpe", period = "2y", rfr, cap = 0.35, currentWeights = null } = {}) {
+    const syms = [...new Set((tickers || []).map(t => String(t).toUpperCase()).filter(Boolean))].slice(0, 12);
+    if (syms.length < 2) return { ok: false, error: "Se necesitan al menos 2 activos con precio para optimizar." };
+
+    if (rfr == null) {
+      const r = parseFloat(mkwRfrData?.rate);
+      rfr = isFinite(r) ? r / 100 : 0.045;
+    }
+
+    // Resilient per-ticker fetch: drop symbols without enough history instead of
+    // failing the whole run (one illiquid/unknown ticker shouldn't block it).
+    const dataMap = {};
+    const skipped = [];
+    await Promise.all(syms.map(async sym => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/chart/${sym}?range=${period}&interval=1wk`);
+        if (!res.ok) { skipped.push(sym); return; }
+        const json = await res.json();
+        const result = json?.chart?.result?.[0];
+        const rawTs = result?.timestamp ?? [];
+        const rawClose = result?.indicators?.quote?.[0]?.close ?? [];
+        const pairs = rawTs.map((ts, i) => ({ ts, price: rawClose[i] })).filter(p => p.price != null && p.price > 0);
+        if (pairs.length < 40) { skipped.push(sym); return; }
+        dataMap[sym] = { timestamps: pairs.map(p => p.ts), closes: pairs.map(p => p.price) };
+      } catch { skipped.push(sym); }
+    }));
+
+    const usable = syms.filter(s => dataMap[s]);
+    if (usable.length < 2) return { ok: false, error: "No hay suficiente historial entre tus activos para optimizar (mín. 40 semanas).", skipped };
+
+    const aligned = alignAndComputeReturns(dataMap, usable);
+    if (!aligned) return { ok: false, error: "No hay suficientes fechas comunes (mín. 40 semanas) entre los activos.", skipped };
+    const { returnsMatrix } = aligned;
+    const N = usable.length, T = returnsMatrix[0].length;
+
+    const mu = returnsMatrix.map(r => (r.reduce((s, v) => s + v, 0) / T) * 52);
+    const covRaw = Array.from({ length: N }, (_, i) =>
+      Array.from({ length: N }, (_, j) => {
+        const ri = returnsMatrix[i], rj = returnsMatrix[j];
+        const mi = mu[i] / 52, mj = mu[j] / 52;
+        return (ri.reduce((s, v, k) => s + (v - mi) * (rj[k] - mj), 0) / (T - 1)) * 52;
+      })
+    );
+    const cov = shrinkLW(covRaw, T);
+
+    // Diversification cap so no single name dominates (water-filling projection).
+    mkwMaxCap = (cap && cap > 0 && cap < 1) ? Math.max(cap, 1 / N) : null;
+    const opt = mode === "minvar"
+      ? refineMinVariance(mu, cov, N, rfr, null, 0, 1)
+      : refineMaxSharpe(mu, cov, N, rfr, null, 0, 1);
+    mkwMaxCap = null;
+
+    const weights = {};
+    usable.forEach((s, i) => { weights[s] = opt.w[i]; });
+
+    // Stats of the user's current allocation on the same μ/Σ → honest before/after.
+    let current = null;
+    if (currentWeights) {
+      const cw = usable.map(s => Math.max(0, currentWeights[s] || 0));
+      const sum = cw.reduce((a, b) => a + b, 0);
+      if (sum > 1e-9) {
+        const st = portfolioStats(cw.map(x => x / sum), mu, cov);
+        current = { ret: st.ret, vol: st.vol, sharpe: (st.ret - rfr) / (st.vol || 1e-9) };
+      }
+    }
+
+    return {
+      ok: true, mode, period, rfr, nObs: T,
+      tickers: usable, skipped, weights,
+      optimal: { ret: opt.ret, vol: opt.vol, sharpe: opt.sharpe },
+      current,
+    };
+  };
 
   // ── Theme-aware chart palette (works in both dark and light themes) ────────
   function chartColors() {
@@ -2470,7 +2568,7 @@
     const metricsEl = document.getElementById("mkwBacktestMetrics");
     if (!canvas || !mkwResult || !statusEl) return;
 
-    const { returnsMatrix, tickers, rfr } = mkwResult;
+    const { returnsMatrix, tickers, rfr, commonDates } = mkwResult;
     const period = document.getElementById("mkwPeriod")?.value || "2y";
     const R = parseInt(document.getElementById("mkwBtRebal")?.value, 10) || 13;       // rebalance every R weeks
     const costRate = (parseFloat(document.getElementById("mkwBtCost")?.value) || 0) / 10000; // bps → fraction
@@ -2537,11 +2635,35 @@
       const res = await fetch(`${API_BASE_URL}/chart/SPY?range=${period}&interval=1wk`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      const spyCloses = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-      const spyFiltered = spyCloses.filter(v => v != null && v > 0);
-      const spyRaw = [];
-      const spyLen = Math.min(spyFiltered.length, T + 1);
-      for (let i = 1; i < spyLen; i++) spyRaw.push(Math.log(spyFiltered[i] / spyFiltered[i - 1]));
+      const spyResult = json?.chart?.result?.[0];
+      const spyTs = spyResult?.timestamp ?? [];
+      const spyCl = spyResult?.indicators?.quote?.[0]?.close ?? [];
+
+      // Align SPY to the portfolio's exact common dates (by timestamp) so the
+      // benchmark return at week t is measured over the same interval as the
+      // strategies. Falls back to positional alignment if too few timestamps
+      // match (e.g. weekend-stamped crypto weeks vs SPY's weekday bars).
+      let spyRaw = [];
+      let spyPrices = null;
+      if (Array.isArray(commonDates) && commonDates.length === T + 1) {
+        const spyMap = new Map();
+        spyTs.forEach((ts, i) => { if (spyCl[i] != null && spyCl[i] > 0) spyMap.set(ts, spyCl[i]); });
+        const matched = commonDates.map(ts => spyMap.get(ts) ?? null);
+        const hits = matched.filter(v => v != null).length;
+        if (hits >= commonDates.length * 0.8) {
+          // Forward/back-fill the few gaps so we keep one price per common date.
+          const firstVal = matched.find(v => v != null);
+          let last = firstVal;
+          spyPrices = matched.map(v => { if (v != null) last = v; return last; });
+        }
+      }
+      if (spyPrices) {
+        for (let t = 0; t < T; t++) spyRaw.push(Math.log(spyPrices[t + 1] / spyPrices[t]));
+      } else {
+        const spyFiltered = spyCl.filter(v => v != null && v > 0);
+        const spyLen = Math.min(spyFiltered.length, T + 1);
+        for (let i = 1; i < spyLen; i++) spyRaw.push(Math.log(spyFiltered[i] / spyFiltered[i - 1]));
+      }
 
       const spyCum = [1 * (1 - costRate)], spyRets = [];
       for (let t = L; t < T; t++) {
@@ -2556,6 +2678,11 @@
       drawBacktestChart(canvas, ms.cum, mv.cum, eq.cum, spyCum);
 
       function totRet(c) { return c[c.length - 1] - 1; }
+      function cagr(c) {
+        const weeks = c.length - 1;
+        if (weeks <= 0 || c[c.length - 1] <= 0) return 0;
+        return Math.pow(c[c.length - 1], 52 / weeks) - 1;
+      }
       function maxDraw(c) {
         let pk = c[0], dd = 0;
         for (const v of c) { if (v > pk) pk = v; const d = (pk - v) / pk; if (d > dd) dd = d; }
@@ -2588,6 +2715,12 @@
                   <td class="${cls(totRet(mv.cum))}">${fmtP(totRet(mv.cum))}</td>
                   <td class="${cls(totRet(eq.cum))}">${fmtP(totRet(eq.cum))}</td>
                   <td class="${cls(totRet(spyCum))}">${fmtP(totRet(spyCum))}</td>
+                </tr>
+                <tr><td>CAGR (anualizado)</td>
+                  <td class="${cls(cagr(ms.cum))}">${fmtP(cagr(ms.cum))}</td>
+                  <td class="${cls(cagr(mv.cum))}">${fmtP(cagr(mv.cum))}</td>
+                  <td class="${cls(cagr(eq.cum))}">${fmtP(cagr(eq.cum))}</td>
+                  <td class="${cls(cagr(spyCum))}">${fmtP(cagr(spyCum))}</td>
                 </tr>
                 <tr><td>Max Drawdown</td>
                   <td class="mkw-neg">-${(maxDraw(ms.cum)*100).toFixed(1)}%</td>
@@ -2776,5 +2909,132 @@
         </table>
       </div>
       <p class="mkw-calc-matrix-note" style="margin-top:10px">τ = ${document.getElementById("blTau")?.value || 0.05} · δ = ${document.getElementById("blDelta")?.value || 2.5} · Views: ${blViews.length}. El posterior BL combina el equilibrio de mercado con las views del inversor ponderadas por confianza.</p>`;
+  }
+
+  // ── #8 Comparador de portafolios guardados ─────────────────────────────────
+  // Optimiza cada portafolio guardado con la misma pipeline μ/Σ y los muestra
+  // lado a lado (retorno, volatilidad, Sharpe, composición). Reutiliza
+  // window.computeOptimalWeights, así que no necesita ejecutar la sección.
+  function openCompareModal() {
+    const modal = document.getElementById("mkwCompareModal");
+    const listEl = document.getElementById("mkwCompareList");
+    const resultEl = document.getElementById("mkwCompareResult");
+    if (!modal || !listEl) return;
+    const saved = getSavedPortfolios();
+    resultEl.innerHTML = "";
+    if (saved.length < 2) {
+      listEl.innerHTML = `<p class="mkw-empty-assets">Necesitas al menos 2 portafolios guardados para comparar. Guarda un par desde la barra "Portafolios guardados".</p>`;
+    } else {
+      listEl.innerHTML = saved.map((s, i) => `
+        <label class="mkw-compare-item">
+          <input type="checkbox" class="mkw-compare-check" value="${i}">
+          <span class="mkw-compare-item-name">${escapeHtmlMkw(s.name)}</span>
+          <span class="mkw-compare-item-sub">${(s.assets || []).length} activos · ${(s.assets || []).map(a => a.ticker).slice(0, 4).join(", ")}${(s.assets || []).length > 4 ? "…" : ""}</span>
+        </label>`).join("");
+    }
+    modal.classList.remove("hidden");
+    updateCompareHint();
+  }
+  function closeCompareModal() {
+    document.getElementById("mkwCompareModal")?.classList.add("hidden");
+  }
+  function getCompareSelection() {
+    return [...document.querySelectorAll(".mkw-compare-check:checked")].map(c => parseInt(c.value, 10));
+  }
+  function updateCompareHint() {
+    const hint = document.getElementById("mkwCompareHint");
+    const runBtn = document.getElementById("mkwCompareRunBtn");
+    if (!hint) return;
+    const n = getCompareSelection().length;
+    hint.textContent = n ? `${n} seleccionado${n === 1 ? "" : "s"}` : "";
+    // Cap selection at 3 to keep the table readable
+    if (n >= 3) {
+      document.querySelectorAll(".mkw-compare-check:not(:checked)").forEach(c => { c.disabled = true; });
+    } else {
+      document.querySelectorAll(".mkw-compare-check").forEach(c => { c.disabled = false; });
+    }
+    if (runBtn) runBtn.disabled = n < 2;
+  }
+  async function runComparison() {
+    const resultEl = document.getElementById("mkwCompareResult");
+    const runBtn = document.getElementById("mkwCompareRunBtn");
+    if (!resultEl) return;
+    const sel = getCompareSelection();
+    if (sel.length < 2) { resultEl.innerHTML = `<p class="mkw-compare-warn">Selecciona al menos 2 portafolios.</p>`; return; }
+    if (typeof window.computeOptimalWeights !== "function") {
+      resultEl.innerHTML = `<p class="mkw-compare-warn">El motor de optimización no está disponible. Recarga la página.</p>`;
+      return;
+    }
+    const saved = getSavedPortfolios();
+    const mode = document.getElementById("mkwCompareMode")?.value || "maxsharpe";
+    const orig = runBtn ? runBtn.innerHTML : "";
+    if (runBtn) { runBtn.disabled = true; runBtn.innerHTML = `<span class="mkw-spinner"></span> Comparando…`; }
+    resultEl.innerHTML = `<p class="perf-chart-status">Optimizando ${sel.length} portafolios con datos históricos…</p>`;
+
+    try {
+      const results = [];
+      for (const idx of sel) {
+        const p = saved[idx];
+        if (!p) continue;
+        const tickers = (p.assets || []).map(a => a.ticker);
+        const period = p.params?.period || "2y";
+        let res;
+        try { res = await window.computeOptimalWeights({ tickers, mode, period }); }
+        catch (e) { res = { ok: false, error: e.message || String(e) }; }
+        results.push({ name: p.name, period, res });
+      }
+
+      const ok = results.filter(r => r.res?.ok);
+      if (!ok.length) {
+        resultEl.innerHTML = `<p class="mkw-compare-warn">No se pudo optimizar ninguno de los portafolios seleccionados (historial insuficiente o sin datos).</p>`;
+        return;
+      }
+
+      // Best Sharpe / lowest vol highlight
+      const bestSharpe = Math.max(...ok.map(r => r.res.optimal.sharpe));
+      const pctF = x => (x * 100).toFixed(1) + "%";
+      const cols = results.map(r => {
+        if (!r.res?.ok) {
+          return `<th class="mkw-cmp-col"><span class="mkw-cmp-name">${escapeHtmlMkw(r.name)}</span><span class="mkw-cmp-err">sin datos</span></th>`;
+        }
+        const best = Math.abs(r.res.optimal.sharpe - bestSharpe) < 1e-9;
+        return `<th class="mkw-cmp-col${best ? " mkw-cmp-best" : ""}"><span class="mkw-cmp-name">${escapeHtmlMkw(r.name)}</span>${best ? `<span class="mkw-cmp-badge">Mejor Sharpe</span>` : ""}</th>`;
+      }).join("");
+
+      const cell = (r, fn) => r.res?.ok ? fn(r.res) : `<td class="muted-val">—</td>`;
+      const rowRet = results.map(r => cell(r, d => `<td>${pctF(d.optimal.ret)}</td>`)).join("");
+      const rowVol = results.map(r => cell(r, d => `<td>${pctF(d.optimal.vol)}</td>`)).join("");
+      const rowShp = results.map(r => cell(r, d => `<td><strong>${d.optimal.sharpe.toFixed(2)}</strong></td>`)).join("");
+      const rowN   = results.map(r => cell(r, d => `<td>${d.tickers.length}${d.skipped?.length ? ` <span class="muted-val">(+${d.skipped.length} sin datos)</span>` : ""}</td>`)).join("");
+      const rowTop = results.map(r => cell(r, d => {
+        const top = d.tickers
+          .map(t => ({ t, w: d.weights[t] || 0 }))
+          .sort((a, b) => b.w - a.w)
+          .slice(0, 4)
+          .map(x => `${x.t} ${(x.w * 100).toFixed(0)}%`)
+          .join(", ");
+        return `<td class="mkw-cmp-top">${top}</td>`;
+      })).join("");
+
+      const objLabel = mode === "minvar" ? "Mínima volatilidad" : "Máx. Sharpe";
+      resultEl.innerHTML = `
+        <div class="mkw-weights-table-shell tracker-table-shell" style="margin-top:14px">
+          <table class="tracker-table mkw-calc-table mkw-cmp-table">
+            <thead><tr><th>Métrica (${objLabel})</th>${cols}</tr></thead>
+            <tbody>
+              <tr><td>Retorno esperado anual</td>${rowRet}</tr>
+              <tr><td>Volatilidad anual</td>${rowVol}</tr>
+              <tr><td>Sharpe (rent./riesgo)</td>${rowShp}</tr>
+              <tr><td>Activos</td>${rowN}</tr>
+              <tr><td>Composición (top)</td>${rowTop}</tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mkw-calc-matrix-note" style="margin-top:10px">Cada portafolio se optimizó con su propio periodo guardado y la misma pipeline (media-varianza con shrinkage Ledoit-Wolf, tope 35% por activo). Cifras esperadas a partir de datos históricos; el desempeño pasado no garantiza resultados futuros.</p>`;
+    } catch (e) {
+      resultEl.innerHTML = `<p class="mkw-compare-warn">Error al comparar: ${escapeHtmlMkw(e.message || String(e))}</p>`;
+    } finally {
+      if (runBtn) { runBtn.disabled = false; runBtn.innerHTML = orig; }
+    }
   }
 })();
