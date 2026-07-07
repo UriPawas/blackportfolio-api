@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="theme-init.js"></script>
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body class="auth-page">
   <div class="background-orb orb-one"></div>
@@ -150,8 +150,12 @@
       <p class="totp-sub">Tu cuenta requiere Google Authenticator. Escanea el código QR para agregar BlackPortfolio y continuar.</p>
 
       <div id="totpSetupLoading" style="text-align:center">
-        <div class="totp-loading-spinner"></div>
-        <p style="font-size:0.83rem;color:var(--muted)">Generando código QR…</p>
+        <div class="totp-loading-spinner" id="totpSetupSpinner"></div>
+        <p id="totpSetupLoadingMsg" style="font-size:0.83rem;color:var(--muted)">Generando código QR…</p>
+        <div id="totpSetupRetry" class="totp-setup-retry hidden">
+          <button id="totpSetupRetryBtn" class="button primary" type="button">Reintentar</button>
+          <button id="totpSetupErrLogoutBtn" class="button ghost" type="button">Cancelar y salir</button>
+        </div>
       </div>
 
       <div id="totpSetupContent" class="hidden">
@@ -165,7 +169,10 @@
         </ol>
 
         <p class="totp-manual-key-label">Clave manual (si no puedes escanear):</p>
-        <div class="totp-manual-key" id="totpSetupManualKey">—</div>
+        <div class="totp-manual-key-row">
+          <div class="totp-manual-key" id="totpSetupManualKey">—</div>
+          <button id="totpSetupManualCopy" class="button secondary totp-manual-copy" type="button">Copiar</button>
+        </div>
 
         <div class="totp-setup-otp-grid" id="totpSetupOtpGrid">
           <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 1">
@@ -205,9 +212,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="assets/qrcode.min.js"></script>
   <script src="assets/qr-shim.js"></script>
-  <script src="auth.js?v=10"></script>
+  <script src="auth.js?v=11"></script>
   <script src="plan-picker.js?v=2"></script>
-  <script src="login.js?v=9"></script>
+  <script src="login.js?v=11"></script>
   <script>
     (function () {
       var btn = document.getElementById("themeToggle");

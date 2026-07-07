@@ -923,7 +923,7 @@ if (googleSignupBtn) {
   nav.querySelectorAll("a").forEach(a => a.addEventListener("click", close));
 
   window.addEventListener("resize", () => {
-    if (window.innerWidth > 720) close();
+    if (window.innerWidth > 1024) close();
   });
 })();
 

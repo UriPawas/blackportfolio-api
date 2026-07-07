@@ -224,8 +224,17 @@ googleLoginBtn.addEventListener("click", async () => {
 // ── Email/password login ─────────────────────────────────────────────────────
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const _origBtnText = submitButton.textContent;
   submitButton.disabled = true;
+  submitButton.classList.add("is-loading");
+  submitButton.textContent = "Entrando…";
   _loginFlowActive = true;
+
+  function resetSubmitButton() {
+    submitButton.disabled = false;
+    submitButton.classList.remove("is-loading");
+    submitButton.textContent = _origBtnText;
+  }
 
   const formData = new FormData(loginForm);
   const email = String(formData.get("email") ?? "").trim();
@@ -238,15 +247,25 @@ loginForm.addEventListener("submit", async (event) => {
     failedAttempts++;
     showLoginMessage(result.error, "error");
     maybeShowForgotHint();
-    submitButton.disabled = false;
+    resetSubmitButton();
     return;
   }
 
   failedAttempts = 0;
   document.getElementById("forgotHint")?.remove();
-  await redeemLoginBetaCode();
-  await handlePostAuth(result.user);
-  submitButton.disabled = false;
+  try {
+    await redeemLoginBetaCode();
+    await handlePostAuth(result.user);
+  } catch (err) {
+    // Sign-in succeeded but a downstream step (beta redeem, 2FA, bootstrap)
+    // threw. Never leave the button stuck on "Entrando…" with no feedback.
+    _loginFlowActive = false;
+    showLoginMessage(
+      (err && err.message) || "No se pudo completar el inicio de sesión. Intenta de nuevo.",
+      "error"
+    );
+  }
+  resetSubmitButton();
 });
 
 // ── Forgot password ──────────────────────────────────────────────────────────
@@ -529,26 +548,65 @@ function showSetupOverlay(uid) {
   verifyBtn.disabled = true;
   verifyBtn.textContent = "Activar y continuar";
   overlay.classList.remove("hidden");
-  loading.classList.remove("hidden");
-  content.classList.add("hidden");
 
-  window.BlackPortfolioAuth.setupTwoFactor().then(result => {
-    loading.classList.add("hidden");
-    content.classList.remove("hidden");
-    if (!result.ok) {
-      msg.textContent = "Error al generar el QR. Recarga la página e intenta de nuevo.";
-      msg.className = "totp-setup-msg form-message error";
-      return;
-    }
-    if (typeof QRCode !== "undefined") {
-      QRCode.toDataURL(result.otpauthUri, { width: 200, margin: 2 }, function(err, url) {
-        qrImg.src = err ? "" : url;
-      });
-    } else {
-      qrImg.style.display = "none";
-    }
-    manualKey.textContent = result.manualKey;
-  });
+  const spinner    = document.getElementById("totpSetupSpinner");
+  const loadingMsg = document.getElementById("totpSetupLoadingMsg");
+  const retryWrap  = document.getElementById("totpSetupRetry");
+  const retryBtn   = document.getElementById("totpSetupRetryBtn");
+  const manualCopy = document.getElementById("totpSetupManualCopy");
+
+  function showSetupError(text) {
+    loading.classList.remove("hidden");
+    content.classList.add("hidden");
+    spinner.classList.add("hidden");
+    loadingMsg.textContent = text;
+    loadingMsg.style.color = "#ff8f8f";
+    retryWrap.classList.remove("hidden");
+  }
+
+  // Genera (o regenera) el secreto y el QR. Cualquier fallo — red caída o el
+  // backend — deja un botón de reintento en vez de un spinner colgado.
+  function runSetup() {
+    loading.classList.remove("hidden");
+    content.classList.add("hidden");
+    spinner.classList.remove("hidden");
+    loadingMsg.textContent = "Generando código QR…";
+    loadingMsg.style.color = "var(--muted)";
+    retryWrap.classList.add("hidden");
+
+    window.BlackPortfolioAuth.setupTwoFactor().then(result => {
+      if (!result.ok) {
+        showSetupError(result.error || "No se pudo generar el código. Revisa tu conexión y reintenta.");
+        return;
+      }
+      loading.classList.add("hidden");
+      content.classList.remove("hidden");
+      if (typeof QRCode !== "undefined") {
+        QRCode.toDataURL(result.otpauthUri, { width: 200, margin: 2 }, function(err, url) {
+          qrImg.src = err ? "" : url;
+          qrImg.style.display = err ? "none" : "";
+        });
+      } else {
+        qrImg.style.display = "none";
+      }
+      manualKey.textContent = result.manualKey;
+    }).catch(() => {
+      showSetupError("No se pudo generar el código. Revisa tu conexión y reintenta.");
+    });
+  }
+
+  retryBtn.onclick = runSetup;
+  document.getElementById("totpSetupErrLogoutBtn").onclick = () => logoutBtn.onclick();
+
+  if (manualCopy) manualCopy.onclick = async () => {
+    const key = (manualKey.textContent || "").trim();
+    if (!key || key === "—") return;
+    try { await navigator.clipboard.writeText(key); manualCopy.textContent = "✓ Copiado"; }
+    catch { manualCopy.textContent = "No se pudo"; }
+    setTimeout(() => { manualCopy.textContent = "Copiar"; }, 1500);
+  };
+
+  runSetup();
 
   function clearError() { msg.textContent = ""; msg.className = "totp-setup-msg"; boxes.forEach(b => b.classList.remove("otp-box--error")); }
   function syncBtn() { verifyBtn.disabled = !boxes.every(b => b.value !== ""); }

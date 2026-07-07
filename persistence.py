@@ -618,6 +618,17 @@ def require_plan(*allowed_plans: str) -> Callable:
     return dependency
 
 
+def current_plan(
+    token: dict[str, Any] = Depends(require_verified_email),
+    session: Session = Depends(get_session),
+) -> str:
+    """Dependencia de IA: exige email verificado (cualquier plan) y devuelve el
+    plan normalizado del usuario, para elegir el modelo de OpenRouter por plan."""
+    user = upsert_user(session, token)
+    session.commit()
+    return normalize_plan(user.plan)
+
+
 class TotpCodeBody(BaseModel):
     code: str = ""
 

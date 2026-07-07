@@ -2224,6 +2224,12 @@ h1, h2, h3,
     grid-template-columns: 1fr;
   }
 
+  /* On single-column (tablet/phone) the login form should come first so
+     returning users don't scroll past the marketing panel to sign in. */
+  .auth-card {
+    order: -1;
+  }
+
   .section-heading-inline {
     flex-direction: column;
     align-items: start;
@@ -2242,6 +2248,30 @@ h1, h2, h3,
 
   .stack-cards {
     grid-template-columns: 1fr;
+  }
+
+  /* Nav switches to hamburger below 1024px so the tablet range (721–1024)
+     no longer overflows the header actions. */
+  .nav {
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  /* Higher specificity than the base `.nav-hamburger { display:none }`
+     (defined later in the file) so it actually shows on small screens. */
+  .nav .nav-hamburger {
+    display: flex;
+  }
+
+  .nav-actions .nav-sep,
+  .nav-actions .button.ghost,
+  .nav-actions .button.secondary {
+    display: none;
   }
 }
 
@@ -2271,28 +2301,8 @@ h1, h2, h3,
     scroll-margin-top: 80px;
   }
 
-  .nav {
-    flex-wrap: nowrap;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .nav-links {
-    display: none;
-  }
-
-  .nav-hamburger {
-    display: flex;
-  }
-
   .nav-actions {
     gap: 8px;
-  }
-
-  .nav-actions .nav-sep,
-  .nav-actions .button.ghost,
-  .nav-actions .button.secondary {
-    display: none;
   }
 
   .nav-actions .button {
@@ -2341,6 +2351,33 @@ h1, h2, h3,
   .integration-note code {
     font-size: 0.78rem;
     word-break: break-all;
+  }
+}
+
+/* Prevent the header from overflowing on phones: hide the theme toggle
+   (mobile follows the system color scheme automatically) and let the brand
+   shrink so the CTA and hamburger always stay on-screen. Log in + Abrir
+   cuenta also live in the hamburger drawer. */
+@media (max-width: 560px) {
+  .nav-actions .theme-toggle,
+  .nav-actions .nav-sep {
+    display: none;
+  }
+
+  .nav .brand {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .nav .brand > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-actions .button.primary {
+    padding: 9px 13px;
+    font-size: 0.85rem;
   }
 }
 
@@ -3672,7 +3709,15 @@ h1, h2, h3,
   letter-spacing: 0.06em;
 }
 
+.totp-manual-key-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
 .totp-manual-key {
+  flex: 1;
   background: rgba(var(--primary-rgb), 0.08);
   border: 1px dashed rgba(var(--primary-rgb), 0.35);
   border-radius: 12px;
@@ -3683,8 +3728,25 @@ h1, h2, h3,
   color: var(--primary);
   letter-spacing: 0.12em;
   text-align: center;
-  margin-bottom: 22px;
   word-break: break-all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.totp-manual-copy {
+  flex-shrink: 0;
+  padding: 0 16px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  min-height: 44px;
+}
+
+.totp-setup-retry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .totp-setup-otp-grid {
@@ -3854,6 +3916,29 @@ h1, h2, h3,
   opacity: 0.65;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+/* ── Primary/submit button loading spinner ──────────────────────────────────── */
+.button.primary.is-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+.button.primary.is-loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btnSpin 0.6s linear infinite;
+}
+@keyframes btnSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* ══════════════════════════════════════════════════════════

@@ -10,7 +10,7 @@ from persistence import (
     install_persistence, verify_firebase_user, require_2fa, get_session,
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
     BetaAllowlist, BetaCode, BETA_CLOSED, redeem_beta_code,
-    normalize_plan, require_plan, upsert_user, utc_now, limiter, purge_user,
+    normalize_plan, require_plan, current_plan, upsert_user, utc_now, limiter, purge_user,
     UserAlert, UserNotification, AnalyticsEvent,
 )
 import requests
@@ -2257,14 +2257,46 @@ def stripe_customer_portal(
 # Proxy server-side: la API key NUNCA llega al navegador. Configúrala en Railway:
 #   OPENROUTER_API_KEY  (obligatoria)
 #   OPENROUTER_MODEL    (opcional) — cadena de modelos separada por comas; se intenta
-#                       en orden hasta que uno responda. Por defecto prueba el modelo
-#                       gratuito y, si está saturado (429), cae al de pago equivalente
-#                       (≈ $0.00006 por reporte). Así el resumen casi siempre aparece.
+#                       en orden hasta que uno responda. Por defecto usa Claude Sonnet
+#                       vía OpenRouter; en Railway puedes reemplazarlo con otra cadena.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL   = os.environ.get(
     "OPENROUTER_MODEL",
-    "deepseek/deepseek-v4-flash",
+    "anthropic/claude-sonnet-5",
 )
+
+# ── Modelo de IA por plan ──────────────────────────────────────────────────────
+# Cada plan tiene acceso a la IA, pero con un modelo distinto según su nivel.
+# Orden de menor a mayor. Un plan usa su modelo y, si falla (429/404/5xx), cae a
+# los modelos de planes INFERIORES (nunca a los superiores) para degradar sin
+# encarecer. Cada modelo se puede sobreescribir en Railway con una variable:
+#   OPENROUTER_MODEL_EXPLORER, OPENROUTER_MODEL_INVESTOR,
+#   OPENROUTER_MODEL_ADVISOR_PRO, OPENROUTER_MODEL_WEALTH_DESK
+_PLAN_MODEL_TIERS = [
+    ("Explorer",    "google/gemini-2.5-flash-lite"),
+    ("Investor",    "deepseek/deepseek-v4-flash"),
+    ("Advisor Pro", "anthropic/claude-sonnet-5"),
+    ("Wealth Desk", "anthropic/claude-opus-4.8"),
+]
+_PLAN_TIER_INDEX = {name: i for i, (name, _) in enumerate(_PLAN_MODEL_TIERS)}
+
+def models_for_plan(plan: str) -> list[str]:
+    """Devuelve la cadena de modelos de OpenRouter a intentar para un plan."""
+    plan = normalize_plan(plan)
+    idx = _PLAN_TIER_INDEX.get(plan, 0)
+    env_key = "OPENROUTER_MODEL_" + plan.upper().replace(" ", "_")
+    override = os.environ.get(env_key, "").strip()
+    if override:
+        top = [m.strip() for m in override.split(",") if m.strip()]
+    else:
+        top = [_PLAN_MODEL_TIERS[idx][1]]
+    # Fallbacks: modelos de planes inferiores, de mayor a menor
+    fallbacks = [_PLAN_MODEL_TIERS[i][1] for i in range(idx - 1, -1, -1)]
+    chain: list[str] = []
+    for m in top + fallbacks:
+        if m and m not in chain:
+            chain.append(m)
+    return chain
 
 class InsightsRequest(BaseModel):
     metrics: dict
@@ -2304,12 +2336,12 @@ def _openrouter_chat(models, messages):
 def ai_insights(
     request: Request,
     body: InsightsRequest,
-    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+    plan: str = Depends(current_plan),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
 
-    models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
+    models = models_for_plan(plan)
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
         "Eres un analista financiero senior (CFA), objetivo y prudente, que redacta la sección de "
@@ -2318,7 +2350,7 @@ def ai_insights(
         "1) Escribe en PROSA narrativa que EXPLIQUE qué pasó con el dinero, contando una historia "
         "con causa y efecto — no listas de datos sueltos ni frases inconexas.\n"
         "2) Traduce SIEMPRE los porcentajes y los puntos de contribución (pp) a dinero real usando "
-        "'total_invertido' y 'valor_actual' en la moneda del portafolio. Di primero el dinero y luego "
+        "'capital_base_periodo', 'resultado_periodo' y 'valor_actual' en la moneda del portafolio. Di primero el dinero y luego "
         "el porcentaje: 'ganó $X (Y%)'.\n"
         "3) Cada frase debe apoyarse en una cifra concreta del JSON. Prohibido el lenguaje de plantilla "
         "y los consejos genéricos ('es importante diversificar', 'mantener una cartera equilibrada'). "
@@ -2331,19 +2363,21 @@ def ai_insights(
         "6) En atribución explica la cadena causa→efecto: por qué una posición aportó o restó "
         "('pesaba Z% y se movió W%, por eso aportó N pp ≈ $M').\n"
         "7) No das recomendaciones personalizadas de compra/venta ni garantías de rentabilidad; tus "
-        "observaciones son educativas. No inventes datos que no estén en el JSON."
+        "observaciones son educativas. No inventes datos que no estén en el JSON.\n"
+        "8) Si existen 'ventas_realizadas', separa P&L realizado de P&L abierto; no lo mezcles con "
+        "el valor actual de posiciones abiertas.\n"
+        "9) Usa 'beta_actual' para hablar de la beta visible del portafolio y 'beta_historica_periodo' "
+        "solo como dato metodológico del rango seleccionado."
     )
     user_msg = (
         f"Analiza el siguiente portafolio y redacta el análisis en {lang_name}, en Markdown, "
         "organizado EXACTAMENTE en estas secciones con encabezado '## '. Cada sección (salvo la última) "
         "es un PÁRRAFO narrativo de 3-5 frases, NO viñetas:\n"
-        "## Tesis y diagnóstico — Estado general en dinero y en perfil: cuánto se invirtió, cuánto vale "
-        "hoy, cuánto se ganó o perdió (en $ y %) y qué tipo de portafolio es (riesgo, concentración, CAGR).\n"
-        "## Puente del dinero — Reconstruye paso a paso qué pasó con el capital: partiste de "
-        "'total_invertido'; el mercado aportó o restó $X de P&L; se cobraron 'dividendos_cobrados' en "
-        "dividendos; se pagaron 'comisiones_totales' en comisiones; hoy el portafolio vale 'valor_actual'. "
-        "Calcula el P&L de mercado como el residual coherente con esas cifras y cierra con el efecto neto "
-        "en una frase.\n"
+        "## Tesis y diagnóstico — Estado general en dinero y en perfil: capital base del periodo, "
+        "valor actual, resultado del periodo (en $ y %) y qué tipo de portafolio es (riesgo, concentración, CAGR).\n"
+        "## Puente del dinero — Reconstruye paso a paso qué pasó con el capital usando 'resultado_periodo', "
+        "'pnl_abierto_periodo', 'pnl_realizado_ventas_periodo', 'dividendos_cobrados' y 'comisiones_totales'. "
+        "Si hubo ventas, menciona el P&L realizado de esas operaciones; si no hubo, dilo brevemente sin inventar.\n"
         "## Atribución de resultados — Qué posiciones movieron la aguja, con la cadena causa→efecto "
         "(peso × movimiento → contribución en pp y en $). Nombra los mayores contribuidores y detractores "
         "de 'atribucion' y explica el porqué.\n"
@@ -2351,7 +2385,7 @@ def ai_insights(
         "divisa/sector/región. Nombra la posición, divisa o sector causante e interpreta si el nivel es alto "
         "o razonable.\n"
         "## Desempeño vs benchmark — Compara el retorno del portafolio vs el benchmark, el exceso (alpha) en "
-        "pp y en $, el tracking error y la beta. Di si se batió al mercado y a costa de cuánto riesgo "
+        "pp y en $, el tracking error, la beta actual y la beta histórica del periodo. Di si se batió al mercado y a costa de cuánto riesgo "
         "relativo. Omite esta sección solo si 'comparacion_benchmark' es null.\n"
         "## Acciones de rebalanceo sugeridas — 2-3 viñetas concretas (qué sobreponderar o reducir y por qué), "
         "en términos educativos, sin órdenes de compra/venta personalizadas.\n\n"
@@ -2378,14 +2412,14 @@ class AnalyzerAIRequest(BaseModel):
 def ai_analyzer(
     request: Request,
     body: AnalyzerAIRequest,
-    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+    plan: str = Depends(current_plan),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
     if not body.assets:
         raise HTTPException(status_code=400, detail="Sin activos para analizar")
 
-    models = ["deepseek/deepseek-v4-flash"]
+    models = models_for_plan(plan)
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
         "Eres un analista financiero senior (CFA) con experiencia en research de buy-side, objetivo y "
@@ -2449,12 +2483,12 @@ class RebalanceAIRequest(BaseModel):
 def ai_rebalance(
     request: Request,
     body: RebalanceAIRequest,
-    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+    plan: str = Depends(current_plan),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
 
-    models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
+    models = models_for_plan(plan)
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     periodo = body.metrics.get("periodo", "el periodo analizado")
     system_msg = (
@@ -2499,7 +2533,7 @@ class ChatAIRequest(BaseModel):
 def ai_chat(
     request: Request,
     body: ChatAIRequest,
-    _user: dict = Depends(require_plan("Advisor Pro", "Wealth Desk")),
+    plan: str = Depends(current_plan),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
@@ -2518,7 +2552,7 @@ def ai_chat(
     if not history:
         raise HTTPException(status_code=400, detail="Sin mensajes")
 
-    models = [m.strip() for m in OPENROUTER_MODEL.split(",") if m.strip()]
+    models = models_for_plan(plan)
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
         "Eres el asistente de inversión de BlackPortfolio: un analista financiero senior (CFA), "

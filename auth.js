@@ -248,7 +248,13 @@
       if (c === "auth/too-many-requests") {
         return { ok: false, error: "Demasiados intentos. Intenta mas tarde.", locked: true, remainingMs: 15 * 60 * 1000 };
       }
-      return { ok: false, error: "Error al iniciar sesion. Intenta de nuevo." };
+      if (c === "auth/network-request-failed") {
+        return { ok: false, error: "Sin conexión. Revisa tu internet e intenta de nuevo." };
+      }
+      if (c === "auth/user-disabled") {
+        return { ok: false, error: "Esta cuenta está deshabilitada. Escríbenos para ayudarte." };
+      }
+      return { ok: false, error: "No se pudo iniciar sesión. Intenta de nuevo." };
     }
   }
 

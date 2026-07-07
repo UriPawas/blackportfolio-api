@@ -202,7 +202,7 @@ const _ALL_CHART_TYPES = ["candlestick", "bars", "line", "area", "volheatmap", "
 
 const PLAN_LIMITS = {
   "-1": { // Explorer
-    sections: ["home", "tracker", "settings"],
+    sections: ["home", "tracker", "markowitz", "analyzer", "settings"],
     ranges: ["1D", "1W", "1M"],
     chartTypes: ["line", "area"],
     indicators: ["sma20", "vol"],
@@ -218,7 +218,7 @@ const PLAN_LIMITS = {
     maxPortfolios: 0
   },
   1: { // Investor
-    sections: ["home", "tracker", "markets", "settings"],
+    sections: ["home", "tracker", "markets", "markowitz", "analyzer", "settings"],
     ranges: ["1D", "1W", "1M", "3M", "6M", "1Y", "2Y"],
     chartTypes: _ALL_CHART_TYPES,
     indicators: ["sma20", "ema20", "ema50", "sma50", "sma200", "bb", "rsi", "macd", "vol",
@@ -4214,8 +4214,44 @@ mobileBottomNavItems.forEach((item) => {
 });
 
 mobileMoreButton?.addEventListener("click", () => {
+  dismissMoreHint();
   if (!mobileSidebarOpen) handleSidebarToggle();
 });
+
+// ── Hint de descubrimiento del menú "Más" (una sola vez) ──────────────────────
+// 4 de 7 secciones viven tras "Más"; sin una pista, un usuario nuevo en móvil
+// no descubre que existen. Mostramos un globo la primera vez y lo recordamos.
+const MORE_HINT_KEY = "bp-more-hint-seen";
+let _moreHintEl = null;
+
+function dismissMoreHint() {
+  try { localStorage.setItem(MORE_HINT_KEY, "1"); } catch {}
+  mobileMoreButton?.classList.remove("more-hint-pulse");
+  if (_moreHintEl) { _moreHintEl.remove(); _moreHintEl = null; }
+}
+
+function initMobileMoreHint() {
+  if (!mobileMoreButton || window.innerWidth > 1100) return;
+  try { if (localStorage.getItem(MORE_HINT_KEY)) return; } catch { return; }
+
+  const tip = document.createElement("div");
+  tip.className = "more-hint-bubble";
+  tip.setAttribute("role", "status");
+  tip.textContent = "Aquí están tus demás secciones: Creación de portafolio, Top-Down y Analizador.";
+  document.body.appendChild(tip);
+  _moreHintEl = tip;
+  mobileMoreButton.classList.add("more-hint-pulse");
+
+  requestAnimationFrame(() => {
+    const r = mobileMoreButton.getBoundingClientRect();
+    tip.style.right = Math.max(10, Math.round(window.innerWidth - r.right - 6)) + "px";
+    tip.style.bottom = Math.round(window.innerHeight - r.top + 10) + "px";
+    tip.classList.add("visible");
+  });
+
+  tip.addEventListener("click", dismissMoreHint);
+  setTimeout(dismissMoreHint, 7000);
+}
 
 mobilePrimaryAction?.addEventListener("click", () => {
   const target = document.getElementById(mobilePrimaryAction.dataset.target || "");
@@ -4238,6 +4274,7 @@ initMobileDisclosures();
 initMobileDataStatus();
 initMobileQuickStart();
 initMobileTableLabels();
+initMobileMoreHint();
 
 resetHomeButton.addEventListener("click", () => {
   if (confirm("¿Restablecer el inicio? Se perderán todos los espacios y tarjetas personalizadas.")) {
@@ -5871,7 +5908,7 @@ function importPositionsCSV(file) {
 function _pdfBuildAllocationSVG(posData, totalCurrentValue) {
   if (!posData.length) return "";
   const COLORS = ["#6f86ff","#a78bfa","#34d399","#f59e0b","#f87171","#38bdf8","#fb923c","#e879f9"];
-  const barH = 22, gap = 9, labelW = 72, chartW = 380, pctW = 48;
+  const barH = 19, gap = 7, labelW = 76, chartW = 360, pctW = 50;
   const svgW = labelW + chartW + pctW + 10;
   const svgH = posData.length * (barH + gap);
   const maxVal = posData[0].currentValuePf || 1;
@@ -5881,7 +5918,7 @@ function _pdfBuildAllocationSVG(posData, totalCurrentValue) {
     const y = i * (barH + gap);
     const color = COLORS[i % COLORS.length];
     const label = (pos.ticker || "").substring(0, 9);
-    return `<text x="0" y="${y + barH * 0.73}" font-size="11" fill="#222" font-weight="700" font-family="Segoe UI,Arial,sans-serif">${label}</text><rect x="${labelW}" y="${y + 2}" width="${barW}" height="${barH - 4}" fill="${color}" rx="3" opacity="0.9"/><text x="${labelW + barW + 6}" y="${y + barH * 0.73}" font-size="11" fill="#555" font-family="Segoe UI,Arial,sans-serif">${(pct * 100).toFixed(1)}%</text>`;
+    return `<text x="0" y="${y + barH * 0.72}" font-size="10.5" fill="#222" font-weight="700" font-family="Segoe UI,Arial,sans-serif">${label}</text><rect x="${labelW}" y="${y + 2}" width="${chartW}" height="${barH - 4}" fill="#eef1fb" rx="4"/><rect x="${labelW}" y="${y + 2}" width="${barW}" height="${barH - 4}" fill="${color}" rx="4" opacity="0.95"/><text x="${labelW + chartW + 8}" y="${y + barH * 0.72}" font-size="10.5" fill="#4a5168" font-weight="700" font-family="Segoe UI,Arial,sans-serif">${(pct * 100).toFixed(1)}%</text>`;
   }).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${bars}</svg>`;
 }
@@ -6036,7 +6073,7 @@ async function _aiChatSend(text) {
     });
     aiChatHistory = aiChatHistory.filter(m => m.role !== "typing");
     if (res.status === 403) {
-      aiChatHistory.push({ role: "assistant", content: "El **Asistente IA** está disponible en los planes **Advisor Pro** y **Wealth Desk**. Actívalo en Ajustes → Plan y facturación." });
+      aiChatHistory.push({ role: "assistant", content: "Para usar el **Asistente IA** necesitas verificar tu correo. Revisa tu email o reenvía la verificación desde Ajustes." });
     } else if (res.status === 503) {
       aiChatHistory.push({ role: "assistant", content: "El asistente aún no está configurado en el servidor. Inténtalo más tarde." });
     } else if (!res.ok) {
@@ -6203,7 +6240,7 @@ function _parseAISections(md) {
 function _pdfBuildBarsSVG(rows, opts = {}) {
   if (!rows.length) return "";
   const COLORS = ["#6f86ff","#a78bfa","#34d399","#f59e0b","#f87171","#38bdf8","#fb923c","#e879f9","#4ade80","#94a3b8"];
-  const barH = 20, gap = 8, labelW = opts.labelW || 96, chartW = 300, pctW = 50;
+  const barH = 17, gap = 6, labelW = opts.labelW || 96, chartW = 280, pctW = 48;
   const svgW = labelW + chartW + pctW + 10;
   const svgH = rows.length * (barH + gap);
   const maxPct = Math.max(...rows.map(r => r.pct)) || 1;
@@ -6212,7 +6249,7 @@ function _pdfBuildBarsSVG(rows, opts = {}) {
     const y = i * (barH + gap);
     const color = r.color || COLORS[i % COLORS.length];
     const label = String(r.label || "").substring(0, 16);
-    return `<text x="0" y="${y + barH * 0.72}" font-size="10.5" fill="#222" font-weight="600" font-family="Segoe UI,Arial,sans-serif">${label}</text><rect x="${labelW}" y="${y + 2}" width="${barW}" height="${barH - 4}" fill="${color}" rx="3" opacity="0.9"/><text x="${labelW + barW + 6}" y="${y + barH * 0.72}" font-size="10.5" fill="#555" font-family="Segoe UI,Arial,sans-serif">${r.pct.toFixed(1)}%</text>`;
+    return `<text x="0" y="${y + barH * 0.72}" font-size="10" fill="#222" font-weight="600" font-family="Segoe UI,Arial,sans-serif">${label}</text><rect x="${labelW}" y="${y + 2}" width="${chartW}" height="${barH - 4}" fill="#eef1fb" rx="3"/><rect x="${labelW}" y="${y + 2}" width="${barW}" height="${barH - 4}" fill="${color}" rx="3" opacity="0.92"/><text x="${labelW + chartW + 7}" y="${y + barH * 0.72}" font-size="10" fill="#4a5168" font-weight="700" font-family="Segoe UI,Arial,sans-serif">${r.pct.toFixed(1)}%</text>`;
   }).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${bars}</svg>`;
 }
@@ -6453,15 +6490,33 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
   const cashAtEnd = isEndToday ? (portfolio.cashBalance || 0) : 0;
   totalValueEnd += cashAtEnd;
 
+  // ── Beta actual ponderada por posiciones abiertas al cierre ───────────────
+  const betaInfo = {};
+  await Promise.all(Object.values(byTicker).map(async (b) => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/info/${encodeURIComponent(b.ticker)}`);
+      const j = r.ok ? await r.json() : null;
+      if (j && j.beta != null && isFinite(j.beta)) betaInfo[b.ticker] = Number(j.beta);
+    } catch (_) {}
+  }));
+
   // ── Serie de retornos ponderados por costo dentro de [start,end] ──────────
   const activeInWindow = allLots.filter(l => (l.purchaseDate || "0000-00-00") <= endStr && (!l.sellDate || l.sellDate >= startStr));
   let totalAllCost = 0;
   activeInWindow.forEach(l => { const c = convertAmount((l.avgPrice || 0) * l.quantity, l.currency, currency) ?? ((l.avgPrice || 0) * l.quantity); l._cost = c; totalAllCost += c; });
   activeInWindow.forEach(l => { l._weight = totalAllCost > 0 ? l._cost / totalAllCost : 0; });
 
-  const dateSet = new Set();
-  tickers.forEach(t => (sortedDates[t] || []).forEach(d => { if (d >= startStr && d <= endStr) dateSet.add(d); }));
-  const windowDates = [...dateSet].sort();
+  const tickersWithData = tickers.filter(t => (sortedDates[t] || []).filter(d => d >= startStr && d <= endStr).length > 1);
+  let windowDates = [];
+  if (tickersWithData.length) {
+    const dateSets = tickersWithData.map(t => new Set((sortedDates[t] || []).filter(d => d >= startStr && d <= endStr)));
+    windowDates = [...dateSets[0]].filter(d => dateSets.every(s => s.has(d))).sort();
+  }
+  if (windowDates.length < 2) {
+    const dateSet = new Set();
+    tickers.forEach(t => (sortedDates[t] || []).forEach(d => { if (d >= startStr && d <= endStr) dateSet.add(d); }));
+    windowDates = [...dateSet].sort();
+  }
 
   const dailyReturns = [], equityCurve = [], benchCurve = [], benchDaily = [];
   let cum = 0, cumB = 0;
@@ -6486,7 +6541,35 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
   // ── Métricas del periodo ──────────────────────────────────────────────────
   const m = calcMetrics(dailyReturns, perfCurrentConf);
   const maxDD = calcMaxDrawdown(dailyReturns);
-  const beta = benchHist.length > 1 && benchDaily.length >= 2 ? calcBeta(dailyReturns, benchDaily) : null;
+  const historicalBeta = benchHist.length > 1 && benchDaily.length >= 2 ? calcBeta(dailyReturns, benchDaily) : null;
+  if (benchHist.length > 1) {
+    const activeBetaBase = posData
+      .filter(d => d.currentValuePf !== null && d.costInPf > 0)
+      .reduce((s, d) => s + d.costInPf, 0);
+    if (activeBetaBase > 0) {
+      posData.forEach(d => {
+        if (betaInfo[d.pos.ticker] != null) return;
+        const tMap = dateMap[d.pos.ticker] || {};
+        const tDates = Object.keys(tMap).filter(day => day >= startStr && day <= endStr).sort();
+        const tRets = [], bmRets = [];
+        for (let i = 1; i < tDates.length; i++) {
+          const tc0 = tMap[tDates[i - 1]], tc1 = tMap[tDates[i]];
+          const bc0 = benchAsOf(tDates[i - 1]), bc1 = benchAsOf(tDates[i]);
+          if (tc0 > 0 && tc1 > 0 && bc0 > 0 && bc1 > 0) {
+            tRets.push((tc1 - tc0) / tc0);
+            bmRets.push((bc1 - bc0) / bc0);
+          }
+        }
+        if (tRets.length >= 2) betaInfo[d.pos.ticker] = calcBeta(tRets, bmRets);
+      });
+    }
+  }
+  const betaWeightedRows = posData.filter(d => betaInfo[d.pos.ticker] != null && d.costInPf > 0);
+  const betaWeightBase = betaWeightedRows.reduce((s, d) => s + d.costInPf, 0);
+  const currentWeightedBeta = betaWeightBase > 0
+    ? betaWeightedRows.reduce((s, d) => s + betaInfo[d.pos.ticker] * (d.costInPf / betaWeightBase), 0)
+    : null;
+  const beta = currentWeightedBeta ?? historicalBeta;
   let sortino = null;
   if (dailyReturns.length >= 2) {
     const daily_rfr = (perfRfr.rate / 100) / 252;
@@ -6510,6 +6593,15 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
     .reduce((s, tx) => s + (convertAmount(tx.commCost || 0, tx.currency || currency, currency) ?? (tx.commCost || 0)), 0);
   const dividends = txInWindow.filter(tx => tx.type === "DIVIDENDO");
   const totalDividends = dividends.reduce((s, tx) => s + (convertAmount(tx.net || 0, tx.currency || currency, currency) ?? (tx.net || 0)), 0);
+  const closedTradesInWindow = computeClosedTrades(portfolio)
+    .filter(tr => tr.sellDate >= startStr && tr.sellDate <= endStr);
+  const totalRealizedPnl = closedTradesInWindow.reduce((s, tr) => s + (tr.pnl || 0), 0);
+  const totalRealizedCost = closedTradesInWindow.reduce((s, tr) => s + (tr.cost || 0), 0);
+  const totalRealizedProceeds = closedTradesInWindow.reduce((s, tr) => s + (tr.proceeds || 0), 0);
+  const openPeriodPnl = posData.reduce((s, d) => s + (d.periodPnl || 0), 0);
+  const periodCapitalBase = totalAllCost || totalCostEnd || totalRealizedCost;
+  const periodResultAmt = openPeriodPnl + totalRealizedPnl + totalDividends;
+  const periodResultPct = periodCapitalBase > 0 ? periodResultAmt / periodCapitalBase * 100 : null;
 
   // Exposición por divisa (al end)
   const fxExposure = {};
@@ -6518,10 +6610,12 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
   return {
     currency, startStr, endStr, isEndToday, todayStr,
     posData, totalValueEnd, totalCostEnd, cashAtEnd,
-    metrics: { sharpe: m.sharpe, volatility: m.volatility, var: m.var, beta, maxDD, sortino },
+    metrics: { sharpe: m.sharpe, volatility: m.volatility, var: m.var, beta, currentWeightedBeta, historicalBeta, maxDD, sortino },
     equityCurve, benchCurve, dailyReturns, benchDaily,
     benchmarkLabel: (typeof BENCHMARKS !== "undefined" && BENCHMARKS[portfolio.benchmark]) || benchSym || "Benchmark",
     sessions: windowDates.length, periodReturnPct, cagrPct,
+    periodCapitalBase, periodResultAmt, periodResultPct, openPeriodPnl,
+    closedTradesInWindow, totalRealizedPnl, totalRealizedCost, totalRealizedProceeds,
     txInWindow, totalTxCount: allTx.length, totalComm, dividends, totalDividends,
     missingPrices, fxExposure,
   };
@@ -6549,20 +6643,27 @@ async function exportPortfolioPDF(startStr, endStr) {
   const totalCurrentValue = data.totalValueEnd;
   const fmtPct2 = v => (v === null || v === undefined) ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
 
-  // KPIs (al rango de fechas)
-  const totalInvestedTxt = formatCurrency(data.totalCostEnd, currency);
+  // KPIs del rango seleccionado: incluye resultado abierto, ventas realizadas y dividendos.
+  const totalInvestedTxt = formatCurrency(data.periodCapitalBase || data.totalCostEnd, currency);
   const currentValueTxt  = formatCurrency(data.totalValueEnd, currency);
-  const _retAmt = data.totalValueEnd - data.totalCostEnd;
+  const _retAmt = data.periodResultAmt ?? (data.totalValueEnd - data.totalCostEnd);
   const returnAmtTxt = (_retAmt >= 0 ? "+" : "") + formatCurrency(_retAmt, currency);
-  const returnPctTxt = data.totalCostEnd > 0 ? fmtPct2(_retAmt / data.totalCostEnd * 100) : "—";
+  const returnPctTxt = data.periodResultPct !== null && data.periodResultPct !== undefined
+    ? fmtPct2(data.periodResultPct)
+    : (data.totalCostEnd > 0 ? fmtPct2(_retAmt / data.totalCostEnd * 100) : "—");
+  const openPeriodPnlTxt = (data.openPeriodPnl >= 0 ? "+" : "") + formatCurrency(data.openPeriodPnl || 0, currency);
+  const realizedPnlTxt = ((data.totalRealizedPnl || 0) >= 0 ? "+" : "") + formatCurrency(data.totalRealizedPnl || 0, currency);
+  const betaHistText = data.metrics.historicalBeta !== null && data.metrics.historicalBeta !== undefined
+    ? data.metrics.historicalBeta.toFixed(2)
+    : "—";
 
   // Métricas del periodo (como texto)
-  const sharpe      = data.metrics.sharpe     !== null ? data.metrics.sharpe.toFixed(2)        : "—";
-  const sortinoText = data.metrics.sortino    !== null ? data.metrics.sortino.toFixed(2)       : "—";
-  const volatility  = data.metrics.volatility !== null ? data.metrics.volatility.toFixed(1) + "%" : "—";
-  const varVal      = data.metrics.var        !== null ? "-" + Math.abs(data.metrics.var).toFixed(2) + "%" : "—";
-  const beta        = data.metrics.beta       !== null ? data.metrics.beta.toFixed(2)          : "—";
-  const maxDrawdown = data.metrics.maxDD      !== null ? "-" + data.metrics.maxDD.toFixed(2) + "%" : "—";
+  const sharpe      = data.metrics.sharpe     != null ? data.metrics.sharpe.toFixed(2)        : "—";
+  const sortinoText = data.metrics.sortino    != null ? data.metrics.sortino.toFixed(2)       : "—";
+  const volatility  = data.metrics.volatility != null ? data.metrics.volatility.toFixed(1) + "%" : "—";
+  const varVal      = data.metrics.var        != null ? "-" + Math.abs(data.metrics.var).toFixed(2) + "%" : "—";
+  const beta        = data.metrics.beta       != null ? data.metrics.beta.toFixed(2)          : "—";
+  const maxDrawdown = data.metrics.maxDD      != null ? "-" + data.metrics.maxDD.toFixed(2) + "%" : "—";
 
   const posRows = posData.map(({ pos, currentValuePf, pnlAmt, pnlPct }) => {
     const weight = totalCurrentValue > 0 && currentValuePf !== null ? (currentValuePf / totalCurrentValue * 100) : null;
@@ -6685,10 +6786,10 @@ async function exportPortfolioPDF(startStr, endStr) {
     const varAmt = totalCurrentValue > 0 ? formatCurrency(Math.abs(_var) / 100 * totalCurrentValue, currency) : "—";
     riskBullets.push(`**VaR 95%:** en un mal día (1 de cada 20) el portafolio podría perder hasta ~<strong>${Math.abs(_var).toFixed(2)}%</strong> (≈ ${varAmt}).`);
   }
-  if (_mdd !== null) riskBullets.push(`**Máxima caída histórica:** desde su punto más alto el portafolio llegó a caer <strong>${Math.abs(_mdd).toFixed(2)}%</strong>; mide la peor racha sufrida.`);
+  if (_mdd !== null) riskBullets.push(`**Máxima caída del periodo:** desde su punto más alto dentro del rango el portafolio llegó a caer <strong>${Math.abs(_mdd).toFixed(2)}%</strong>.`);
   if (_vol !== null) riskBullets.push(`**Volatilidad:** ${_vol.toFixed(1)}% anual — ${_vol > 25 ? "alta, esperar oscilaciones amplias" : _vol > 15 ? "moderada" : "contenida"}.`);
   if (_sh !== null) riskBullets.push(`**Sharpe ${_sh.toFixed(2)}:** ${_sh > 1 ? "buen retorno por unidad de riesgo" : _sh > 0 ? "retorno ajustado al riesgo modesto" : "el retorno no compensó el riesgo asumido"}.`);
-  if (_bt !== null) riskBullets.push(`**Beta ${_bt.toFixed(2)}:** el portafolio se mueve ${_bt > 1.1 ? "más" : _bt < 0.9 ? "menos" : "en línea"} que el mercado de referencia.`);
+  if (_bt !== null) riskBullets.push(`**Beta actual ${_bt.toFixed(2)}:** exposición ponderada de las posiciones abiertas; la beta histórica del periodo fue ${betaHistText}.`);
   const riskInterpHtml = riskBullets.length
     ? `<div class="callout"><div class="callout-h">¿Qué significan estas métricas?</div>${_mdToBulletsHtml(riskBullets.map(b => "- " + b).join("\n"))}</div>`
     : "";
@@ -6696,10 +6797,16 @@ async function exportPortfolioPDF(startStr, endStr) {
   // Executive summary
   const sharpeNum = parseFloat(sharpe);
   const riskLabel = isNaN(sharpeNum) ? "sin datos" : sharpeNum > 1 ? "buena" : sharpeNum > 0 ? "moderada" : "baja";
-  const execSummary = `Portafolio <strong>${portfolio.name}</strong> con <strong>${positions.length}</strong> posición${positions.length !== 1 ? "es" : ""} activa${positions.length !== 1 ? "s" : ""} en ${currency}. Retorno total: <strong>${returnAmtTxt} (${returnPctTxt})</strong>. CAGR estimado: <strong>${cagrText}</strong>. Relación riesgo/retorno <strong>${riskLabel}</strong> · Sharpe ${sharpe} · Sortino ${sortinoText}.`;
+  const execSummary = `Portafolio <strong>${portfolio.name}</strong> con <strong>${positions.length}</strong> posición${positions.length !== 1 ? "es" : ""} activa${positions.length !== 1 ? "s" : ""} en ${currency}. Resultado del periodo: <strong>${returnAmtTxt} (${returnPctTxt})</strong>. P/L abierto: <strong>${openPeriodPnlTxt}</strong>${data.closedTradesInWindow?.length ? ` · P/L realizado: <strong>${realizedPnlTxt}</strong>` : ""}. Riesgo/retorno <strong>${riskLabel}</strong> · Sharpe ${sharpe} · Sortino ${sortinoText}.`;
 
   // ── #8 Periodo del reporte (del rango seleccionado) ────────────────────────
-  const _fmtD = d => { try { return new Date(d + "T00:00:00").toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" }); } catch { return d; } };
+  const _fmtD = d => {
+    if (!d) return "—";
+    try {
+      const dt = new Date(d + "T00:00:00");
+      return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" });
+    } catch { return d; }
+  };
   const periodLabel = `${_fmtD(data.startStr)} – ${_fmtD(data.endStr)}`;
 
   // ── #11 Frescura / vigencia de los datos ───────────────────────────────────
@@ -6723,22 +6830,52 @@ async function exportPortfolioPDF(startStr, endStr) {
     </tr>`;
   }).join("");
   const txCaption = `${txs.length} en el periodo${data.txInWindow.length > txs.length ? ` (de ${data.txInWindow.length})` : ""} · ${totalTxCount} históricas`;
+  const closedTrades = (data.closedTradesInWindow || []).slice(0, 30);
+  const closedTradeRows = closedTrades.map(tr => {
+    const pnlColor = (tr.pnl || 0) >= 0 ? "#00a870" : "#d94040";
+    return `<tr>
+      <td><strong>${tr.ticker}</strong></td>
+      <td>${_fmtD(tr.buyDate || "")}</td>
+      <td>${_fmtD(tr.sellDate || "")}</td>
+      <td>${parseFloat((tr.qty || 0).toFixed(4))}</td>
+      <td>${formatCurrency(tr.cost || 0, currency)}</td>
+      <td>${formatCurrency(tr.proceeds || 0, currency)}</td>
+      <td style="color:${pnlColor};font-weight:700">${(tr.pnl || 0) >= 0 ? "+" : ""}${formatCurrency(tr.pnl || 0, currency)}</td>
+      <td style="color:${pnlColor};font-weight:700">${tr.pnlPct != null ? (tr.pnlPct >= 0 ? "+" : "") + tr.pnlPct.toFixed(2) + "%" : "—"}</td>
+    </tr>`;
+  }).join("");
+  const closedTradeCaption = `${closedTrades.length} venta${closedTrades.length !== 1 ? "s" : ""} cerrada${closedTrades.length !== 1 ? "s" : ""} en el periodo`;
 
   // ── Insights con IA (OpenRouter vía backend de Railway) ────────────────────
   const aiMetrics = {
     portafolio: portfolio.name,
     moneda: currency,
     periodo_reporte: periodLabel,
-    retorno_periodo_pct: data.periodReturnPct !== null ? +data.periodReturnPct.toFixed(2) : null,
+    retorno_periodo_pct: data.periodResultPct != null ? +data.periodResultPct.toFixed(2) : null,
+    twr_periodo_pct: data.periodReturnPct !== null ? +data.periodReturnPct.toFixed(2) : null,
     posiciones_activas: positions.length,
-    total_invertido: totalInvestedTxt,
+    capital_base_periodo: totalInvestedTxt,
     valor_actual: currentValueTxt,
-    retorno: `${returnAmtTxt} (${returnPctTxt})`,
+    resultado_periodo: `${returnAmtTxt} (${returnPctTxt})`,
+    pnl_abierto_periodo: openPeriodPnlTxt,
+    pnl_realizado_ventas_periodo: realizedPnlTxt,
     cagr_estimado: cagrText,
     sharpe, sortino: sortinoText, volatilidad: volatility,
-    var_95: varVal, beta, max_drawdown: maxDrawdown, benchmark,
+    var_95: varVal,
+    beta_actual: beta,
+    beta_historica_periodo: betaHistText,
+    max_drawdown_periodo: maxDrawdown,
+    benchmark,
     comisiones_totales: formatCurrency(totalComm, currency),
     dividendos_cobrados: dividendTxs.length ? formatCurrency(totalDividends, currency) : "0",
+    ventas_realizadas: closedTrades.map(tr => ({
+      ticker: tr.ticker,
+      fecha_venta: tr.sellDate,
+      costo: +((tr.cost || 0).toFixed(2)),
+      ingreso: +((tr.proceeds || 0).toFixed(2)),
+      pnl: +((tr.pnl || 0).toFixed(2)),
+      pnl_pct: tr.pnlPct != null ? +(tr.pnlPct.toFixed(2)) : null,
+    })),
     posiciones: posData
       .filter(d => d.currentValuePf !== null)
       .sort((a, b) => (b.currentValuePf || 0) - (a.currentValuePf || 0))
@@ -6771,7 +6908,8 @@ async function exportPortfolioPDF(startStr, endStr) {
       retorno_benchmark_pct: benchCompare.benchRet === null ? null : +benchCompare.benchRet.toFixed(2),
       exceso_pp: benchCompare.active === null ? null : +benchCompare.active.toFixed(2),
       tracking_error_pct: benchCompare.trackingError === null ? null : +benchCompare.trackingError.toFixed(2),
-      beta: benchCompare.beta === null || benchCompare.beta === undefined ? null : +benchCompare.beta.toFixed(2),
+      beta_actual: data.metrics.beta == null ? null : +data.metrics.beta.toFixed(2),
+      beta_historica_periodo: data.metrics.historicalBeta == null ? null : +data.metrics.historicalBeta.toFixed(2),
     } : null,
   };
 
@@ -6788,6 +6926,62 @@ async function exportPortfolioPDF(startStr, endStr) {
   const aiNote = (key) => aiSections[key]
     ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections[key]}</div>` : "";
   const aiHasAny = Object.keys(aiSections).length > 0;
+  const reportId = `BP-${String(portfolio.id || "PF").slice(-5).toUpperCase()}-${String(data.endStr || "").replace(/-/g, "")}`;
+  const diagStatus = (status) => status === "good" ? "Fuerte" : status === "warn" ? "Vigilar" : status === "bad" ? "Riesgo" : "Info";
+  const diagItems = [
+    {
+      label: "Rendimiento",
+      value: `${returnAmtTxt} (${returnPctTxt})`,
+      status: _retAmt >= 0 ? "good" : "bad",
+      note: `Sobre ${totalInvestedTxt} invertidos`,
+    },
+    {
+      label: "Riesgo/retorno",
+      value: `Sharpe ${sharpe}`,
+      status: isNaN(sharpeNum) ? "neutral" : sharpeNum > 1 ? "good" : sharpeNum > 0 ? "warn" : "bad",
+      note: `Sortino ${sortinoText} · volatilidad ${volatility}`,
+    },
+    {
+      label: "Diversificación",
+      value: `${concLabel} · top 3 ${top3W.toFixed(1)}%`,
+      status: concLabel === "baja" ? "good" : concLabel === "moderada" ? "warn" : "bad",
+      note: `${effN.toFixed(1)} holdings efectivos`,
+    },
+    {
+      label: "Benchmark",
+      value: benchCompare?.active === null || !benchCompare ? "Sin base suficiente" : `${benchCompare.active >= 0 ? "+" : ""}${benchCompare.active.toFixed(2)} pp`,
+      status: !benchCompare || benchCompare.active === null ? "neutral" : benchCompare.active >= 0 ? "good" : "warn",
+      note: benchCompare ? `Vs ${benchCompare.label || benchmark}` : `Benchmark: ${benchmark || "no disponible"}`,
+    },
+  ];
+  const diagHtml = diagItems.map(item => `<div class="diag-card ${item.status}">
+    <span>${item.label}</span>
+    <strong>${item.value}</strong>
+    <small>${diagStatus(item.status)} · ${item.note}</small>
+  </div>`).join("");
+  const qualityItems = [
+    ["Folio", reportId],
+    ["Vigencia de precios", dataAsOf],
+    ["Benchmark", benchmark || "No disponible"],
+    ["Tasa libre de riesgo", `${perfRfr.rate.toFixed(2)}% (${perfRfr.label})`],
+    ["Beta actual / histórica", `${beta} / ${betaHistText}`],
+    ["Ventas cerradas", `${closedTrades.length} · P/L ${realizedPnlTxt}`],
+    ["Precios faltantes", missingPrices.length ? `${missingPrices.length}: ${missingPrices.slice(0, 8).join(", ")}${missingPrices.length > 8 ? "..." : ""}` : "0"],
+    ["IA del reporte", aiModel ? aiModel : (aiError ? "No disponible" : "No solicitada")],
+  ];
+  const qualityHtml = qualityItems.map(([label, value]) => `<div class="quality-item"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  let pdfSecNo = 1;
+  const nExec = pdfSecNo++;
+  const nBench = pdfSecNo++;
+  const nRisk = pdfSecNo++;
+  const nDist = pdfSecNo++;
+  const nAttrib = attribChartRows.length ? pdfSecNo++ : null;
+  const nClosed = closedTradeRows ? pdfSecNo++ : null;
+  const nPos = posRows ? pdfSecNo++ : null;
+  const nTx = txRows ? pdfSecNo++ : null;
+  const nQuality = pdfSecNo++;
+  const nRebal = aiSections.rebalanceo ? pdfSecNo++ : null;
+  const nGlossary = pdfSecNo++;
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -6796,79 +6990,100 @@ async function exportPortfolioPDF(startStr, endStr) {
   <title>Reporte — ${portfolio.name}</title>
   <style>
     :root{
-      --ink:#1b1f2e; --muted:#6b7280; --faint:#9aa1b2;
-      --pri:#5b6ef5; --pri-dk:#4453d6; --soft:#f6f7fb; --soft2:#eef1fb;
-      --border:#e6e9f4; --green:#00a870; --red:#d94040; --amber:#f5b84c;
+      --ink:#171b2a; --muted:#646b7c; --faint:#98a0b2;
+      --pri:#5668f2; --pri-dk:#3544c8; --soft:#f7f8fc; --soft2:#edf1ff;
+      --border:#e3e7f2; --green:#00a870; --red:#d94040; --amber:#f5b84c;
     }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:var(--ink);padding:30px 38px;font-size:12.5px;line-height:1.45}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:var(--ink);padding:24px 32px;font-size:12px;line-height:1.38}
     h1,h2,h3{font-weight:700}
     /* Cover */
-    .cover{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding:0 0 16px;margin-bottom:6px;border-bottom:3px solid var(--pri)}
-    .brand{font-size:25px;font-weight:800;letter-spacing:-.6px;color:var(--ink)}
+    .cover{display:flex;justify-content:space-between;align-items:flex-end;gap:22px;padding:0 0 12px;margin-bottom:6px;border-bottom:3px solid var(--pri)}
+    .brand{font-size:24px;font-weight:800;letter-spacing:-.6px;color:var(--ink)}
     .brand span{color:var(--pri)}
-    .brand-sub{font-size:10.5px;color:var(--faint);margin-top:3px;letter-spacing:.5px;text-transform:uppercase}
+    .brand-sub{font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.5px;text-transform:uppercase}
     .cover-right{text-align:right}
-    .cover-name{font-size:20px;font-weight:800;color:var(--ink);margin-bottom:3px}
-    .cover-meta{font-size:10.5px;color:var(--muted);line-height:1.65}
+    .cover-name{font-size:19px;font-weight:800;color:var(--ink);margin-bottom:3px}
+    .cover-meta{font-size:10px;color:var(--muted);line-height:1.55}
     .cover-meta b{color:var(--ink);font-weight:600}
+    .report-hero{display:grid;grid-template-columns:1.3fr .9fr;gap:14px;background:linear-gradient(135deg,#f8f9ff 0%,#eef2ff 100%);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:14px 0 14px}
+    .hero-eyebrow{font-size:9px;color:var(--pri-dk);font-weight:800;letter-spacing:.7px;text-transform:uppercase;margin-bottom:5px}
+    .hero-title{font-size:23px;font-weight:850;letter-spacing:-.7px;line-height:1.05;margin-bottom:8px}
+    .hero-copy{font-size:11.5px;color:#394056;line-height:1.55;max-width:430px}
+    .hero-side{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .hero-stat{background:#fff;border:1px solid #dfe4f5;border-radius:9px;padding:10px 11px}
+    .hero-stat span{display:block;font-size:8.7px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.45px;margin-bottom:4px}
+    .hero-stat strong{display:block;font-size:15px;color:var(--ink);font-weight:850}
     /* Freshness ribbon */
-    .ribbon{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--muted);padding:8px 0 0;margin-bottom:18px}
-    .ribbon .pill{background:var(--soft);border:1px solid var(--border);border-radius:20px;padding:3px 11px}
-    .warn{background:#fff3f3;border:1px solid #f3c9c9;color:#a44;border-radius:7px;padding:8px 12px;font-size:10.5px;margin-bottom:16px}
+    .ribbon{display:flex;gap:8px;flex-wrap:wrap;font-size:9.7px;color:var(--muted);padding:6px 0 0;margin-bottom:12px}
+    .ribbon .pill{background:var(--soft);border:1px solid var(--border);border-radius:20px;padding:3px 9px}
+    .warn{background:#fff3f3;border:1px solid #f3c9c9;color:#a44;border-radius:7px;padding:7px 10px;font-size:10px;margin-bottom:10px}
     /* Sections */
-    .sec{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:.6px;margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid var(--border)}
-    .sec .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:6px;background:var(--pri);color:#fff;font-size:11px;font-weight:800;letter-spacing:0}
-    .sec .hint{margin-left:auto;font-size:9.5px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
-    section{margin-bottom:26px}
+    .sec{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:750;color:var(--ink);text-transform:uppercase;letter-spacing:.55px;margin:0 0 9px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    .sec .n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px;background:var(--pri);color:#fff;font-size:10px;font-weight:850;letter-spacing:0}
+    .sec .hint{margin-left:auto;font-size:9px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
+    section{margin-bottom:18px}
     /* Grids */
-    .g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
-    .g-perf{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start}
-    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:13px;align-items:start}
+    .g-perf{display:grid;grid-template-columns:1.55fr 1fr;gap:13px;align-items:start}
+    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:start}
     /* Text blocks */
-    .exec{background:var(--soft2);border-left:3px solid var(--pri);border-radius:7px;padding:13px 16px;font-size:12.5px;line-height:1.6;color:#2c3142}
-    .ai-note{background:#f7f9ff;border:1px solid #dde4ff;border-left:3px solid var(--pri);border-radius:7px;padding:12px 14px;font-size:11.5px;color:#2a2f45}
-    .ai-note-h{font-size:9.5px;font-weight:800;color:var(--pri-dk);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
-    .ai-note ul{margin:2px 0 0;padding-left:16px;line-height:1.55}
-    .callout{background:#fbfcff;border:1px solid var(--border);border-radius:7px;padding:12px 14px;font-size:11.5px;color:#333}
-    .callout-h{font-size:10px;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-    .ai-h{font-size:11px;font-weight:700;color:var(--pri-dk);margin:10px 0 3px}
+    .exec{background:var(--soft2);border-left:3px solid var(--pri);border-radius:7px;padding:11px 13px;font-size:11.5px;line-height:1.5;color:#2c3142}
+    .ai-note{background:#f7f9ff;border:1px solid #dde4ff;border-left:3px solid var(--pri);border-radius:7px;padding:10px 12px;font-size:10.8px;color:#2a2f45;line-height:1.45}
+    .ai-note-h{font-size:9px;font-weight:800;color:var(--pri-dk);text-transform:uppercase;letter-spacing:.55px;margin-bottom:5px}
+    .ai-note ul{margin:2px 0 0;padding-left:15px;line-height:1.45}
+    .callout{background:#fbfcff;border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:10.8px;color:#333}
+    .callout-h{font-size:9.5px;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+    .ai-h{font-size:10.5px;font-weight:700;color:var(--pri-dk);margin:8px 0 2px}
     .ai-h:first-child{margin-top:0}
     /* KPIs / metrics */
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .kpi{background:linear-gradient(180deg,#f8f9ff,#f3f5fc);border:1px solid var(--border);border-radius:9px;padding:13px 15px;border-top:3px solid var(--pri)}
-    .kpi span{font-size:9.5px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
-    .kpi strong{font-size:17px;font-weight:800;color:var(--ink)}
-    .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:12px}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+    .kpi{background:linear-gradient(180deg,#f8f9ff,#f3f5fc);border:1px solid var(--border);border-radius:8px;padding:10px 11px;border-top:3px solid var(--pri)}
+    .kpi span{font-size:8.7px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.45px}
+    .kpi strong{font-size:15.5px;font-weight:850;color:var(--ink)}
+    .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-bottom:10px}
     .metrics.m4{grid-template-columns:repeat(4,1fr)}
-    .metric{background:var(--soft);border:1px solid var(--border);border-radius:8px;padding:10px 8px;text-align:center}
-    .metric span{font-size:8.5px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
-    .metric strong{font-size:14px;font-weight:800;color:var(--ink)}
+    .metric{background:var(--soft);border:1px solid var(--border);border-radius:7px;padding:8px 7px;text-align:center}
+    .metric span{font-size:8px;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
+    .metric strong{font-size:12.5px;font-weight:850;color:var(--ink)}
+    .diag-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+    .diag-card{background:#fff;border:1px solid var(--border);border-left:4px solid var(--faint);border-radius:8px;padding:9px 10px;min-height:76px}
+    .diag-card.good{border-left-color:var(--green)}
+    .diag-card.warn{border-left-color:var(--amber)}
+    .diag-card.bad{border-left-color:var(--red)}
+    .diag-card span{display:block;font-size:8.5px;color:var(--muted);font-weight:800;letter-spacing:.45px;text-transform:uppercase;margin-bottom:4px}
+    .diag-card strong{display:block;font-size:13.5px;font-weight:850;color:var(--ink);line-height:1.2;margin-bottom:5px}
+    .diag-card small{display:block;font-size:9.2px;color:#606879;line-height:1.35}
     /* Charts */
-    .chart{background:#fff;border:1px solid var(--border);border-radius:8px;padding:13px 15px}
-    .chart-h{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600}
+    .chart{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+    .chart-h{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.45px;margin-bottom:7px;font-weight:700}
     .chart svg{max-width:100%;height:auto}
-    .cap{font-size:9px;color:var(--faint);margin-top:8px}
+    .cap{font-size:8.5px;color:var(--faint);margin-top:6px}
     /* Stats list */
-    .stat-box{background:var(--soft);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:9px}
-    .stat-box span{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
-    .stat-box strong{font-size:14px;font-weight:800;color:var(--ink)}
+    .stat-box{background:var(--soft);border:1px solid var(--border);border-radius:8px;padding:9px 10px;margin-bottom:7px}
+    .stat-box span{font-size:8.7px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+    .stat-box strong{font-size:13px;font-weight:850;color:var(--ink)}
     /* Tables */
-    table{width:100%;border-collapse:collapse;font-size:11px}
-    thead th{background:var(--soft2);color:#4a5168;font-size:9px;font-weight:700;text-transform:uppercase;padding:7px 9px;text-align:left;letter-spacing:.3px}
-    tbody td{border-bottom:1px solid #edeef4;padding:6px 9px}
+    table{width:100%;border-collapse:collapse;font-size:10.3px}
+    thead th{background:var(--soft2);color:#4a5168;font-size:8.3px;font-weight:750;text-transform:uppercase;padding:6px 7px;text-align:left;letter-spacing:.25px}
+    tbody td{border-bottom:1px solid #edeef4;padding:5px 7px}
     tbody tr:last-child td{border-bottom:none}
+    .quality-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .quality-item{background:var(--soft);border:1px solid var(--border);border-radius:7px;padding:9px 10px;min-height:54px}
+    .quality-item span{display:block;font-size:8.5px;color:var(--muted);font-weight:800;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px}
+    .quality-item strong{font-size:10.5px;line-height:1.35;color:var(--ink);font-weight:700;word-break:break-word}
     /* Glossary */
-    .gloss{columns:2;column-gap:24px;font-size:10.5px;color:#444}
-    .gloss div{break-inside:avoid;margin-bottom:8px}
+    .gloss{columns:2;column-gap:20px;font-size:9.8px;color:#444}
+    .gloss div{break-inside:avoid;margin-bottom:6px}
     .gloss b{color:var(--ink)}
-    .disclaimer{background:#fff8e7;border-left:3px solid var(--amber);border-radius:6px;padding:10px 13px;margin-bottom:16px;font-size:10.5px;color:#7a6020}
-    .alerts{background:#fff3f3;border:1px solid #f3c9c9;border-left:3px solid var(--red);border-radius:7px;padding:9px 13px;font-size:10.5px;color:#a44;margin-bottom:12px;line-height:1.7}
-    .footer{margin-top:8px;padding-top:11px;border-top:1px solid var(--border);font-size:9.5px;color:var(--faint);display:flex;justify-content:space-between;align-items:center}
+    .disclaimer{background:#fff8e7;border-left:3px solid var(--amber);border-radius:6px;padding:8px 11px;margin-bottom:10px;font-size:9.6px;color:#7a6020}
+    .alerts{background:#fff3f3;border:1px solid #f3c9c9;border-left:3px solid var(--red);border-radius:7px;padding:8px 11px;font-size:9.8px;color:#a44;margin-bottom:10px;line-height:1.55}
+    .footer{margin-top:6px;padding-top:9px;border-top:1px solid var(--border);font-size:9px;color:var(--faint);display:flex;justify-content:space-between;align-items:center}
     /* Saltos de página: fuera de @media print para que html2pdf (renderiza en
        medio "screen") los respete al paginar el PDF descargado. */
-    section,.kpis,.metrics,.g2,.g-perf,.g3,.chart,.kpi,.metric{page-break-inside:avoid;break-inside:avoid}
+    .report-hero,.kpis,.metrics,.chart,.kpi,.metric,.diag-card,.quality-item,.ai-note,.callout{page-break-inside:avoid;break-inside:avoid}
     .sec{page-break-after:avoid;break-after:avoid}
+    .dense-section{margin-bottom:14px}
     table{page-break-inside:auto}
     tr{page-break-inside:avoid;break-inside:avoid}
     @media print{
@@ -6890,33 +7105,47 @@ async function exportPortfolioPDF(startStr, endStr) {
       <div class="cover-meta">Generado el ${today}</div>
     </div>
   </header>
-  <div class="ribbon">
-    <span class="pill">📅 Periodo: ${periodLabel}</span>
-    <span class="pill">🔄 Valuado al ${dataAsOf}</span>
-    <span class="pill">📊 ${positions.length} posiciones · ${currency}</span>
-    ${!data.isEndToday ? `<span class="pill">🕑 Reconstruido a fecha histórica</span>` : ""}
+  <div class="report-hero">
+    <div>
+      <div class="hero-eyebrow">Diagnóstico ejecutivo</div>
+      <div class="hero-title">${portfolio.name}</div>
+      <div class="hero-copy">${execSummary}</div>
+    </div>
+    <div class="hero-side">
+      <div class="hero-stat"><span>Valor actual</span><strong>${currentValueTxt}</strong></div>
+      <div class="hero-stat"><span>Resultado periodo</span><strong>${returnPctTxt}</strong></div>
+      <div class="hero-stat"><span>Riesgo/retorno</span><strong>${riskLabel}</strong></div>
+      <div class="hero-stat"><span>Folio</span><strong>${reportId}</strong></div>
+    </div>
   </div>
-  ${missingPrices.length ? `<div class="warn">⚠ ${missingPrices.length} posición(es) sin precio de cierre en la fecha (${missingPrices.slice(0,6).join(", ")}${missingPrices.length>6?"…":""}); quedan en "—". Puede deberse a tickers sin histórico disponible para el rango.</div>` : ""}
-  ${!data.isEndToday ? `<div class="warn" style="background:#fff8e7;border-color:#f0d9a8;color:#7a6020">ℹ El saldo en efectivo (Cash) solo se incluye cuando la fecha final es hoy; en reportes históricos el valor refleja únicamente las posiciones.</div>` : ""}
+  <div class="ribbon">
+    <span class="pill">Periodo: ${periodLabel}</span>
+    <span class="pill">Valuado al ${dataAsOf}</span>
+    <span class="pill">${positions.length} posiciones · ${currency}</span>
+    ${!data.isEndToday ? `<span class="pill">Reconstruido a fecha histórica</span>` : ""}
+  </div>
+  ${missingPrices.length ? `<div class="warn">${missingPrices.length} posición(es) sin precio de cierre en la fecha (${missingPrices.slice(0,6).join(", ")}${missingPrices.length>6?"…":""}); quedan en "—". Puede deberse a tickers sin histórico disponible para el rango.</div>` : ""}
+  ${!data.isEndToday ? `<div class="warn" style="background:#fff8e7;border-color:#f0d9a8;color:#7a6020">El saldo en efectivo (Cash) solo se incluye cuando la fecha final es hoy; en reportes históricos el valor refleja únicamente las posiciones.</div>` : ""}
 
-  <!-- 1. Resumen ejecutivo -->
-  <section>
-    <h2 class="sec"><span class="n">1</span>Resumen ejecutivo</h2>
-    <div class="${(aiSections.tesis || aiSections.general) ? "g2" : ""}" style="margin-bottom:16px">
+  <!-- Resumen ejecutivo -->
+  <section class="dense-section">
+    <h2 class="sec"><span class="n">${nExec}</span>Diagnóstico ejecutivo</h2>
+    <div class="diag-grid">${diagHtml}</div>
+    <div class="${(aiSections.tesis || aiSections.general) ? "g2" : ""}" style="margin-bottom:10px">
       <div class="exec">${execSummary}</div>
       ${aiNote("tesis") || (aiSections.general ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections.general}</div>` : (aiError ? `<div class="warn" style="margin-bottom:0">⚠ Análisis IA no disponible: ${String(aiError).replace(/&/g,"&amp;").replace(/</g,"&lt;")}. El resto del reporte se generó con normalidad.</div>` : ""))}
     </div>
     <div class="kpis">
-      <div class="kpi"><span>Total invertido</span><strong>${totalInvestedTxt}</strong></div>
+      <div class="kpi"><span>Capital base</span><strong>${totalInvestedTxt}</strong></div>
       <div class="kpi"><span>Valor actual</span><strong>${currentValueTxt}</strong></div>
-      <div class="kpi"><span>Retorno $</span><strong>${returnAmtTxt}</strong></div>
-      <div class="kpi"><span>Retorno %</span><strong>${returnPctTxt}</strong></div>
+      <div class="kpi"><span>Resultado $</span><strong>${returnAmtTxt}</strong></div>
+      <div class="kpi"><span>Resultado %</span><strong>${returnPctTxt}</strong></div>
     </div>
   </section>
 
-  <!-- 2. Rendimiento vs benchmark -->
+  <!-- Rendimiento vs benchmark -->
   <section>
-    <h2 class="sec"><span class="n">2</span>Rendimiento vs benchmark<span class="hint">${perfSessions ? perfSessions + " sesiones · " + periodLabel : periodLabel}</span></h2>
+    <h2 class="sec"><span class="n">${nBench}</span>Rendimiento vs benchmark<span class="hint">${perfSessions ? perfSessions + " sesiones · " + periodLabel : periodLabel}</span></h2>
     ${eqSVG ? `<div class="g-perf">
       <div class="chart"><div class="chart-h">Valor acumulado · Portafolio vs ${benchCompare?.label || "Benchmark"}</div>${eqSVG}<div class="cap">Retorno compuesto acumulado en el periodo. Línea punteada = benchmark.</div></div>
       <div>
@@ -6926,16 +7155,16 @@ async function exportPortfolioPDF(startStr, endStr) {
     </div>` : `<div class="callout">No hay suficientes datos de precios históricos para construir la serie en el rango seleccionado. Prueba un rango más amplio o verifica que los tickers tengan histórico disponible.</div>`}
   </section>
 
-  <!-- 3. Riesgo -->
+  <!-- Riesgo -->
   <section>
-    <h2 class="sec"><span class="n">3</span>Riesgo y volatilidad</h2>
+    <h2 class="sec"><span class="n">${nRisk}</span>Riesgo y volatilidad</h2>
     <div class="metrics">
       <div class="metric"><span>Sharpe</span><strong>${sharpe}</strong></div>
       <div class="metric"><span>Sortino</span><strong>${sortinoText}</strong></div>
       <div class="metric"><span>Volatilidad</span><strong>${volatility}</strong></div>
       <div class="metric"><span>VaR (95%)</span><strong>${varVal}</strong></div>
-      <div class="metric"><span>Beta</span><strong>${beta}</strong></div>
-      <div class="metric"><span>Max Drawdown</span><strong>${maxDrawdown}</strong></div>
+      <div class="metric"><span>Beta actual</span><strong>${beta}</strong></div>
+      <div class="metric"><span>Drawdown periodo</span><strong>${maxDrawdown}</strong></div>
     </div>
     <div class="${ddSVG ? "g2" : ""}">
       ${ddSVG ? `<div class="chart"><div class="chart-h">Drawdown · caídas desde máximos</div>${ddSVG}</div>` : ""}
@@ -6946,9 +7175,9 @@ async function exportPortfolioPDF(startStr, endStr) {
     </div>
   </section>
 
-  <!-- 4. Distribución y diversificación -->
+  <!-- Distribución y diversificación -->
   <section>
-    <h2 class="sec"><span class="n">4</span>Distribución y diversificación</h2>
+    <h2 class="sec"><span class="n">${nDist}</span>Distribución y diversificación</h2>
     <div class="metrics m4">
       <div class="metric"><span>Concentración (HHI)</span><strong>${hhi.toFixed(3)} · ${concLabel}</strong></div>
       <div class="metric"><span>Holdings efectivos</span><strong>${effN.toFixed(1)}</strong></div>
@@ -6959,6 +7188,8 @@ async function exportPortfolioPDF(startStr, endStr) {
     <div class="g2" style="margin-bottom:14px">
       <div class="chart"><div class="chart-h">Distribución por posición (top ${sortedForChart.length})</div>${svgChart || "<span style='color:#aaa;font-size:11px'>Sin precios en caché para graficar</span>"}</div>
       <div>
+        <div class="stat-box"><span>P/L abierto del periodo</span><strong>${openPeriodPnlTxt}</strong></div>
+        ${closedTradeRows ? `<div class="stat-box"><span>P/L realizado por ventas</span><strong>${realizedPnlTxt}</strong></div>` : ""}
         <div class="stat-box"><span>CAGR estimado</span><strong>${cagrText}</strong></div>
         <div class="stat-box"><span>Comisiones totales</span><strong>${formatCurrency(totalComm, currency)}</strong></div>
         ${dividendTxs.length ? `<div class="stat-box"><span>Dividendos cobrados (${dividendTxs.length} pagos)</span><strong>${formatCurrency(totalDividends, currency)}</strong></div>` : ""}
@@ -6971,50 +7202,65 @@ async function exportPortfolioPDF(startStr, endStr) {
     </div>
   </section>
 
-  <!-- 5. Atribución -->
+  <!-- Atribución -->
   ${attribChartRows.length ? `<section>
-    <h2 class="sec"><span class="n">5</span>Atribución de resultados<span class="hint">contribución al retorno, en puntos %</span></h2>
+    <h2 class="sec"><span class="n">${nAttrib}</span>Atribución de resultados<span class="hint">contribución al retorno, en puntos %</span></h2>
     <div class="${aiSections.atribucion ? "g-perf" : ""}">
       <div class="chart">${attribSVG}<div class="cap">Aporte de cada posición al retorno sobre el capital invertido. Verde = sumó, rojo = restó.</div></div>
       ${aiNote("atribucion")}
     </div>
   </section>` : ""}
 
-  <!-- 6. Posiciones -->
+  <!-- Operaciones cerradas -->
+  ${closedTradeRows ? `<section>
+    <h2 class="sec"><span class="n">${nClosed}</span>Operaciones cerradas del periodo<span class="hint">${closedTradeCaption}</span></h2>
+    <table>
+      <thead><tr><th>Ticker</th><th>Compra</th><th>Venta</th><th>Cantidad</th><th>Costo</th><th>Ingreso</th><th>P/L</th><th>Retorno</th></tr></thead>
+      <tbody>${closedTradeRows}</tbody>
+    </table>
+  </section>` : ""}
+
+  <!-- Posiciones -->
   ${posRows ? `<section>
-    <h2 class="sec"><span class="n">6</span>Posiciones al ${_fmtD(data.endStr)}<span class="hint">${positions.length} posiciones · precios al cierre</span></h2>
+    <h2 class="sec"><span class="n">${nPos}</span>Posiciones al ${_fmtD(data.endStr)}<span class="hint">${positions.length} posiciones · precios al cierre</span></h2>
     <table>
       <thead><tr><th>Ticker</th><th>Divisa</th><th>Costo prom.</th><th>Cantidad</th><th>P&L $</th><th>P&L %</th><th>Peso</th><th>1ª compra</th></tr></thead>
       <tbody>${posRows}</tbody>
     </table>
   </section>` : ""}
 
-  <!-- 7. Transacciones -->
+  <!-- Transacciones -->
   ${txRows ? `<section>
-    <h2 class="sec"><span class="n">7</span>Historial de transacciones<span class="hint">${txCaption}</span></h2>
+    <h2 class="sec"><span class="n">${nTx}</span>Historial de transacciones<span class="hint">${txCaption}</span></h2>
     <table>
       <thead><tr><th>Fecha</th><th>Tipo</th><th>Ticker</th><th>Cantidad</th><th>Precio</th><th>Comisión $</th><th>Neto</th></tr></thead>
       <tbody>${txRows}</tbody>
     </table>
   </section>` : ""}
 
-  <!-- 8. Recomendaciones IA -->
+  <!-- Calidad de datos -->
+  <section class="dense-section">
+    <h2 class="sec"><span class="n">${nQuality}</span>Calidad de datos y supuestos<span class="hint">trazabilidad del reporte</span></h2>
+    <div class="quality-grid">${qualityHtml}</div>
+  </section>
+
+  <!-- Recomendaciones IA -->
   ${aiSections.rebalanceo ? `<section>
-    <h2 class="sec"><span class="n">8</span>Acciones de rebalanceo sugeridas<span class="hint">generado por IA</span></h2>
+    <h2 class="sec"><span class="n">${nRebal}</span>Acciones de rebalanceo sugeridas<span class="hint">generado por IA</span></h2>
     <div class="ai-note"><div class="ai-note-h">★ Análisis IA · educativo, no es asesoría</div>${aiSections.rebalanceo}</div>
   </section>` : ""}
 
-  <!-- 9. Glosario y metodología -->
+  <!-- Glosario y metodología -->
   <section>
-    <h2 class="sec"><span class="n">${aiSections.rebalanceo ? 9 : 8}</span>Glosario y metodología</h2>
+    <h2 class="sec"><span class="n">${nGlossary}</span>Glosario y metodología</h2>
     <div class="gloss">
       <div><b>CAGR</b> — tasa de crecimiento anual compuesta del valor del portafolio desde la primera operación.</div>
       <div><b>Sharpe</b> — retorno por unidad de riesgo total: (retorno − tasa libre de riesgo) ÷ volatilidad. Mayor es mejor.</div>
       <div><b>Sortino</b> — variante del Sharpe que solo penaliza la volatilidad a la baja (caídas).</div>
       <div><b>Volatilidad</b> — desviación estándar anualizada de los retornos diarios; mide cuánto oscila el valor.</div>
       <div><b>VaR 95%</b> — pérdida máxima esperada en el 95% de los días; en 1 de cada 20 días podría superarse.</div>
-      <div><b>Beta</b> — sensibilidad del portafolio frente al benchmark. 1 = se mueve igual; &gt;1 = amplifica.</div>
-      <div><b>Max Drawdown</b> — mayor caída desde un máximo histórico hasta el siguiente mínimo.</div>
+      <div><b>Beta actual</b> — beta ponderada de las posiciones abiertas; la beta histórica del periodo se muestra en calidad de datos.</div>
+      <div><b>Max Drawdown</b> — mayor caída dentro del rango seleccionado desde un máximo local hasta el siguiente mínimo.</div>
       <div><b>Alpha (exceso)</b> — retorno del portafolio por encima del benchmark en el periodo.</div>
       <div><b>Tracking error</b> — desviación estándar anualizada de la diferencia portafolio − benchmark.</div>
       <div><b>HHI</b> — índice de concentración (suma de pesos²). Mayor = más concentrado; &gt;0.25 se considera alto.</div>
@@ -7026,8 +7272,8 @@ async function exportPortfolioPDF(startStr, endStr) {
 
   <div class="disclaimer">Este reporte es generado automáticamente con fines informativos. No constituye asesoría de inversión ni recomendación de compra o venta de valores. Las observaciones de IA pueden contener errores; verifica las cifras antes de tomar decisiones.</div>
   <div class="footer">
-    <span>BlackPortfolio · blackportfolio.ai</span>
-    <span>Generado el ${today}</span>
+    <span>BlackPortfolio · blackportfolio.ai · ${reportId}</span>
+    <span>Generado el ${today}${aiModel ? " · IA: " + aiModel : ""}</span>
   </div>
 </body>
 </html>`;
@@ -7930,7 +8176,7 @@ function renderConsolidatedBar(portfolios) {
   const bar = document.getElementById("consolidatedBar");
   if (!bar) return;
   portfolios = portfolios || getPortfolios();
-  if (portfolios.length < 2) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+  if (portfolios.length < 1) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
 
   // Moneda base = la más frecuente entre los portafolios
   const counts = {};
@@ -7977,7 +8223,7 @@ function renderConsolidatedBar(portfolios) {
 
   bar.innerHTML = `
     <div class="cbar-metric cbar-metric--primary">
-      <span class="cbar-label">Patrimonio total · ${portfolios.length} portafolios</span>
+      <span class="cbar-label">Patrimonio total · ${portfolios.length} ${portfolios.length === 1 ? "portafolio" : "portafolios"}</span>
       <strong class="cbar-value cbar-value--lg">${formatCurrency(totalValue, base)} <small>${base}</small></strong>
     </div>
     ${anyDay ? metric("Cambio hoy", signed(totalDay, dayPct)) : ""}
@@ -9421,7 +9667,7 @@ async function fetchRebalanceExplanation(res, priced, totalValue) {
       body: JSON.stringify({ metrics, lang: "es" }),
     });
     if (r.status === 403) {
-      body.innerHTML = `<p class="rebal-ai-locked">La explicación con IA está disponible en los planes Advisor Pro y Wealth Desk. La optimización cuantitativa de arriba funciona en tu plan actual.</p>`;
+      body.innerHTML = `<p class="rebal-ai-locked">Para la explicación con IA necesitas verificar tu correo. La optimización cuantitativa de arriba funciona igualmente.</p>`;
       return;
     }
     if (!r.ok) {
@@ -15499,8 +15745,9 @@ function mkBtn(html, title, danger) {
     sectorSel.style.cssText = selStyle + "flex:1;max-width:150px;";
 
     const statusEl = document.createElement("span");
-    statusEl.style.cssText = "font-size:10px;opacity:0.45;margin-left:auto;white-space:nowrap;";
-    statusEl.textContent = "Cargando…";
+    statusEl.style.cssText = "font-size:10px;opacity:0.6;margin-left:auto;white-space:nowrap;display:inline-flex;align-items:center;";
+    const HEAT_LOADING = '<span class="inline-spinner" style="width:9px;height:9px;border-width:2px;margin-right:5px;vertical-align:0"></span>Cargando…';
+    statusEl.innerHTML = HEAT_LOADING;
 
     toolbar.appendChild(indexSel);
     toolbar.appendChild(sectorSel);
@@ -15735,7 +15982,7 @@ function mkBtn(html, title, danger) {
     // ── Fetch prices in batches of 100 to avoid URL length limits ──
     async function fetchAll() {
       prices = {};
-      statusEl.textContent = "Cargando…";
+      statusEl.innerHTML = HEAT_LOADING;
       draw();
       const syms = currentStocks().map(s => s.s);
       const BATCH = 100;
@@ -16805,13 +17052,32 @@ function mkBtn(html, title, danger) {
     const upgradeBtn      = document.getElementById("upgradePlanBtn");
 
     if (planName) planName.textContent = session.selectedPlan || "—";
+
+    // Clasificación del estado para evitar el confuso "Pendiente":
+    //  - active  → suscripción de Stripe vigente
+    //  - demo    → cuenta demo con acceso completo
+    //  - granted → plan de pago sin Stripe = acceso beta/otorgado
+    //  - free    → plan Explorer gratuito
+    //  - canceled/past_due → estado real de Stripe, en texto legible
+    const isActive   = session.billingStatus === "active";
+    const isFree     = (session.selectedPlan || "Explorer") === "Explorer";
+    const isGranted  = !isActive && !isFree && !session.isDemo;
+    const STATUS_LABELS = { canceled: "Cancelada", past_due: "Pago pendiente" };
+
     if (billingStatus) {
-      const active = session.billingStatus === "active";
-      billingStatus.innerHTML = active
-        ? '<span style="color:var(--success)">● Activo</span>'
-        : (session.selectedPlan === "Explorer" ? "Sin suscripción" : session.billingStatus || "Pendiente");
+      let html;
+      if (isActive)          html = '<span style="color:var(--success)">● Activo</span>';
+      else if (session.isDemo) html = '<span style="color:var(--success)">● Demo · acceso completo</span>';
+      else if (isGranted)    html = '<span style="color:var(--accent, #6f86ff)">● Acceso beta</span>';
+      else if (isFree)       html = "Plan gratuito";
+      else                   html = STATUS_LABELS[session.billingStatus] || "Sin suscripción activa";
+      billingStatus.innerHTML = html;
     }
-    if (billingPayment) billingPayment.textContent = session.billingStatus ? "Stripe" : "—";
+
+    if (billingPayment) {
+      billingPayment.textContent = isActive ? "Stripe"
+        : (session.isDemo || isGranted) ? "No aplica" : "—";
+    }
 
     if (renewalDate) {
       const next = session.billingCurrentPeriodEnd
@@ -16819,7 +17085,7 @@ function mkBtn(html, title, danger) {
         : null;
       renewalDate.textContent = next
         ? next.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
-        : "—";
+        : (session.isDemo || isGranted) ? "Sin vencimiento" : "—";
     }
 
     const planLevels = { "Explorer": 0, "Investor": 1, "Advisor Pro": 2, "Wealth Desk": 3 };
