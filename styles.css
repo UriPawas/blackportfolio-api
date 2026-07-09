@@ -23,6 +23,13 @@
   --up: #22d39a;
   --down-rgb: 255, 77, 106;
   --down: #ff4d6a;
+  /* Semantic gain/loss tokens — used across the tracker (JS + CSS) so light
+     mode and future theming stay consistent. */
+  --gain: #32d6a2;
+  --gain-rgb: 50, 214, 162;
+  --loss: #ff6b81;
+  --loss-rgb: 255, 107, 129;
+  --danger: #ff6b81;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
   --radius-xl: 20px;
   --radius-lg: 16px;

@@ -2852,6 +2852,9 @@ body.light-mode .seas-neg { color: #d93a52; }
 #mainBackupRegenForm.hidden,
 #mainBackupRegenResult.hidden,
 #consolidatedBar.hidden,
+#dividendModal.hidden,
+#dividendError.hidden,
+#editPortfolioModal.hidden,
 #positionsTableShell.hidden {
   display: none;
 }
@@ -14323,4 +14326,319 @@ body.light-mode .mobile-quick-start button {
 :is(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid var(--accent, #7892ff) !important;
   outline-offset: 3px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Tracker · refinamientos móvil/tablet y rediseño (lote de mejoras 2026-07)
+   Bloque final: gana por orden de cascada a reglas previas equivalentes.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Tablet intermedio: en 900–1100px hay espacio para 2 columnas en el grid
+   principal del Resumen (antes se forzaba a 1 col en todo 721–1100). */
+@media (min-width: 900px) and (max-width: 1100px) {
+  .tracker-main-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) !important;
+  }
+  .tracker-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .perf-metrics-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  /* Mobile 1 · Operaciones cerradas: convertir a tarjetas (sus <td> ya traen
+     data-label) para que no desborde la página con su min-width de escritorio. */
+  #closedTradesShell { overflow: visible; }
+  #closedTradesShell .closed-trades-table { min-width: 0; }
+  #closedTradesShell thead { display: none; }
+  #closedTradesBody { display: grid; gap: 10px; }
+  #closedTradesBody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.025);
+  }
+  #closedTradesBody > tr > td {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 8px;
+    border: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  #closedTradesBody > tr > td::before {
+    content: attr(data-label);
+    color: rgba(226, 232, 255, 0.48);
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  #closedTradesBody > tr > td:first-child { grid-column: 1 / -1; }
+
+  /* Mobile 4 · Desempeño: 2 columnas en vez de 1 para no hacer scroll eterno. */
+  .perf-metrics-grid,
+  .corr-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+  .perf-metric-card { padding: 12px; }
+  .perf-metric-value { font-size: clamp(1.1rem, 5.5vw, 1.5rem); }
+
+  /* Mobile 6 · Indicador de scroll horizontal en la barra de pestañas:
+     máscara sutil en el borde derecho que insinúa que hay más contenido. */
+  .tracker-tab-nav {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  }
+
+  /* Tooltips (?) accesibles al tacto: fijarlos dentro del viewport. */
+  .tracker-kpi-grid .kpi-tooltip,
+  .corr-metrics-grid .kpi-tooltip {
+    left: 0;
+    right: auto;
+    max-width: min(86vw, 320px);
+  }
+}
+
+/* ── Menú de acciones por posición (P0.1) ─────────────────────────────────── */
+.pos-action-menu { position: relative; display: inline-block; }
+.pos-action-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text, #f5f7fb);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pos-action-trigger:hover,
+.pos-action-trigger[aria-expanded="true"] {
+  background: rgba(var(--primary-rgb), 0.14);
+  border-color: rgba(var(--primary-rgb), 0.4);
+}
+.pos-action-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 120;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-strong, #12121a);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+.pos-action-dropdown[hidden] { display: none; }
+.pos-action-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text, #f5f7fb);
+  font-size: 0.85rem;
+  font-family: Inter, sans-serif;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.pos-action-dropdown button:hover {
+  background: rgba(var(--primary-rgb), 0.14);
+}
+.pos-action-dropdown .pos-action-danger { color: var(--loss, #ff6b81); }
+.pos-action-dropdown .pos-action-danger:hover { background: rgba(var(--loss-rgb), 0.14); }
+
+body.light-mode .pos-action-dropdown {
+  background: #fff;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+body.light-mode .pos-action-trigger {
+  color: #172033;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.03);
+}
+
+/* En móvil el dropdown se abre alineado a la izquierda para no salirse. */
+@media (max-width: 720px) {
+  .pos-action-dropdown { right: auto; left: 0; }
+  #positionsTableBody .pos-actions-cell { justify-content: flex-start; }
+}
+
+/* ── Watchlist: acciones de fila (P1.11 / P0.2) ───────────────────────────── */
+.wl-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.wl-buy {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--primary-rgb), 0.4);
+  background: rgba(var(--primary-rgb), 0.14);
+  color: var(--text, #f5f7fb);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.wl-buy:hover { background: rgba(var(--primary-rgb), 0.24); }
+.wl-alert, .wl-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted, #9ca3b4);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.wl-alert:hover { background: rgba(var(--warm-rgb, 255,180,84), 0.16); color: var(--warm, #ffb454); }
+.wl-remove:hover { background: rgba(var(--loss-rgb), 0.16); color: var(--loss, #ff6b81); }
+.wl-sparkline { width: 80px; height: 28px; }
+@media (max-width: 720px) {
+  .wl-actions { justify-content: flex-start; }
+}
+
+/* ── Toggle de serie del gráfico hero del Resumen (P0.3) ───────────────────── */
+.value-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.value-series-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.value-series-btn {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: Inter, sans-serif;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.value-series-btn:hover { color: rgba(255, 255, 255, 0.8); }
+.value-series-btn.active {
+  background: rgba(var(--primary-rgb), 0.2);
+  color: #fff;
+}
+body.light-mode .value-series-toggle { background: rgba(15, 23, 42, 0.05); }
+body.light-mode .value-series-btn { color: #5b6478; }
+body.light-mode .value-series-btn.active { color: #172033; }
+
+/* Gráfico de barras de dividendos mensuales (P1.6) */
+.div-bars-wrap { position: relative; width: 100%; margin-top: 8px; }
+.div-bars-wrap canvas { display: block; width: 100%; }
+
+/* ── Gráficas táctiles en móvil (Mobile 8) ────────────────────────────────────
+   Permite el scroll vertical de la página, pero captura el arrastre horizontal
+   sobre el lienzo para mover el crosshair/tooltip (Pointer Events ya unifican
+   ratón y tacto en las gráficas del tracker). */
+#portfolioValueChart,
+#investmentValueChart,
+#perfLineChart,
+#mcCanvas,
+#whatifCanvas {
+  touch-action: pan-y;
+}
+
+/* ── Correlación: lista de pares (visible solo en móvil) — Mobile 2 ────────── */
+.corr-top-pairs { display: none; }
+.corr-pairs-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #9ca3b4);
+  margin: 4px 0 8px;
+}
+.corr-pair-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.corr-pair-names { font-weight: 600; font-size: 0.9rem; }
+.corr-pair-val { font-weight: 700; display: flex; flex-direction: column; align-items: flex-end; }
+.corr-pair-val small { font-weight: 500; font-size: 0.66rem; opacity: 0.7; color: var(--muted, #9ca3b4); }
+@media (max-width: 720px) {
+  #corrMatrixWrap { display: none; }
+  .corr-top-pairs { display: block; }
+}
+
+/* ── Jerarquía de KPIs (Visual 2): atenúa métricas de detalle ──────────────── */
+.summary-item.summary-item--muted { opacity: 0.9; }
+.summary-item.summary-item--muted strong { font-size: 1.15rem; font-weight: 650; }
+.summary-item.summary-item--muted > span:not(.kpi-hero-label-row) { color: var(--muted, #9ca3b4); }
+
+/* ── Estados de carga uniformes (Visual 7): shimmer para lienzos ───────────── */
+@keyframes bpChartShimmer {
+  0% { background-position: -420px 0; }
+  100% { background-position: 420px 0; }
+}
+.chart-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: linear-gradient(100deg,
+    rgba(255, 255, 255, 0.02) 30%,
+    rgba(255, 255, 255, 0.07) 50%,
+    rgba(255, 255, 255, 0.02) 70%);
+  background-size: 840px 100%;
+  animation: bpChartShimmer 1.3s linear infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-loading::after { animation: none; }
+}
+
+/* ── Jerarquía de tarjetas de posición en móvil (Mobile 3) ─────────────────── */
+@media (max-width: 720px) {
+  /* Destaca lo esencial (valor, retorno, cambio hoy) y atenúa el resto. */
+  #positionsTableBody > .pos-row > td[data-label="Valor actual"] { font-weight: 700; }
+  #positionsTableBody > .pos-row > td[data-label="Fecha"],
+  #positionsTableBody > .pos-row > td[data-label="Precio promedio"],
+  #positionsTableBody > .pos-row > td[data-label="Cantidad"],
+  #positionsTableBody > .pos-row > td[data-label="Costo total"] {
+    opacity: 0.72;
+  }
+  #positionsTableBody > .pos-row > td[data-label="Fecha"] > *,
+  #positionsTableBody > .pos-row > td[data-label="Precio promedio"],
+  #positionsTableBody > .pos-row > td[data-label="Cantidad"],
+  #positionsTableBody > .pos-row > td[data-label="Costo total"] { font-size: 0.86rem; }
+}
+@media (max-width: 560px) {
+  .value-chart-controls { justify-content: flex-start; }
+  .value-series-btn { padding: 6px 9px; font-size: 0.74rem; }
 }

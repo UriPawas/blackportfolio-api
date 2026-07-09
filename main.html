@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=9">
-  <link rel="stylesheet" href="main.css?v=24">
+  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="main.css?v=25">
   <style>
     .company-info-animation {
       display: flex;
@@ -232,7 +232,7 @@
             <div id="watchlistTableShell" class="tracker-table-shell">
               <table class="tracker-table">
                 <thead>
-                  <tr><th>Ticker</th><th>Precio</th><th>Cambio diario</th><th></th></tr>
+                  <tr><th>Ticker</th><th>30 días</th><th>Precio</th><th>Cambio diario</th><th></th></tr>
                 </thead>
                 <tbody id="watchlistTableBody"></tbody>
               </table>
@@ -271,6 +271,10 @@
               <button id="sharePortfolioBtn" class="button ghost tracker-export-btn" type="button" title="Crear un enlace público de solo lectura">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
                 Compartir
+              </button>
+              <button id="editPortfolioSettingsBtn" class="button ghost tracker-export-btn" type="button" title="Editar nombre, benchmark y moneda del portafolio">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Ajustes
               </button>
             </div>
           </div>
@@ -408,21 +412,21 @@
               </div>
               <span>Posiciones</span><strong id="dashPositionCount">0</strong>
             </div>
-            <div class="summary-item">
+            <div class="summary-item summary-item--muted">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Suma de las comisiones de corretaje pagadas en todas las transacciones de compra registradas.</span>
               </div>
               <span>Comisiones</span><strong id="dashTotalCommissions">$0.00</strong>
             </div>
-            <div class="summary-item">
+            <div class="summary-item summary-item--muted">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Impuesto al Valor Agregado (IVA) acumulado sobre las comisiones de todas las transacciones.</span>
               </div>
               <span>IVA total</span><strong id="dashTotalIva">$0.00</strong>
             </div>
-            <div class="summary-item">
+            <div class="summary-item summary-item--muted">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Índice de referencia seleccionado (benchmark) para comparar el rendimiento del portafolio, p. ej. S&amp;P 500.</span>
@@ -465,12 +469,19 @@
                     <span id="valueChartDelta" class="value-chart-delta"></span>
                   </div>
                 </div>
-                <div class="perf-period-nav" id="valueChartPeriodNav">
-                  <button class="perf-period-btn" type="button" data-range="1mo" data-interval="1d">1M</button>
-                  <button class="perf-period-btn" type="button" data-range="3mo" data-interval="1d">3M</button>
-                  <button class="perf-period-btn" type="button" data-range="6mo" data-interval="1d">6M</button>
-                  <button class="perf-period-btn active" type="button" data-range="1y" data-interval="1d">1A</button>
-                  <button class="perf-period-btn" type="button" data-range="max" data-interval="1wk">Máx</button>
+                <div class="value-chart-controls">
+                  <div class="value-series-toggle" id="valueSeriesToggle" role="group" aria-label="Serie a mostrar">
+                    <button type="button" class="value-series-btn active" data-series="value">Valor</button>
+                    <button type="button" class="value-series-btn" data-series="invested">vs Invertido</button>
+                    <button type="button" class="value-series-btn" data-series="benchmark">vs Benchmark</button>
+                  </div>
+                  <div class="perf-period-nav" id="valueChartPeriodNav">
+                    <button class="perf-period-btn" type="button" data-range="1mo" data-interval="1d">1M</button>
+                    <button class="perf-period-btn" type="button" data-range="3mo" data-interval="1d">3M</button>
+                    <button class="perf-period-btn" type="button" data-range="6mo" data-interval="1d">6M</button>
+                    <button class="perf-period-btn active" type="button" data-range="1y" data-interval="1d">1A</button>
+                    <button class="perf-period-btn" type="button" data-range="max" data-interval="1wk">Máx</button>
+                  </div>
                 </div>
               </div>
               <div id="valueChartWrap" class="value-chart-wrap">
@@ -563,6 +574,7 @@
                       <th class="th-sortable" data-sort="date">Fecha</th>
                       <th class="th-sortable" data-sort="avg">Precio prom.</th>
                       <th class="th-sortable" data-sort="price">Precio actual</th>
+                      <th class="th-sortable" data-sort="day">Cambio hoy</th>
                       <th class="th-sortable" data-sort="qty">Cantidad</th>
                       <th class="th-sortable" data-sort="cost">Costo total</th>
                       <th class="th-sortable" data-sort="value">Valor actual</th>
@@ -698,8 +710,8 @@
                   <button class="perf-period-btn" type="button" data-range="1mo" data-interval="1d">1M</button>
                   <button class="perf-period-btn" type="button" data-range="3mo" data-interval="1d">3M</button>
                   <button class="perf-period-btn" type="button" data-range="6mo" data-interval="1d">6M</button>
-                  <button class="perf-period-btn active" type="button" data-range="1y" data-interval="1d">1Y</button>
-                  <button class="perf-period-btn" type="button" data-range="max" data-interval="1wk">MAX</button>
+                  <button class="perf-period-btn active" type="button" data-range="1y" data-interval="1d">1A</button>
+                  <button class="perf-period-btn" type="button" data-range="max" data-interval="1wk">Máx</button>
                 </div>
               </div>
               <div id="perfChartWrap" class="perf-chart-wrap">
@@ -1004,6 +1016,12 @@
               </div>
             </div>
             <div class="dashboard-card">
+              <div class="card-header"><h3>Ingreso mensual por dividendos</h3><span>Recibido (últimos 12m) y proyectado (próximos 12m)</span></div>
+              <div class="div-bars-wrap"><canvas id="divMonthlyChart" aria-label="Dividendos por mes"></canvas></div>
+              <div id="divMonthlyStatus" class="perf-chart-status">Aún no hay dividendos para graficar.</div>
+            </div>
+
+            <div class="dashboard-card">
               <div class="card-header"><h3>Ingreso por dividendos por activo</h3><span>Convertido a la moneda del portafolio</span></div>
               <div class="tracker-table-wrap">
                 <table class="tracker-table" id="divByTickerTable">
@@ -1108,6 +1126,7 @@
                 <span>Retornos diarios · 1 año</span>
               </div>
               <div id="corrMatrixWrap" class="corr-matrix-wrap"></div>
+              <div id="corrTopPairs" class="corr-top-pairs"></div>
               <div id="corrStatus" class="perf-chart-status">Calculando correlaciones…</div>
               <div class="corr-scale">
                 <span>−1 inversa</span>
@@ -1156,9 +1175,9 @@
                   <label>Periodo</label>
                   <div class="perf-period-nav" id="whatifPeriodNav">
                     <button class="perf-period-btn" type="button" data-range="6mo" data-interval="1d">6M</button>
-                    <button class="perf-period-btn active" type="button" data-range="1y" data-interval="1d">1Y</button>
-                    <button class="perf-period-btn" type="button" data-range="2y" data-interval="1wk">2Y</button>
-                    <button class="perf-period-btn" type="button" data-range="5y" data-interval="1wk">5Y</button>
+                    <button class="perf-period-btn active" type="button" data-range="1y" data-interval="1d">1A</button>
+                    <button class="perf-period-btn" type="button" data-range="2y" data-interval="1wk">2A</button>
+                    <button class="perf-period-btn" type="button" data-range="5y" data-interval="1wk">5A</button>
                   </div>
                 </div>
                 <button id="whatifRunBtn" class="button primary" type="button">Simular</button>
@@ -1422,6 +1441,82 @@
               <p class="form-hint">El efectivo se suma al "Valor actual" y los aportes/retiros se usan para calcular el XIRR ponderado por dinero.</p>
               <div id="cashError" class="form-hint hidden" style="color:#d94040"></div>
               <button class="button primary" type="submit">Confirmar</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Modal: Registrar dividendo (P0.1) ──────────────────────── -->
+        <div id="dividendModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal tracker-modal--sm">
+            <div class="tracker-modal-header">
+              <h3>Registrar dividendo</h3>
+              <button id="closeDividendModalBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="dividendForm" class="dashboard-form">
+              <input type="hidden" id="dividendPosId">
+              <div class="form-row">
+                <label>Activo</label>
+                <div id="dividendTickerDisplay" class="withdraw-ticker-display"></div>
+              </div>
+              <div class="form-row">
+                <label for="dividendPerShareInput">Dividendo por acción</label>
+                <input id="dividendPerShareInput" type="number" step="any" min="0" placeholder="0.00" required autocomplete="off">
+                <small id="dividendTotalNote" class="form-hint"></small>
+              </div>
+              <div class="form-row">
+                <label for="dividendDateInput">Fecha de pago</label>
+                <input id="dividendDateInput" type="date" required>
+              </div>
+              <p class="form-hint">Se registra como transacción DIVIDENDO sobre tu cantidad actual de acciones.</p>
+              <div id="dividendError" class="form-hint hidden" style="color:#d94040"></div>
+              <button class="button primary" type="submit">Registrar</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Modal: Editar portafolio (P0.5) ────────────────────────── -->
+        <div id="editPortfolioModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal">
+            <div class="tracker-modal-header">
+              <h3>Ajustes del portafolio</h3>
+              <button id="closeEditPortfolioBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="editPortfolioForm" class="dashboard-form">
+              <div class="form-row">
+                <label for="editPortfolioName">Nombre</label>
+                <input id="editPortfolioName" type="text" maxlength="60" required autocomplete="off">
+              </div>
+              <div class="form-row">
+                <label for="editPortfolioDesc">Descripción (opcional)</label>
+                <input id="editPortfolioDesc" type="text" maxlength="120" autocomplete="off">
+              </div>
+              <div class="form-row">
+                <label for="editPortfolioBenchmark">Índice de referencia</label>
+                <select id="editPortfolioBenchmark">
+                  <option value="^GSPC">S&amp;P 500</option>
+                  <option value="^IXIC">NASDAQ 100</option>
+                  <option value="^DJI">Dow Jones</option>
+                  <option value="URTH">MSCI World (ETF)</option>
+                  <option value="EEM">MSCI Emerging Markets (ETF)</option>
+                  <option value="^MXX">IPC Mexico</option>
+                  <option value="^FTSE">FTSE 100</option>
+                  <option value="^N225">Nikkei 225</option>
+                  <option value="none">Sin referencia</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="editPortfolioCurrency">Moneda principal</label>
+                <select id="editPortfolioCurrency">
+                  <option value="USD">USD — Dólar estadounidense</option>
+                  <option value="MXN">MXN — Peso mexicano</option>
+                  <option value="EUR">EUR — Euro</option>
+                  <option value="GBP">GBP — Libra esterlina</option>
+                  <option value="CAD">CAD — Dólar canadiense</option>
+                  <option value="BRL">BRL — Real brasileño</option>
+                </select>
+              </div>
+              <p class="form-hint">Cambiar la moneda no reconvierte tus posiciones; solo cambia la moneda de presentación del portafolio.</p>
+              <button class="button primary" type="submit">Guardar cambios</button>
             </form>
           </div>
         </div>
@@ -3275,7 +3370,7 @@
   <script src="auth.js?v=11"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=27"></script>
+  <script src="main.js?v=28"></script>
   <script src="markowitz.js?v=2"></script>
   <script src="analyzer.js?v=2"></script>
   <script src="topdown.js"></script>

@@ -5443,6 +5443,16 @@ const CHART_COLORS = [
   "#9f7aea", "#f687b3", "#48bb78", "#ed8936", "#4299e1",
   "#667eea", "#fc8181", "#68d391", "#fbd38d", "#76e4f7"
 ];
+// Semantic gain/loss colors read from CSS tokens (--gain/--loss) so canvas
+// charts stay consistent with the rest of the UI and any future theming.
+function _cssColor(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch { return fallback; }
+}
+const GAIN_COLOR = _cssColor("--gain", "#32d6a2");
+const LOSS_COLOR = _cssColor("--loss", "#ff6b81");
 const BENCHMARKS = {
   "^GSPC": "S&P 500", "^IXIC": "NASDAQ 100", "^DJI": "Dow Jones",
   "URTH": "MSCI World", "EEM": "MSCI EM", "^MXX": "IPC Mexico",
@@ -8053,6 +8063,11 @@ function showTrackerDashView(portfolioId) {
   perfDailyReturns = null;
   perfReportData = null;
   mcTabLoaded = false;
+  // Reiniciar el toggle de serie del gráfico hero a "Valor" (P0.3)
+  summaryChartMode = "value";
+  _summaryChartData = null;
+  document.querySelectorAll("#valueSeriesToggle .value-series-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.series === "value"));
   _invalidatePriceCache(portfolioId);
   // Reset to Summary tab
   document.querySelectorAll(".tracker-tab-btn").forEach((b) => b.classList.remove("active"));
@@ -8420,7 +8435,7 @@ function _drawSparkline(canvas, values) {
   const max  = Math.max(...values);
   const rng  = max - min || 1;
   const isUp = values[values.length - 1] >= values[0];
-  const col  = isUp ? "#32d6a2" : "#ff6b81";
+  const col  = isUp ? GAIN_COLOR : LOSS_COLOR;
   const pts  = values.map((v, i) => ({
     x: (i / (values.length - 1)) * w,
     y: h - ((v - min) / rng) * (h - 4) - 2
@@ -8707,11 +8722,14 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       const price = getCachedPrice(pos.ticker);
       const cost = convertAmount(t.total, posCur, currency) ?? t.total;
       const value = price !== null ? (convertAmount(price * pos.quantity, posCur, currency) ?? price * pos.quantity) : -Infinity;
+      const prevClose = getCachedPrev(pos.ticker);
+      const dayPct = (price !== null && prevClose !== null && prevClose > 0) ? (price - prevClose) / prevClose : -Infinity;
       switch (key) {
         case "ticker": return pos.ticker || "";
         case "date": return pos.purchaseDate || "";
         case "avg": return effectiveAvgPrice(pos);
         case "price": return price ?? -Infinity;
+        case "day": return dayPct;
         case "qty": return pos.quantity || 0;
         case "cost": return cost;
         case "value": return value;
@@ -8728,7 +8746,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
   _markSortIndicators(".tracker-table--positions [data-sort]", "sort", posSort);
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">Sin posiciones que coincidan con "${posSearch}".</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">Sin posiciones que coincidan con "${posSearch}".</td></tr>`;
     tableShell.classList.remove("is-loading-prices");
     return;
   }
@@ -8738,7 +8756,15 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
     const posCur = getPosCurrency(pos, currency);
     const color = CHART_COLORS[i % CHART_COLORS.length];
     const currentPrice = getCachedPrice(pos.ticker);
+    const prevClose = getCachedPrev(pos.ticker);
     const fr = currentPrice !== null ? _priceFreshnessLabel(pos.ticker) : null;
+    let dayCell = '<span class="muted-val">—</span>';
+    if (currentPrice !== null && prevClose !== null && prevClose > 0) {
+      const dPct = (currentPrice - prevClose) / prevClose * 100;
+      const dCls = dPct >= 0 ? "return-pos" : "return-neg";
+      const dSign = dPct >= 0 ? "+" : "";
+      dayCell = `<span class="${dCls}">${dSign}${dPct.toFixed(2)}%</span>`;
+    }
     const currentValueRaw = currentPrice !== null ? currentPrice * pos.quantity : null;
     const currentValue = currentValueRaw !== null ? (convertAmount(currentValueRaw, posCur, currency) ?? currentValueRaw) : null;
     const costConverted = convertAmount(t.total, posCur, currency) ?? t.total;
@@ -8759,7 +8785,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       .filter(tx => tx.ticker === pos.ticker)
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     const lotsHtml = txs.length ? `<tr class="pos-lots-row" data-lots-for="${pos.id}" style="display:none">
-      <td colspan="10" class="pos-lots-cell"><div class="pos-lots-inner">
+      <td colspan="11" class="pos-lots-cell"><div class="pos-lots-inner">
         <table class="pos-lots-table">
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Precio</th><th>Total neto</th></tr></thead>
           <tbody>${txs.map(tx => {
@@ -8779,13 +8805,23 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       <td data-label="Fecha">${dateStr}</td>
       <td data-label="Precio promedio">${formatCurrency(effectiveAvgPrice(pos), posCur)}<small class="fx-tag" title="Incluye comisión de entrada e IVA">c/com</small></td>
       <td data-label="Precio actual">${currentPrice !== null ? `<span class="price-fresh-dot price-fresh-dot--${fr.cls}" title="${fr.title}"></span>` + formatCurrency(currentPrice, posCur) : '<span class="muted-val" title="Precio cargando o no disponible">…</span>'}</td>
+      <td data-label="Cambio hoy">${dayCell}</td>
       <td data-label="Cantidad">${parseFloat(pos.quantity.toFixed(5))}</td>
       <td data-label="Costo total">${formatCurrency(costConverted, currency)}</td>
       <td data-label="Valor actual">${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
       <td data-label="Retorno">${retCell}</td>
       <td class="pos-actions-cell" data-label="Acciones">
-        <button class="pos-withdraw-btn" type="button" data-pos-id="${pos.id}" title="Retirar posicion">Retirar</button>
-        <button class="pos-delete-btn" type="button" data-pos-id="${pos.id}" title="Eliminar">✕</button>
+        <div class="pos-action-menu">
+          <button class="pos-action-trigger" type="button" data-menu-for="${pos.id}" aria-haspopup="true" aria-expanded="false" aria-label="Acciones de ${pos.ticker}" title="Acciones">⋯</button>
+          <div class="pos-action-dropdown" data-menu-id="${pos.id}" role="menu" hidden>
+            <button type="button" role="menuitem" data-act="buy" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Comprar más</button>
+            <button type="button" role="menuitem" data-act="sell" data-pos-id="${pos.id}">Vender</button>
+            <button type="button" role="menuitem" data-act="dividend" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Registrar dividendo</button>
+            <button type="button" role="menuitem" data-act="alert" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Crear alerta</button>
+            <button type="button" role="menuitem" data-act="market" data-ticker="${pos.ticker}">Ver en Mercados</button>
+            <button type="button" role="menuitem" class="pos-action-danger" data-act="delete" data-pos-id="${pos.id}">Eliminar</button>
+          </div>
+        </div>
       </td>
     </tr>${lotsHtml}`;
   }).join("");
@@ -8805,37 +8841,137 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
     });
   });
 
-  tbody.querySelectorAll(".pos-withdraw-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openWithdrawModal(btn.dataset.posId));
-  });
-
-  tbody.querySelectorAll(".pos-delete-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const portfolios = getPortfolios();
-      const portfolio = portfolios.find((p) => p.id === activePortfolioId);
-      if (!portfolio) return;
-      const allPos = portfolio.positions || [];
-      const idx = allPos.findIndex((p) => p.id === btn.dataset.posId);
-      if (idx === -1) return;
-      const [removed] = allPos.splice(idx, 1);  // conserva orden para restaurar
-      savePortfolios(portfolios);
-      renderPortfolioDashboard();
-      // Toast con opción de deshacer (L2.1)
-      showToast(`Posición ${removed.ticker} eliminada.`, {
-        actionLabel: "Deshacer",
-        duration: 7000,
-        onAction: () => {
-          const ps = getPortfolios();
-          const p = ps.find((q) => q.id === activePortfolioId);
-          if (!p) return;
-          if (!p.positions) p.positions = [];
-          p.positions.splice(Math.min(idx, p.positions.length), 0, removed);
-          savePortfolios(ps);
-          renderPortfolioDashboard();
-        }
-      });
+  // ── Menú de acciones por posición (P0.1) ───────────────────────────────────
+  tbody.querySelectorAll(".pos-action-trigger").forEach((trigger) => {
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = trigger.dataset.menuFor;
+      const dd = tbody.querySelector(`.pos-action-dropdown[data-menu-id="${id}"]`);
+      const isOpen = dd && !dd.hidden;
+      _closeAllPosMenus();
+      if (dd && !isOpen) {
+        dd.hidden = false;
+        trigger.setAttribute("aria-expanded", "true");
+      }
     });
   });
+
+  tbody.querySelectorAll(".pos-action-dropdown [data-act]").forEach((item) => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _closeAllPosMenus();
+      handlePositionAction(item.dataset.act, item.dataset.posId, item.dataset.ticker);
+    });
+  });
+}
+
+function _closeAllPosMenus() {
+  document.querySelectorAll(".pos-action-dropdown").forEach((d) => { d.hidden = true; });
+  document.querySelectorAll(".pos-action-trigger[aria-expanded='true']").forEach((t) => t.setAttribute("aria-expanded", "false"));
+}
+// Cierra los menús al hacer clic fuera
+if (!document._posMenuDocListener) {
+  document._posMenuDocListener = true;
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".pos-action-menu")) _closeAllPosMenus();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") _closeAllPosMenus(); });
+}
+
+function handlePositionAction(act, posId, ticker) {
+  if (act === "sell") { openWithdrawModal(posId); return; }
+  if (act === "buy") { openBuyMoreModal(posId, ticker); return; }
+  if (act === "dividend") { openDividendModal(posId, ticker); return; }
+  if (act === "alert") { openCreateAlertFor(ticker); return; }
+  if (act === "market") { watchlistOpenInMarkets(ticker); return; }
+  if (act === "delete") { deletePositionWithUndo(posId); return; }
+}
+
+function deletePositionWithUndo(posId) {
+  const portfolios = getPortfolios();
+  const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+  if (!portfolio) return;
+  const allPos = portfolio.positions || [];
+  const idx = allPos.findIndex((p) => p.id === posId);
+  if (idx === -1) return;
+  const [removed] = allPos.splice(idx, 1);  // conserva orden para restaurar
+  savePortfolios(portfolios);
+  renderPortfolioDashboard();
+  // Toast con opción de deshacer (L2.1)
+  showToast(`Posición ${removed.ticker} eliminada.`, {
+    actionLabel: "Deshacer",
+    duration: 7000,
+    onAction: () => {
+      const ps = getPortfolios();
+      const p = ps.find((q) => q.id === activePortfolioId);
+      if (!p) return;
+      if (!p.positions) p.positions = [];
+      p.positions.splice(Math.min(idx, p.positions.length), 0, removed);
+      savePortfolios(ps);
+      renderPortfolioDashboard();
+    }
+  });
+}
+
+// "Comprar más": abre el modal de agregar posición con el ticker precargado.
+function openBuyMoreModal(posId, ticker) {
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  const pos = portfolio && (portfolio.positions || []).find((p) => p.id === posId);
+  const dateInput = document.getElementById("posPurchaseDateInput");
+  if (dateInput) { dateInput.max = new Date().toISOString().slice(0, 10); dateInput.value = new Date().toISOString().slice(0, 10); }
+  const tickerInput = document.getElementById("posTickerInput");
+  if (tickerInput) tickerInput.value = ticker || (pos && pos.ticker) || "";
+  const curSel = document.getElementById("posCurrencyInput");
+  if (curSel && pos) curSel.value = getPosCurrency(pos, portfolio.currency || "USD");
+  const priceInput = document.getElementById("posAvgPriceInput");
+  if (priceInput) {
+    const cached = getCachedPrice(ticker);
+    priceInput.value = cached !== null ? parseFloat(cached.toFixed(4)) : "";
+  }
+  openModal("addPositionModal");
+}
+
+// "Crear alerta": lleva a Ajustes, precarga el símbolo y enfoca el precio objetivo.
+function openCreateAlertFor(ticker) {
+  activateSection("settings");
+  requestAnimationFrame(() => {
+    const symInput = document.getElementById("alertSymbol");
+    const alertsCard = document.querySelector(".alerts-card");
+    if (symInput) symInput.value = (ticker || "").toUpperCase();
+    if (alertsCard) alertsCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    const thr = document.getElementById("alertThreshold");
+    if (thr) thr.focus();
+  });
+}
+
+// "Ajustes del portafolio" (P0.5): editar nombre, descripción, benchmark y moneda.
+function openEditPortfolioModal() {
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  if (!portfolio) return;
+  document.getElementById("editPortfolioName").value = portfolio.name || "";
+  document.getElementById("editPortfolioDesc").value = portfolio.description || "";
+  document.getElementById("editPortfolioBenchmark").value = portfolio.benchmark || "^GSPC";
+  document.getElementById("editPortfolioCurrency").value = portfolio.currency || "USD";
+  openModal("editPortfolioModal");
+}
+
+// "Registrar dividendo": modal ligero que crea una transacción DIVIDENDO.
+function openDividendModal(posId, ticker) {
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  const pos = portfolio && (portfolio.positions || []).find((p) => p.id === posId);
+  if (!portfolio || !pos) return;
+  const posCur = getPosCurrency(pos, portfolio.currency || "USD");
+  document.getElementById("dividendPosId").value = posId;
+  const qty = parseFloat(pos.quantity.toFixed(5));
+  document.getElementById("dividendTickerDisplay").textContent =
+    `${pos.ticker} · ${qty} acciones` + (posCur !== (portfolio.currency || "USD") ? ` (${posCur})` : "");
+  document.getElementById("dividendPerShareInput").value = "";
+  const dateEl = document.getElementById("dividendDateInput");
+  dateEl.value = new Date().toISOString().slice(0, 10);
+  dateEl.max = new Date().toISOString().slice(0, 10);
+  document.getElementById("dividendTotalNote").textContent = "";
+  document.getElementById("dividendError").classList.add("hidden");
+  openModal("dividendModal");
 }
 
 function openWithdrawModal(posId) {
@@ -8999,6 +9135,16 @@ function renderDividendsTab() {
   document.getElementById("divYieldOnCost").textContent =
     totalInvested > 0 ? `${(trailing12 / totalInvested * 100).toFixed(2)}%` : "—";
 
+  // Ingreso mensual recibido (últimos 12 meses) para el gráfico de barras (P1.6)
+  const receivedByMonth = {};
+  divs.forEach((tx) => {
+    const k = (tx.date || "").slice(0, 7); // YYYY-MM
+    if (!k) return;
+    receivedByMonth[k] = (receivedByMonth[k] || 0) + conv(tx.net || 0, tx.currency);
+  });
+  _divReceivedByMonth = receivedByMonth;
+  renderDividendMonthlyChart(receivedByMonth, _divProjectedByMonth || {}, cur);
+
   const tickers = Object.keys(byTicker).sort((a, b) => byTicker[b].total - byTicker[a].total);
   if (!tickers.length) {
     table.style.display = "none";
@@ -9015,6 +9161,95 @@ function renderDividendsTab() {
     const last = b.last ? new Date(b.last).toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "2-digit" }) : "—";
     return `<tr><td><strong>${tk}</strong></td><td>${b.count}</td><td>${formatCurrency(b.total, cur)}</td><td>${last}</td><td>${yoc}</td></tr>`;
   }).join("");
+}
+
+// ── Gráfico de barras: ingreso mensual por dividendos (P1.6) ───────────────────
+let _divReceivedByMonth = null;
+let _divProjectedByMonth = null;
+
+function _monthKeyOffset(offset) {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function renderDividendMonthlyChart(receivedByMonth, projectedByMonth, cur) {
+  const canvas = document.getElementById("divMonthlyChart");
+  const status = document.getElementById("divMonthlyStatus");
+  if (!canvas) return;
+  // Ventana: 11 meses atrás → 12 meses adelante (24 barras)
+  const months = [];
+  for (let off = -11; off <= 12; off++) months.push(_monthKeyOffset(off));
+  const buckets = months.map((k) => ({
+    key: k,
+    received: receivedByMonth[k] || 0,
+    projected: projectedByMonth[k] || 0
+  }));
+  const maxV = Math.max(1, ...buckets.map((b) => Math.max(b.received, b.projected)));
+  const hasData = buckets.some((b) => b.received > 0 || b.projected > 0);
+  if (status) status.style.display = hasData ? "none" : "";
+  if (!hasData) { const c = canvas.getContext("2d"); c && c.clearRect(0, 0, canvas.width, canvas.height); return; }
+
+  const width = canvas.parentElement?.clientWidth || 700;
+  const height = width < 560 ? 220 : 260;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr; canvas.height = height * dpr;
+  canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  const lightMode = document.body.classList.contains("light-mode");
+  const pad = { left: 56, right: 14, top: 16, bottom: 40 };
+  const cw = width - pad.left - pad.right, ch = height - pad.top - pad.bottom;
+  const axisColor = lightMode ? "rgba(23,32,51,0.5)" : "rgba(226,232,255,0.45)";
+  const gridColor = lightMode ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.07)";
+
+  ctx.font = "500 10px Inter, sans-serif";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let s = 0; s <= 4; s++) {
+    const v = (maxV / 4) * s, y = pad.top + ch * (1 - s / 4);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y);
+    ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.setLineDash([4, 5]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = axisColor; ctx.fillText(formatCurrencyCompact(v, cur), pad.left - 8, y);
+  }
+
+  const slot = cw / buckets.length;
+  const barW = Math.min(18, slot * 0.6);
+  buckets.forEach((b, i) => {
+    const cx = pad.left + slot * i + slot / 2;
+    const drawBar = (val, color) => {
+      if (val <= 0) return;
+      const h = ch * (val / maxV);
+      ctx.fillStyle = color;
+      ctx.fillRect(cx - barW / 2, pad.top + ch - h, barW, h);
+    };
+    drawBar(b.received, GAIN_COLOR);
+    if (b.projected > 0 && b.received <= 0) {
+      // Proyección: barra con relieve más tenue (activo punteado)
+      const h = ch * (b.projected / maxV);
+      ctx.fillStyle = "rgba(111,134,255,0.45)";
+      ctx.fillRect(cx - barW / 2, pad.top + ch - h, barW, h);
+      ctx.strokeStyle = "#6f86ff"; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+      ctx.strokeRect(cx - barW / 2, pad.top + ch - h, barW, h); ctx.setLineDash([]);
+    }
+    // Etiqueta de mes cada 3 barras
+    if (i % 3 === 0) {
+      const [yy, mm] = b.key.split("-");
+      const lbl = new Date(+yy, +mm - 1, 1).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+      ctx.save();
+      ctx.fillStyle = axisColor; ctx.font = "500 9px Inter, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.fillText(lbl, cx, height - pad.bottom + 8);
+      ctx.restore();
+    }
+  });
+  // Leyenda
+  ctx.font = "600 10px Inter, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.fillStyle = GAIN_COLOR; ctx.fillRect(pad.left, height - 12, 10, 10);
+  ctx.fillStyle = axisColor; ctx.fillText("Recibido", pad.left + 16, height - 7);
+  ctx.fillStyle = "rgba(111,134,255,0.6)"; ctx.fillRect(pad.left + 90, height - 12, 10, 10);
+  ctx.fillStyle = axisColor; ctx.fillText("Proyectado", pad.left + 106, height - 7);
 }
 
 // ── Calendario de dividendos futuros (proyección 12m) ──────────────────────────
@@ -9086,6 +9321,16 @@ async function renderDividendForecast(portfolio, cur) {
 
   events.sort((a, b) => a.date - b.date);
   fcastEl.textContent = events.length ? formatCurrency(forecast12, cur) : "—";
+
+  // Alimenta el gráfico de barras mensual con la proyección (P1.6)
+  const projectedByMonth = {};
+  events.forEach((e) => {
+    const k = `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, "0")}`;
+    projectedByMonth[k] = (projectedByMonth[k] || 0) + e.amount;
+  });
+  _divProjectedByMonth = projectedByMonth;
+  renderDividendMonthlyChart(_divReceivedByMonth || {}, projectedByMonth, cur);
+
   if (!events.length) {
     tbody.innerHTML = "";
     status.style.display = ""; status.textContent = "No hay historial suficiente para proyectar dividendos de tus activos.";
@@ -9200,8 +9445,37 @@ async function renderCorrelationTab(portfolio) {
   wrap.innerHTML = html;
   status.style.display = "none";
 
+  // Lista compacta de pares (mejor lectura en móvil que la matriz completa) — Mobile 2
+  renderCorrelationTopPairs(valid, M);
+
   try { renderRiskContribution(portfolio, valid, rets, M, { days: common.length - 1, excluded: tickers.filter((t) => !valid.includes(t)) }); }
   catch (e) { if (rcStatus) { rcStatus.style.display = ""; rcStatus.textContent = "No se pudo calcular la contribución al riesgo."; } }
+}
+
+// Top pares por correlación absoluta — lista legible en móvil (Mobile 2)
+function renderCorrelationTopPairs(valid, M) {
+  const el = document.getElementById("corrTopPairs");
+  if (!el) return;
+  const pairs = [];
+  for (let i = 0; i < valid.length; i++) {
+    for (let j = i + 1; j < valid.length; j++) {
+      pairs.push({ a: valid[i], b: valid[j], c: M[i][j] });
+    }
+  }
+  if (!pairs.length) { el.innerHTML = ""; return; }
+  pairs.sort((x, y) => Math.abs(y.c) - Math.abs(x.c));
+  const top = pairs.slice(0, 6);
+  el.innerHTML =
+    `<div class="corr-pairs-title">Pares más relacionados</div>` +
+    top.map((p) => {
+      const strong = Math.abs(p.c) >= 0.7, mod = Math.abs(p.c) >= 0.4;
+      const cls = p.c >= 0 ? "return-pos" : "return-neg";
+      const lvl = strong ? "Alta" : mod ? "Moderada" : "Baja";
+      return `<div class="corr-pair-row">
+        <span class="corr-pair-names">${p.a} · ${p.b}</span>
+        <span class="corr-pair-val ${cls}">${p.c >= 0 ? "+" : ""}${p.c.toFixed(2)}<small>${lvl}</small></span>
+      </div>`;
+    }).join("");
 }
 
 // ── Watchlist global (vigilar sin poseer) ──────────────────────────────────────
@@ -9223,9 +9497,26 @@ async function renderWatchlist() {
   if (!list.length) { tbody.innerHTML = ""; shell.style.display = "none"; empty.style.display = ""; return; }
   shell.style.display = ""; empty.style.display = "none";
   tbody.innerHTML = list.map((tk) =>
-    `<tr data-wl="${tk}" class="wl-row"><td><strong>${tk}</strong></td><td class="wl-price">…</td><td class="wl-chg">…</td>` +
-    `<td><button class="wl-remove" data-wl-remove="${tk}" title="Quitar de la lista" type="button">✕</button></td></tr>`
+    `<tr data-wl="${tk}" class="wl-row">` +
+    `<td data-label="Ticker"><strong>${tk}</strong></td>` +
+    `<td class="td-sparkline" data-label="30 días"><canvas class="pos-sparkline wl-sparkline" data-ticker="${tk}" width="80" height="28"></canvas></td>` +
+    `<td class="wl-price" data-label="Precio">…</td>` +
+    `<td class="wl-chg" data-label="Cambio diario">…</td>` +
+    `<td class="wl-actions" data-label="Acciones">` +
+      `<button class="wl-buy" data-wl-buy="${tk}" title="Comprar / agregar a un portafolio" type="button">Comprar</button>` +
+      `<button class="wl-alert" data-wl-alert="${tk}" title="Crear alerta de precio" type="button" aria-label="Crear alerta">🔔</button>` +
+      `<button class="wl-remove" data-wl-remove="${tk}" title="Quitar de la lista" type="button" aria-label="Quitar">✕</button>` +
+    `</td></tr>`
   ).join("");
+
+  // Sparklines de 30 días (reutiliza el mismo motor que la tabla de posiciones)
+  drawAllSparklines(list.map((tk) => ({ ticker: tk })));
+
+  // Acciones de fila: comprar / alerta / quitar
+  tbody.querySelectorAll("[data-wl-buy]").forEach((btn) =>
+    btn.addEventListener("click", () => openBuyMoreModal(null, btn.dataset.wlBuy)));
+  tbody.querySelectorAll("[data-wl-alert]").forEach((btn) =>
+    btn.addEventListener("click", () => openCreateAlertFor(btn.dataset.wlAlert)));
 
   const priceMap = await fetchPricesBatch(list);
   list.forEach((tk) => {
@@ -10749,6 +11040,67 @@ function initializeTrackerModule() {
     });
   });
 
+  // ── Modal: Registrar dividendo (P0.1) ──────────────────────────────────────
+  document.getElementById("closeDividendModalBtn")?.addEventListener("click", () => closeModal("dividendModal"));
+  document.getElementById("dividendModal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeModal("dividendModal");
+  });
+  document.getElementById("dividendPerShareInput")?.addEventListener("input", () => {
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    const pos = portfolio && (portfolio.positions || []).find((p) => p.id === document.getElementById("dividendPosId").value);
+    const note = document.getElementById("dividendTotalNote");
+    const perShare = parseFloat(document.getElementById("dividendPerShareInput").value);
+    if (pos && isFinite(perShare) && perShare > 0) {
+      const posCur = getPosCurrency(pos, portfolio.currency || "USD");
+      note.textContent = `Total estimado: ${formatCurrency(perShare * pos.quantity, posCur)}`;
+    } else if (note) note.textContent = "";
+  });
+  document.getElementById("dividendForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("dividendError");
+    const portfolios = getPortfolios();
+    const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+    const posId = document.getElementById("dividendPosId").value;
+    const pos = portfolio && (portfolio.positions || []).find((p) => p.id === posId);
+    const perShare = parseFloat(document.getElementById("dividendPerShareInput").value);
+    const date = document.getElementById("dividendDateInput").value;
+    if (!portfolio || !pos) { closeModal("dividendModal"); return; }
+    if (!isFinite(perShare) || perShare <= 0) { errEl.textContent = "Ingresa un dividendo por acción válido."; errEl.classList.remove("hidden"); return; }
+    if (!date) { errEl.textContent = "Ingresa la fecha de pago."; errEl.classList.remove("hidden"); return; }
+    const posCur = getPosCurrency(pos, portfolio.currency || "USD");
+    recordTransaction(portfolio, "DIVIDENDO", pos.ticker, pos.quantity, perShare, 0, posCur, { date: new Date(date + "T12:00:00").toISOString() });
+    savePortfolios(portfolios);
+    closeModal("dividendModal");
+    renderPortfolioDashboard();
+    showToast(`Dividendo de ${pos.ticker} registrado.`, { duration: 4000 });
+    window.bpTrack?.("dividend_recorded", { ticker: pos.ticker });
+  });
+
+  // ── Modal: Editar ajustes del portafolio (P0.5) ────────────────────────────
+  document.getElementById("editPortfolioSettingsBtn")?.addEventListener("click", openEditPortfolioModal);
+  document.getElementById("closeEditPortfolioBtn")?.addEventListener("click", () => closeModal("editPortfolioModal"));
+  document.getElementById("editPortfolioModal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeModal("editPortfolioModal");
+  });
+  document.getElementById("editPortfolioForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const portfolios = getPortfolios();
+    const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+    if (!portfolio) { closeModal("editPortfolioModal"); return; }
+    const name = document.getElementById("editPortfolioName").value.trim();
+    if (name) portfolio.name = name;
+    portfolio.description = document.getElementById("editPortfolioDesc").value.trim();
+    portfolio.benchmark = document.getElementById("editPortfolioBenchmark").value;
+    portfolio.currency = document.getElementById("editPortfolioCurrency").value;
+    savePortfolios(portfolios);
+    closeModal("editPortfolioModal");
+    const nameEl = document.getElementById("dashPortfolioName");
+    if (nameEl) nameEl.textContent = portfolio.name;
+    renderPortfolioDashboard();
+    showToast("Ajustes del portafolio actualizados.", { duration: 3500 });
+    window.bpTrack?.("portfolio_edited");
+  });
+
   document.getElementById("exportCsvBtn")?.addEventListener("click", exportTransactionsCSV);
   document.getElementById("exportPdfBtn")?.addEventListener("click", () => { window.bpTrack?.("pdf_report_open"); openReportRangeModal(); });
   _wireReportRangeModal();
@@ -10767,6 +11119,8 @@ function initializeTrackerModule() {
   document.getElementById("watchlistTableBody")?.addEventListener("click", (e) => {
     const rm = e.target.closest("[data-wl-remove]");
     if (rm) { e.stopPropagation(); removeFromWatchlist(rm.dataset.wlRemove); return; }
+    // Los botones de acción (comprar / alerta) manejan su propio click; no abrir Mercados.
+    if (e.target.closest("[data-wl-buy], [data-wl-alert]")) return;
     const row = e.target.closest("tr[data-wl]");
     if (row) watchlistOpenInMarkets(row.dataset.wl);
   });
@@ -11219,6 +11573,16 @@ function initializeTrackerModule() {
     summaryValueLoaded = false;
     const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
     if (portfolio) loadSummaryValueChart(portfolio);
+  });
+
+  // Toggle de serie del gráfico hero (Valor / vs Invertido / vs Benchmark) — P0.3
+  document.getElementById("valueSeriesToggle")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".value-series-btn");
+    if (!btn) return;
+    document.querySelectorAll("#valueSeriesToggle .value-series-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    summaryChartMode = btn.dataset.series;
+    drawSummaryChartForMode();
   });
 
   // ── Accesibilidad: cerrar cualquier modal del tracker con ESC (L2.6) ───────
@@ -12025,6 +12389,60 @@ function buildAllPositionHistory(portfolio) {
 // ── Gráfica de valor del portafolio (Resumen, #1) ───────────────────────────
 const portfolioValueChartStates = new WeakMap();
 
+// ── Toggle de serie del gráfico hero del Resumen (P0.3) ─────────────────────
+let summaryChartMode = "value"; // "value" | "invested" | "benchmark"
+let _summaryChartData = null;
+
+async function drawSummaryChartForMode() {
+  const data = _summaryChartData;
+  const canvas = document.getElementById("portfolioValueChart");
+  if (!data || !canvas) return;
+  const { points, currency } = data;
+  const statusEl = document.getElementById("valueChartStatus");
+
+  if (summaryChartMode === "invested") {
+    drawPortfolioValueChart(canvas, points, currency, {
+      points: points.map((p) => ({ value: p.invested })),
+      color: "#f5b84c", label: "Capital invertido"
+    });
+    if (statusEl) statusEl.textContent = "Naranja punteado = capital invertido acumulado.";
+    return;
+  }
+
+  if (summaryChartMode === "benchmark") {
+    if (!data.benchmark) {
+      drawPortfolioValueChart(canvas, points, currency);
+      if (statusEl) statusEl.textContent = "Sin índice de referencia. Configúralo en Ajustes del portafolio.";
+      return;
+    }
+    if (!data.benchPoints) {
+      try {
+        const h = await fetchHistoricalCloses(data.benchmark, data.range, data.interval);
+        const map = {};
+        (h || []).forEach((d) => { map[new Date(d.ts).toISOString().slice(0, 10)] = d.close; });
+        let lastClose = null;
+        const aligned = points.map((p) => {
+          if (map[p.date] != null) lastClose = map[p.date];
+          return lastClose;
+        });
+        const base = aligned.find((v) => v != null);
+        const startVal = points[0].value;
+        data.benchPoints = aligned.map((v) => (v != null && base) ? { value: v / base * startVal } : { value: null });
+      } catch { data.benchPoints = null; }
+    }
+    drawPortfolioValueChart(canvas, points, currency, data.benchPoints ? {
+      points: data.benchPoints, color: "#39d0ff", label: `${data.benchName} (equiv.)`
+    } : null);
+    if (statusEl) statusEl.textContent = data.benchPoints
+      ? `Azul punteado = ${data.benchName} con el mismo valor inicial (equivalencia).`
+      : "No se pudo cargar el índice de referencia.";
+    return;
+  }
+
+  drawPortfolioValueChart(canvas, points, currency);
+  if (statusEl) statusEl.textContent = "Valor de mercado de tus posiciones a lo largo del tiempo.";
+}
+
 async function loadSummaryValueChart(portfolio) {
   portfolio = portfolio || getPortfolios().find((p) => p.id === activePortfolioId);
   if (!portfolio) return;
@@ -12080,7 +12498,10 @@ async function loadSummaryValueChart(portfolio) {
     }
   });
   const series = buildInvestmentValueSeries(allPositions, dates, tickerDateMaps, portfolioCur);
-  const points = series.map((p) => ({ date: p.date, value: p.market })).filter((p) => p.value > 0);
+  // Conserva `invested` alineado por índice para la serie de comparación (P0.3).
+  const points = series
+    .map((p) => ({ date: p.date, value: p.market, invested: p.invested }))
+    .filter((p) => p.value > 0);
 
   if (points.length < 2) {
     resetReadout("No hay suficientes datos históricos para este periodo.");
@@ -12088,7 +12509,14 @@ async function loadSummaryValueChart(portfolio) {
     return;
   }
 
-  drawPortfolioValueChart(canvas, points, portfolioCur);
+  // Guarda el contexto para poder redibujar al cambiar de serie sin re-descargar.
+  _summaryChartData = {
+    points, currency: portfolioCur, range, interval,
+    benchmark: (portfolio.benchmark && portfolio.benchmark !== "none") ? portfolio.benchmark : null,
+    benchName: BENCHMARKS[portfolio.benchmark] || portfolio.benchmark || "Benchmark",
+    benchPoints: null
+  };
+  await drawSummaryChartForMode();
   const first = points[0].value, last = points[points.length - 1].value;
   const diff = last - first;
   const pct = first > 0 ? diff / first * 100 : 0;
@@ -12101,7 +12529,7 @@ async function loadSummaryValueChart(portfolio) {
   if (statusEl) statusEl.textContent = "";
 }
 
-function drawPortfolioValueChart(canvas, points, currency) {
+function drawPortfolioValueChart(canvas, points, currency, compare) {
   if (!canvas) return;
   const width = canvas.parentElement?.clientWidth || 700;
   const height = width < 560 ? 240 : 300;
@@ -12110,7 +12538,8 @@ function drawPortfolioValueChart(canvas, points, currency) {
   canvas.height = height * dpr;
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
-  portfolioValueChartStates.set(canvas, { width, height, dpr, points, currency, hoverIndex: null });
+  // `compare` (opcional): { points:[{value}] alineado por índice, color, label }
+  portfolioValueChartStates.set(canvas, { width, height, dpr, points, currency, hoverIndex: null, compare: compare || null });
   document.getElementById("portfolioValueTooltip")?.classList.add("hidden");
   paintPortfolioValueChart(canvas);
   ensurePortfolioValueInteractions(canvas);
@@ -12119,7 +12548,7 @@ function drawPortfolioValueChart(canvas, points, currency) {
 function paintPortfolioValueChart(canvas) {
   const state = portfolioValueChartStates.get(canvas);
   if (!state) return;
-  const { width, height, dpr, points, currency, hoverIndex } = state;
+  const { width, height, dpr, points, currency, hoverIndex, compare } = state;
   const ctx = canvas.getContext("2d");
   const lightMode = document.body.classList.contains("light-mode");
   const pad = { left: 64, right: 20, top: 20, bottom: 34 };
@@ -12135,7 +12564,8 @@ function paintPortfolioValueChart(canvas) {
     return;
   }
   const values = points.map((p) => p.value);
-  const rawMin = Math.min(...values), rawMax = Math.max(...values);
+  const cmpValues = compare && compare.points ? compare.points.map((p) => (p ? p.value : null)).filter((v) => v != null && isFinite(v)) : [];
+  const rawMin = Math.min(...values, ...cmpValues), rawMax = Math.max(...values, ...cmpValues);
   const valPad = (rawMax - rawMin) * 0.12 || Math.max(rawMax * 0.08, 1);
   const minV = Math.max(0, rawMin - valPad), maxV = rawMax + valPad;
   const vRange = Math.max(maxV - minV, 1);
@@ -12177,6 +12607,25 @@ function paintPortfolioValueChart(canvas) {
   ctx.beginPath();
   points.forEach((p, i) => ctx[i ? "lineTo" : "moveTo"](toX(i), toY(p.value)));
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2.4; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.stroke();
+
+  // Serie de comparación (opcional): línea secundaria punteada, sin relleno.
+  if (compare && compare.points && compare.points.length === points.length) {
+    ctx.beginPath();
+    let started = false;
+    compare.points.forEach((p, i) => {
+      if (!p || !isFinite(p.value)) return;
+      if (!started) { ctx.moveTo(toX(i), toY(p.value)); started = true; }
+      else ctx.lineTo(toX(i), toY(p.value));
+    });
+    ctx.strokeStyle = compare.color || "#8aa0ff";
+    ctx.lineWidth = 1.8; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+    // Etiqueta de la serie de comparación
+    ctx.font = "600 11px Inter, sans-serif";
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = compare.color || "#8aa0ff";
+    ctx.fillText(compare.label || "", pad.left + 6, pad.top + 2);
+  }
 
   if (hoverIndex !== null && points[hoverIndex]) {
     const x = toX(hoverIndex);
