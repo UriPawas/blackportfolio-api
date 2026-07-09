@@ -35,29 +35,63 @@
 
   <main class="legal-shell">
     <h1>Política de Privacidad</h1>
-    <span class="legal-date">Última actualización: mayo 2026</span>
+    <span class="legal-date">Última actualización: 9 de julio de 2026</span>
 
-    <h2>1. Datos que recopilamos</h2>
-    <p>Al registrarte recopilamos tu nombre completo, correo electrónico y el plan de suscripción seleccionado. No almacenamos información financiera ni credenciales de brokers.</p>
+    <h2>1. Responsable y alcance</h2>
+    <p>Esta política describe qué datos personales recopila BlackPortfolio (el "Servicio"), con qué fines los tratamos, con quién los compartimos y qué derechos tienes. Aplica a la landing, la aplicación web y las funciones de inteligencia artificial. Para dudas o solicitudes de privacidad escribe a <a href="mailto:privacy@blackportfolio.ai">privacy@blackportfolio.ai</a>.</p>
 
-    <h2>2. Uso de los datos</h2>
+    <h2>2. Datos que recopilamos</h2>
     <ul>
-      <li>Autenticar tu sesión mediante Firebase Authentication.</li>
-      <li>Personalizar la experiencia de la plataforma según tu plan.</li>
-      <li>Enviar correos transaccionales relacionados con tu cuenta.</li>
+      <li><strong>Datos de cuenta:</strong> nombre, correo electrónico, plan de suscripción, preferencias de perfil y estado de verificación. Las contraseñas las gestiona Firebase Authentication; nunca las vemos ni almacenamos en texto plano.</li>
+      <li><strong>Datos de portafolio:</strong> las posiciones, transacciones, metas y notas que registras manualmente (símbolos, cantidades, precios, fechas, comisiones). <strong>No</strong> nos conectamos a tu banco ni a tu bróker, y no almacenamos credenciales de terceros ni números de tarjeta.</li>
+      <li><strong>Datos de pago:</strong> el procesamiento lo realiza Stripe. Nosotros solo guardamos el identificador de cliente, el plan contratado y el estado de la suscripción — nunca los datos completos de tu tarjeta.</li>
+      <li><strong>Datos de seguridad:</strong> registro de actividad de la cuenta (inicios de sesión, activación de 2FA, cambios de portafolio) y, si activas 2FA, el secreto TOTP cifrado en el servidor y los hashes de tus códigos de respaldo.</li>
+      <li><strong>Datos de uso:</strong> eventos de producto propios (qué módulos usas, desde qué página) asociados a tu cuenta, y reportes de errores técnicos (vía Sentry) que pueden incluir tu identificador de usuario. No usamos rastreadores publicitarios de terceros.</li>
+      <li><strong>Feedback:</strong> los mensajes que envías desde el formulario in-app, junto con tu plan y la página desde la que escribes.</li>
     </ul>
 
-    <h2>3. Almacenamiento</h2>
-    <p>Los datos de perfil se guardan en Google Firestore (región us-central1). Firebase Authentication gestiona las credenciales con cifrado estándar de la industria.</p>
+    <h2>3. Para qué usamos los datos</h2>
+    <ul>
+      <li>Prestar el Servicio: autenticación, sincronización de tus portafolios entre dispositivos, cálculo de métricas y generación de reportes.</li>
+      <li>Generar análisis con IA cuando tú lo solicitas (ver sección 4).</li>
+      <li>Gestionar la facturación y prevenir el fraude y el abuso (límites de plan, cuotas de IA, control de acceso a la beta).</li>
+      <li>Enviar correos transaccionales: verificación de cuenta, alertas de precio que tú configuras y avisos de seguridad o de cambios en el servicio. No enviamos publicidad de terceros.</li>
+      <li>Diagnosticar errores y mejorar el producto a partir de métricas de uso agregadas.</li>
+    </ul>
 
-    <h2>4. Terceros</h2>
-    <p>Utilizamos Firebase (Google LLC) y Stripe Inc. para autenticación y procesamiento de pagos respectivamente. Consulta sus políticas en <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">firebase.google.com/support/privacy</a> y <a href="https://stripe.com/privacy" target="_blank" rel="noopener">stripe.com/privacy</a>.</p>
+    <h2>4. Inteligencia artificial</h2>
+    <p>Cuando usas una función de IA (reportes, análisis de activos, chat del portafolio), los datos necesarios de tu portafolio se envían a modelos de lenguaje de terceros a través de <strong>OpenRouter</strong> para generar la respuesta. Enviamos únicamente los datos del análisis solicitado (posiciones, métricas), no tu correo ni identificadores de cuenta. Estos proveedores procesan los datos como encargados del tratamiento conforme a sus propias políticas. Las respuestas pueden almacenarse temporalmente en caché en nuestros servidores para no reprocesar el mismo análisis.</p>
 
-    <h2>5. Tus derechos</h2>
-    <p>Puedes solicitar la eliminación de tu cuenta y datos en cualquier momento enviando un correo a <a href="mailto:privacy@blackportfolio.ai">privacy@blackportfolio.ai</a>.</p>
+    <h2>5. Dónde se almacenan los datos</h2>
+    <p>La autenticación la gestiona Firebase Authentication (Google). Tus portafolios y datos de cuenta se almacenan en una base de datos PostgreSQL alojada en Railway (infraestructura en EE. UU.), con copias de seguridad cifradas. El frontend se sirve desde Firebase Hosting. Al usar el Servicio, aceptas la transferencia internacional de datos que esto implica.</p>
 
-    <h2>6. Cookies</h2>
-    <p>Solo usamos almacenamiento local (localStorage) para mantener tu sesión y preferencias de tema. No usamos cookies de seguimiento ni publicidad.</p>
+    <h2>6. Con quién compartimos datos (subencargados)</h2>
+    <ul>
+      <li><strong>Google / Firebase</strong> — autenticación y hosting (<a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">política</a>).</li>
+      <li><strong>Stripe</strong> — procesamiento de pagos (<a href="https://stripe.com/privacy" target="_blank" rel="noopener">política</a>).</li>
+      <li><strong>Railway</strong> — alojamiento del backend y la base de datos (<a href="https://railway.com/legal/privacy" target="_blank" rel="noopener">política</a>).</li>
+      <li><strong>OpenRouter</strong> — enrutamiento a modelos de IA cuando usas esas funciones (<a href="https://openrouter.ai/privacy" target="_blank" rel="noopener">política</a>).</li>
+      <li><strong>Sentry</strong> — monitoreo de errores técnicos (<a href="https://sentry.io/privacy/" target="_blank" rel="noopener">política</a>).</li>
+    </ul>
+    <p>No vendemos tus datos personales ni los compartimos con anunciantes. Solo revelaremos datos a autoridades cuando exista una obligación legal.</p>
+
+    <h2>7. Conservación y eliminación</h2>
+    <p>Conservamos tus datos mientras tu cuenta esté activa. Puedes <strong>exportar</strong> todos tus datos y <strong>eliminar tu cuenta de forma permanente</strong> desde Ajustes dentro de la app; la eliminación borra tus portafolios, perfil, actividad y credenciales de autenticación. Los registros de facturación se conservan el tiempo que exige la normativa fiscal. Las copias de seguridad se rotan y expiran automáticamente.</p>
+
+    <h2>8. Tus derechos</h2>
+    <p>Tienes derecho a acceder, rectificar, exportar (portabilidad) y eliminar tus datos, así como a oponerte o limitar ciertos tratamientos (derechos ARCO en México; derechos equivalentes bajo GDPR si resides en la UE). La mayoría puedes ejercerlos directamente desde la app (Ajustes → Cuenta); para el resto escribe a <a href="mailto:privacy@blackportfolio.ai">privacy@blackportfolio.ai</a> y responderemos en un máximo de 30 días.</p>
+
+    <h2>9. Seguridad</h2>
+    <p>Aplicamos medidas técnicas razonables: cifrado en tránsito (TLS), verificación en dos pasos (2FA) opcional con secretos que nunca salen del servidor, verificación de correo para operaciones sensibles, límites de tasa contra abuso, copias de seguridad cifradas y acceso administrativo restringido. Ningún sistema es infalible: si detectamos una brecha que afecte tus datos, te lo notificaremos conforme a la ley aplicable.</p>
+
+    <h2>10. Cookies y almacenamiento local</h2>
+    <p>Usamos almacenamiento local del navegador (localStorage) para mantener tu sesión, tus preferencias de tema y una caché de tus datos. No usamos cookies de seguimiento publicitario. Los servicios de terceros integrados (Firebase) pueden usar cookies técnicas propias necesarias para la autenticación.</p>
+
+    <h2>11. Menores de edad</h2>
+    <p>El Servicio no está dirigido a menores de 18 años y no recopilamos deliberadamente datos de menores. Si detectamos una cuenta de un menor, la eliminaremos.</p>
+
+    <h2>12. Cambios a esta política</h2>
+    <p>Si realizamos cambios materiales, te lo notificaremos por correo o mediante aviso en la app con al menos 14 días de anticipación. La fecha de "última actualización" siempre refleja la versión vigente.</p>
 
     <p style="margin-top:48px"><a href="index.html">← Volver al inicio</a></p>
   </main>

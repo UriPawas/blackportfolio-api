@@ -12,7 +12,9 @@ from persistence import (
     BetaAllowlist, BetaCode, BETA_CLOSED, redeem_beta_code,
     normalize_plan, require_plan, current_plan, upsert_user, utc_now, limiter, purge_user,
     UserAlert, UserNotification, AnalyticsEvent,
+    current_ai_user, consume_ai_quota, ai_cache_get, ai_cache_put, ensure_writable_account,
 )
+import hashlib
 import requests
 import yfinance as yf
 import numpy as np
@@ -1004,6 +1006,7 @@ def account_profile_patch(
     token: dict = Depends(verify_firebase_user),
     session=Depends(get_session),
 ):
+    ensure_writable_account(token)
     user = upsert_user(session, token)
     incoming = dict(body or {})
     incoming.pop("plan", None)  # el entitlement nunca se fija desde el cliente
@@ -2302,6 +2305,25 @@ class InsightsRequest(BaseModel):
     metrics: dict
     lang: str = "es"
 
+# Límite del payload que se envía a la IA. Sin esto, un cliente podría mandar
+# JSONs gigantes que se pagan como tokens de entrada en OpenRouter.
+_AI_MAX_PAYLOAD_BYTES = int(os.environ.get("AI_MAX_PAYLOAD_BYTES", str(64 * 1024)))
+
+def _ai_serialize_payload(obj) -> str:
+    """Serializa el payload de la IA (orden estable para la clave de caché) y
+    rechaza los que exceden el límite de tamaño."""
+    text = json.dumps(obj, ensure_ascii=False, sort_keys=True)
+    if len(text.encode("utf-8")) > _AI_MAX_PAYLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Los datos enviados a la IA exceden el límite de {_AI_MAX_PAYLOAD_BYTES // 1024} KB.",
+        )
+    return text
+
+def _ai_cache_key(kind: str, lang: str, models: list, payload_text: str) -> str:
+    top_model = models[0] if models else ""
+    return hashlib.sha256(f"{kind}|{lang}|{top_model}|{payload_text}".encode("utf-8")).hexdigest()
+
 def _openrouter_chat(models, messages):
     """Intenta cada modelo en orden; devuelve (texto, modelo_usado) o (None, detalle_error)."""
     last_detail = "sin modelos configurados"
@@ -2336,12 +2358,19 @@ def _openrouter_chat(models, messages):
 def ai_insights(
     request: Request,
     body: InsightsRequest,
-    plan: str = Depends(current_plan),
+    ai_user: dict = Depends(current_ai_user),
+    session=Depends(get_session),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
 
-    models = models_for_plan(plan)
+    models = models_for_plan(ai_user["plan"])
+    payload_text = _ai_serialize_payload(body.metrics)
+    cache_key = _ai_cache_key("insights", body.lang, models, payload_text)
+    cached = ai_cache_get(session, cache_key)
+    if cached:
+        return {"insights": cached["text"], "model": cached["model"], "cached": True}
+    consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
         "Eres un analista financiero senior (CFA), objetivo y prudente, que redacta la sección de "
@@ -2399,6 +2428,7 @@ def ai_insights(
     ])
     if not text:
         raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
+    ai_cache_put(session, cache_key, info, text)
     return {"insights": text, "model": info}
 
 
@@ -2412,14 +2442,22 @@ class AnalyzerAIRequest(BaseModel):
 def ai_analyzer(
     request: Request,
     body: AnalyzerAIRequest,
-    plan: str = Depends(current_plan),
+    ai_user: dict = Depends(current_ai_user),
+    session=Depends(get_session),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
     if not body.assets:
         raise HTTPException(status_code=400, detail="Sin activos para analizar")
 
-    models = models_for_plan(plan)
+    models = models_for_plan(ai_user["plan"])
+    _cache_payload = {"activos": body.assets, "portafolio": body.portfolio}
+    payload_text = _ai_serialize_payload(_cache_payload)
+    cache_key = _ai_cache_key("analyzer", body.lang, models, payload_text)
+    cached = ai_cache_get(session, cache_key)
+    if cached:
+        return {"verdict": cached["text"], "model": cached["model"], "cached": True}
+    consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
         "Eres un analista financiero senior (CFA) con experiencia en research de buy-side, objetivo y "
@@ -2471,6 +2509,7 @@ def ai_analyzer(
     ])
     if not text:
         raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
+    ai_cache_put(session, cache_key, info, text)
     return {"verdict": text, "model": info}
 
 
@@ -2483,12 +2522,19 @@ class RebalanceAIRequest(BaseModel):
 def ai_rebalance(
     request: Request,
     body: RebalanceAIRequest,
-    plan: str = Depends(current_plan),
+    ai_user: dict = Depends(current_ai_user),
+    session=Depends(get_session),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
 
-    models = models_for_plan(plan)
+    models = models_for_plan(ai_user["plan"])
+    payload_text = _ai_serialize_payload(body.metrics)
+    cache_key = _ai_cache_key("rebalance", body.lang, models, payload_text)
+    cached = ai_cache_get(session, cache_key)
+    if cached:
+        return {"explanation": cached["text"], "model": cached["model"], "cached": True}
+    consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     periodo = body.metrics.get("periodo", "el periodo analizado")
     system_msg = (
@@ -2517,6 +2563,7 @@ def ai_rebalance(
     ])
     if not text:
         raise HTTPException(status_code=502, detail=f"OpenRouter sin respuesta. {info}")
+    ai_cache_put(session, cache_key, info, text)
     return {"explanation": text, "model": info}
 
 
@@ -2533,10 +2580,12 @@ class ChatAIRequest(BaseModel):
 def ai_chat(
     request: Request,
     body: ChatAIRequest,
-    plan: str = Depends(current_plan),
+    ai_user: dict = Depends(current_ai_user),
+    session=Depends(get_session),
 ):
     if not OPENROUTER_API_KEY:
         raise HTTPException(status_code=503, detail="AI no configurada (falta OPENROUTER_API_KEY)")
+    _ai_serialize_payload(body.context)  # solo valida tamaño; el chat no se cachea
 
     # Sanear el historial: solo roles válidos, recortar longitud y conservar los últimos turnos
     history = []
@@ -2552,7 +2601,8 @@ def ai_chat(
     if not history:
         raise HTTPException(status_code=400, detail="Sin mensajes")
 
-    models = models_for_plan(plan)
+    consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
+    models = models_for_plan(ai_user["plan"])
     lang_name = "español" if str(body.lang).startswith("es") else "inglés"
     system_msg = (
         "Eres el asistente de inversión de BlackPortfolio: un analista financiero senior (CFA), "

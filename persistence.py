@@ -45,6 +45,50 @@ def normalize_plan(plan: str | None) -> str:
     return canonical if canonical in PLAN_LIMITS else "Explorer"
 
 
+# Cuota diaria de llamadas a IA por usuario (todas las funciones de IA comparten
+# el mismo contador). El rate-limit por IP no basta para controlar el gasto de
+# OpenRouter: esta cuota es por uid y es autoritativa en el servidor.
+# Sobreescribible por entorno: AI_DAILY_LIMIT_EXPLORER, AI_DAILY_LIMIT_INVESTOR,
+# AI_DAILY_LIMIT_ADVISOR_PRO, AI_DAILY_LIMIT_WEALTH_DESK.
+AI_DAILY_LIMITS = {
+    "Explorer": 5,
+    "Investor": 25,
+    "Advisor Pro": 60,
+    "Wealth Desk": 120,
+}
+
+
+def ai_daily_limit(plan: str) -> int:
+    plan = normalize_plan(plan)
+    env_key = "AI_DAILY_LIMIT_" + plan.upper().replace(" ", "_")
+    try:
+        return int(os.environ.get(env_key, "") or AI_DAILY_LIMITS[plan])
+    except ValueError:
+        return AI_DAILY_LIMITS[plan]
+
+
+# Cuentas demo de solo lectura: la contraseña del demo es pública, así que sin
+# esto cualquiera podría vandalizar el portafolio que ve el siguiente visitante
+# (o activarle 2FA y bloquear el acceso demo para todos).
+DEMO_READONLY_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("DEMO_READONLY_EMAILS", "demo@blackportfolio.ai").split(",")
+    if e.strip()
+}
+
+
+def is_demo_account(token: dict[str, Any]) -> bool:
+    return (token.get("email") or "").strip().lower() in DEMO_READONLY_EMAILS
+
+
+def ensure_writable_account(token: dict[str, Any]) -> None:
+    if is_demo_account(token):
+        raise HTTPException(
+            status_code=403,
+            detail="La cuenta demo es de solo lectura. Crea tu propia cuenta para guardar cambios.",
+        )
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -228,6 +272,29 @@ class AnalyticsEvent(Base):
     props: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     plan: Mapped[str | None] = mapped_column(String(80), nullable=True)
     path: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class AiUsage(Base):
+    """Contador diario de llamadas a IA por usuario (control de gasto OpenRouter).
+    Clave compuesta (uid, día UTC); todas las funciones de IA suman aquí."""
+    __tablename__ = "ai_usage"
+
+    firebase_uid: Mapped[str] = mapped_column(String(128), primary_key=True)
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)  # YYYY-MM-DD (UTC)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AiCache(Base):
+    """Respuestas de IA cacheadas por hash del payload (kind|lang|modelo|datos).
+    Si el portafolio no cambió, se sirve el análisis guardado en vez de pagar
+    otra llamada a OpenRouter. Un cache hit NO consume cuota diaria."""
+    __tablename__ = "ai_cache"
+
+    cache_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model: Mapped[str | None] = mapped_column(String(120))
+    text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
@@ -629,6 +696,70 @@ def current_plan(
     return normalize_plan(user.plan)
 
 
+def current_ai_user(
+    token: dict[str, Any] = Depends(require_verified_email),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Dependencia de IA: usuario con email verificado + plan normalizado.
+    Devuelve uid y plan para aplicar cuota diaria y elegir modelo por plan."""
+    user = upsert_user(session, token)
+    session.commit()
+    return {"uid": token["uid"], "plan": normalize_plan(user.plan)}
+
+
+def consume_ai_quota(session: Session, uid: str, plan: str) -> int:
+    """Consume 1 llamada de la cuota diaria de IA del usuario. Devuelve cuántas
+    le quedan; lanza 429 si la cuota del día está agotada."""
+    limit = ai_daily_limit(plan)
+    now = utc_now()
+    day = now.strftime("%Y-%m-%d")
+    row = session.get(AiUsage, (uid, day))
+    if row is None:
+        row = AiUsage(firebase_uid=uid, day=day, count=0, updated_at=now)
+        session.add(row)
+    if row.count >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Alcanzaste el límite diario de análisis con IA de tu plan ({limit}/día). "
+                "Vuelve mañana o mejora tu plan para ampliar la cuota."
+            ),
+        )
+    row.count += 1
+    row.updated_at = now
+    session.commit()
+    return limit - row.count
+
+
+AI_CACHE_TTL_SECONDS = int(os.environ.get("AI_CACHE_TTL_SECONDS", str(24 * 3600)))
+
+
+def ai_cache_get(session: Session, cache_key: str) -> dict[str, Any] | None:
+    row = session.get(AiCache, cache_key)
+    if row is None:
+        return None
+    created = row.created_at
+    if created is not None and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if created is None or (utc_now() - created).total_seconds() > AI_CACHE_TTL_SECONDS:
+        session.delete(row)
+        session.commit()
+        return None
+    return {"text": row.text, "model": row.model}
+
+
+def ai_cache_put(session: Session, cache_key: str, model: str | None, text: str) -> None:
+    now = utc_now()
+    row = session.get(AiCache, cache_key)
+    if row is None:
+        session.add(AiCache(cache_key=cache_key, model=(model or "")[:120], text=text, created_at=now))
+    else:
+        row.model = (model or "")[:120]
+        row.text = text
+        row.created_at = now
+    session.commit()
+
+
 class TotpCodeBody(BaseModel):
     code: str = ""
 
@@ -660,6 +791,7 @@ def twofa_setup(
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),
 ):
+    ensure_writable_account(token)
     uid = token["uid"]
     secret = _generate_totp_secret()
     now = utc_now()
@@ -862,6 +994,7 @@ def replace_portfolios(
     token: dict[str, Any] = Depends(require_verified_email),
     session: Session = Depends(get_session),
 ):
+    ensure_writable_account(token)
     encoded_size = len(json.dumps(payload.portfolios, ensure_ascii=False).encode("utf-8"))
     if encoded_size > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="El portafolio excede el limite de 5 MB.")
@@ -939,6 +1072,7 @@ def create_share(
     token: dict[str, Any] = Depends(require_verified_email),
     session: Session = Depends(get_session),
 ):
+    ensure_writable_account(token)
     uid = token["uid"]
     if _find_portfolio(session, uid, portfolio_id) is None:
         raise HTTPException(status_code=404, detail="Portafolio no encontrado.")
@@ -1027,6 +1161,7 @@ def create_alert(
     token: dict[str, Any] = Depends(require_verified_email),
     session: Session = Depends(get_session),
 ):
+    ensure_writable_account(token)
     symbol = (body.symbol or "").strip().upper()[:40]
     if not symbol:
         raise HTTPException(status_code=400, detail="Símbolo requerido.")
@@ -1166,6 +1301,7 @@ def account_delete(
 ):
     """Borra permanentemente la cuenta: datos en PostgreSQL + cuenta de Firebase Auth.
     Requiere 2FA si la cuenta lo tiene activo. Acción irreversible."""
+    ensure_writable_account(token)
     uid = token["uid"]
     session.execute(delete(PortfolioSnapshot).where(PortfolioSnapshot.firebase_uid == uid))
     session.execute(delete(SecurityActivity).where(SecurityActivity.firebase_uid == uid))
