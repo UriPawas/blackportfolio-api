@@ -420,6 +420,10 @@ def initialize_backup_scheduler():
 def initialize_alerts_scheduler():
     start_alerts_scheduler()
 
+@app.on_event("startup")
+def initialize_digest_scheduler():
+    start_digest_scheduler()
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -873,6 +877,191 @@ def start_alerts_scheduler() -> bool:
 
     threading.Thread(target=worker, name="price-alerts", daemon=True).start()
     print(f"[alerts] scheduler iniciado (cada {interval_min} min)", flush=True)
+    return True
+
+
+# ── Digest semanal por email (retención) ───────────────────────────────────────
+# Resumen semanal del portafolio por correo. Reusa el SMTP de las alertas y
+# UserNotification (kind="digest") como marcador del último envío, así el
+# scheduler sobrevive reinicios sin tabla nueva. Se desactiva con DIGEST_ENABLED=0
+# o simplemente no configurando SMTP_HOST.
+_DIGEST_KIND = "digest"
+
+def _digest_summary_for_snapshot(portfolios: list, prices: dict) -> dict | None:
+    """Resumen agregado de todos los portafolios de un usuario.
+
+    `prices` es {TICKER: (precio_actual, cierre_previo|None)}. Devuelve None si
+    no hay ninguna posición valuable. Los totales se agrupan por divisa para no
+    sumar peras con manzanas.
+    """
+    totals: dict[str, dict] = {}   # currency -> {value, cost}
+    movers: list[tuple[str, float]] = []  # (ticker, % día)
+    n_positions = 0
+    for p in (portfolios or []):
+        p_currency = p.get("currency") or "USD"
+        for pos in (p.get("positions") or []):
+            try:
+                qty = float(pos.get("quantity") or 0)
+                avg = float(pos.get("avgPrice") or 0)
+            except (TypeError, ValueError):
+                continue
+            ticker = str(pos.get("ticker") or "").upper()
+            if qty <= 0 or not ticker:
+                continue
+            entry = prices.get(ticker)
+            if not entry or entry[0] is None:
+                continue
+            price, prev = entry
+            currency = pos.get("currency") or p_currency
+            bucket = totals.setdefault(currency, {"value": 0.0, "cost": 0.0})
+            bucket["value"] += qty * float(price)
+            bucket["cost"] += qty * avg
+            n_positions += 1
+            if prev:
+                try:
+                    movers.append((ticker, (float(price) - float(prev)) / float(prev) * 100.0))
+                except ZeroDivisionError:
+                    pass
+    if n_positions == 0:
+        return None
+    best = max(movers, key=lambda m: m[1], default=None)
+    worst = min(movers, key=lambda m: m[1], default=None)
+    return {"totals": totals, "best": best, "worst": worst, "positions": n_positions}
+
+
+def _digest_email_body(display_name: str | None, summary: dict) -> str:
+    lines = [f"Hola {display_name or 'inversor'},", "",
+             "Este es el resumen semanal de tu portafolio en BlackPortfolio:", ""]
+    for currency, t in summary["totals"].items():
+        pnl = t["value"] - t["cost"]
+        pct = (pnl / t["cost"] * 100.0) if t["cost"] else 0.0
+        sign = "+" if pnl >= 0 else "−"
+        lines.append(
+            f"  • Valor actual: {t['value']:,.2f} {currency} — "
+            f"P&L total: {sign}{abs(pnl):,.2f} {currency} ({sign}{abs(pct):.1f}%)"
+        )
+    lines.append(f"  • Posiciones seguidas: {summary['positions']}")
+    if summary.get("best"):
+        t, chg = summary["best"]
+        lines.append(f"  • Mejor movimiento del día: {t} {chg:+.1f}%")
+    if summary.get("worst") and summary["worst"] != summary.get("best"):
+        t, chg = summary["worst"]
+        lines.append(f"  • Peor movimiento del día: {t} {chg:+.1f}%")
+    lines += ["",
+              "Entra a tu panel para ver el análisis completo (riesgo, atribución y más):",
+              "https://portify-6467f.web.app/main.html", "",
+              "— BlackPortfolio",
+              "Recibes este resumen por tener una cuenta con portafolio activo. "
+              "Si no quieres recibirlo, responde a este correo y lo desactivamos."]
+    return "\n".join(lines)
+
+
+def _send_digests_once() -> int:
+    """Envía el digest a los usuarios que no lo han recibido en ~1 semana."""
+    from sqlalchemy import select
+    from persistence import DEMO_READONLY_EMAILS
+    gen = get_session()
+    session = next(gen)
+    sent = 0
+    try:
+        rows = session.execute(
+            select(AppUser, PortfolioSnapshot).join(
+                PortfolioSnapshot, PortfolioSnapshot.firebase_uid == AppUser.firebase_uid
+            )
+        ).all()
+        now = utc_now()
+        candidates = []
+        symbols: set[str] = set()
+        for user, snapshot in rows:
+            email = (user.email or "").strip().lower()
+            if not email or email in DEMO_READONLY_EMAILS or not user.email_verified:
+                continue
+            last = session.execute(
+                select(UserNotification.created_at)
+                .where(UserNotification.firebase_uid == user.firebase_uid,
+                       UserNotification.kind == _DIGEST_KIND)
+                .order_by(UserNotification.created_at.desc()).limit(1)
+            ).scalar()
+            if last is not None:
+                if last.tzinfo is None:
+                    from datetime import timezone as _tz
+                    last = last.replace(tzinfo=_tz.utc)
+                if (now - last).total_seconds() < 6.5 * 86400:
+                    continue
+            portfolios = snapshot.data if isinstance(snapshot.data, list) else []
+            for p in portfolios:
+                for pos in (p.get("positions") or []):
+                    t = str(pos.get("ticker") or "").upper()
+                    if t:
+                        symbols.add(t)
+            candidates.append((user, portfolios))
+        if not candidates:
+            return 0
+        prices = {}
+        for sym in sorted(symbols):
+            try:
+                prices[sym] = _price_and_prev_for_ticker(sym)
+            except Exception:
+                continue
+        for user, portfolios in candidates:
+            summary = _digest_summary_for_snapshot(portfolios, prices)
+            if not summary:
+                continue
+            body = _digest_email_body(user.display_name, summary)
+            if not _send_email(user.email, "📊 Tu portafolio esta semana — BlackPortfolio", body):
+                continue
+            session.add(UserNotification(
+                firebase_uid=user.firebase_uid,
+                title="Resumen semanal enviado a tu correo",
+                body="Te mandamos el digest semanal de tu portafolio.",
+                kind=_DIGEST_KIND, read=False, created_at=now,
+            ))
+            sent += 1
+        session.commit()
+        return sent
+    except Exception as exc:  # noqa: BLE001
+        print(f"[digest] envío falló: {exc}", flush=True)
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return sent
+    finally:
+        try:
+            gen.close()
+        except Exception:
+            pass
+
+
+def start_digest_scheduler() -> bool:
+    if os.environ.get("DIGEST_ENABLED", "1") not in ("1", "true", "True"):
+        return False
+    if not os.environ.get("DATABASE_URL") or not os.environ.get("SMTP_HOST"):
+        print("[digest] desactivado: falta DATABASE_URL o SMTP_HOST", flush=True)
+        return False
+    import threading
+    from datetime import datetime as _dt, timezone as _tz
+
+    weekday = int(os.environ.get("DIGEST_WEEKDAY", "0"))      # 0 = lunes
+    hour_utc = int(os.environ.get("DIGEST_HOUR_UTC", "13"))   # ~7-8am México
+
+    def worker():
+        threading.Event().wait(120)
+        while True:
+            try:
+                now = _dt.now(_tz.utc)
+                # La deduplicación real es por usuario (última notificación kind
+                # "digest"); la ventana horaria solo evita mandar a media noche.
+                if now.weekday() == weekday and now.hour == hour_utc:
+                    n = _send_digests_once()
+                    if n:
+                        print(f"[digest] {n} resumen(es) semanal(es) enviados", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[digest] ciclo falló: {exc}", flush=True)
+            threading.Event().wait(1800)  # cada 30 min
+
+    threading.Thread(target=worker, name="weekly-digest", daemon=True).start()
+    print(f"[digest] scheduler iniciado (weekday={weekday}, {hour_utc}:00 UTC)", flush=True)
     return True
 
 

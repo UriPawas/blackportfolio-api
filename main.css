@@ -14216,3 +14216,34 @@ body.light-mode .mobile-quick-start button {
   border-color: rgba(51, 72, 184, 0.16);
   color: #172033;
 }
+
+/* ── Tipografía display (consistencia con la landing) ─────────────────────────
+   La landing usa Space Grotesk para títulos; el dashboard usaba solo Inter.
+   Se aplica a h1–h3 (títulos de sección, tarjetas y modales); h4+ siguen en
+   Inter para no ruido en labels densos de datos. */
+.main-page h1,
+.main-page h2,
+.main-page h3 {
+  font-family: var(--font-display, "Space Grotesk", "Inter", sans-serif);
+  letter-spacing: -0.01em;
+}
+
+/* ── Reduced motion: kill-switch global (mismo criterio que styles.css) ──── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Focus ring de teclado garantizado ────────────────────────────────────────
+   main.css tiene ~30 resets `outline: none` sobre :focus que pisaban el anillo
+   base de styles.css. Este bloque restaura el anillo SOLO para navegación por
+   teclado (:focus-visible); el !important es deliberado: debe ganar a cualquier
+   reset de foco por ratón. Mismo estilo que la landing (accent, offset 3px). */
+:is(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--accent, #7892ff) !important;
+  outline-offset: 3px;
+}
