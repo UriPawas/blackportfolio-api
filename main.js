@@ -9200,7 +9200,7 @@ async function renderCorrelationTab(portfolio) {
   wrap.innerHTML = html;
   status.style.display = "none";
 
-  try { renderRiskContribution(portfolio, valid, rets, M); }
+  try { renderRiskContribution(portfolio, valid, rets, M, { days: common.length - 1, excluded: tickers.filter((t) => !valid.includes(t)) }); }
   catch (e) { if (rcStatus) { rcStatus.style.display = ""; rcStatus.textContent = "No se pudo calcular la contribución al riesgo."; } }
 }
 
@@ -10299,7 +10299,7 @@ function renderHoldingsTreemap(positions, currency) {
 }
 
 // ── #7 Contribución al riesgo por posición ─────────────────────────────────────
-function renderRiskContribution(portfolio, valid, rets, M) {
+function renderRiskContribution(portfolio, valid, rets, M, meta = {}) {
   const wrap = document.getElementById("riskContribWrap");
   const status = document.getElementById("riskContribStatus");
   if (!wrap) return;
@@ -10337,20 +10337,62 @@ function renderRiskContribution(portfolio, valid, rets, M) {
     if (status) { status.style.display = ""; status.textContent = "Datos insuficientes para la contribución al riesgo."; }
     return;
   }
-  const rc = valid.map((t, i) => ({ ticker: t, weight: w[i] * 100, risk: w[i] * Sw[i] / portVar * 100 }))
-    .sort((a, b) => b.risk - a.risk);
-  const maxV = Math.max(...rc.map((r) => Math.max(r.risk, r.weight)), 1);
+  const ANN = Math.sqrt(252);
+  const rcAll = valid.map((t, i) => ({
+    ticker: t,
+    weight: w[i] * 100,
+    risk: w[i] * Sw[i] / portVar * 100,
+    sigmaAnn: sigma[i] * ANN * 100,
+  }));
+  const hidden = rcAll.filter((r) => r.weight < 0.05 && Math.abs(r.risk) < 0.05);
+  const rc = rcAll.filter((r) => !hidden.includes(r)).sort((a, b) => b.risk - a.risk);
+  const maxV = Math.max(...rc.map((r) => Math.max(Math.abs(r.risk), r.weight)), 1);
 
-  wrap.innerHTML = rc.map((r) => {
-    const alert = r.risk > r.weight + 8;
-    return `<div class="rc-row ${alert ? "rc-alert" : ""}">
-      <span class="rc-ticker" title="${r.ticker}">${r.ticker}</span>
-      <div class="rc-bars">
-        <div class="rc-line"><span class="rc-tag">Peso</span><span class="rc-track"><span class="rc-fill weight" style="width:${(r.weight / maxV * 100).toFixed(1)}%"></span></span><span class="rc-val">${r.weight.toFixed(1)}%</span></div>
-        <div class="rc-line"><span class="rc-tag">Riesgo</span><span class="rc-track"><span class="rc-fill risk" style="width:${(r.risk / maxV * 100).toFixed(1)}%"></span></span><span class="rc-val">${r.risk.toFixed(1)}%</span></div>
+  // KPIs: vol anualizada del portafolio, vol "sin diversificar" y ahorro por diversificación
+  const portVolAnn = Math.sqrt(portVar) * ANN * 100;
+  const standaloneDaily = w.reduce((s, x, i) => s + x * sigma[i], 0);
+  const standaloneAnn = standaloneDaily * ANN * 100;
+  const divBenefit = standaloneDaily > 0 ? Math.max(0, (1 - Math.sqrt(portVar) / standaloneDaily) * 100) : 0;
+
+  const kpis = `<div class="rc-kpis">
+    <div class="rc-kpi"><span class="rc-kpi-label">Volatilidad del portafolio</span><strong>${portVolAnn.toFixed(1)}%</strong><span class="rc-kpi-sub">anualizada</span></div>
+    <div class="rc-kpi"><span class="rc-kpi-label">Sin diversificación</span><strong>${standaloneAnn.toFixed(1)}%</strong><span class="rc-kpi-sub">suma ponderada de σ</span></div>
+    <div class="rc-kpi rc-kpi-good"><span class="rc-kpi-label">Ahorro por diversificar</span><strong>−${divBenefit.toFixed(0)}%</strong><span class="rc-kpi-sub">menos volatilidad</span></div>
+  </div>`;
+
+  const rows = rc.map((r) => {
+    const ratio = r.weight > 0 ? r.risk / r.weight : 0;
+    const alert = r.weight >= 0.5 && ratio >= 1.5 && r.risk >= 3;
+    const hedge = r.risk < 0;
+    const tip = `${r.ticker} — peso ${r.weight.toFixed(1)}% · riesgo ${r.risk.toFixed(1)}%${r.weight > 0 ? ` (${ratio.toFixed(1)}× su peso)` : ""} · σ anualizada ${r.sigmaAnn.toFixed(0)}%${hedge ? " · reduce el riesgo total (cobertura)" : ""}`;
+    return `<div class="rc-row${alert ? " rc-alert" : ""}" title="${tip}">
+      <div class="rc-id">
+        <span class="rc-ticker-line"><span class="rc-ticker">${r.ticker}</span>${alert ? `<span class="rc-badge">${ratio.toFixed(1)}×</span>` : ""}</span>
+        <span class="rc-sigma">σ ${r.sigmaAnn.toFixed(0)}%</span>
       </div>
+      <div class="rc-track">
+        <span class="rc-fill${hedge ? " hedge" : ""}" style="width:${(Math.abs(r.risk) / maxV * 100).toFixed(1)}%"></span>
+        <span class="rc-marker" style="left:${Math.min(100, r.weight / maxV * 100).toFixed(1)}%"></span>
+      </div>
+      <div class="rc-nums"><strong>${r.risk.toFixed(1)}%</strong><span>peso ${r.weight.toFixed(1)}%</span></div>
     </div>`;
-  }).join("") + `<div class="rc-legend"><span><i class="weight"></i>Peso (capital)</span><span><i class="risk"></i>Contribución al riesgo</span></div>`;
+  }).join("");
+
+  const days = meta.days || 0;
+  const excluded = meta.excluded || [];
+  const warn = days > 0 && days < 60 ? `<div class="rc-warn">Solo ${days} retornos diarios comunes entre todos los activos — toma estos resultados con cautela.</div>` : "";
+  const legend = `<div class="rc-legend">
+    <span><i class="rc-i-fill"></i>Contribución al riesgo</span>
+    <span><i class="rc-i-marker"></i>Peso (capital)</span>
+    <span><i class="rc-i-warn"></i>Riesgo desproporcionado vs peso</span>
+  </div>`;
+  const notes = [];
+  if (days > 0) notes.push(`Calculado con ${days} retornos diarios comunes (1 año)`);
+  if (excluded.length) notes.push(`Excluidos por falta de histórico: ${excluded.join(", ")}`);
+  if (hidden.length) notes.push(`${hidden.length} posición${hidden.length > 1 ? "es" : ""} con peso ~0% omitida${hidden.length > 1 ? "s" : ""}`);
+  const note = notes.length ? `<div class="rc-note">${notes.join(" · ")}</div>` : "";
+
+  wrap.innerHTML = kpis + `<div class="rc-list">${rows}</div>` + warn + legend + note;
   if (status) status.style.display = "none";
 }
 
