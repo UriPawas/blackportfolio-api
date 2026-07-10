@@ -5910,6 +5910,24 @@ function parseCSV(text) {
   return rows;
 }
 
+// Normaliza números de exportaciones de brokers: quita símbolos de moneda y
+// resuelve separadores de miles/decimales en formato US ("1,234.56") y EU ("1.234,56").
+function _csvNum(raw) {
+  if (raw == null) return NaN;
+  let s = String(raw).trim().replace(/[^0-9,.\-]/g, "");
+  if (s === "") return NaN;
+  const hasComma = s.includes(","), hasDot = s.includes(".");
+  if (hasComma && hasDot) {
+    // El último separador que aparece es el decimal.
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else s = s.replace(/,/g, "");
+  } else if (hasComma) {
+    // Solo coma: decimal si hay 1-2 dígitos al final, si no es separador de miles.
+    s = /,\d{1,2}$/.test(s) ? s.replace(",", ".") : s.replace(/,/g, "");
+  }
+  return parseFloat(s);
+}
+
 // Importa posiciones desde CSV creando SIEMPRE un portafolio nuevo (nunca toca los existentes)
 function importPositionsCSV(file) {
   const maxP = window._planLimits?.maxPortfolios ?? Infinity;
@@ -5944,8 +5962,8 @@ function importPositionsCSV(file) {
       for (let r = 1; r < rows.length; r++) {
         const row = rows[r];
         const ticker = (row[iTicker] || "").trim().toUpperCase();
-        const quantity = parseFloat(row[iQty]);
-        const avgPrice = parseFloat(row[iPrice]);
+        const quantity = _csvNum(row[iQty]);
+        const avgPrice = _csvNum(row[iPrice]);
         if (!ticker || !isFinite(quantity) || quantity <= 0 || !isFinite(avgPrice) || avgPrice <= 0) continue;
         let currency = iCur !== -1 ? (row[iCur] || "").trim().toUpperCase() : "";
         if (!validCur.has(currency)) currency = detectCurrencyFromTicker(ticker) || "USD";
@@ -5954,10 +5972,10 @@ function importPositionsCSV(file) {
           const d = new Date(purchaseDate);
           purchaseDate = isNaN(d) ? "" : d.toISOString().slice(0, 10);
         }
-        const commissionPercent = iComm !== -1 ? (parseFloat(row[iComm]) || 0) : 0;
+        const commissionPercent = iComm !== -1 ? (_csvNum(row[iComm]) || 0) : 0;
         const ivaRaw = iIva !== -1 ? (row[iIva] || "").trim().toLowerCase() : "";
         const applyIva = ["si", "sí", "yes", "true", "1"].includes(ivaRaw);
-        const ivaRate = iIvaRate !== -1 ? (parseFloat(row[iIvaRate]) || 0) : 0;
+        const ivaRate = iIvaRate !== -1 ? (_csvNum(row[iIvaRate]) || 0) : 0;
         positions.push({ id: generateId(), ticker, avgPrice, quantity, commissionPercent, applyIva, ivaRate, purchaseDate, currency });
       }
       if (!positions.length) { alert("No se encontraron posiciones válidas en el CSV."); return; }
@@ -8732,6 +8750,8 @@ function _doRenderDashboard(portfolio) {
   renderSummaryTable(positions, totalInvested, currency, cashBalance);
   renderPositionsTable(positions, totalInvested, currency, portfolio.transactions || []);
   if (positions.length) drawAllSparklines(positions);
+  if (positions.length) renderPositionBenchmarkDeltas(portfolio);
+  updateTrackerTabCounts(portfolio);
   // Composición consolidada (Visual 1): sólo se dibuja el panel activo; los demás
   // se dibujan al alternar (evita lienzos con tamaño 0 por estar ocultos).
   _compositionCtx = { positions, totalInvested, currency, cashBalance };
@@ -8879,7 +8899,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
   _markSortIndicators(".tracker-table--positions [data-sort]", "sort", posSort);
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">Sin posiciones que coincidan con "${posSearch}".</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--muted)">Sin posiciones que coincidan con "${posSearch}".</td></tr>`;
     tableShell.classList.remove("is-loading-prices");
     return;
   }
@@ -8918,7 +8938,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       .filter(tx => tx.ticker === pos.ticker)
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     const lotsHtml = txs.length ? `<tr class="pos-lots-row" data-lots-for="${pos.id}" style="display:none">
-      <td colspan="11" class="pos-lots-cell"><div class="pos-lots-inner">
+      <td colspan="12" class="pos-lots-cell"><div class="pos-lots-inner">
         <table class="pos-lots-table">
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Precio</th><th>Total neto</th></tr></thead>
           <tbody>${txs.map(tx => {
@@ -8943,6 +8963,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       <td data-label="Costo total">${formatCurrency(costConverted, currency)}</td>
       <td data-label="Valor actual">${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
       <td data-label="Retorno">${retCell}</td>
+      <td class="td-vs-bench" data-label="vs Bench." data-bench-ticker="${pos.ticker}"><span class="muted-val">…</span></td>
       <td class="pos-actions-cell" data-label="Acciones">
         <div class="pos-action-menu">
           <button class="pos-action-trigger" type="button" data-menu-for="${pos.id}" aria-haspopup="true" aria-expanded="false" aria-label="Acciones de ${pos.ticker}" title="Acciones">⋯</button>
@@ -8995,6 +9016,71 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       _closeAllPosMenus();
       handlePositionAction(item.dataset.act, item.dataset.posId, item.dataset.ticker);
     });
+  });
+}
+
+// ── Retorno de cada posición vs benchmark desde su fecha de compra (#8) ──────
+const _benchHistCache = {};
+async function renderPositionBenchmarkDeltas(portfolio) {
+  const cells = [...document.querySelectorAll("#positionsTableBody .td-vs-bench[data-bench-ticker]")];
+  if (!cells.length) return;
+  const benchSym = (portfolio.benchmark && portfolio.benchmark !== "none") ? portfolio.benchmark : null;
+  if (!benchSym) { cells.forEach((c) => { c.innerHTML = '<span class="muted-val" title="Configura un benchmark en Ajustes del portafolio">—</span>'; }); return; }
+
+  let benchHist = _benchHistCache[benchSym];
+  if (!benchHist) {
+    try {
+      const h = await fetchHistoricalCloses(benchSym, "max", "1wk");
+      benchHist = (h || []).map((d) => ({ t: new Date(d.ts).getTime(), c: d.close }))
+        .filter((d) => isFinite(d.c) && d.c > 0).sort((a, b) => a.t - b.t);
+      _benchHistCache[benchSym] = benchHist;
+    } catch { benchHist = []; }
+  }
+  // La tabla pudo re-renderizarse mientras descargábamos; re-consultar celdas vivas.
+  const liveCells = [...document.querySelectorAll("#positionsTableBody .td-vs-bench[data-bench-ticker]")];
+  if (!benchHist.length) { liveCells.forEach((c) => { c.innerHTML = '<span class="muted-val">—</span>'; }); return; }
+  const benchNow = benchHist[benchHist.length - 1].c;
+  const closeOnOrBefore = (tMs) => {
+    let lo = 0, hi = benchHist.length - 1, res = null;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (benchHist[mid].t <= tMs) { res = benchHist[mid].c; lo = mid + 1; } else hi = mid - 1; }
+    return res;
+  };
+  const positions = portfolio.positions || [];
+  liveCells.forEach((cell) => {
+    const ticker = cell.dataset.benchTicker;
+    const pos = positions.find((p) => p.ticker === ticker);
+    const price = pos ? getCachedPrice(pos.ticker) : null;
+    const buyPrice = pos ? (pos.avgPrice || 0) : 0;
+    if (!pos || price === null || !pos.purchaseDate || buyPrice <= 0) { cell.innerHTML = '<span class="muted-val">—</span>'; return; }
+    const posReturn = price / buyPrice - 1;
+    const bAtBuy = closeOnOrBefore(new Date(pos.purchaseDate + "T12:00:00").getTime());
+    if (!bAtBuy) { cell.innerHTML = '<span class="muted-val" title="Sin dato del benchmark en esa fecha">—</span>'; return; }
+    const benchReturn = benchNow / bAtBuy - 1;
+    const deltaPp = (posReturn - benchReturn) * 100;
+    const cls = deltaPp >= 0 ? "return-pos" : "return-neg";
+    const sign = deltaPp >= 0 ? "+" : "";
+    const arrow = deltaPp >= 0 ? "▲" : "▼";
+    cell.innerHTML = `<span class="${cls}" title="Tu posición ${(posReturn * 100).toFixed(1)}% vs ${BENCHMARKS[benchSym] || benchSym} ${(benchReturn * 100).toFixed(1)}% desde ${pos.purchaseDate}">${arrow} ${sign}${deltaPp.toFixed(1)} pp</span>`;
+  });
+}
+
+// ── Contadores en las pestañas (rediseño visual #3) ─────────────────────────
+function updateTrackerTabCounts(portfolio) {
+  const txs = portfolio.transactions || [];
+  const counts = {
+    transacciones: txs.length,
+    dividendos: txs.filter((t) => t.type === "DIVIDENDO").length
+  };
+  Object.entries(counts).forEach(([tab, n]) => {
+    const btn = document.querySelector(`.tracker-tab-btn[data-tab='${tab}']`);
+    if (!btn) return;
+    let badge = btn.querySelector(".tab-count");
+    if (n > 0) {
+      if (!badge) { badge = document.createElement("span"); badge.className = "tab-count"; btn.appendChild(badge); }
+      badge.textContent = n > 99 ? "99+" : n;
+    } else if (badge) {
+      badge.remove();
+    }
   });
 }
 
@@ -11093,6 +11179,35 @@ function initializeTrackerModule() {
     if (file) importPositionsCSV(file);
     e.target.value = "";
   });
+
+  // ── Drag & drop de CSV sobre la vista de lista (#12) ────────────────────────
+  const listView = document.getElementById("trackerListView");
+  if (listView && !listView.dataset.csvDropInit) {
+    listView.dataset.csvDropInit = "1";
+    const overlay = document.createElement("div");
+    overlay.className = "csv-drop-overlay";
+    overlay.innerHTML = `<div class="csv-drop-inner">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <strong>Suelta tu CSV para importar</strong>
+      <span>GBM, IBKR, Binance, eToro y otros formatos de broker</span>
+    </div>`;
+    listView.appendChild(overlay);
+    let dragDepth = 0;
+    const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+    listView.addEventListener("dragenter", (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; listView.classList.add("is-dragging-csv"); });
+    listView.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+    listView.addEventListener("dragleave", (e) => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) listView.classList.remove("is-dragging-csv"); });
+    listView.addEventListener("drop", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth = 0;
+      listView.classList.remove("is-dragging-csv");
+      const file = Array.from(e.dataTransfer.files || []).find((f) => /\.csv$/i.test(f.name) || f.type === "text/csv");
+      if (file) importPositionsCSV(file);
+      else showToast("Suelta un archivo .csv válido.", { type: "error" });
+    });
+  }
+
   document.getElementById("closePortfolioModalBtn").addEventListener("click", () => closeModal("newPortfolioModal"));
   document.getElementById("newPortfolioModal").addEventListener("click", (e) => {
     if (e.target === e.currentTarget) closeModal("newPortfolioModal");
@@ -11241,6 +11356,43 @@ function initializeTrackerModule() {
   document.getElementById("sharePortfolioBtn")?.addEventListener("click", openShareModal);
   _wireShareModal();
   initAiChat();
+
+  // ── Menú desplegable de exportación (agrupación #3) ─────────────────────────
+  const exportMenu = document.getElementById("trackerExportMenu");
+  const exportTrigger = document.getElementById("exportMenuTrigger");
+  if (exportMenu && exportTrigger) {
+    const dropdown = exportMenu.querySelector(".tracker-export-dropdown");
+    const closeExportMenu = () => { dropdown.hidden = true; exportTrigger.setAttribute("aria-expanded", "false"); };
+    exportTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const willOpen = dropdown.hidden;
+      dropdown.hidden = !willOpen;
+      exportTrigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+    // Cerrar el menú al elegir una opción o hacer clic fuera / Escape.
+    dropdown.querySelectorAll("[role='menuitem']").forEach((item) => item.addEventListener("click", closeExportMenu));
+    document.addEventListener("click", (e) => { if (!exportMenu.contains(e.target)) closeExportMenu(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeExportMenu(); });
+  }
+
+  // ── Toggle de densidad de la tabla de posiciones (rediseño visual #4) ───────
+  const densityBtn = document.getElementById("positionsDensityBtn");
+  if (densityBtn) {
+    const applyDensity = (compact) => {
+      const shell = document.getElementById("positionsTableShell");
+      if (shell) shell.classList.toggle("is-compact", compact);
+      densityBtn.setAttribute("aria-pressed", compact ? "true" : "false");
+      densityBtn.classList.toggle("is-active", compact);
+    };
+    let compact = false;
+    try { compact = localStorage.getItem("bp_posDensityCompact") === "1"; } catch {}
+    applyDensity(compact);
+    densityBtn.addEventListener("click", () => {
+      compact = !compact;
+      applyDensity(compact);
+      try { localStorage.setItem("bp_posDensityCompact", compact ? "1" : "0"); } catch {}
+    });
+  }
 
   // ── Watchlist ──────────────────────────────────────────────────────────────
   document.getElementById("watchlistForm")?.addEventListener("submit", (e) => {

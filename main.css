@@ -2866,13 +2866,60 @@ body.light-mode .seas-neg { color: #d93a52; }
 /* ── Tracker Tabs ─────────────────────────────────────────────────────────── */
 
 .tracker-tab-nav {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 2px;
   margin-bottom: 24px;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   padding: 3px;
+  /* Nunca desbordar horizontalmente el contenedor (fix tablet 720–1100px): la
+     barra se limita al ancho disponible y hace scroll interno si no cabe. */
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  /* Fija la barra al hacer scroll también en desktop (rediseño visual #3). */
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(10px);
+  scroll-padding-inline: 6px;
+}
+
+.tracker-tab-nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* Contador por pestaña (Transacciones · N, Dividendos · N) */
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 7px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tracker-tab-btn.active .tab-count {
+  background: rgba(var(--primary-rgb), 0.32);
+  color: #fff;
+}
+
+body.light-mode .tracker-tab-nav {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body.light-mode .tab-count {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .tracker-tab-btn {
@@ -3981,7 +4028,258 @@ body.light-mode .consolidated-bar {
   padding: 6px 14px;
   white-space: nowrap;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.tracker-refresh-btn svg { flex-shrink: 0; }
+
+/* Botones con icono de la cabecera de lista (Importar CSV / Nuevo portafolio) */
+.tracker-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.tracker-icon-btn svg { flex-shrink: 0; }
+
+/* ── Menú desplegable de exportación (agrupación #3) ───────────────────────── */
+.tracker-export-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.export-menu-chevron {
+  margin-left: 2px;
+  transition: transform 0.18s ease;
+  opacity: 0.75;
+}
+
+#exportMenuTrigger[aria-expanded="true"] .export-menu-chevron {
+  transform: rotate(180deg);
+}
+
+.tracker-export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 248px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(18, 21, 32, 0.98);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: exportMenuIn 0.14s ease-out;
+}
+
+@keyframes exportMenuIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tracker-export-dropdown[hidden] { display: none; }
+
+.tracker-export-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-family: Inter, sans-serif;
+  transition: background 0.13s ease;
+}
+
+.tracker-export-dropdown button:hover {
+  background: rgba(var(--primary-rgb), 0.14);
+}
+
+.tracker-export-dropdown button svg {
+  flex-shrink: 0;
+  color: #8ea0ff;
+}
+
+.tracker-export-dropdown button span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tracker-export-dropdown button strong {
+  font-size: 0.83rem;
+  font-weight: 650;
+}
+
+.tracker-export-dropdown button small {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+body.light-mode .tracker-export-dropdown {
+  background: rgba(255, 255, 255, 0.99);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* ── KPIs terciarios colapsables (Comisiones/IVA/Referencia) #2 ────────────── */
+.kpi-details {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+.kpi-details-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background 0.13s ease, color 0.13s ease;
+}
+
+.kpi-details-summary::-webkit-details-marker { display: none; }
+
+.kpi-details-summary:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.kpi-details-chevron {
+  transition: transform 0.18s ease;
+  opacity: 0.8;
+}
+
+.kpi-details[open] .kpi-details-chevron {
+  transform: rotate(180deg);
+}
+
+.kpi-details-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+body.light-mode .kpi-details-summary {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* ── Tabla de posiciones: columna vs benchmark (#8) ────────────────────────── */
+.th-vs-bench, .td-vs-bench {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.td-vs-bench span { font-weight: 600; font-size: 0.82rem; }
+
+/* ── Tabla de posiciones: ticker fijo al hacer scroll horizontal (visual #4) ─ */
+.tracker-table--positions .th-ticker-sticky,
+.tracker-table--positions td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card, #12151f);
+}
+
+.tracker-table--positions thead .th-ticker-sticky {
+  z-index: 3;
+}
+
+/* ── Toggle de densidad de la tabla (visual #4) ────────────────────────────── */
+.positions-density-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.13s ease, color 0.13s ease, border-color 0.13s ease;
+}
+
+.positions-density-btn:hover,
+.positions-density-btn.is-active {
+  background: rgba(var(--primary-rgb), 0.14);
+  color: #8ea0ff;
+  border-color: rgba(var(--primary-rgb), 0.3);
+}
+
+.tracker-table-shell.is-compact .tracker-table--positions td,
+.tracker-table-shell.is-compact .tracker-table--positions th {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 0.8rem;
+}
+
+.tracker-table-shell.is-compact .pos-sparkline { height: 20px; }
+
+body.light-mode .positions-density-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+body.light-mode .tracker-table--positions .th-ticker-sticky,
+body.light-mode .tracker-table--positions td:first-child {
+  background: var(--card, #fff);
+}
+
+/* ── Overlay drag & drop de CSV (#12) ──────────────────────────────────────── */
+#trackerListView { position: relative; }
+
+.csv-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 2px dashed rgba(var(--primary-rgb), 0.55);
+  background: rgba(10, 12, 20, 0.86);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+#trackerListView.is-dragging-csv .csv-drop-overlay { display: flex; }
+
+.csv-drop-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #cdd6ff;
+  text-align: center;
+  padding: 20px;
+}
+
+.csv-drop-inner svg { color: #8ea0ff; }
+.csv-drop-inner strong { font-size: 1.05rem; }
+.csv-drop-inner span { font-size: 0.8rem; color: var(--muted); }
+
+body.light-mode .csv-drop-overlay {
+  background: rgba(240, 243, 252, 0.92);
+}
+body.light-mode .csv-drop-inner { color: #1a2340; }
 
 .tracker-dash-title {
   margin: 0;
@@ -14757,4 +15055,49 @@ body.light-mode .value-custom-popover input[type="date"] { color: #172033; borde
 @media (max-width: 560px) {
   .value-chart-controls { justify-content: flex-start; }
   .value-series-btn { padding: 6px 9px; font-size: 0.74rem; }
+}
+
+/* ── Ajustes responsive de las mejoras del tracker (tablet + móvil) ────────── */
+/* KPIs terciarios: 2 columnas en tablet estrecho (no aplica a móvil ≤720). */
+@media (min-width: 721px) and (max-width: 900px) {
+  .kpi-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  /* Compresión del muro de KPIs en móvil (#2): los secundarios pasan a 2
+     columnas y los tres KPIs hero conservan el ancho completo. Así el primer
+     gráfico queda mucho más arriba. */
+  .tracker-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .tracker-kpi-hero {
+    grid-column: 1 / -1;
+  }
+  .tracker-kpi-grid .summary-item:not(.tracker-kpi-hero) {
+    min-height: 92px;
+  }
+
+  /* KPIs terciarios colapsables: una columna en móvil. */
+  .kpi-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* En vista de tarjetas, el ticker no debe quedar "pegajoso" ni con fondo de
+     columna: se restaura el flujo normal de la card. */
+  .tracker-table--positions .th-ticker-sticky,
+  .tracker-table--positions td:first-child {
+    position: static;
+    background: transparent;
+  }
+
+  /* El menú de exportación ocupa el ancho disponible dentro del scroll. */
+  .tracker-export-menu { flex: 0 0 auto; }
+  .tracker-export-dropdown {
+    right: auto;
+    left: 0;
+    min-width: 220px;
+  }
 }
