@@ -527,12 +527,30 @@ function getMobilePrimaryAction(sectionId) {
   return null;
 }
 
+let _mobileDockObserver = null;
+let _mobileDockTargetVisible = false;
+
 function syncMobilePrimaryAction(sectionId = activeSection) {
   const config = getMobilePrimaryAction(sectionId);
   const target = config ? document.getElementById(config.target) : null;
-  const visible = window.innerWidth <= 720 && target;
-  mobileActionDock?.classList.toggle("hidden", !visible);
-  if (!visible || !mobilePrimaryAction) return;
+  const eligible = window.innerWidth <= 720 && Boolean(target);
+
+  // Oculta el dock flotante mientras el CTA inline equivalente ya es visible
+  // en pantalla, para no duplicar el botón ni tapar contenido al final del
+  // scroll (bug #3). Se reobserva el target cada vez que cambia.
+  _mobileDockObserver?.disconnect();
+  _mobileDockObserver = null;
+  _mobileDockTargetVisible = false;
+  if (eligible && "IntersectionObserver" in window) {
+    _mobileDockObserver = new IntersectionObserver((entries) => {
+      _mobileDockTargetVisible = entries[0]?.isIntersecting ?? false;
+      mobileActionDock?.classList.toggle("hidden", !eligible || _mobileDockTargetVisible);
+    }, { threshold: 0.1 });
+    _mobileDockObserver.observe(target);
+  }
+
+  mobileActionDock?.classList.toggle("hidden", !eligible || _mobileDockTargetVisible);
+  if (!eligible || !mobilePrimaryAction) return;
   mobilePrimaryAction.dataset.target = config.target;
   mobilePrimaryAction.dataset.focusTarget = config.focus ? "1" : "0";
   mobilePrimaryAction.disabled = Boolean(target.disabled);
@@ -681,6 +699,15 @@ function initMobileQuickStart() {
       });
     }
   });
+}
+
+// Oculta la barra de inicio rápido móvil una vez que el usuario ya tiene al
+// menos un portafolio: el chip "Crear portafolio" deja de ser relevante y
+// competía con el contenido del tracker (bug #7 / móvil-tablet #9).
+function updateMobileQuickStartVisibility() {
+  const el = document.getElementById("mobileQuickStart");
+  if (!el || typeof getPortfolios !== "function") return;
+  el.classList.toggle("is-dismissed", getPortfolios().length > 0);
 }
 
 function applyMobileTableLabels() {
@@ -4069,6 +4096,7 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async function(user) {
   }
   await window.BlackPortfolioAuth.syncFromFirestore(user.uid);
   await syncPortfoliosFromCloud();
+  updateMobileQuickStartVisibility();
   const session = window.BlackPortfolioAuth.buildSession(user);
   renderUser(session);
   applyPlanRestrictions(session);
@@ -5447,7 +5475,10 @@ const CHART_COLORS = [
 // charts stay consistent with the rest of the UI and any future theming.
 function _cssColor(name, fallback) {
   try {
-    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    // Lee de <body> (no <html>): los tokens de light-mode se sobreescriben en
+    // `body.light-mode`, y las variables custom no heredan hacia el ancestro
+    // <html> — leer de documentElement siempre devolvía el valor de dark mode.
+    const v = getComputedStyle(document.body).getPropertyValue(name).trim();
     return v || fallback;
   } catch { return fallback; }
 }
@@ -5540,8 +5571,12 @@ let perfMetricsData = null;
 let perfReportData = null; // series + extras para el reporte PDF (curva, benchmark, drawdown)
 let perfVarHorizon = "daily"; // "daily" | "annual"
 let posSort = { key: null, dir: "asc" };   // ordenamiento tabla de posiciones (L2.2)
+let posReturnPeriod = "total"; // "total" | "1d" | "1w" | "1m" | "ytd" — periodo del retorno por posición (P1.1)
 let posSearch = "";                          // búsqueda tabla de posiciones (L2.2)
 let txSort = { key: "date", dir: "desc" };  // ordenamiento tabla de transacciones (L2.2)
+const TX_PAGE_SIZE = 40; // paginación de transacciones (P0): evita pintar cientos de filas de golpe
+let _txVisibleCount = TX_PAGE_SIZE;
+let _txLastFilterKey = "";
 let donutBase = "invested";                  // base del donut de ponderación: "invested" | "current" (L2.3)
 
 // Valor de una posición para el donut según la base seleccionada (L2.3)
@@ -5581,6 +5616,10 @@ function updateSharpeRfrLabel() {
 
 let _portfolioMemory = [];
 let _portfolioLoaded = false;
+// Distinto de _portfolioLoaded: se marca true tras CUALQUIER intento de sync
+// (éxito o error), para no dejar el skeleton de carga infinito si el backend
+// falla y el fallback local también está vacío (bug #5).
+let _portfolioSyncAttempted = false;
 let _portfolioSaveInFlight = null;
 let _portfolioPendingSnapshot = null;
 
@@ -5765,12 +5804,14 @@ async function syncPortfoliosFromCloud() {
 
     _portfolioMemory = clonePortfolios(verified);
     _portfolioLoaded = true;
+    _portfolioSyncAttempted = true;
     localStorage.removeItem(getTrackerKey());
     return previous !== JSON.stringify(_portfolioMemory);
   } catch (error) {
     const fallback = legacy.local.length ? legacy.local : legacy.firestore;
     _portfolioMemory = clonePortfolios(fallback);
     _portfolioLoaded = false;
+    _portfolioSyncAttempted = true;
     console.error("PostgreSQL portfolio sync failed; legacy data preserved.", error);
     return previous !== JSON.stringify(_portfolioMemory);
   }
@@ -7442,6 +7483,31 @@ function _markSortIndicators(selector, attr, sortState) {
   });
 }
 
+// Marca las tablas que realmente desbordan horizontalmente para mostrar un
+// indicio visual de scroll (bug #6): evita el "scrollbar apenas se nota".
+function _updateTableOverflowHint(shell) {
+  if (!shell) return;
+  requestAnimationFrame(() => {
+    shell.classList.toggle("has-h-scroll", shell.scrollWidth > shell.clientWidth + 2);
+  });
+}
+
+const TX_MONTH_LABELS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// Filtros de transacciones colapsados tras un botón en móvil (móvil/tablet #7):
+// en desktop el panel siempre está visible (la clase .is-collapsed se ignora
+// por CSS a partir de 721px).
+function initTxFiltersToggle() {
+  const btn = document.getElementById("txFiltersToggleBtn");
+  const panel = document.getElementById("txFiltersPanel");
+  if (!btn || !panel || btn.dataset.wired) return;
+  btn.dataset.wired = "1";
+  btn.addEventListener("click", () => {
+    const collapsed = panel.classList.toggle("is-collapsed");
+    btn.setAttribute("aria-expanded", String(!collapsed));
+  });
+}
+
 function renderTransactionsTab() {
   const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
   const allTxs = portfolio ? (portfolio.transactions || []) : [];
@@ -7484,6 +7550,14 @@ function renderTransactionsTab() {
   });
   _markSortIndicators("[data-txsort]", "txsort", txSort);
 
+  // Paginación (P0): resetea a la primera página cuando cambian filtros/orden/
+  // portafolio; se conserva al hacer clic en "Cargar más".
+  const filterKey = JSON.stringify({ filterType, filterTicker, filterFrom, filterTo, k: txSort.key, d: txSort.dir, pid: activePortfolioId });
+  if (filterKey !== _txLastFilterKey) {
+    _txVisibleCount = TX_PAGE_SIZE;
+    _txLastFilterKey = filterKey;
+  }
+
   const hasFilters = filterType || filterTicker || filterFrom || filterTo;
   if (allTxs.length) {
     countLabel.textContent = hasFilters
@@ -7491,6 +7565,14 @@ function renderTransactionsTab() {
       : `${allTxs.length} transacción(es)`;
   } else {
     countLabel.textContent = "";
+  }
+
+  // Badge de filtros activos sobre el botón "Filtros" (móvil/tablet #7).
+  const activeFilterCount = [filterType, filterTicker, filterFrom, filterTo].filter(Boolean).length;
+  const filtersCountEl = document.getElementById("txFiltersCount");
+  if (filtersCountEl) {
+    filtersCountEl.textContent = activeFilterCount || "";
+    filtersCountEl.classList.toggle("hidden", !activeFilterCount);
   }
 
   if (!allTxs.length) {
@@ -7506,13 +7588,30 @@ function renderTransactionsTab() {
     return;
   }
 
+  // Agrupar por mes solo cuando el orden efectivo es por fecha (P0): con
+  // cientos de transacciones (p. ej. dividendos auto-sincronizados), agrupar
+  // por mes + paginar hace el historial navegable en vez de una lista plana.
+  const groupByMonth = txSort.key === "date";
+  const visibleTxs = txs.slice(0, _txVisibleCount);
+  const remaining = txs.length - visibleTxs.length;
+
   const typeClassMap = { COMPRA: "tx-buy", DIVIDENDO: "tx-dividend", DEPOSITO: "tx-deposit", RETIRO: "tx-withdraw" };
-  tbody.innerHTML = txs.map((tx) => {
-    const date = new Date(tx.date).toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" });
+  let lastMonthKey = null;
+  const rowsHtml = visibleTxs.map((tx) => {
+    const d = new Date(tx.date);
+    const date = d.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" });
+    let monthHeaderHtml = "";
+    if (groupByMonth) {
+      const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+      if (monthKey !== lastMonthKey) {
+        lastMonthKey = monthKey;
+        monthHeaderHtml = `<tr class="tx-month-header"><td colspan="8">${TX_MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}</td></tr>`;
+      }
+    }
     const typeClass = typeClassMap[tx.type] || "tx-sell";
     const sym = CURRENCY_SYMBOLS[tx.currency] || "$";
     const isCash = tx.type === "DEPOSITO" || tx.type === "RETIRO";
-    return `<tr>
+    return `${monthHeaderHtml}<tr>
       <td data-label="Fecha">${date}</td>
       <td data-label="Tipo"><span class="tx-badge ${typeClass}">${tx.type}</span></td>
       <td data-label="Activo"><strong>${isCash ? "Efectivo" : tx.ticker}</strong></td>
@@ -7526,6 +7625,18 @@ function renderTransactionsTab() {
       </td>
     </tr>`;
   }).join("");
+
+  const loadMoreHtml = remaining > 0
+    ? `<tr class="tx-load-more-row"><td colspan="8"><button type="button" id="txLoadMoreBtn" class="tx-load-more-btn">Cargar ${Math.min(remaining, TX_PAGE_SIZE)} más (${remaining} restantes)</button></td></tr>`
+    : "";
+
+  tbody.innerHTML = rowsHtml + loadMoreHtml;
+
+  document.getElementById("txLoadMoreBtn")?.addEventListener("click", () => {
+    _txVisibleCount += TX_PAGE_SIZE;
+    renderTransactionsTab();
+  });
+  _updateTableOverflowHint(shell);
 
   renderClosedTradesTab(portfolio);
 }
@@ -8238,6 +8349,23 @@ function renderPortfolioCards() {
   const portfolios = getPortfolios();
   const grid = document.getElementById("portfolioCardsGrid");
   const emptyMsg = document.getElementById("noPortfoliosMsg");
+  updateMobileQuickStartVisibility();
+
+  // Evita el parpadeo de "Aún no tienes portafolios" mientras el bootstrap a
+  // Postgres sigue en curso (bug #5): muestra un skeleton hasta que resuelva
+  // (éxito o error; _portfolioSyncAttempted evita un skeleton infinito si el
+  // backend falla y no hay datos locales de respaldo).
+  if (!portfolios.length && !_portfolioSyncAttempted) {
+    emptyMsg.classList.add("hidden");
+    grid.innerHTML = Array.from({ length: 2 }).map(() => `
+      <div class="portfolio-card portfolio-card-skeleton" aria-hidden="true">
+        <div class="skel-line skel-line--title"></div>
+        <div class="skel-line skel-line--value"></div>
+        <div class="skel-line skel-line--stats"></div>
+      </div>
+    `).join("");
+    return;
+  }
 
   if (!portfolios.length) {
     grid.innerHTML = "";
@@ -8751,6 +8879,7 @@ function _doRenderDashboard(portfolio) {
   renderPositionsTable(positions, totalInvested, currency, portfolio.transactions || []);
   if (positions.length) drawAllSparklines(positions);
   if (positions.length) renderPositionBenchmarkDeltas(portfolio);
+  if (positions.length) renderPositionsReturnPeriod(portfolio);
   updateTrackerTabCounts(portfolio);
   // Composición consolidada (Visual 1): sólo se dibuja el panel activo; los demás
   // se dibujan al alternar (evita lienzos con tamaño 0 por estar ocultos).
@@ -8925,11 +9054,17 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       ? new Date(pos.purchaseDate + "T12:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
       : "—";
     let retCell = "—";
-    if (currentValue !== null && costConverted > 0) {
-      const retAmt = currentValue - costConverted;
-      const retPct = retAmt / costConverted * 100;
-      const sign = retAmt >= 0 ? "+" : "";
-      retCell = `<span class="${retAmt >= 0 ? "return-pos" : "return-neg"}">${sign}${retPct.toFixed(2)}%<br><small>${sign}${formatCurrency(retAmt, currency)}</small></span>`;
+    if (posReturnPeriod === "total") {
+      if (currentValue !== null && costConverted > 0) {
+        const retAmt = currentValue - costConverted;
+        const retPct = retAmt / costConverted * 100;
+        const sign = retAmt >= 0 ? "+" : "";
+        retCell = `<span class="${retAmt >= 0 ? "return-pos" : "return-neg"}">${sign}${retPct.toFixed(2)}%<br><small>${sign}${formatCurrency(retAmt, currency)}</small></span>`;
+      }
+    } else {
+      // Se completa async por renderPositionsReturnPeriod (P1.1): requiere el
+      // cierre histórico del ticker en la fecha de referencia del periodo.
+      retCell = '<span class="muted-val">…</span>';
     }
     const currTag = posCur !== currency ? ` <small class="fx-tag">${posCur}</small>` : "";
 
@@ -8951,8 +9086,8 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
 
     return `<tr class="pos-row">
       <td data-label="Activo">
-        ${txs.length ? `<button class="pos-expand-btn" type="button" data-lots-for="${pos.id}" aria-label="Ver lotes"><svg class="pos-expand-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>` : ""}
-        ${posTickerLogoHtml(pos.ticker, color)}<strong>${pos.ticker}</strong>${currTag}
+        <button class="pos-expand-btn" type="button" data-lots-for="${pos.id}" data-has-lots="${txs.length ? "1" : "0"}" aria-label="Ver detalle" aria-expanded="false"><svg class="pos-expand-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        ${posTickerLogoHtml(pos.ticker, color)}<strong>${pos.ticker}</strong>${currTag}${pos.note ? `<span class="pos-note-dot" title="${_aiChatEsc(pos.note).replace(/"/g, "&quot;")}">✎</span>` : ""}
       </td>
       <td class="td-sparkline" data-label="30 días"><canvas class="pos-sparkline" data-ticker="${pos.ticker}" width="80" height="28"></canvas></td>
       <td data-label="Fecha">${dateStr}</td>
@@ -8962,7 +9097,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       <td data-label="Cantidad">${parseFloat(pos.quantity.toFixed(5))}</td>
       <td data-label="Costo total">${formatCurrency(costConverted, currency)}</td>
       <td data-label="Valor actual">${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
-      <td data-label="Retorno">${retCell}</td>
+      <td data-label="Retorno" data-ticker="${pos.ticker}">${retCell}</td>
       <td class="td-vs-bench" data-label="vs Bench." data-bench-ticker="${pos.ticker}"><span class="muted-val">…</span></td>
       <td class="pos-actions-cell" data-label="Acciones">
         <div class="pos-action-menu">
@@ -8972,6 +9107,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
             <button type="button" role="menuitem" data-act="sell" data-pos-id="${pos.id}">Vender</button>
             <button type="button" role="menuitem" data-act="dividend" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Registrar dividendo</button>
             <button type="button" role="menuitem" data-act="alert" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Crear alerta</button>
+            <button type="button" role="menuitem" data-act="note" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">${pos.note ? "Editar nota" : "Agregar nota"}</button>
             <button type="button" role="menuitem" data-act="market" data-ticker="${pos.ticker}">Ver en Mercados</button>
             <button type="button" role="menuitem" class="pos-action-danger" data-act="delete" data-pos-id="${pos.id}">Eliminar</button>
           </div>
@@ -8985,15 +9121,22 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
     tableShell.classList.remove("is-loading-prices");
   }
 
+  // Chevron por posición: en móvil revela los campos secundarios de la fila
+  // (Fecha, Precio prom., Cantidad, Costo total, vs Bench.); si hay lotes,
+  // también despliega el historial de transacciones (bug #2 / P0).
   tbody.querySelectorAll(".pos-expand-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const row = btn.closest("tr.pos-row");
+      if (!row) return;
+      const expanded = row.classList.toggle("is-row-expanded");
+      btn.classList.toggle("is-expanded", expanded);
+      btn.setAttribute("aria-expanded", String(expanded));
       const lotsRow = tbody.querySelector(`tr.pos-lots-row[data-lots-for="${btn.dataset.lotsFor}"]`);
-      if (!lotsRow) return;
-      const open = lotsRow.style.display !== "none";
-      lotsRow.style.display = open ? "none" : "";
-      btn.classList.toggle("is-expanded", !open);
+      if (lotsRow) lotsRow.style.display = expanded ? "" : "none";
     });
   });
+
+  _updateTableOverflowHint(tableShell);
 
   // ── Menú de acciones por posición (P0.1) ───────────────────────────────────
   tbody.querySelectorAll(".pos-action-trigger").forEach((trigger) => {
@@ -9064,6 +9207,78 @@ async function renderPositionBenchmarkDeltas(portfolio) {
   });
 }
 
+// ── Retorno por posición con periodo seleccionable: 1D/1S/1M/YTD (P1.1) ─────
+const _posReturnHistCache = {}; // ticker -> [{t,c}] cierres diarios (1 año), ordenados
+
+function _posReturnRefDate(period) {
+  const now = new Date();
+  if (period === "1w") { const d = new Date(now); d.setDate(d.getDate() - 7); return d; }
+  if (period === "1m") { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d; }
+  if (period === "ytd") return new Date(now.getFullYear(), 0, 1);
+  return null;
+}
+
+function _posReturnRenderCell(cell, pos, currency, refPrice) {
+  const price = getCachedPrice(pos.ticker);
+  if (price === null || !refPrice || refPrice <= 0) { cell.innerHTML = '<span class="muted-val">—</span>'; return; }
+  const posCur = getPosCurrency(pos, currency);
+  const retPct = (price - refPrice) / refPrice * 100;
+  const retAmtRaw = (price - refPrice) * (pos.quantity || 0);
+  const retAmt = convertAmount(retAmtRaw, posCur, currency) ?? retAmtRaw;
+  const sign = retAmt >= 0 ? "+" : "";
+  cell.innerHTML = `<span class="${retAmt >= 0 ? "return-pos" : "return-neg"}">${sign}${retPct.toFixed(2)}%<br><small>${sign}${formatCurrency(retAmt, currency)}</small></span>`;
+}
+
+async function renderPositionsReturnPeriod(portfolio) {
+  const period = posReturnPeriod;
+  if (period === "total") return; // ya se pinta síncrono en renderPositionsTable
+  const currency = portfolio.currency || "USD";
+  const cells = [...document.querySelectorAll('#positionsTableBody td[data-label="Retorno"][data-ticker]')];
+  if (!cells.length) return;
+
+  if (period === "1d") {
+    cells.forEach((cell) => {
+      const pos = (portfolio.positions || []).find((p) => p.ticker === cell.dataset.ticker);
+      const prev = pos ? getCachedPrev(pos.ticker) : null;
+      if (!pos || prev === null) { cell.innerHTML = '<span class="muted-val">—</span>'; return; }
+      _posReturnRenderCell(cell, pos, currency, prev);
+    });
+    return;
+  }
+
+  const refDate = _posReturnRefDate(period);
+  const uniqueTickers = [...new Set(cells.map((c) => c.dataset.ticker))];
+  await Promise.all(uniqueTickers.map(async (ticker) => {
+    if (_posReturnHistCache[ticker]) return;
+    try {
+      const h = await fetchHistoricalCloses(ticker, "1y", "1d");
+      _posReturnHistCache[ticker] = (h || []).map((d) => ({ t: new Date(d.ts).getTime(), c: d.close }))
+        .filter((d) => isFinite(d.c) && d.c > 0).sort((a, b) => a.t - b.t);
+    } catch { _posReturnHistCache[ticker] = []; }
+  }));
+
+  // El usuario pudo cambiar de periodo o re-renderizar la tabla mientras
+  // descargábamos: re-consultar celdas vivas y abortar si el modo cambió.
+  if (posReturnPeriod !== period) return;
+  const liveCells = [...document.querySelectorAll('#positionsTableBody td[data-label="Retorno"][data-ticker]')];
+  liveCells.forEach((cell) => {
+    const pos = (portfolio.positions || []).find((p) => p.ticker === cell.dataset.ticker);
+    const hist = pos ? _posReturnHistCache[pos.ticker] : null;
+    if (!pos || !hist || !hist.length) { cell.innerHTML = '<span class="muted-val">—</span>'; return; }
+    const closeOnOrBefore = (tMs) => {
+      let lo = 0, hi = hist.length - 1, res = null;
+      while (lo <= hi) { const mid = (lo + hi) >> 1; if (hist[mid].t <= tMs) { res = hist[mid].c; lo = mid + 1; } else hi = mid - 1; }
+      return res;
+    };
+    // No usar una fecha anterior a la compra: si la posición es más nueva que
+    // el periodo (p. ej. YTD con compra en junio), usar la fecha de compra.
+    const purchaseMs = pos.purchaseDate ? new Date(pos.purchaseDate + "T12:00:00").getTime() : 0;
+    const effMs = Math.max(refDate.getTime(), purchaseMs);
+    const refPrice = closeOnOrBefore(effMs) ?? hist[0].c;
+    _posReturnRenderCell(cell, pos, currency, refPrice);
+  });
+}
+
 // ── Contadores en las pestañas (rediseño visual #3) ─────────────────────────
 function updateTrackerTabCounts(portfolio) {
   const txs = portfolio.transactions || [];
@@ -9102,6 +9317,7 @@ function handlePositionAction(act, posId, ticker) {
   if (act === "buy") { openBuyMoreModal(posId, ticker); return; }
   if (act === "dividend") { openDividendModal(posId, ticker); return; }
   if (act === "alert") { openCreateAlertFor(ticker); return; }
+  if (act === "note") { openPositionNoteModal(posId, ticker); return; }
   if (act === "market") { watchlistOpenInMarkets(ticker); return; }
   if (act === "delete") { deletePositionWithUndo(posId); return; }
 }
@@ -9191,6 +9407,17 @@ function openDividendModal(posId, ticker) {
   document.getElementById("dividendTotalNote").textContent = "";
   document.getElementById("dividendError").classList.add("hidden");
   openModal("dividendModal");
+}
+
+function openPositionNoteModal(posId, ticker) {
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  const pos = portfolio && (portfolio.positions || []).find((p) => p.id === posId);
+  if (!portfolio || !pos) return;
+  document.getElementById("positionNotePosId").value = posId;
+  document.getElementById("positionNoteTickerDisplay").textContent = ticker || pos.ticker;
+  document.getElementById("positionNoteInput").value = pos.note || "";
+  openModal("positionNoteModal");
+  requestAnimationFrame(() => document.getElementById("positionNoteInput")?.focus());
 }
 
 function openWithdrawModal(posId) {
@@ -11167,12 +11394,25 @@ function initCustomSelects() {
 function initializeTrackerModule() {
   if (trackerInitialized) return;
 
-  // Sincronizar desde Firestore (no bloquea el render inicial desde localStorage)
-  syncPortfoliosFromCloud().then(changed => { if (changed) renderPortfolioCards(); });
+  // Sincronizar desde Firestore (no bloquea el render inicial desde localStorage).
+  // Siempre re-renderiza al resolver (no solo si `changed`) para limpiar el
+  // skeleton de "cargando" incluso cuando el resultado final sigue vacío (bug #5).
+  syncPortfoliosFromCloud().then(() => {
+    if (!document.getElementById("trackerListView").classList.contains("hidden")) {
+      renderPortfolioCards();
+    }
+  });
 
   initCustomSelects();
+  initTxFiltersToggle();
 
   document.getElementById("newPortfolioBtn").addEventListener("click", () => openModal("newPortfolioModal"));
+
+  // ── Enlace al comparador de escenarios de Markowitz (P2.2) ─────────────────
+  document.getElementById("trackerGoCompareBtn")?.addEventListener("click", () => {
+    activateSection("markowitz");
+    requestAnimationFrame(() => document.getElementById("mkwCompareBtn")?.click());
+  });
   document.getElementById("importCsvBtn")?.addEventListener("click", () => document.getElementById("importCsvInput").click());
   document.getElementById("importCsvInput")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
@@ -11322,6 +11562,26 @@ function initializeTrackerModule() {
     renderPortfolioDashboard();
     showToast(`Dividendo de ${pos.ticker} registrado.`, { duration: 4000 });
     window.bpTrack?.("dividend_recorded", { ticker: pos.ticker });
+  });
+
+  // ── Modal: Nota / tesis de inversión por posición (P1.4) ───────────────────
+  document.getElementById("closePositionNoteModalBtn")?.addEventListener("click", () => closeModal("positionNoteModal"));
+  document.getElementById("positionNoteModal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeModal("positionNoteModal");
+  });
+  document.getElementById("positionNoteForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const portfolios = getPortfolios();
+    const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+    const posId = document.getElementById("positionNotePosId").value;
+    const pos = portfolio && (portfolio.positions || []).find((p) => p.id === posId);
+    if (!portfolio || !pos) { closeModal("positionNoteModal"); return; }
+    const note = document.getElementById("positionNoteInput").value.trim();
+    pos.note = note || undefined;
+    savePortfolios(portfolios);
+    closeModal("positionNoteModal");
+    renderPortfolioDashboard();
+    showToast(note ? `Nota guardada para ${pos.ticker}.` : `Nota eliminada de ${pos.ticker}.`, { duration: 3000 });
   });
 
   // ── Modal: Editar ajustes del portafolio (P0.5) ────────────────────────────
@@ -11783,6 +12043,19 @@ function initializeTrackerModule() {
       drawDonutChart(document.getElementById("portfolioDonutChart"), portfolio.positions || [], totalInvested, portfolio.currency || "USD", cashBalance);
       renderDonutLegend(portfolio.positions || [], totalInvested, portfolio.currency || "USD", cashBalance);
     }
+  });
+
+  // ── Toggle de periodo del retorno por posición (P1.1) ──────────────────────
+  document.getElementById("posReturnPeriodToggle")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pos-period-btn");
+    if (!btn) return;
+    posReturnPeriod = btn.dataset.period;
+    document.querySelectorAll("#posReturnPeriodToggle .pos-period-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    const thLabels = { total: "Retorno", "1d": "Retorno (1D)", "1w": "Retorno (1S)", "1m": "Retorno (1M)", ytd: "Retorno (YTD)" };
+    const th = document.getElementById("thPosReturn");
+    if (th) th.textContent = thLabels[posReturnPeriod] || "Retorno";
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (portfolio) _doRenderDashboard(portfolio);
   });
 
   // ── Gestión de efectivo (L1.10) ────────────────────────────────────────────
@@ -12463,6 +12736,28 @@ function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labe
 
 const investmentValueChartStates = new WeakMap();
 
+// Reconstruye el efectivo acumulado por fecha a partir de las transacciones
+// (compras/ventas/dividendos/aportes/retiros), para que el gráfico "Valor del
+// portafolio" incluya el efectivo igual que el KPI "Valor actual" (bug #4).
+function buildCashBalanceSeries(transactions, dates, portfolioCur) {
+  const cashTxs = (transactions || [])
+    .filter((tx) => tx.type === "COMPRA" || tx.type === "VENTA" || tx.type === "DIVIDENDO" || tx.type === "DEPOSITO" || tx.type === "RETIRO")
+    .map((tx) => ({ date: (tx.date || "").slice(0, 10), delta: txCashEffect(tx, portfolioCur) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const result = {};
+  let cum = 0;
+  let txIdx = 0;
+  for (const date of dates) {
+    while (txIdx < cashTxs.length && cashTxs[txIdx].date <= date) {
+      cum += cashTxs[txIdx].delta;
+      txIdx++;
+    }
+    result[date] = cum;
+  }
+  return result;
+}
+
 function buildInvestmentValueSeries(allPositions, dates, tickerDateMaps, portfolioCurrency) {
   if (!dates.length) return [];
   return dates.map((date) => {
@@ -12778,7 +13073,7 @@ async function drawSummaryChartForMode() {
   }
 
   drawPortfolioValueChart(canvas, points, currency);
-  if (statusEl) statusEl.textContent = "Valor de mercado de tus posiciones a lo largo del tiempo.";
+  if (statusEl) statusEl.textContent = "Valor de mercado de tus posiciones + efectivo a lo largo del tiempo.";
 }
 
 async function loadSummaryValueChart(portfolio) {
@@ -12849,9 +13144,12 @@ async function loadSummaryValueChart(portfolio) {
   // dentro de la ventana ya heredaron su último cierre conocido).
   const windowDates = cr ? dates.filter((d) => d >= cr.from && d <= cr.to) : dates;
   const series = buildInvestmentValueSeries(allPositions, windowDates, tickerDateMaps, portfolioCur);
+  // El efectivo se suma al valor de mercado (no al invertido) para que coincida
+  // con el KPI "Valor actual", que también lo incluye (bug #4).
+  const cashByDate = buildCashBalanceSeries(portfolio.transactions, windowDates, portfolioCur);
   // Conserva `invested` alineado por índice para la serie de comparación (P0.3).
   const points = series
-    .map((p) => ({ date: p.date, value: p.market, invested: p.invested }))
+    .map((p) => ({ date: p.date, value: p.market + (cashByDate[p.date] || 0), invested: p.invested }))
     .filter((p) => p.value > 0);
 
   if (points.length < 2) {
@@ -12878,6 +13176,19 @@ async function loadSummaryValueChart(portfolio) {
     deltaEl.className = "value-chart-delta " + (up ? "return-pos" : "return-neg");
   }
   if (statusEl) statusEl.textContent = "";
+}
+
+// Paso "redondo" (1/2/5 × potencia de 10) para el eje Y de un gráfico (bug #9).
+function _niceAxisStep(range, targetTicks = 4) {
+  const rough = range / targetTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)));
+  const norm = rough / mag;
+  let step;
+  if (norm < 1.5) step = 1;
+  else if (norm < 3) step = 2;
+  else if (norm < 7) step = 5;
+  else step = 10;
+  return step * mag;
 }
 
 function drawPortfolioValueChart(canvas, points, currency, compare) {
@@ -12918,7 +13229,12 @@ function paintPortfolioValueChart(canvas) {
   const cmpValues = compare && compare.points ? compare.points.map((p) => (p ? p.value : null)).filter((v) => v != null && isFinite(v)) : [];
   const rawMin = Math.min(...values, ...cmpValues), rawMax = Math.max(...values, ...cmpValues);
   const valPad = (rawMax - rawMin) * 0.12 || Math.max(rawMax * 0.08, 1);
-  const minV = Math.max(0, rawMin - valPad), maxV = rawMax + valPad;
+  const paddedMin = Math.max(0, rawMin - valPad), paddedMax = rawMax + valPad;
+  // Ticks "redondos" en vez de dividir el rango crudo en 4 (bug #9): antes
+  // producía valores como 18K/16K/14K/11K/9K sin ningún patrón.
+  const axisStep = _niceAxisStep(paddedMax - paddedMin || paddedMax || 1);
+  const minV = Math.floor(paddedMin / axisStep) * axisStep;
+  const maxV = Math.ceil(paddedMax / axisStep) * axisStep;
   const vRange = Math.max(maxV - minV, 1);
   const toX = (i) => pad.left + (i / Math.max(points.length - 1, 1)) * chartWidth;
   const toY = (v) => pad.top + chartHeight * (1 - (v - minV) / vRange);
@@ -12931,8 +13247,7 @@ function paintPortfolioValueChart(canvas) {
 
   ctx.font = "500 10px Inter, sans-serif";
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (let s = 0; s <= 4; s++) {
-    const v = minV + (vRange / 4) * s;
+  for (let v = minV; v <= maxV + axisStep * 1e-6; v += axisStep) {
     const y = toY(v);
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y);
     ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.setLineDash([4, 5]); ctx.stroke(); ctx.setLineDash([]);
@@ -13263,13 +13578,16 @@ async function loadPerformanceTab(portfolio) {
       const lastD = new Date(returnDates[returnDates.length - 1]);
       const years = (lastD - firstD) / (365.25 * 864e5);
       const twrTotal = twrTotalPct / 100;
+      // Etiqueta del periodo activo (1M/3M/6M/1A/Máx) para no confundir el TWR
+      // con el "Retorno total" (que es sobre costo, sin ventana de tiempo) (bug #9).
+      const periodTag = activePeriodBtn?.textContent ? ` · ${activePeriodBtn.textContent}` : "";
       if (years >= 0.95 && twrTotal > -1) {
         const ann = Math.pow(1 + twrTotal, 1 / years) - 1;
         twrEl.textContent = (ann >= 0 ? "+" : "") + (ann * 100).toFixed(2) + "%";
-        if (twrSubEl) twrSubEl.textContent = `Anualizado · ${twrTotalPct >= 0 ? "+" : ""}${twrTotalPct.toFixed(2)}% acum.`;
+        if (twrSubEl) twrSubEl.textContent = `Anualizado · ${twrTotalPct >= 0 ? "+" : ""}${twrTotalPct.toFixed(2)}% acum.${periodTag}`;
       } else {
         twrEl.textContent = (twrTotalPct >= 0 ? "+" : "") + twrTotalPct.toFixed(2) + "%";
-        if (twrSubEl) twrSubEl.textContent = "Acumulado en el periodo";
+        if (twrSubEl) twrSubEl.textContent = `Acumulado en el periodo${periodTag}`;
       }
       twrEl.className = "perf-metric-value " + (twrTotal >= 0 ? "return-pos" : "return-neg");
     } else {

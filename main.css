@@ -2855,6 +2855,7 @@ body.light-mode .seas-neg { color: #d93a52; }
 #dividendModal.hidden,
 #dividendError.hidden,
 #editPortfolioModal.hidden,
+#positionNoteModal.hidden,
 #positionsTableShell.hidden {
   display: none;
 }
@@ -2885,6 +2886,9 @@ body.light-mode .seas-neg { color: #d93a52; }
   z-index: 20;
   backdrop-filter: blur(10px);
   scroll-padding-inline: 6px;
+  /* Indicio de que hay más pestañas por scrollear (móvil/tablet #5). */
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(to right, black calc(100% - 22px), transparent 100%);
 }
 
 .tracker-tab-nav::-webkit-scrollbar {
@@ -4201,6 +4205,84 @@ body.light-mode .kpi-details-summary {
   z-index: 3;
 }
 
+/* ── Tabla de posiciones: acciones fijas a la derecha (bug #6) ─────────────
+   La tabla desborda incluso en desktop y el menú "⋯" quedaba tras un scroll
+   horizontal poco visible; se fija a la derecha igual que el ticker a la
+   izquierda, así siempre queda alcanzable sin desplazar. */
+.tracker-table--positions th:last-child,
+.tracker-table--positions td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--card, #12151f);
+  box-shadow: -6px 0 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+.tracker-table--positions thead th:last-child {
+  z-index: 3;
+}
+
+body.light-mode .tracker-table--positions th:last-child,
+body.light-mode .tracker-table--positions td:last-child {
+  background: var(--card, #fff);
+}
+
+/* Solo se muestra el chevron cuando hay lotes que expandir; en móvil siempre
+   se muestra (ver bloque responsive) para revelar los campos secundarios. */
+@media (min-width: 721px) {
+  .pos-expand-btn[data-has-lots="0"] {
+    display: none;
+  }
+}
+
+/* Indicio de scroll horizontal cuando la tabla realmente desborda (bug #6):
+   clase .has-h-scroll agregada por JS tras medir scrollWidth/clientWidth. */
+.tracker-table-shell.has-h-scroll {
+  box-shadow: inset -22px 0 14px -14px rgba(0, 0, 0, 0.35);
+}
+body.light-mode .tracker-table-shell.has-h-scroll {
+  box-shadow: inset -22px 0 14px -14px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Transacciones: encabezado de mes + paginación (P0) ────────────────────── */
+.tx-month-header td {
+  padding: 8px 16px !important;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+body.light-mode .tx-month-header td {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.tx-load-more-row td {
+  padding: 14px 16px !important;
+  text-align: center;
+}
+.tx-load-more-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 9px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tx-load-more-btn:hover {
+  background: rgba(var(--primary-rgb), 0.14);
+  border-color: rgba(var(--primary-rgb), 0.3);
+}
+body.light-mode .tx-load-more-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
 /* ── Toggle de densidad de la tabla (visual #4) ────────────────────────────── */
 .positions-density-btn {
   display: inline-flex;
@@ -4245,6 +4327,15 @@ body.light-mode .tracker-table--positions td:first-child {
 
 /* ── Overlay drag & drop de CSV (#12) ──────────────────────────────────────── */
 #trackerListView { position: relative; }
+
+/* Dígitos de ancho fijo en todo el tracker (rediseño visual #3): sin esto,
+   los números "bailaban" al actualizar precios y las columnas de las tablas
+   no alineaban dígitos entre filas. font-variant-numeric hereda a todo el
+   contenido de texto de estas vistas. */
+#trackerListView,
+#trackerDashView {
+  font-variant-numeric: tabular-nums;
+}
 
 .csv-drop-overlay {
   position: absolute;
@@ -4435,6 +4526,104 @@ body.light-mode .kpi-alt-currency-select {
   border-color: rgba(0, 0, 0, 0.12);
 }
 
+/* ── Strip compacto de KPIs secundarios (rediseño visual #1) ─────────────────
+   Antes cada KPI secundario era una tarjeta igual a los heroes, diluyendo la
+   jerarquía visual. Ahora es una sola franja "label: valor" separada por
+   divisores, liberando ~150px verticales para los heroes y el primer gráfico. */
+.kpi-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin: 0 0 20px;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+}
+
+.summary-item.kpi-strip-item {
+  background: none;
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 10px 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.summary-item.kpi-strip-item:last-of-type {
+  border-right: none;
+}
+
+/* ">" en vez de descendiente: .kpi-tooltip también es un <span> anidado
+   dentro de .kpi-info-wrap y NO debe heredar este display (rompía el
+   hover-to-show del tooltip, quedaba siempre visible). */
+.summary-item.kpi-strip-item > span {
+  display: inline;
+  margin-bottom: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.summary-item.kpi-strip-item strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.summary-item.kpi-strip-item .kpi-info-wrap {
+  top: 4px;
+  right: 2px;
+}
+
+.summary-item.kpi-strip-item .kpi-hero-label-row {
+  padding-right: 0;
+  gap: 6px;
+}
+
+.kpi-strip .kpi-details {
+  flex: 1 1 100%;
+  order: 99;
+}
+
+body.light-mode .kpi-strip {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+body.light-mode .summary-item.kpi-strip-item {
+  border-right-color: rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 720px) {
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    padding: 4px 10px;
+  }
+  .summary-item.kpi-strip-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 10px 6px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .summary-item.kpi-strip-item:nth-last-child(-n+2) {
+    border-bottom: none;
+  }
+  .kpi-strip .kpi-details {
+    grid-column: 1 / -1;
+  }
+  body.light-mode .summary-item.kpi-strip-item {
+    border-bottom-color: rgba(0, 0, 0, 0.07);
+  }
+}
+
 /* Flash animation on KPI value update */
 @keyframes kpiFlashPos {
   0%   { background-color: transparent; }
@@ -4469,6 +4658,38 @@ body.light-mode .kpi-alt-currency-select {
   vertical-align: middle;
 }
 
+/* Skeleton de tarjetas de portafolio mientras el bootstrap a Postgres resuelve,
+   para no mostrar "Aún no tienes portafolios" de forma prematura (bug #5). */
+.portfolio-card-skeleton {
+  cursor: default;
+  pointer-events: none;
+}
+.portfolio-card-skeleton:hover {
+  transform: none;
+  box-shadow: var(--shadow);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.skel-line {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.13) 50%,
+    rgba(255, 255, 255, 0.05) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s infinite;
+}
+.skel-line--title { width: 55%; height: 18px; }
+.skel-line--value { width: 70%; height: 28px; }
+.skel-line--stats { width: 85%; height: 14px; }
+body.light-mode .skel-line {
+  background: linear-gradient(90deg,
+    rgba(0, 0, 0, 0.05) 25%,
+    rgba(0, 0, 0, 0.1) 50%,
+    rgba(0, 0, 0, 0.05) 75%);
+  background-size: 200% 100%;
+}
+
 /* Tab group separators and labels */
 .tab-group-sep {
   width: 1px;
@@ -4483,11 +4704,20 @@ body.light-mode .kpi-alt-currency-select {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: rgba(255, 255, 255, 0.22);
+  /* 0.22 era casi invisible (rediseño visual #5) */
+  color: rgba(255, 255, 255, 0.5);
   padding: 0 3px;
   align-self: center;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+body.light-mode .tab-group-label {
+  color: rgba(15, 23, 42, 0.45);
+}
+
+body.light-mode .tab-group-sep {
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .tracker-main-grid {
@@ -4895,11 +5125,44 @@ body.light-mode .kpi-alt-currency-select {
 .custom-select-list::-webkit-scrollbar-track { background: transparent; }
 .custom-select-list::-webkit-scrollbar-thumb { background: rgba(var(--primary-rgb), 0.3); border-radius: 2px; }
 
-.return-pos { color: #32d6a2; font-weight: 600; }
-.return-neg { color: #ff6b81; font-weight: 600; }
+.return-pos { color: var(--gain, #32d6a2); font-weight: 600; }
+.return-neg { color: var(--loss, #ff6b81); font-weight: 600; }
 .return-pos small, .return-neg small { font-weight: 400; opacity: 0.8; }
 .muted-val { color: var(--muted); font-size: 0.82rem; }
 .fx-tag { font-size: 0.72rem; font-weight: 600; color: var(--accent); opacity: 0.75; margin-left: 4px; vertical-align: middle; }
+
+/* Textarea dentro de .form-row (styles.css no la estiliza, solo input/select) */
+.form-row textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm, 10px);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  outline: none;
+  font-family: Inter, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+  transition: all 0.2s ease;
+}
+.form-row textarea:focus { border-color: var(--primary); }
+body.light-mode .form-row textarea {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--text);
+}
+
+/* Indicador de nota/tesis por posición (P1.4) */
+.pos-note-dot {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.72rem;
+  color: var(--accent, #7892ff);
+  opacity: 0.75;
+  cursor: help;
+  vertical-align: middle;
+}
 
 .portfolio-card-badges {
   display: flex;
@@ -5252,6 +5515,19 @@ body.light-mode {
   --border: rgba(0, 0, 0, 0.08);
   --text: #1a1a1e;
   --muted: #6b7280;
+  /* Tokens de ganancia/pérdida oscurecidos para contraste sobre fondo claro
+     (bug #8): los valores oscuros (--gain/--loss #32d6a2/#ff6b81) casi no se
+     leían en blanco. Mismos hex que ya usan los badges de transacciones. */
+  --gain: #16a34a;
+  --gain-rgb: 22, 163, 74;
+  --loss: #dc2626;
+  --loss-rgb: 220, 38, 38;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --up: #16a34a;
+  --up-rgb: 22, 163, 74;
+  --down: #dc2626;
+  --down-rgb: 220, 38, 38;
   background:
     radial-gradient(circle at top left, rgba(var(--primary-rgb), 0.04), transparent 26%),
     radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.03), transparent 24%),
@@ -6150,6 +6426,44 @@ body.light-mode .tx-filter-group select {
 }
 body.light-mode .tx-filter-group input[type="date"] { color-scheme: light; }
 body.light-mode .tx-filter-clear { border-color: rgba(0,0,0,0.2); }
+
+/* ── Botón "Filtros" colapsable (solo móvil, móvil/tablet #7) ──────────────── */
+.tx-filters-toggle-btn {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  padding: 9px 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tx-filters-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(var(--primary-rgb), 0.3);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+body.light-mode .tx-filters-toggle-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+@media (max-width: 720px) {
+  .tx-filters-toggle-btn { display: inline-flex; }
+  .tx-filters.is-collapsed { display: none; }
+}
 
 .tx-badge {
   display: inline-block;
@@ -11154,6 +11468,33 @@ body.light-mode .tx-withdraw { background: rgba(202, 138, 4, 0.12); color: #ca8a
 }
 .donut-base-btn.active { background: rgba(var(--primary-rgb), 0.28); color: var(--text); }
 
+/* ── Toggle de periodo del retorno por posición (P1.1) ─────────────────────── */
+.pos-return-period-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -4px 0 12px;
+}
+.pos-period-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.pos-period-btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted, #aeb6d6);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pos-period-btn.active { background: rgba(var(--primary-rgb), 0.28); color: var(--text); }
+body.light-mode .pos-period-btn { background: rgba(0, 0, 0, 0.04); }
+
 /* Búsqueda de posiciones — L2.2 */
 .positions-header-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 .positions-search {
@@ -12914,6 +13255,7 @@ body.light-mode .investment-value-tooltip small {
   .chart-fullscreen-btn,
   .pos-delete-btn,
   .pos-expand-btn,
+  .positions-density-btn,
   .mobile-data-status button {
     min-width: 44px;
     min-height: 44px;
@@ -13799,8 +14141,10 @@ body.light-mode .ai-chat-typing span { background: rgba(0, 0, 0, 0.35); }
   }
 
   .kpi-alt-currency-select {
-    width: 112px;
-    max-width: 48%;
+    /* 112px truncaba la opción "Sin equivalencia" (bug #7). */
+    width: auto;
+    min-width: 118px;
+    max-width: 62%;
   }
 
   .tracker-price-status-bar {
@@ -14226,7 +14570,16 @@ body.light-mode #section-markets .stats-rail-item {
     min-width: 0;
     font-size: 0.74rem;
     line-height: 1.15;
-    overflow-wrap: anywhere;
+    /* "anywhere" partía palabras a la mitad ("portafoli/o"); "break-word"
+       prioriza el salto entre palabras y solo rompe si no cabe (bug #7). */
+    overflow-wrap: break-word;
+  }
+
+  /* Una vez que ya existe al menos un portafolio, el chip "Crear portafolio"
+     deja de ser relevante: se oculta la barra completa de inicio rápido
+     (móvil/tablet #9), clase agregada por JS en updateMobileQuickStartVisibility. */
+  .mobile-quick-start.is-dismissed {
+    display: none !important;
   }
 
   .mobile-bottom-nav {
@@ -14268,6 +14621,9 @@ body.light-mode #section-markets .stats-rail-item {
     overflow-x: auto;
     padding-bottom: 2px;
     scrollbar-width: none;
+    /* Indicio de que la barra scrollea: difumina el borde derecho (móvil/tablet #5). */
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(to right, black calc(100% - 22px), transparent 100%);
   }
 
   .tracker-list-actions::-webkit-scrollbar,
@@ -14640,6 +14996,12 @@ body.light-mode .mobile-quick-start button {
   .tracker-kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
+  /* Los heroes deben ocupar la fila completa en un grid de 3 columnas;
+     el span-2 heredado del desktop (grid de 6 columnas) dejaba una
+     columna muerta junto a cada hero (bug tablet 900-1100px). */
+  .tracker-kpi-hero {
+    grid-column: span 3 !important;
+  }
   .perf-metrics-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -14773,10 +15135,57 @@ body.light-mode .pos-action-trigger {
   background: rgba(15, 23, 42, 0.03);
 }
 
-/* En móvil el dropdown se abre alineado a la izquierda para no salirse. */
+/* ── Menú de acciones como bottom sheet en móvil (móvil/tablet #2) ─────────── */
 @media (max-width: 720px) {
-  .pos-action-dropdown { right: auto; left: 0; }
   #positionsTableBody .pos-actions-cell { justify-content: flex-start; }
+
+  .pos-action-dropdown {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    z-index: 500;
+    min-width: 0;
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0;
+    padding: 10px 10px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.55);
+    animation: posSheetSlideUp 0.18s ease-out;
+  }
+
+  .pos-action-dropdown button {
+    padding: 13px 14px;
+    font-size: 0.92rem;
+    min-height: 44px;
+  }
+
+  /* Fondo atenuado detrás del sheet (sin backdrop dedicado en el DOM). */
+  body:has(.pos-action-dropdown:not([hidden])) {
+    overflow: hidden;
+  }
+  body:has(.pos-action-dropdown:not([hidden]))::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 490;
+    animation: posSheetFade 0.15s ease-out;
+  }
+}
+
+@keyframes posSheetSlideUp {
+  from { transform: translateY(20px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes posSheetFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pos-action-dropdown { animation: none; }
 }
 
 /* ── Watchlist: acciones de fila (P1.11 / P0.2) ───────────────────────────── */
@@ -15066,18 +15475,26 @@ body.light-mode .value-custom-popover input[type="date"] { color: #172033; borde
 }
 
 @media (max-width: 720px) {
-  /* Compresión del muro de KPIs en móvil (#2): los secundarios pasan a 2
-     columnas y los tres KPIs hero conservan el ancho completo. Así el primer
-     gráfico queda mucho más arriba. */
+  /* Carrusel horizontal de KPIs hero en móvil (móvil/tablet #4): antes 3
+     tarjetas apiladas de ancho completo (~600px de scroll); ahora un
+     scroll-snap horizontal, sin JS, con solo el primero visible de entrada. */
   .tracker-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    grid-template-columns: none;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
     gap: 10px;
   }
-  .tracker-kpi-hero {
-    grid-column: 1 / -1;
+  .tracker-kpi-grid::-webkit-scrollbar {
+    display: none;
   }
-  .tracker-kpi-grid .summary-item:not(.tracker-kpi-hero) {
-    min-height: 92px;
+  .tracker-kpi-hero {
+    grid-column: auto;
+    flex: 0 0 84%;
+    scroll-snap-align: start;
   }
 
   /* KPIs terciarios colapsables: una columna en móvil. */
@@ -15088,9 +15505,12 @@ body.light-mode .value-custom-popover input[type="date"] { color: #172033; borde
   /* En vista de tarjetas, el ticker no debe quedar "pegajoso" ni con fondo de
      columna: se restaura el flujo normal de la card. */
   .tracker-table--positions .th-ticker-sticky,
-  .tracker-table--positions td:first-child {
+  .tracker-table--positions td:first-child,
+  .tracker-table--positions th:last-child,
+  .tracker-table--positions td:last-child {
     position: static;
     background: transparent;
+    box-shadow: none;
   }
 
   /* El menú de exportación ocupa el ancho disponible dentro del scroll. */
@@ -15100,4 +15520,23 @@ body.light-mode .value-custom-popover input[type="date"] { color: #172033; borde
     left: 0;
     min-width: 220px;
   }
+
+  /* ── Fila compacta expandible de posiciones (bug #2 / P0) ──────────────────
+     Por defecto solo se ve Ticker, sparkline, Valor actual, Retorno y
+     Acciones; el resto se revela al tocar el chevron (clase .is-row-expanded
+     agregada por JS). Antes cada posición apilaba ~12 campos y ocupaba una
+     pantalla completa; ahora caben varias posiciones sin expandir. */
+  #positionsTableBody > .pos-row:not(.is-row-expanded) > td[data-label="Fecha"],
+  #positionsTableBody > .pos-row:not(.is-row-expanded) > td[data-label="Precio promedio"],
+  #positionsTableBody > .pos-row:not(.is-row-expanded) > td[data-label="Precio actual"],
+  #positionsTableBody > .pos-row:not(.is-row-expanded) > td[data-label="Cambio hoy"],
+  #positionsTableBody > .pos-row:not(.is-row-expanded) > td[data-label="Cantidad"],
+  #positionsTableBody > .pos-row:not(.is-row-expanded) > td[data-label="Costo total"],
+  #positionsTableBody > .pos-row:not(.is-row-expanded) > td.td-vs-bench {
+    display: none;
+  }
+
+  /* El chevron siempre debe verse en móvil (incluso sin lotes): ahí es donde
+     se revelan los campos secundarios de la fila. */
+  .pos-expand-btn { display: inline-flex !important; align-items: center; }
 }

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=10">
-  <link rel="stylesheet" href="main.css?v=27">
+  <link rel="stylesheet" href="main.css?v=28">
   <style>
     .company-info-animation {
       display: flex;
@@ -207,6 +207,10 @@
               <p class="tracker-list-sub">Selecciona un portafolio o crea uno nuevo</p>
             </div>
             <div class="tracker-list-actions">
+              <button id="trackerGoCompareBtn" class="button ghost tracker-icon-btn" type="button" title="Compara escenarios de optimización guardados en Creación de portafolio">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+                Comparar portafolios
+              </button>
               <button id="importCsvBtn" class="button ghost tracker-icon-btn" type="button" title="Importar posiciones desde CSV (GBM, IBKR, Binance, eToro y otros)">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Importar CSV
@@ -381,22 +385,25 @@
               <em id="dashReturnPct">—</em>
               <em id="dashReturnAmtAlt" class="kpi-alt-value"></em>
             </div>
-            <!-- ── Secondary row: smaller KPIs ───────────────────────────── -->
-            <div class="summary-item">
+          </div>
+
+          <!-- ── Strip compacto de KPIs secundarios (rediseño visual #1) ────── -->
+          <div class="kpi-strip" id="kpiStrip">
+            <div class="summary-item kpi-strip-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Ganancia o pérdida de las posiciones que sigues teniendo (valor actual de mercado menos su costo). Aún no se materializa: cambia con el precio y solo se realiza al vender.</span>
               </div>
               <span>P/L no realizada</span><strong id="dashUnrealizedPnL">—</strong>
             </div>
-            <div class="summary-item">
+            <div class="summary-item kpi-strip-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Ganancia o pérdida ya materializada por ventas: el dinero que efectivamente obtuviste (o perdiste) al vender, comparado con el costo promedio de esas acciones.</span>
               </div>
               <span>P/L realizada</span><strong id="dashRealizedPnL">—</strong>
             </div>
-            <div class="summary-item">
+            <div class="summary-item kpi-strip-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Suma de todas las compras realizadas en este portafolio, incluyendo comisiones e IVA pagados.</span>
@@ -404,7 +411,7 @@
               <span>Total invertido</span><strong id="dashTotalInvested">$0.00</strong>
               <em id="dashInvestedNote" class="kpi-alt-value"></em>
             </div>
-            <div class="summary-item">
+            <div class="summary-item kpi-strip-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Efectivo disponible en el portafolio. Aumenta con aportes y ventas; disminuye con retiros y compras. Se incluye en el "Valor actual".</span>
@@ -414,14 +421,14 @@
               </span>
               <strong id="dashCashBalance">$0.00</strong>
             </div>
-            <div class="summary-item">
+            <div class="summary-item kpi-strip-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Tasa interna de retorno anualizada (XIRR) que pondera el momento exacto de cada flujo: compras, ventas y dividendos. Más precisa que el retorno simple cuando hay múltiples aportes.</span>
               </div>
               <span>XIRR anual</span><strong id="dashXirr">—</strong>
             </div>
-            <div class="summary-item">
+            <div class="summary-item kpi-strip-item">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
                 <span class="kpi-tooltip">Número de activos distintos con al menos una acción registrada en este portafolio.</span>
@@ -522,7 +529,7 @@
                 <canvas id="portfolioValueChart" aria-label="Evolución del valor del portafolio"></canvas>
                 <div id="portfolioValueTooltip" class="perf-chart-tooltip hidden"></div>
               </div>
-              <div id="valueChartStatus" class="perf-chart-status">Valor de mercado de tus posiciones a lo largo del tiempo.</div>
+              <div id="valueChartStatus" class="perf-chart-status">Valor de mercado de tus posiciones + efectivo a lo largo del tiempo.</div>
             </div>
 
             <!-- ── Composición: ponderación / Top 10 / mapa de calor (Visual 1) ── -->
@@ -579,6 +586,14 @@
                   <button id="addPositionBtn" class="button primary" type="button">+ Agregar posicion</button>
                 </div>
               </div>
+              <div class="pos-return-period-toggle" id="posReturnPeriodToggle" role="group" aria-label="Periodo del retorno por posición">
+                <span class="pos-period-label">Retorno:</span>
+                <button type="button" class="pos-period-btn active" data-period="total">Total</button>
+                <button type="button" class="pos-period-btn" data-period="1d">1D</button>
+                <button type="button" class="pos-period-btn" data-period="1w">1S</button>
+                <button type="button" class="pos-period-btn" data-period="1m">1M</button>
+                <button type="button" class="pos-period-btn" data-period="ytd">YTD</button>
+              </div>
               <div id="positionsTableShell" class="tracker-table-shell">
                 <table class="tracker-table tracker-table--positions">
                   <thead>
@@ -592,7 +607,7 @@
                       <th class="th-sortable" data-sort="qty">Cantidad</th>
                       <th class="th-sortable" data-sort="cost">Costo total</th>
                       <th class="th-sortable" data-sort="value">Valor actual</th>
-                      <th class="th-sortable" data-sort="return">Retorno</th>
+                      <th class="th-sortable" data-sort="return" id="thPosReturn">Retorno</th>
                       <th class="th-vs-bench" title="Retorno de la posición menos el del benchmark, desde la fecha de compra">vs Bench.</th>
                       <th></th>
                     </tr>
@@ -807,7 +822,12 @@
               </div>
 
               <!-- Filtros -->
-              <div class="tx-filters">
+              <button type="button" id="txFiltersToggleBtn" class="tx-filters-toggle-btn" aria-expanded="false" aria-controls="txFiltersPanel">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                Filtros
+                <span id="txFiltersCount" class="tx-filters-count hidden"></span>
+              </button>
+              <div class="tx-filters is-collapsed" id="txFiltersPanel">
                 <div class="tx-filter-group">
                   <label for="txFilterType">Tipo</label>
                   <select id="txFilterType" onchange="renderTransactionsTab()">
@@ -1485,6 +1505,28 @@
               <p class="form-hint">Se registra como transacción DIVIDENDO sobre tu cantidad actual de acciones.</p>
               <div id="dividendError" class="form-hint hidden" style="color:#d94040"></div>
               <button class="button primary" type="submit">Registrar</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Modal: Nota / tesis de inversión por posición (P1.4) ─────── -->
+        <div id="positionNoteModal" class="tracker-modal-backdrop hidden" role="dialog" aria-modal="true">
+          <div class="tracker-modal tracker-modal--sm">
+            <div class="tracker-modal-header">
+              <h3>Nota de inversión</h3>
+              <button id="closePositionNoteModalBtn" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
+            </div>
+            <form id="positionNoteForm" class="dashboard-form">
+              <input type="hidden" id="positionNotePosId">
+              <div class="form-row">
+                <label>Activo</label>
+                <div id="positionNoteTickerDisplay" class="withdraw-ticker-display"></div>
+              </div>
+              <div class="form-row">
+                <label for="positionNoteInput">Tesis, razón de compra o recordatorio</label>
+                <textarea id="positionNoteInput" rows="5" maxlength="1000" placeholder="Ej: Comprado por su ventaja competitiva en X y crecimiento de márgenes. Revisar si el múltiplo supera 30x."></textarea>
+              </div>
+              <button class="button primary" type="submit">Guardar nota</button>
             </form>
           </div>
         </div>
@@ -3385,7 +3427,7 @@
   <script src="auth.js?v=11"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=30"></script>
+  <script src="main.js?v=31"></script>
   <script src="markowitz.js?v=2"></script>
   <script src="analyzer.js?v=2"></script>
   <script src="topdown.js"></script>
