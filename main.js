@@ -5520,6 +5520,10 @@ const GEO_MAP = {
 let activePortfolioId = null;
 let pendingDeleteId = null;
 let trackerInitialized = false;
+// Portafolio consolidado navegable (P0.4): id sintético + estado de sólo lectura.
+const CONSOLIDATED_ID = "__ALL__";
+let _consolidatedActive = false;
+let _consolidatedPortfolio = null;
 let _dashRefreshTimer = null;
 let perfTabLoaded = false;
 let summaryValueLoaded = false;
@@ -5585,7 +5589,81 @@ function clonePortfolios(portfolios) {
 }
 
 function getPortfolios() {
+  // En modo consolidado se antepone el portafolio sintético "Todos" para que
+  // TODAS las búsquedas por id lo encuentren, sin tocarlo nunca en disco (P0.4).
+  if (_consolidatedActive && _consolidatedPortfolio) return [_consolidatedPortfolio, ..._portfolioMemory];
   return _portfolioMemory;
+}
+
+// Construye un portafolio sintético que agrega posiciones/transacciones de todos
+// los portafolios reales, fusionando por ticker+divisa. Sólo lectura (P0.4).
+function buildConsolidatedPortfolio() {
+  const reals = _portfolioMemory || [];
+  if (reals.length < 2) return null;
+
+  // Divisa base = la más frecuente entre los portafolios
+  const counts = {};
+  reals.forEach((p) => { const c = p.currency || "USD"; counts[c] = (counts[c] || 0) + 1; });
+  const base = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || "USD";
+
+  // Benchmark = el más frecuente distinto de "none"
+  const benchCounts = {};
+  reals.forEach((p) => { const b = p.benchmark; if (b && b !== "none") benchCounts[b] = (benchCounts[b] || 0) + 1; });
+  const benchmark = Object.keys(benchCounts).sort((a, b) => benchCounts[b] - benchCounts[a])[0] || "^GSPC";
+
+  const merged = {}; // key ticker|cur -> { ticker, cur, qty, totalCost, earliest }
+  const allTx = [];
+  let earliestCreated = null;
+  let cash = 0;
+
+  reals.forEach((p) => {
+    const pCur = p.currency || "USD";
+    if (p.createdAt && (!earliestCreated || p.createdAt < earliestCreated)) earliestCreated = p.createdAt;
+    (p.positions || []).forEach((pos) => {
+      const cur = getPosCurrency(pos, pCur);
+      const key = `${pos.ticker}|${cur}`;
+      const totals = calcPositionTotals(pos);
+      if (!merged[key]) merged[key] = { ticker: pos.ticker, cur, qty: 0, totalCost: 0, earliest: pos.purchaseDate || null };
+      const m = merged[key];
+      m.qty += pos.quantity || 0;
+      m.totalCost += totals.total;
+      if (pos.purchaseDate && (!m.earliest || pos.purchaseDate < m.earliest)) m.earliest = pos.purchaseDate;
+    });
+    (p.transactions || []).forEach((tx) => {
+      allTx.push({ ...tx, currency: tx.currency || pCur });
+    });
+    const c = convertAmount(p.cashBalance || 0, pCur, base);
+    if (c !== null && isFinite(c)) cash += c;
+  });
+
+  const positions = Object.values(merged)
+    .filter((m) => m.qty > 0)
+    .map((m) => ({
+      id: `cons_${m.ticker}_${m.cur}`,
+      ticker: m.ticker,
+      quantity: m.qty,
+      avgPrice: m.qty > 0 ? m.totalCost / m.qty : 0, // ya incluye comisión/IVA en el costo total
+      commissionPercent: 0,
+      applyIva: false,
+      currency: m.cur,
+      purchaseDate: m.earliest
+    }));
+
+  if (!positions.length) return null;
+
+  allTx.sort((a, b) => (a.date < b.date ? 1 : -1));
+  return {
+    id: CONSOLIDATED_ID,
+    name: "Todos los portafolios",
+    description: `Vista consolidada de ${reals.length} portafolios`,
+    currency: base,
+    benchmark,
+    positions,
+    transactions: allTx,
+    cashBalance: cash,
+    createdAt: earliestCreated || new Date().toISOString(),
+    _consolidated: true
+  };
 }
 
 async function portfolioApiRequest(path, options = {}) {
@@ -5718,8 +5796,10 @@ async function flushPortfolioSaveQueue() {
 }
 
 function savePortfolios(portfolios) {
-  _portfolioMemory = clonePortfolios(portfolios);
-  _portfolioPendingSnapshot = clonePortfolios(portfolios);
+  // Blindaje P0.4: el portafolio sintético "Todos" jamás se persiste.
+  const clean = (Array.isArray(portfolios) ? portfolios : []).filter((p) => p && p.id !== CONSOLIDATED_ID);
+  _portfolioMemory = clonePortfolios(clean);
+  _portfolioPendingSnapshot = clonePortfolios(clean);
   void flushPortfolioSaveQueue();
 }
 
@@ -8033,11 +8113,23 @@ function calcPortfolioTotals(positions, portfolioCurrency) {
 
 function showTrackerListView() {
   if (_dashRefreshTimer) { clearInterval(_dashRefreshTimer); _dashRefreshTimer = null; }
+  // Salir de modo consolidado (P0.4)
+  _consolidatedActive = false;
+  _consolidatedPortfolio = null;
+  document.getElementById("trackerDashView").classList.remove("is-consolidated");
   document.getElementById("trackerListView").classList.remove("hidden");
   document.getElementById("trackerDashView").classList.add("hidden");
   renderPortfolioCards();
   renderWatchlist();
   loadListViewData();
+}
+
+// Abre la vista consolidada navegable (P0.4)
+function showConsolidatedDashView() {
+  const synthetic = buildConsolidatedPortfolio();
+  if (!synthetic) { showToast("Necesitas al menos 2 portafolios con posiciones para consolidar.", { type: "warn" }); return; }
+  showTrackerDashView(CONSOLIDATED_ID);
+  window.bpTrack?.("consolidated_view_open");
 }
 
 function _invalidatePriceCache(portfolioId) {
@@ -8053,6 +8145,11 @@ function _invalidatePriceCache(portfolioId) {
 function showTrackerDashView(portfolioId) {
   if (_dashRefreshTimer) { clearInterval(_dashRefreshTimer); _dashRefreshTimer = null; }
   activePortfolioId = portfolioId;
+  // Modo consolidado (P0.4): construir el sintético ANTES de cualquier búsqueda por id.
+  _consolidatedActive = (portfolioId === CONSOLIDATED_ID);
+  _consolidatedPortfolio = _consolidatedActive ? buildConsolidatedPortfolio() : null;
+  if (_consolidatedActive && !_consolidatedPortfolio) { showTrackerListView(); return; }
+  document.getElementById("trackerDashView").classList.toggle("is-consolidated", _consolidatedActive);
   // Reiniciar búsqueda/orden de la tabla de posiciones al abrir un portafolio (L2.2)
   posSearch = "";
   posSort = { key: null, dir: "asc" };
@@ -8066,6 +8163,13 @@ function showTrackerDashView(portfolioId) {
   // Reiniciar el toggle de serie del gráfico hero a "Valor" (P0.3)
   summaryChartMode = "value";
   _summaryChartData = null;
+  _valueCustomRange = null; // limpiar rango personalizado (P1.8)
+  // Reiniciar el toggle de composición a "Ponderación" (Visual 1)
+  _compositionMode = "donut";
+  document.querySelectorAll("#compositionToggle .comp-btn").forEach((b) => b.classList.toggle("active", b.dataset.comp === "donut"));
+  document.querySelectorAll("#compositionCard .comp-panel").forEach((p) => p.classList.toggle("hidden", p.dataset.compPanel !== "donut"));
+  const _compCard = document.getElementById("compositionCard");
+  if (_compCard) _compCard.dataset.comp = "donut";
   document.querySelectorAll("#valueSeriesToggle .value-series-btn").forEach((b) =>
     b.classList.toggle("active", b.dataset.series === "value"));
   _invalidatePriceCache(portfolioId);
@@ -8244,8 +8348,10 @@ function renderConsolidatedBar(portfolios) {
     ${anyDay ? metric("Cambio hoy", signed(totalDay, dayPct)) : ""}
     ${anyReturn ? metric("Retorno total", signed(totalReturn, retPct)) : ""}
     ${fxMissing ? `<div class="cbar-note">Algunos valores aún sin tipo de cambio</div>` : ""}
+    ${portfolios.length >= 2 ? `<button id="consolidatedOpenBtn" class="button primary cbar-cta" type="button">Ver análisis consolidado →</button>` : ""}
   `;
   bar.classList.remove("hidden");
+  document.getElementById("consolidatedOpenBtn")?.addEventListener("click", showConsolidatedDashView);
 }
 
 // Carga precios+FX de todos los portafolios y refresca tarjetas + barra consolidada
@@ -8309,10 +8415,17 @@ async function renderPortfolioDashboard() {
   const results = tickers.map(t => ({ t, p: priceMap[t] ?? null }));
   const failed = results.filter((r) => r.p === null).map((r) => r.t);
 
-  // Sincronizar dividendos automáticamente (necesita FX cargado para conversión)
+  // Consolidado: reconstruir con FX ya cargado para que el efectivo agregado sea exacto.
+  if (_consolidatedActive) {
+    _consolidatedPortfolio = buildConsolidatedPortfolio() || _consolidatedPortfolio;
+    portfolio = _consolidatedPortfolio;
+  }
+
+  // Sincronizar dividendos automáticamente (necesita FX cargado para conversión).
+  // En modo consolidado no se sincroniza: es sólo lectura y ya se sincroniza por portafolio.
   const portfolios = getPortfolios();
   const stored = portfolios.find((p) => p.id === activePortfolioId);
-  if (stored) {
+  if (stored && !_consolidatedActive) {
     const divChanged = await syncDividends(stored);
     if (divChanged) {
       savePortfolios(portfolios);
@@ -8619,16 +8732,36 @@ function _doRenderDashboard(portfolio) {
   renderSummaryTable(positions, totalInvested, currency, cashBalance);
   renderPositionsTable(positions, totalInvested, currency, portfolio.transactions || []);
   if (positions.length) drawAllSparklines(positions);
-  drawDonutChart(document.getElementById("portfolioDonutChart"), positions, totalInvested, currency, cashBalance);
-  renderDonutLegend(positions, totalInvested, currency, cashBalance);
-  drawHoldingsBarChart(document.getElementById("holdingsBarChart"), positions, currency);
-  renderHoldingsTreemap(positions, currency);
+  // Composición consolidada (Visual 1): sólo se dibuja el panel activo; los demás
+  // se dibujan al alternar (evita lienzos con tamaño 0 por estar ocultos).
+  _compositionCtx = { positions, totalInvested, currency, cashBalance };
+  renderCompositionPanel(_compositionMode);
   renderAllocationCharts(positions, totalInvested, currency, cashBalance);
+}
+
+// ── Panel de composición: ponderación / Top 10 / mapa de calor (Visual 1) ──────
+let _compositionMode = "donut";
+let _compositionCtx = null;
+
+function renderCompositionPanel(which) {
+  _compositionMode = which || _compositionMode;
+  const ctx = _compositionCtx;
+  if (!ctx) return;
+  const { positions, totalInvested, currency, cashBalance } = ctx;
+  if (_compositionMode === "donut") {
+    drawDonutChart(document.getElementById("portfolioDonutChart"), positions, totalInvested, currency, cashBalance);
+    renderDonutLegend(positions, totalInvested, currency, cashBalance);
+  } else if (_compositionMode === "bars") {
+    drawHoldingsBarChart(document.getElementById("holdingsBarChart"), positions, currency);
+  } else if (_compositionMode === "heatmap") {
+    renderHoldingsTreemap(positions, currency);
+  }
 }
 
 function renderSummaryTable(positions, totalInvested, currency, cashBalance) {
   const tbody = document.getElementById("summaryTableBody");
   const emptyMsg = document.getElementById("noPositionsSummaryMsg");
+  if (!tbody) return; // La tabla "Cambio diario" se fusionó en Posiciones (Visual 1)
   const cash = cashBalance || 0;
 
   if (!positions.length && cash <= 0) {
@@ -11568,8 +11701,44 @@ function initializeTrackerModule() {
   document.getElementById("valueChartPeriodNav")?.addEventListener("click", (e) => {
     const btn = e.target.closest(".perf-period-btn");
     if (!btn) return;
+    const pop = document.getElementById("valueCustomPopover");
+    // Botón "Personalizado" (P1.8): abre/cierra el selector de fechas, no recarga aún.
+    if (btn.dataset.range === "custom") {
+      if (pop) {
+        pop.classList.toggle("hidden");
+        if (!pop.classList.contains("hidden")) {
+          const fromEl = document.getElementById("valueCustomFrom");
+          const toEl = document.getElementById("valueCustomTo");
+          const today = new Date().toISOString().slice(0, 10);
+          if (toEl && !toEl.value) toEl.value = today;
+          if (fromEl && !fromEl.value) { const d = new Date(); d.setMonth(d.getMonth() - 6); fromEl.value = d.toISOString().slice(0, 10); }
+          if (fromEl) fromEl.max = today;
+          if (toEl) toEl.max = today;
+        }
+      }
+      return;
+    }
+    if (pop) pop.classList.add("hidden");
+    _valueCustomRange = null;
     document.querySelectorAll("#valueChartPeriodNav .perf-period-btn").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
+    summaryValueLoaded = false;
+    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+    if (portfolio) loadSummaryValueChart(portfolio);
+  });
+
+  // Aplicar rango personalizado del gráfico hero (P1.8)
+  document.getElementById("valueCustomApply")?.addEventListener("click", () => {
+    const from = document.getElementById("valueCustomFrom")?.value;
+    const to = document.getElementById("valueCustomTo")?.value;
+    const err = document.getElementById("valueCustomError");
+    if (!from || !to) { if (err) err.textContent = "Elige ambas fechas."; return; }
+    if (from > to) { if (err) err.textContent = "La fecha inicial debe ser anterior a la final."; return; }
+    if (err) err.textContent = "";
+    _valueCustomRange = { from, to };
+    document.getElementById("valueCustomPopover")?.classList.add("hidden");
+    document.querySelectorAll("#valueChartPeriodNav .perf-period-btn").forEach((b) => b.classList.remove("active"));
+    document.getElementById("valueCustomBtn")?.classList.add("active");
     summaryValueLoaded = false;
     const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
     if (portfolio) loadSummaryValueChart(portfolio);
@@ -11583,6 +11752,22 @@ function initializeTrackerModule() {
     btn.classList.add("active");
     summaryChartMode = btn.dataset.series;
     drawSummaryChartForMode();
+  });
+
+  // Toggle de composición (Ponderación / Top 10 / Mapa de calor) — Visual 1
+  document.getElementById("compositionToggle")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".comp-btn");
+    if (!btn) return;
+    const which = btn.dataset.comp;
+    document.querySelectorAll("#compositionToggle .comp-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    document.querySelectorAll("#compositionCard .comp-panel").forEach((p) => p.classList.toggle("hidden", p.dataset.compPanel !== which));
+    const card = document.getElementById("compositionCard");
+    if (card) card.dataset.comp = which;
+    const sub = document.getElementById("compositionSub");
+    if (sub) sub.textContent = which === "donut" ? "Distribución por posición"
+      : which === "bars" ? "Top 10 por valor actual"
+      : "Tamaño = peso · color = cambio de hoy";
+    renderCompositionPanel(which);
   });
 
   // ── Accesibilidad: cerrar cualquier modal del tracker con ESC (L2.6) ───────
@@ -12392,6 +12577,7 @@ const portfolioValueChartStates = new WeakMap();
 // ── Toggle de serie del gráfico hero del Resumen (P0.3) ─────────────────────
 let summaryChartMode = "value"; // "value" | "invested" | "benchmark"
 let _summaryChartData = null;
+let _valueCustomRange = null; // {from, to} — rango personalizado del gráfico (P1.8)
 
 async function drawSummaryChartForMode() {
   const data = _summaryChartData;
@@ -12454,8 +12640,18 @@ async function loadSummaryValueChart(portfolio) {
   if (!canvas) return;
   const portfolioCur = portfolio.currency || "USD";
   const activeBtn = document.querySelector("#valueChartPeriodNav .perf-period-btn.active");
-  const range = activeBtn?.dataset.range || "1y";
-  const interval = activeBtn?.dataset.interval || "1d";
+  let range = activeBtn?.dataset.range || "1y";
+  let interval = activeBtn?.dataset.interval || "1d";
+  // Rango personalizado (P1.8): se descarga un periodo amplio y se recorta en cliente,
+  // sin depender de que el backend acepte fechas arbitrarias.
+  const cr = (range === "custom") ? _valueCustomRange : null;
+  if (cr) {
+    const spanDays = (new Date(cr.to) - new Date(cr.from)) / 86400000;
+    const fromAgeDays = (Date.now() - new Date(cr.from)) / 86400000;
+    if (fromAgeDays > 730 || spanDays > 365 * 2) { range = "max"; interval = spanDays > 365 * 3 ? "1wk" : "1d"; }
+    else if (spanDays > 365) { range = "2y"; interval = "1d"; }
+    else { range = "1y"; interval = "1d"; }
+  }
 
   const resetReadout = (msg) => {
     drawPortfolioValueChart(canvas, [], portfolioCur);
@@ -12497,7 +12693,10 @@ async function loadSummaryValueChart(portfolio) {
       else if (last != null) map[ds] = last;
     }
   });
-  const series = buildInvestmentValueSeries(allPositions, dates, tickerDateMaps, portfolioCur);
+  // Recorta al rango personalizado tras el forward-fill (así los días no bursátiles
+  // dentro de la ventana ya heredaron su último cierre conocido).
+  const windowDates = cr ? dates.filter((d) => d >= cr.from && d <= cr.to) : dates;
+  const series = buildInvestmentValueSeries(allPositions, windowDates, tickerDateMaps, portfolioCur);
   // Conserva `invested` alineado por índice para la serie de comparación (P0.3).
   const points = series
     .map((p) => ({ date: p.date, value: p.market, invested: p.invested }))

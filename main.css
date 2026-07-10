@@ -14556,6 +14556,122 @@ body.light-mode .value-series-btn.active { color: #172033; }
 .div-bars-wrap { position: relative; width: 100%; margin-top: 8px; }
 .div-bars-wrap canvas { display: block; width: 100%; }
 
+/* ── Tarjeta de composición unificada (Visual 1) ──────────────────────────── */
+.composition-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.composition-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.composition-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.comp-btn {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: Inter, sans-serif;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.comp-btn:hover { color: rgba(255, 255, 255, 0.8); }
+.comp-btn.active { background: rgba(var(--primary-rgb), 0.2); color: #fff; }
+.comp-panel { margin-top: 6px; }
+.comp-panel.hidden { display: none; }
+.comp-panel-sub { display: block; margin-bottom: 8px; font-size: 0.8rem; color: var(--muted, #9ca3b4); }
+/* El toggle Invertido/Valor actual sólo aplica a la vista de ponderación. */
+.composition-card:not([data-comp="donut"]) #donutBaseToggle { display: none; }
+body.light-mode .composition-toggle { background: rgba(15, 23, 42, 0.05); }
+body.light-mode .comp-btn { color: #5b6478; }
+body.light-mode .comp-btn.active { color: #172033; }
+@media (max-width: 560px) {
+  .composition-controls { width: 100%; }
+  .composition-toggle { width: 100%; }
+  .comp-btn { flex: 1; padding: 7px 6px; font-size: 0.74rem; }
+}
+
+/* ── Rango de fechas personalizado del gráfico hero (P1.8) ─────────────────── */
+.value-chart-controls { position: relative; }
+.value-custom-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 130;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-strong, #12121a);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+.value-custom-popover.hidden { display: none; }
+.value-custom-popover label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--muted, #9ca3b4);
+}
+.value-custom-popover input[type="date"] {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text, #f5f7fb);
+  font-size: 0.82rem;
+}
+.value-custom-popover .button { padding: 7px 14px; }
+.value-custom-error { flex-basis: 100%; color: var(--loss, #ff6b81); font-size: 0.72rem; }
+body.light-mode .value-custom-popover { background: #fff; border-color: rgba(15, 23, 42, 0.12); }
+body.light-mode .value-custom-popover input[type="date"] { color: #172033; border-color: rgba(15, 23, 42, 0.14); background: rgba(15, 23, 42, 0.03); }
+@media (max-width: 560px) {
+  .value-custom-popover { left: 0; right: auto; }
+}
+
+/* ── Vista consolidada navegable "Todos" (P0.4) ───────────────────────────── */
+.cbar-cta { margin-left: auto; white-space: nowrap; align-self: center; }
+.consolidated-badge {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--warm, #ffb454);
+  background: rgba(var(--warm-rgb, 255, 180, 84), 0.14);
+  border: 1px solid rgba(var(--warm-rgb, 255, 180, 84), 0.3);
+}
+#trackerDashView.is-consolidated .consolidated-badge { display: inline-flex; }
+/* Modo sólo lectura: ocultar toda acción que edite datos del portafolio. */
+#trackerDashView.is-consolidated #addPositionBtn,
+#trackerDashView.is-consolidated .pos-action-menu,
+#trackerDashView.is-consolidated #manageCashBtn,
+#trackerDashView.is-consolidated .portfolio-rename-btn,
+#trackerDashView.is-consolidated #editPortfolioSettingsBtn,
+#trackerDashView.is-consolidated #sharePortfolioBtn {
+  display: none !important;
+}
+
 /* ── Gráficas táctiles en móvil (Mobile 8) ────────────────────────────────────
    Permite el scroll vertical de la página, pero captura el arrastre horizontal
    sobre el lienzo para mover el crosshair/tooltip (Pointer Events ya unifican
