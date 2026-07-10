@@ -7853,6 +7853,13 @@ function rebuildOpenPositionForTicker(portfolio, ticker, baseline) {
   for (const tx of txs) {
     currency = tx.currency || currency;
     if (tx.type === "COMPRA") {
+      // Si la posición estaba en cero, esta compra reinicia el tramo de
+      // tenencia actual: la fecha debe reflejar desde cuándo se sostiene la
+      // posición ACTUAL, no la primera compra de todos los tiempos. Sin esto,
+      // vender todo y recomprar después dejaba `purchaseDate` "vieja", y el
+      // historial (buildAllPositionHistory) contaba el hueco sin acciones
+      // como si se tuviera la cantidad actual — inflaba el gráfico de valor.
+      const wasEmpty = qty <= 1e-9;
       const oldInvested = avg * qty;
       const newInvested = (tx.price || 0) * (tx.quantity || 0);
       const oldComm = oldInvested * commPct / 100;
@@ -7862,7 +7869,8 @@ function rebuildOpenPositionForTicker(portfolio, ticker, baseline) {
       const totInvested = oldInvested + newInvested;
       commPct = totInvested > 0 ? (oldComm + newComm) / totInvested * 100 : commPct;
       const d = (tx.date || "").slice(0, 10);
-      if (d && (!earliestDate || d < earliestDate)) earliestDate = d;
+      if (d && (wasEmpty || !earliestDate)) earliestDate = d;
+      else if (d && d < earliestDate) earliestDate = d;
     } else { // VENTA: solo reduce cantidad (igual que el handler de retiro)
       qty = Math.max(0, qty - (tx.quantity || 0));
     }
@@ -12736,28 +12744,6 @@ function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labe
 
 const investmentValueChartStates = new WeakMap();
 
-// Reconstruye el efectivo acumulado por fecha a partir de las transacciones
-// (compras/ventas/dividendos/aportes/retiros), para que el gráfico "Valor del
-// portafolio" incluya el efectivo igual que el KPI "Valor actual" (bug #4).
-function buildCashBalanceSeries(transactions, dates, portfolioCur) {
-  const cashTxs = (transactions || [])
-    .filter((tx) => tx.type === "COMPRA" || tx.type === "VENTA" || tx.type === "DIVIDENDO" || tx.type === "DEPOSITO" || tx.type === "RETIRO")
-    .map((tx) => ({ date: (tx.date || "").slice(0, 10), delta: txCashEffect(tx, portfolioCur) }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  const result = {};
-  let cum = 0;
-  let txIdx = 0;
-  for (const date of dates) {
-    while (txIdx < cashTxs.length && cashTxs[txIdx].date <= date) {
-      cum += cashTxs[txIdx].delta;
-      txIdx++;
-    }
-    result[date] = cum;
-  }
-  return result;
-}
-
 function buildInvestmentValueSeries(allPositions, dates, tickerDateMaps, portfolioCurrency) {
   if (!dates.length) return [];
   return dates.map((date) => {
@@ -12960,18 +12946,44 @@ function drawInvestmentValueChart(canvas, points, currency) {
   paintInvestmentValueChart(canvas);
 }
 
+// Fecha desde la que se sostiene CONTINUAMENTE la posición actual de un
+// ticker (bug del gráfico de valor): si se vendió todo y se recompró después,
+// `pos.purchaseDate` puede seguir apuntando a la primera compra de todos los
+// tiempos (dato ya guardado, de antes del fix en rebuildOpenPositionForTicker).
+// Se recalcula replayando COMPRA/VENTA y tomando la fecha de la última compra
+// que arrancó desde cantidad cero. Devuelve null si no hay transacciones para
+// ese ticker (posiciones importadas por CSV sin historial completo).
+function _effectiveOpenPurchaseDate(transactions, ticker) {
+  const txs = (transactions || [])
+    .filter((t) => t.ticker === ticker && (t.type === "COMPRA" || t.type === "VENTA"))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (!txs.length) return null;
+  let qty = 0;
+  let since = null;
+  for (const tx of txs) {
+    if (tx.type === "COMPRA") {
+      if (qty <= 1e-9) since = (tx.date || "").slice(0, 10);
+      qty += tx.quantity || 0;
+    } else {
+      qty = Math.max(0, qty - (tx.quantity || 0));
+    }
+  }
+  return since;
+}
+
 function buildAllPositionHistory(portfolio) {
   const portfolioCur = portfolio.currency || "USD";
   const result = [];
 
   // Open positions
   for (const pos of (portfolio.positions || [])) {
+    const effectiveDate = _effectiveOpenPurchaseDate(portfolio.transactions, pos.ticker);
     result.push({
       ticker: pos.ticker,
       avgPrice: pos.avgPrice || 0,
       quantity: pos.quantity || 0,
       currency: getPosCurrency(pos, portfolioCur),
-      purchaseDate: pos.purchaseDate || null,
+      purchaseDate: effectiveDate || pos.purchaseDate || null,
       sellDate: null
     });
   }
@@ -13115,9 +13127,18 @@ async function loadSummaryValueChart(portfolio) {
   if (statusEl) statusEl.innerHTML = `<span class="inline-spinner"></span> Calculando evolución del valor…`;
 
   const uniqueTickers = [...new Set(allPositions.map((p) => p.ticker))];
-  const histories = await Promise.all(uniqueTickers.map((t) =>
-    fetchHistoricalCloses(t, range, interval).then((h) => ({ t, h })).catch(() => ({ t, h: [] }))
-  ));
+  // Asegura el tipo de cambio ANTES de convertir (bug de valores inflados):
+  // showTrackerDashView dispara este render en paralelo con renderPortfolioDashboard
+  // (que también hace fetchExchangeRates), así que sin este await la conversión
+  // podía correr con el caché de FX vacío → convertAmount devolvía null →
+  // conversion caía a 1 (sin convertir) para posiciones en otra moneda.
+  const posCurrencies = [...new Set(allPositions.map((p) => p.currency))];
+  const [histories] = await Promise.all([
+    Promise.all(uniqueTickers.map((t) =>
+      fetchHistoricalCloses(t, range, interval).then((h) => ({ t, h })).catch(() => ({ t, h: [] }))
+    )),
+    fetchExchangeRates(posCurrencies, portfolioCur)
+  ]);
 
   const tickerDateMaps = {};
   const allDates = new Set();
@@ -13144,12 +13165,17 @@ async function loadSummaryValueChart(portfolio) {
   // dentro de la ventana ya heredaron su último cierre conocido).
   const windowDates = cr ? dates.filter((d) => d >= cr.from && d <= cr.to) : dates;
   const series = buildInvestmentValueSeries(allPositions, windowDates, tickerDateMaps, portfolioCur);
-  // El efectivo se suma al valor de mercado (no al invertido) para que coincida
-  // con el KPI "Valor actual", que también lo incluye (bug #4).
-  const cashByDate = buildCashBalanceSeries(portfolio.transactions, windowDates, portfolioCur);
+  // El efectivo ACTUAL se suma como constante al valor de mercado (no al
+  // invertido), para que el punto más reciente coincida con el KPI "Valor
+  // actual" (bug #4), que también lo incluye. No se intenta reconstruir un
+  // efectivo histórico por fecha: replayar cada COMPRA/VENTA como si saliera
+  // de una caja que arranca en $0 ignora que la mayoría de las posiciones no
+  // tienen un DEPOSITO previo registrado, y el acumulado se iba muy negativo
+  // (viz. hallazgo real: infló/desinfló el gráfico muy por debajo del KPI).
+  const cashBalance = portfolio.cashBalance || 0;
   // Conserva `invested` alineado por índice para la serie de comparación (P0.3).
   const points = series
-    .map((p) => ({ date: p.date, value: p.market + (cashByDate[p.date] || 0), invested: p.invested }))
+    .map((p) => ({ date: p.date, value: p.market + cashBalance, invested: p.invested }))
     .filter((p) => p.value > 0);
 
   if (points.length < 2) {
