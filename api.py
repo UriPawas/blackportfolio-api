@@ -412,6 +412,15 @@ install_persistence(app)
 
 
 @app.on_event("startup")
+async def expand_threadpool():
+    # Los endpoints síncronos (def) corren en el threadpool de anyio, que por
+    # defecto tiene 40 hilos; yfinance retiene un hilo 1-3 s y el chat de IA
+    # hasta 45 s, así que con varios usuarios concurrentes el pool se agota.
+    import anyio
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 100
+
+
+@app.on_event("startup")
 def initialize_backup_scheduler():
     start_backup_scheduler()
 

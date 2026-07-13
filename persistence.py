@@ -315,7 +315,13 @@ _session_factory = None
 def get_engine():
     global _engine, _session_factory
     if _engine is None:
-        _engine = create_engine(_database_url(), pool_pre_ping=True)
+        _engine = create_engine(
+            _database_url(),
+            pool_pre_ping=True,
+            pool_size=10,
+            max_overflow=20,
+            pool_recycle=300,
+        )
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
     return _engine
 
@@ -342,14 +348,38 @@ def initialize_firebase_admin() -> None:
         firebase_admin.initialize_app(options={"projectId": FIREBASE_PROJECT_ID})
 
 
+# Cache corto de tokens ya verificados. verify_id_token(check_revoked=True)
+# hace un round-trip a la API de Firebase en CADA request autenticado; con el
+# cache solo se paga una vez por minuto por usuario. TTL corto a propósito:
+# una revocación de sesión tarda ≤60 s en surtir efecto.
+_TOKEN_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_TOKEN_CACHE_TTL = 60
+_TOKEN_CACHE_MAX = 512
+
+
 def verify_firebase_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token de autenticacion requerido.")
+    raw_token = authorization[7:]
+    cache_key = hashlib.sha256(raw_token.encode()).hexdigest()
+    now = time.time()
+    cached = _TOKEN_CACHE.get(cache_key)
+    if cached and now - cached[0] < _TOKEN_CACHE_TTL:
+        return cached[1]
     try:
         initialize_firebase_admin()
-        return firebase_auth.verify_id_token(authorization[7:], check_revoked=True)
+        decoded = firebase_auth.verify_id_token(raw_token, check_revoked=True)
     except Exception:
+        _TOKEN_CACHE.pop(cache_key, None)
         raise HTTPException(status_code=401, detail="Sesion invalida o expirada.")
+    if len(_TOKEN_CACHE) >= _TOKEN_CACHE_MAX:
+        cutoff = now - _TOKEN_CACHE_TTL
+        for k in [k for k, v in _TOKEN_CACHE.items() if v[0] < cutoff]:
+            _TOKEN_CACHE.pop(k, None)
+        if len(_TOKEN_CACHE) >= _TOKEN_CACHE_MAX:
+            _TOKEN_CACHE.clear()
+    _TOKEN_CACHE[cache_key] = (now, decoded)
+    return decoded
 
 
 def utc_now() -> datetime:
