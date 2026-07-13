@@ -26,7 +26,18 @@ FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "portify-6467f")
 
 # Limiter compartido entre api.py y los routers de este módulo, para que los
 # endpoints sensibles de 2FA cuenten con el mismo control de tasa que el resto.
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+def _client_ip(request: Request) -> str:
+    """IP real del cliente detrás del proxy de Railway. Con --forwarded-allow-ips "*"
+    uvicorn toma la PRIMERA entrada de X-Forwarded-For, que el cliente puede
+    falsificar para evadir el rate limit rotando IPs inventadas. El edge de
+    Railway añade la IP real como ÚLTIMA entrada, así que esa es la confiable."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.rsplit(",", 1)[-1].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_client_ip, default_limits=["200/minute"])
 
 PLAN_ALIASES = {
     "Free": "Explorer",
@@ -798,6 +809,41 @@ class TotpMigrateBody(BaseModel):
     secret: str = ""
 
 
+# Freno de fuerza bruta por CUENTA para códigos TOTP/backup. El rate limit por IP
+# no basta: un atacante distribuido (o falsificando X-Forwarded-For) lo evade.
+# Ventana deslizante en memoria (una sola instancia en Railway): tras
+# _TOTP_MAX_FAILURES fallos en _TOTP_WINDOW_SECONDS se responde 429 hasta que la
+# ventana expira. Un código correcto resetea el contador, así que un usuario
+# legítimo con typos nunca queda bloqueado de forma permanente.
+_TOTP_MAX_FAILURES = 8
+_TOTP_WINDOW_SECONDS = 10 * 60
+_totp_failures: dict[str, list[float]] = {}
+
+
+def _totp_guard(uid: str) -> None:
+    now = time.time()
+    fails = [t for t in _totp_failures.get(uid, []) if now - t < _TOTP_WINDOW_SECONDS]
+    if fails:
+        _totp_failures[uid] = fails
+    else:
+        _totp_failures.pop(uid, None)
+    if len(fails) >= _TOTP_MAX_FAILURES:
+        raise HTTPException(
+            status_code=429,
+            detail="Demasiados intentos fallidos. Espera unos minutos e intenta de nuevo.",
+        )
+
+
+def _totp_fail(uid: str) -> None:
+    if len(_totp_failures) > 10_000:  # cota de memoria ante abuso masivo
+        _totp_failures.clear()
+    _totp_failures.setdefault(uid, []).append(time.time())
+
+
+def _totp_ok(uid: str) -> None:
+    _totp_failures.pop(uid, None)
+
+
 twofa_router = APIRouter(prefix="/api/2fa", tags=["2fa"])
 
 
@@ -854,11 +900,14 @@ def twofa_verify_setup(
     session: Session = Depends(get_session),
 ):
     uid = token["uid"]
+    _totp_guard(uid)
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.pending_secret:
         raise HTTPException(status_code=400, detail="Sin proceso de activación pendiente. Reinícialo.")
     if not _verify_totp(cred.pending_secret, body.code):
+        _totp_fail(uid)
         raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
+    _totp_ok(uid)
     cred.secret = cred.pending_secret
     cred.pending_secret = None
     cred.enabled = True
@@ -881,13 +930,16 @@ def twofa_verify(
     session: Session = Depends(get_session),
 ):
     uid = token["uid"]
+    _totp_guard(uid)
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="2FA no está activo en esta cuenta.")
     if _verify_totp(cred.secret, body.code):
+        _totp_ok(uid)
         return {"valid": True, "token": issue_2fa_token(uid)}
     # Plan B: código de respaldo de un solo uso (recuperación sin autenticador).
     if _consume_backup_code(session, uid, body.code):
+        _totp_ok(uid)
         session.add(SecurityActivity(
             firebase_uid=uid, event="2fa_backup_used", detail="login", created_at=utc_now(),
         ))
@@ -898,6 +950,7 @@ def twofa_verify(
             "usedBackupCode": True,
             "backupCodesRemaining": _backup_codes_remaining(session, uid),
         }
+    _totp_fail(uid)
     return {"valid": False}
 
 
@@ -910,11 +963,14 @@ def twofa_disable(
     session: Session = Depends(get_session),
 ):
     uid = token["uid"]
+    _totp_guard(uid)
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="No hay 2FA activo.")
     if not (_verify_totp(cred.secret, body.code) or _consume_backup_code(session, uid, body.code)):
+        _totp_fail(uid)
         raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
+    _totp_ok(uid)
     cred.secret = None
     cred.pending_secret = None
     cred.enabled = False
@@ -938,11 +994,14 @@ def twofa_regenerate_backup_codes(
     """Genera un juego nuevo de códigos de respaldo (invalida los anteriores).
     Requiere un código TOTP válido del autenticador para autorizar."""
     uid = token["uid"]
+    _totp_guard(uid)
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="2FA no está activo en esta cuenta.")
     if not _verify_totp(cred.secret, body.code):
+        _totp_fail(uid)
         raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
+    _totp_ok(uid)
     codes = _generate_backup_codes()
     _store_backup_codes(session, uid, codes)
     session.add(SecurityActivity(

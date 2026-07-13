@@ -394,7 +394,9 @@ def _safe_error(exc: Exception, status_code: int = 500,
             pass
     return HTTPException(status_code=status_code, detail=public_detail)
 
-app = FastAPI()
+# Sin documentación pública: /docs, /redoc y /openapi.json expondrían el mapa
+# completo del API en la URL de Railway.
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -1084,7 +1086,9 @@ ADMIN_EMAILS = {
 }
 
 def require_admin(token: dict = Depends(require_2fa)) -> dict:
-    if (token.get("email") or "").lower() not in ADMIN_EMAILS:
+    # email_verified: el admin se decide por correo, así que además exigimos que
+    # Firebase haya verificado ese correo (Google sign-in ya llega verificado).
+    if (token.get("email") or "").lower() not in ADMIN_EMAILS or not token.get("email_verified"):
         raise HTTPException(status_code=403, detail="Acceso restringido a administradores.")
     return token
 

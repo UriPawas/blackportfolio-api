@@ -13,11 +13,20 @@ from firebase_admin import storage
 from sqlalchemy import inspect
 
 from persistence import (
+    AiUsage,
+    AnalyticsEvent,
     AppUser,
+    BetaAllowlist,
+    BetaCode,
     BillingEvent,
+    Feedback,
+    PortfolioShare,
     PortfolioSnapshot,
     SecurityActivity,
+    TotpBackupCode,
     TotpCredential,
+    UserAlert,
+    UserNotification,
     get_session,
     initialize_firebase_admin,
 )
@@ -25,12 +34,23 @@ from persistence import (
 
 LOGGER = logging.getLogger("blackportfolio.backups")
 BACKUP_PREFIX = "postgres-backups/"
+# Todas las tablas con datos de usuario. app_users va primero (FK de
+# portfolio_snapshots). ai_cache se excluye a propósito: es cache regenerable.
 MODEL_TABLES = (
     ("app_users", AppUser),
     ("portfolio_snapshots", PortfolioSnapshot),
     ("security_activity", SecurityActivity),
     ("totp_credentials", TotpCredential),
+    ("totp_backup_codes", TotpBackupCode),
     ("billing_events", BillingEvent),
+    ("feedback", Feedback),
+    ("beta_allowlist", BetaAllowlist),
+    ("beta_codes", BetaCode),
+    ("portfolio_shares", PortfolioShare),
+    ("user_alerts", UserAlert),
+    ("user_notifications", UserNotification),
+    ("analytics_events", AnalyticsEvent),
+    ("ai_usage", AiUsage),
 )
 
 

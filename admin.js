@@ -158,7 +158,7 @@ function planBadge(plan) {
     "Wealth Desk": "badge-inst"
   };
   const cls = map[plan] || "badge-free";
-  return `<span class="badge ${cls}">${plan || "Explorer"}</span>`;
+  return `<span class="badge ${cls}">${esc(plan || "Explorer")}</span>`;
 }
 
 function formatDate(iso) {
