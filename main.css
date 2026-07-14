@@ -4744,10 +4744,30 @@ body.light-mode .tab-group-sep {
 }
 
 .donut-legend-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 9px;
+  width: 100%;
   min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.donut-legend-item:hover,
+.donut-legend-item:focus-visible,
+.donut-legend-item.is-highlighted {
+  border-color: rgba(var(--primary-rgb), 0.18);
+  background: rgba(var(--primary-rgb), 0.075);
+  outline: none;
+  transform: translateX(2px);
 }
 
 .donut-legend-dot {
@@ -4760,7 +4780,6 @@ body.light-mode .tab-group-sep {
 .donut-legend-ticker {
   font-size: 0.88rem;
   font-weight: 600;
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4768,9 +4787,11 @@ body.light-mode .tab-group-sep {
 }
 
 .donut-legend-weight {
+  min-width: 40px;
   font-size: 0.82rem;
   color: var(--muted);
-  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .tracker-positions-section {
@@ -12813,46 +12834,10 @@ body.light-mode .investor-modal-close { color: #64748b; border-color: rgba(15, 2
   font-size: 0.67rem;
 }
 
-.portfolio-weight-card .donut-legend {
-  gap: 4px;
-}
-
-.portfolio-weight-card .donut-legend-item {
-  display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) auto auto;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 8px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
-}
-
-.portfolio-weight-card .donut-legend-item:hover,
-.portfolio-weight-card .donut-legend-item:focus-visible,
-.portfolio-weight-card .donut-legend-item.is-highlighted {
-  border-color: rgba(var(--primary-rgb), 0.18);
-  background: rgba(var(--primary-rgb), 0.075);
-  outline: none;
-  transform: translateX(2px);
-}
-
 .donut-legend-value {
   color: rgba(226, 232, 255, 0.5);
   font-size: 0.7rem;
   white-space: nowrap;
-}
-
-.portfolio-weight-card .donut-legend-weight {
-  min-width: 44px;
-  color: rgba(226, 232, 255, 0.72);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
 body.light-mode .portfolio-weight-heading span,
@@ -12868,7 +12853,6 @@ body.light-mode .donut-chart-tooltip {
 
 body.light-mode .donut-chart-tooltip strong { color: #172033; }
 body.light-mode .donut-chart-tooltip small { color: rgba(23, 32, 51, 0.58); }
-body.light-mode .portfolio-weight-card .donut-legend-weight { color: rgba(23, 32, 51, 0.7); }
 
 @media (max-width: 480px) {
   .portfolio-weight-card .donut-base-btn {
@@ -12882,7 +12866,7 @@ body.light-mode .portfolio-weight-card .donut-legend-weight { color: rgba(23, 32
     height: 196px !important;
   }
 
-  .portfolio-weight-card .donut-legend-item {
+  .donut-legend-item {
     grid-template-columns: 9px minmax(0, 1fr) auto;
     min-height: 38px;
   }
