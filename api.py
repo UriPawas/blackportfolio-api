@@ -16,9 +16,6 @@ from persistence import (
 )
 import hashlib
 import requests
-import yfinance as yf
-import numpy as np
-import pandas as pd
 import os
 import json
 import secrets
@@ -26,6 +23,31 @@ import string
 import stripe
 import time as _time_module
 from backup_service import start_backup_scheduler
+
+# ── Import perezoso de librerías pesadas (pandas/numpy/yfinance ≈250 MB) ───────
+# Sólo se usan en endpoints de mercado. Cargarlas al primer acceso (no al boot)
+# evita reservar esa RAM en un proceso que casi siempre está inactivo (beta
+# cerrada). El proxy es transparente: yf.Ticker / pd.MultiIndex / np.array siguen
+# funcionando igual; la importación real ocurre en la primera petición de Markets.
+class _LazyModule:
+    def __init__(self, name):
+        object.__setattr__(self, "_name", name)
+        object.__setattr__(self, "_mod", None)
+
+    def _load(self):
+        mod = object.__getattribute__(self, "_mod")
+        if mod is None:
+            import importlib
+            mod = importlib.import_module(object.__getattribute__(self, "_name"))
+            object.__setattr__(self, "_mod", mod)
+        return mod
+
+    def __getattr__(self, attr):
+        return getattr(self._load(), attr)
+
+yf = _LazyModule("yfinance")
+np = _LazyModule("numpy")
+pd = _LazyModule("pandas")
 
 # ── HTTP session singleton (connection pool reutilizado entre requests) ────────
 _HTTP_SESSION = requests.Session()
@@ -79,6 +101,19 @@ _ALL_CACHES = [
     _DIVIDENDS_CACHE, _NEWS_CACHE, _BINANCE_PRICE_CACHE,
 ]
 
+def _make_malloc_trim():
+    # glibc no devuelve al SO la memoria que libera pandas/yfinance tras un
+    # request; queda como "marca de agua" y la RAM idle sube y no baja. malloc_trim
+    # fuerza esa devolución. Sólo aplica en Linux/glibc (Railway); no-op en local.
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        return lambda: libc.malloc_trim(0)
+    except Exception:
+        return lambda: None
+
+_malloc_trim = _make_malloc_trim()
+
 def _cache_cleanup_loop():
     import threading
     def _run():
@@ -86,6 +121,7 @@ def _cache_cleanup_loop():
             _time_module.sleep(600)  # cada 10 minutos
             for c in _ALL_CACHES:
                 c.purge_expired()
+            _malloc_trim()  # devolver RAM liberada al SO tras la limpieza
     t = threading.Thread(target=_run, daemon=True)
     t.start()
 
@@ -419,7 +455,10 @@ async def expand_threadpool():
     # defecto tiene 40 hilos; yfinance retiene un hilo 1-3 s y el chat de IA
     # hasta 45 s, así que con varios usuarios concurrentes el pool se agota.
     import anyio
-    anyio.to_thread.current_default_thread_limiter().total_tokens = 100
+    # 32 basta para la concurrencia de una beta cerrada y limita el nº de hilos
+    # → menos arenas de malloc y menor marca de agua de RAM. Ajustable por env.
+    tokens = max(8, int(os.environ.get("THREADPOOL_TOKENS", "32")))
+    anyio.to_thread.current_default_thread_limiter().total_tokens = tokens
 
 
 @app.on_event("startup")
