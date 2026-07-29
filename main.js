@@ -6760,6 +6760,32 @@ function _loadLocalScript(src, globalName) {
   });
 }
 
+// Fotografía del reporte: el backend proxea los bytes de Pexels (la CSP de
+// Hosting no permite fetch a images.pexels.com, y sin data URI html2canvas
+// descarta la imagen al rasterizar). Cualquier fallo devuelve {} y el documento
+// cae al degradado del tono: nunca un hueco en blanco ni un <img> roto.
+async function _fetchReportImagery(sectors) {
+  const out = {};
+  try {
+    const res = await fetch(`${API_BASE_URL}/report/imagery?sectors=${encodeURIComponent(sectors.join(","))}`);
+    if (!res.ok) return out;
+    const slots = (await res.json()).slots || {};
+    const sizeFor = { cover: "large2x", opener: "large", closing: "large", band: "large", rail: "medium", inset: "medium" };
+    await Promise.all(Object.entries(slots).map(async ([slot, meta]) => {
+      try {
+        const r = await fetch(`${API_BASE_URL}/report/photo/${meta.id}?size=${sizeFor[slot] || "large"}`);
+        if (!r.ok) return;
+        const blob = await r.blob();
+        out[slot] = {
+          src: await new Promise(ok => { const f = new FileReader(); f.onload = () => ok(f.result); f.readAsDataURL(blob); }),
+          by: meta.by, avg: meta.avg,
+        };
+      } catch (_) { /* ese hueco se queda sin foto */ }
+    }));
+  } catch (_) { /* sin galería: el reporte se genera igual */ }
+  return out;
+}
+
 async function exportPortfolioPDF(startStr, endStr) {
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
@@ -6886,12 +6912,17 @@ async function exportPortfolioPDF(startStr, endStr) {
     console.warn("[Reporte PDF] Análisis IA no disponible:", aiError);
   }
 
+  // Fotografía por sector dominante (en paralelo no: la IA ya terminó y esto
+  // tarda poco; si falla, el documento sale con el degradado del tono).
+  const domSectors = _bucketPct(getTickerSector).slice(0, 3).map(r => r.label);
+  const images = await _fetchReportImagery(domSectors);
+
   // ── Construcción del documento paginado ───────────────────────────────────
   let built;
   try {
-    await _loadLocalScript("assets/pdf-report.js?v=1", "BPPdfReport");
+    await _loadLocalScript("assets/pdf-report.js?v=2", "BPPdfReport");
     built = window.BPPdfReport.build({
-      data, portfolio, tone: "brand", lang: currentLang || "es",
+      data, portfolio, tone: "brand", lang: currentLang || "es", images,
       ai: { sections: aiSections, model: aiModel, error: aiError },
       fmt: { money: (v, c) => formatCurrency(v, c || currency) },
       helpers: {

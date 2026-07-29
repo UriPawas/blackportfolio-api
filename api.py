@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, Body
+from fastapi import FastAPI, HTTPException, Request, Depends, Body, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -93,12 +93,17 @@ _FINANCIALS_CACHE     = _TTLCache(maxsize=50,  ttl=86400) # 24 h — datos trime
 _HOLDINGS_CACHE       = _TTLCache(maxsize=50,  ttl=86400) # 24 h — composición fondos
 _DIVIDENDS_CACHE      = _TTLCache(maxsize=100, ttl=3600)  # 1 h
 _NEWS_CACHE           = _TTLCache(maxsize=100, ttl=900)   # 15 min
+# Imágenes del reporte: metadatos diminutos y de larga vida; bytes pocos y de
+# vida corta — un JPEG grande pesa cientos de KB y esto corre con la RAM justa.
+_REPORT_IMG_META      = _TTLCache(maxsize=40,  ttl=86400) # 24 h — id/autor/color
+_REPORT_IMG_BYTES     = _TTLCache(maxsize=12,  ttl=3600)  # 1 h  — JPEG del reporte
 _BINANCE_PRICE_CACHE  = _TTLCache(maxsize=200, ttl=30)    # 30 s  — precios crypto
 
 _ALL_CACHES = [
     _CHART_CACHE, _SEASONALITY_CACHE_V2, _CALENDAR_CACHE_V2, _TIIE_CACHE_V2,
     _SEARCH_CACHE, _INFO_CACHE, _FINANCIALS_CACHE, _HOLDINGS_CACHE,
     _DIVIDENDS_CACHE, _NEWS_CACHE, _BINANCE_PRICE_CACHE,
+    _REPORT_IMG_META, _REPORT_IMG_BYTES,
 ]
 
 def _make_malloc_trim():
@@ -2294,6 +2299,168 @@ def gallery():
         return {"photos": photos.get("photos", []), "videos": videos.get("videos", [])}
     except Exception:
         return {"photos": [], "videos": []}
+
+
+# ── Imágenes del reporte PDF (Pexels) ────────────────────────────────────────
+# El navegador no puede convertir una foto de Pexels a data URI por su cuenta:
+# la CSP de Firebase Hosting no lleva images.pexels.com en `connect-src`, y sin
+# data URI html2canvas descarta la imagen al generar el PDF. Por eso los bytes
+# salen por aquí (mismo origen que el resto de la API, ya permitido) y la clave
+# de Pexels sigue sin tocar el frontend.
+#
+# Metadatos y bytes van en cachés separadas a propósito: los metadatos son
+# diminutos y duran un día; los bytes pesan y se guardan pocos y por poco
+# tiempo, para no inflar la RAM en reposo del servicio.
+# Sector → búsqueda. Las CLAVES son las etiquetas que produce getTickerSector
+# en main.js (SECTOR_MAP está en español); las inglesas de yfinance van también
+# por si un consumidor server-side las manda. Consultas genéricas, financieras o
+# arquitectónicas: nunca personas identificables ni logos de marca.
+SECTOR_IMAGE_QUERIES = {
+    # etiquetas de la app
+    "Tecnología": "data center server room",
+    "Comunicación": "fiber optic network abstract",
+    "Energía": "oil refinery night",
+    "Finanzas": "city skyline finance",
+    "Inmobiliario": "modern architecture facade",
+    "Consumo disc.": "retail store shelves",
+    "Consumo básico": "supermarket aisle products",
+    "Salud": "laboratory research equipment",
+    "Industrial": "factory automation robotic arm",
+    "Materiales": "steel mill industrial",
+    "Utilities": "power transmission lines dusk",
+    "Mercado amplio": "stock exchange building",
+    "Internacional": "container port aerial",
+    "México": "mexico city architecture",
+    "Europa": "european city architecture",
+    "Canadá": "toronto skyline",
+    "Cash": "bank vault interior",
+    # equivalentes de yfinance
+    "Technology": "data center server room",
+    "Communication Services": "fiber optic network abstract",
+    "Energy": "oil refinery night",
+    "Financial Services": "city skyline finance",
+    "Real Estate": "modern architecture facade",
+    "Consumer Cyclical": "retail store shelves",
+    "Consumer Defensive": "supermarket aisle products",
+    "Healthcare": "laboratory research equipment",
+    "Industrials": "factory automation robotic arm",
+    "Basic Materials": "steel mill industrial",
+    "crypto": "abstract digital network",
+    "etf": "stock exchange building",
+}
+_GENERIC_IMAGE_QUERIES = [
+    "city skyline finance", "minimal architecture", "modern office glass",
+    "market data screen", "abstract geometric building",
+]
+# Whitelist: el cliente elige *entre estas*, nunca escribe la búsqueda.
+_ALLOWED_IMAGE_QUERIES = set(SECTOR_IMAGE_QUERIES.values()) | set(_GENERIC_IMAGE_QUERIES)
+_PEXELS_SIZES = {"large2x", "large", "medium", "small"}
+
+
+def _pexels_search(query: str, per_page: int = 6):
+    """[{id, by, avg}] para una búsqueda de la whitelist. [] ante cualquier fallo."""
+    if not PEXELS_KEY or query not in _ALLOWED_IMAGE_QUERIES:
+        return []
+    cached = _REPORT_IMG_META.get(query)
+    if cached is not None:
+        return cached
+    try:
+        res = _HTTP_SESSION.get(
+            "https://api.pexels.com/v1/search",
+            params={"query": query, "per_page": per_page, "orientation": "landscape"},
+            headers={"Authorization": PEXELS_KEY}, timeout=10,
+        )
+        if res.status_code != 200:
+            return []
+        photos = [
+            {"id": p["id"], "by": p.get("photographer", ""), "avg": p.get("avg_color") or "#8a94a6"}
+            for p in res.json().get("photos", []) if p.get("id")
+        ]
+    except Exception:
+        return []
+    _REPORT_IMG_META.set(query, photos)
+    return photos
+
+
+@app.get("/api/report/imagery")
+@limiter.limit("30/minute")
+def report_imagery(request: Request, sectors: str = ""):
+    """Metadatos de las fotos del reporte, por hueco de la maqueta.
+
+    `sectors` es una lista separada por comas con los sectores dominantes del
+    portafolio; se traducen a búsquedas de la whitelist. Sin bytes aquí: el
+    cliente pide cada foto por id a /api/report/photo/{id}.
+    """
+    if not PEXELS_KEY:
+        return {"slots": {}}
+
+    wanted = [s.strip() for s in (sectors or "").split(",") if s.strip()][:3]
+    queries = []
+    for s in wanted:
+        q = SECTOR_IMAGE_QUERIES.get(s)
+        if q and q not in queries:
+            queries.append(q)
+    for q in _GENERIC_IMAGE_QUERIES:
+        if len(queries) >= 4:
+            break
+        if q not in queries:
+            queries.append(q)
+
+    pool = []
+    for q in queries:
+        for photo in _pexels_search(q):
+            if all(photo["id"] != p["id"] for p in pool):
+                pool.append(photo)
+    if not pool:
+        return {"slots": {}}
+
+    # Un hueco por patrón de la maqueta (ver references/pdf-document.md §5).
+    slots, names = {}, ["cover", "opener", "rail", "band", "closing"]
+    for i, name in enumerate(names):
+        p = pool[i % len(pool)]
+        slots[name] = {"id": p["id"], "by": p["by"], "avg": p["avg"]}
+    return {"slots": slots}
+
+
+@app.get("/api/report/photo/{photo_id}")
+@limiter.limit("60/minute")
+def report_photo(request: Request, photo_id: int, size: str = "large"):
+    """Bytes de una foto de Pexels por id.
+
+    El cliente sólo manda un entero: la URL real se resuelve contra la API
+    oficial de Pexels, nunca se acepta una URL arbitraria (evita SSRF).
+    """
+    if not PEXELS_KEY:
+        raise HTTPException(status_code=404, detail="Sin galería configurada")
+    if size not in _PEXELS_SIZES:
+        size = "large"
+
+    key = f"{photo_id}:{size}"
+    cached = _REPORT_IMG_BYTES.get(key)
+    if cached is not None:
+        return Response(content=cached, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
+    try:
+        meta = _HTTP_SESSION.get(
+            f"https://api.pexels.com/v1/photos/{photo_id}",
+            headers={"Authorization": PEXELS_KEY}, timeout=10,
+        )
+        if meta.status_code != 200:
+            raise HTTPException(status_code=404, detail="Foto no encontrada")
+        src = (meta.json().get("src") or {}).get(size)
+        if not src or not src.startswith("https://images.pexels.com/"):
+            raise HTTPException(status_code=404, detail="Foto no disponible")
+        img = _HTTP_SESSION.get(src, timeout=15)
+        if img.status_code != 200 or not img.content:
+            raise HTTPException(status_code=502, detail="No se pudo descargar la foto")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _safe_error(e, 503, "Galería no disponible temporalmente.")
+
+    _REPORT_IMG_BYTES.set(key, img.content)
+    return Response(content=img.content, media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ── Stripe ───────────────────────────────────────────────────────────────────

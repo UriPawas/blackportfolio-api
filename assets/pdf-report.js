@@ -205,6 +205,28 @@
         charts.push({ id: id, type: type, data: data, opts: opts || {} });
         return '<div id="' + id + '"></div>';
       }
+
+      /* Fotografía (pdf-document.md §5). Cada patrón trae su geometría; si el
+         hueco no tiene foto devuelve '' y el llamador usa el degradado del tono.
+         Alto y ancho explícitos: la paginación mide antes de que cargue nada. */
+      var IMG = ctx.images || {};
+      var SIZES = { 'img-band': [698, 150], 'img-duotone': [698, 190], 'img-rail': [219, 260],
+                    'img-inset': [76, 76], 'cover-img': [794, 640], 'opener-img': [794, 470],
+                    'img-closing': [794, 560] };
+      function hasImg(slot) { return !!(IMG[slot] && IMG[slot].src); }
+      function img(pattern, slot, extra, creditTop) {
+        if (!hasImg(slot)) return '';
+        var im = IMG[slot], sz = SIZES[pattern];
+        return '<div class="img-wrap ' + pattern + '" style="background:' + esc(im.avg || '#8a94a6') + '">' +
+               '<img src="' + im.src + '" width="' + sz[0] + '" height="' + sz[1] + '" alt="">' +
+               '<div class="tint"></div>' + (extra || '') +
+               '<span class="credit on-img' + (creditTop ? ' top' : '') + '">Foto: ' + esc(im.by || 'Pexels') +
+               ' · Pexels</span></div>';
+      }
+      var photographers = [];
+      Object.keys(IMG).forEach(function (k) {
+        if (IMG[k] && IMG[k].by && photographers.indexOf(IMG[k].by) < 0) photographers.push(IMG[k].by);
+      });
       function blk(html, attrs) {
         var a = '';
         for (var k in (attrs || {})) if (attrs[k] != null) a += ' ' + k + '="' + esc(attrs[k]) + '"';
@@ -286,7 +308,7 @@
         toc.push('<li><b><i>' + r + '</i>' + esc(T.sections[r]) + '</b></li>');
       });
       blk(
-        '<div class="cover-art"></div>' +
+        (img('cover-img', 'cover', '', true) || '<div class="cover-art"></div>') +
         '<div class="cover-card">' +
           '<div class="eyebrow">' + esc(T.kind) + (d.benchmarkLabel ? ' · ' + esc(d.benchmarkLabel) : '') + '</div>' +
           '<div class="cover-title">' + esc(pf.name) + '</div>' +
@@ -365,10 +387,42 @@
       }
       if (!d.isEndToday) blk('<div class="callout">' + T.cashNote + '</div>', { 'data-acc': '1' });
 
-      /* ════════ II · CARTA DEL PERIODO ════════ */
-      secHead('II', T.sections.II, null, '2');
-
+      // Movers arriba: la portadilla de §II ya los necesita.
       var upTop = (d.movers && d.movers.up) || [], downTop = (d.movers && d.movers.down) || [];
+      /* ════════ II · CARTA DEL PERIODO ════════ */
+      // Con foto, la sección abre a página completa (patrón `opener-half`);
+      // sin foto, abre en línea con el encabezado normal.
+      if (hasImg('opener')) {
+        blk(img('opener-img', 'opener', '<div class="opener-num">II</div>') +
+            '<div class="opener-body"><div class="eyebrow" style="--sec:var(--pdf-section-2)">Sección II</div>' +
+            '<h2>' + esc(T.sections.II) + '</h2>' +
+            '<div class="lede">Qué pasó con el dinero entre el ' + dateFull(d.startStr) + ' y el ' +
+            dateFull(d.endStr) + ', por qué pasó, cuánto costó en riesgo y qué queda por vigilar.</div>' +
+            '<div class="opener-figs">' +
+              '<div><span>' + T.resultAmtShort + '</span><strong class="' + sign(resultAmt) + '">' + amt(resultAmt) +
+                '</strong><small>' + pct(resultPct) + ' sobre ' + money(base, cur) + ' de capital base</small></div>' +
+              (active != null ? '<div><span>' + T.excess + '</span><strong class="' + sign(active) + '">' + pp(active) +
+                '</strong><small>' + esc(d.benchmarkLabel) + ' ' + pct(benchRet) + ' en las mismas ' + d.sessions +
+                ' ' + T.sessions + '</small></div>' : '') +
+              (d.drawdown ? '<div><span>Costo en riesgo</span><strong class="down">' + pct(d.drawdown.depthPct) +
+                '</strong><small>' + T.maxDD.toLowerCase() + ' (' + money(d.drawdown.depthAmt, cur) + '), ' +
+                d.drawdown.sessionsUnder + ' sesiones bajo el agua</small></div>' : '') +
+            '</div></div>' +
+            '<div class="opener-toc">' +
+              '<div><b>' + esc(T.sections.V) + '</b>' + (upTop.length
+                ? 'Quién puso los ' + (resultPct != null ? Math.abs(resultPct).toFixed(1) : '—') + ' puntos'
+                : 'Contribución posición por posición') + '</div>' +
+              '<div><b>' + esc(T.sections.VIII) + '</b>' + (d.drawdown
+                ? 'Lo que costó conseguirlos'
+                : 'Volatilidad y riesgo asumido') + '</div>' +
+              '<div><b>' + esc(T.sections.IX) + '</b>' + (maxW ? 'La mayor posición pesa ' + maxW.toFixed(1) + '%'
+                : 'Concentración y exposición') + '</div>' +
+            '</div>',
+            { 'data-page': 'bleed', 'data-acc': '2', 'data-section': 'II · ' + T.sections.II });
+      } else {
+        secHead('II', T.sections.II, null, '2');
+      }
+
       var paras = [];
       paras.push('<p class="body"><span class="dc">' + (lang === 'es' ? 'E' : 'T') + '</span>' +
         (lang === 'es' ? 'l periodo' : 'he period') + ' cerró con un resultado de <strong>' + amt(resultAmt) +
@@ -413,7 +467,28 @@
       if (maxW) notes.push('<div class="sidenote"><b>' + maxW.toFixed(1) + '%</b>peso de la mayor posición (' +
         esc(weights[0].ticker) + ')</div>');
 
-      blk('<div class="prose-rail"><div>' + paras.join('') + '</div><div>' + notes.join('') + '</div></div>', { 'data-acc': '2' });
+      var railFig = img('img-rail', 'rail');
+      blk('<div class="prose-rail"><div>' + paras.join('') + '</div><div>' + notes.join('') + railFig + '</div></div>',
+          { 'data-acc': '2' });
+
+      // Banda a sangre con una cita de una sola línea, siempre anclada a una
+      // cifra del periodo (nunca una frase decorativa sin dato detrás).
+      if (hasImg('band')) {
+        var quote = upTop.length && top3 > 50
+          ? esc(upTop[0].ticker) + ' explicó ' + Math.abs(upTop[0].pp).toFixed(2) + ' de los ' +
+            (resultPct != null ? Math.abs(resultPct).toFixed(2) : '—') + ' puntos del periodo.'
+          : d.drawdown
+            ? 'El periodo costó ' + Math.abs(d.drawdown.depthPct).toFixed(1) + '% de caída máxima: ' +
+              money(d.drawdown.depthAmt, cur) + '.'
+            : 'El resultado del periodo fue ' + amt(resultAmt) + ' sobre ' + money(base, cur) + '.';
+        blk('<div class="img-wrap img-duotone" style="background:' + esc(IMG.band.avg || '#8a94a6') + '">' +
+            '<img src="' + IMG.band.src + '" width="698" height="190" alt="">' +
+            '<div class="tint"></div>' +
+            '<div class="scrim"></div>' +
+            '<div class="pullquote">' + quote + '</div>' +
+            '<span class="credit on-img">Foto: ' + esc(IMG.band.by || 'Pexels') + ' · Pexels</span></div>',
+            { 'data-acc': '2' });
+      }
       if (ai.sections && (ai.sections.tesis || ai.sections.general)) {
         blk('<div class="callout"><b>' + T.aiTag + '</b><br>' + (ai.sections.tesis || ai.sections.general) + '</div>', { 'data-acc': '2' });
       } else if (ai.error) {
@@ -767,8 +842,10 @@
           '<div class="disclaimer">' + T.disclaimer + '</div>' +
           '<div class="footnote">Datos de mercado: Yahoo Finance / CoinGecko.' +
           (ai.model ? ' Análisis asistido por ' + esc(ai.model) + '.' : '') +
+          (photographers.length ? ' Fotografías: Pexels — ' + esc(photographers.join(', ')) + '.' : '') +
           '<br>BlackPortfolio · blackportfolio.ai · ' + folio + ' · ' + esc(dateFull(d.todayStr || d.endStr)) + '</div></div>' +
-          '<div class="closing-art"></div>', { 'data-page': 'bleed', 'data-section': '' });
+          (img('img-closing', 'closing') || '<div class="closing-art"></div>'),
+          { 'data-page': 'bleed', 'data-section': '' });
 
       return {
         html: '<!DOCTYPE html><html lang="' + lang + '"><head><meta charset="utf-8">' +
@@ -891,6 +968,39 @@
     '.gloss{columns:2;column-gap:26px;font-size:9.4px;line-height:1.5;color:var(--pdf-ink-soft)}',
     '.gloss div{break-inside:avoid;margin-bottom:7px}.gloss b{color:var(--pdf-ink)}',
     /* portada y cierre (sin fotografía en esta fase: degradado del tono) */
+    /* fotografía: patrones de pdf-document.md §5 */
+    '.img-wrap{position:relative;overflow:hidden;background:var(--pdf-paper-2)}',
+    '.img-wrap img{display:block;width:100%;height:100%;object-fit:cover;filter:saturate(.18) contrast(1.05)}',
+    '.img-wrap .tint{position:absolute;inset:0;background:var(--sec,var(--pdf-accent));mix-blend-mode:multiply;opacity:.42}',
+    '.img-wrap .scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(17,20,34,.86) 42%,rgba(17,20,34,.15))}',
+    '.credit{font-size:7.5px;color:var(--pdf-ink-faint);margin-top:4px}',
+    '.credit.on-img{position:absolute;right:10px;bottom:8px;color:rgba(255,255,255,.72);margin:0;z-index:2}',
+    '.credit.on-img.top{top:10px;bottom:auto}',
+    '.cover-img{position:absolute;left:0;top:0;width:794px;height:640px}',
+    '.opener-img{position:absolute;left:0;top:0;width:794px;height:470px}',
+    '.opener-num{position:absolute;left:44px;bottom:18px;font-family:var(--tone-font-display);font-size:132px;',
+    'font-weight:800;line-height:.8;color:rgba(255,255,255,.30);letter-spacing:-.05em;z-index:2}',
+    '.opener-body{position:absolute;left:48px;right:48px;top:522px}',
+    '.opener-body h2{font-family:var(--tone-font-display);font-size:34px;font-weight:800;letter-spacing:-.025em;',
+    'line-height:1.08;margin:8px 0 12px}',
+    '.opener-body .lede{font-size:14px;max-width:600px}',
+    '.opener-figs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:26px;padding-top:18px;',
+    'border-top:1px solid var(--pdf-rule)}',
+    '.opener-figs span{display:block;font-size:7.8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;',
+    'color:var(--pdf-ink-muted);margin-bottom:4px}',
+    '.opener-figs strong{font-family:var(--tone-font-display);font-size:24px;font-weight:800;letter-spacing:-.02em}',
+    '.opener-figs small{display:block;font-size:8.6px;color:var(--pdf-ink-muted);margin-top:3px;line-height:1.4}',
+    '.opener-toc{position:absolute;left:48px;right:48px;bottom:110px;border-top:1px solid var(--pdf-rule);',
+    'padding-top:12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;font-size:9px;',
+    'color:var(--pdf-ink-muted);line-height:1.45}',
+    '.opener-toc b{display:block;color:var(--pdf-ink);font-size:10px;font-weight:750;margin-bottom:2px}',
+    '.img-duotone{width:698px;height:190px;border-radius:6px;margin-bottom:12px;display:flex;align-items:center;padding:0 26px}',
+    '.img-duotone img,.img-duotone .tint,.img-duotone .scrim{position:absolute;inset:0}',
+    '.pullquote{position:relative;z-index:2;font-family:var(--tone-font-display);font-size:18px;line-height:1.3;',
+    'font-weight:700;letter-spacing:-.015em;color:#fff;max-width:400px}',
+    '.img-rail{width:219px;height:260px;border-radius:6px;margin-top:4px}',
+    '.img-inset{width:76px;height:76px;border-radius:8px;margin:0 auto 6px}',
+    '.img-closing{position:absolute;left:0;bottom:0;width:794px;height:560px}',
     '.cover-art{position:absolute;left:0;top:0;width:794px;height:640px;',
     'background:linear-gradient(135deg,var(--pdf-accent) 0%,var(--pdf-accent-2) 55%,#a9b8ff 100%)}',
     '.cover-card{position:absolute;left:48px;right:48px;top:500px;background:var(--pdf-paper);padding:26px 28px 22px;border-top:4px solid var(--pdf-accent)}',
