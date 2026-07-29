@@ -286,6 +286,10 @@
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="9" y2="17"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="15" y1="13" x2="15" y2="17"/></svg>
                     <span><strong>Reporte PDF</strong><small>Informe profesional por rango</small></span>
                   </button>
+                  <button id="exportDeckBtn" type="button" role="menuitem">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    <span><strong>Presentación</strong><small>Deck interactivo para exponer</small></span>
+                  </button>
                 </div>
               </div>
               <button id="sharePortfolioBtn" class="button ghost tracker-export-btn" type="button" title="Crear un enlace público de solo lectura">
@@ -1605,6 +1609,18 @@
               <div class="form-row">
                 <label for="reportToInput">Hasta</label>
                 <input id="reportToInput" type="date" required>
+              </div>
+              <div class="form-row" id="deckToneRow" hidden>
+                <label for="deckToneSelect">Estilo de la presentación</label>
+                <select id="deckToneSelect">
+                  <option value="brand">BlackPortfolio — la paleta de la app</option>
+                  <option value="institutional">Institucional — navy sobrio, tipo banca privada</option>
+                  <option value="editorial">Editorial — color vivo y fotografía protagonista</option>
+                  <option value="premium-dark">Premium oscuro — fondo negro y acentos dorados</option>
+                  <option value="minimal">Minimalista — casi sin color, todo tipografía</option>
+                  <option value="gradient">Degradado — violeta, estilo fintech</option>
+                </select>
+                <small class="form-hint">El estilo se fija al generar; la presentación se entrega ya con él aplicado.</small>
               </div>
               <div id="reportRangeError" class="form-hint hidden" style="color:#d94040"></div>
               <button class="button primary" type="submit">Generar reporte</button>
@@ -3427,7 +3443,7 @@
   <script src="auth.js?v=11"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=33"></script>
+  <script src="main.js?v=34"></script>
   <script src="markowitz.js?v=2"></script>
   <script src="analyzer.js?v=2"></script>
   <script src="topdown.js"></script>

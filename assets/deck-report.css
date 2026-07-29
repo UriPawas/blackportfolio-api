@@ -1,0 +1,270 @@
+/* deck-report.css — tokens de tono + estilos del escenario 1600x900.
+   Extraído de .claude/skills/portfolio-report-design/assets/ (deck-shell.html
+   + tone-tokens.css) para que la app y la skill compartan una sola fuente. */
+
+/*
+  Tone token sets for the portfolio report — one block per `data-tone` value.
+  Apply `data-tone="..."` to the report's root element; every visual rule in
+  the report template should read these custom properties, never a literal
+  color/font. See references/design-system.md for the reasoning behind each
+  palette and the deck it was extracted from.
+*/
+
+/* DEFAULT — BlackPortfolio's own brand palette (styles.css --primary family).
+   Applied via :root so an unset/unknown data-tone renders as *this app*,
+   never as a reference company's identity. The future user-customization
+   section overrides exactly these variables. */
+:root,
+[data-tone="brand"] {
+  --tone-bg: linear-gradient(135deg, #556eff 0%, #6f86ff 55%, #7892ff 100%);
+  --tone-surface: #ffffff;
+  --tone-panel: #f1f3fe;
+  --tone-text: #1a1a1e;
+  --tone-text-muted: #666a78;
+  --tone-accent: #556eff;
+  --tone-accent-2: #7892ff;
+  --tone-chart-1: #556eff;
+  --tone-chart-2: #a9b8ff;
+  --tone-font-display: "Manrope", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: high;
+  --tone-footnote-color: #8f93a3;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #12996b;
+  --tone-down: #e0483d;
+}
+
+/* Nu-inspired preset — opt-in alternate, NOT the default. */
+[data-tone="gradient"] {
+  --tone-bg: linear-gradient(135deg, #6a3fd1 0%, #8b5cf6 55%, #b794f6 100%);
+  --tone-surface: #ffffff;
+  --tone-panel: #f5f2fd;
+  --tone-text: #1a1523;
+  --tone-text-muted: #6b6478;
+  --tone-accent: #6a3fd1;
+  --tone-accent-2: #b794f6;
+  --tone-chart-1: #6a3fd1;
+  --tone-chart-2: #b794f6;
+  --tone-font-display: "Manrope", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: high; /* glossy product/portrait photography */
+  --tone-footnote-color: #948da2;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #12996b;
+  --tone-down: #e0483d;
+}
+
+[data-tone="premium-dark"] {
+  --tone-bg: #0b0b0c;
+  --tone-surface: #17171a;
+  --tone-panel: #1c1c1e;
+  --tone-text: #f5f5f4;
+  --tone-text-muted: #9a9a9d;
+  --tone-accent: #c9a227;
+  --tone-accent-2: #e6c65c;
+  --tone-chart-1: #c9a227;
+  --tone-chart-2: #4d4d50;
+  --tone-font-display: "Manrope", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: minimal; /* abstract/product macro only, sparingly */
+  --tone-footnote-color: #6f6f73;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #3ecf8e;
+  --tone-down: #ff6b5e;
+}
+
+[data-tone="editorial"] {
+  --tone-bg: #ffffff;
+  --tone-surface: #ffffff;
+  --tone-panel: #f7f7f8;
+  --tone-text: #1f1b2e;
+  --tone-text-muted: #736c85;
+  --tone-accent: #1e4fbe;
+  --tone-accent-2: #f0862b;
+  --tone-chart-1: #1e4fbe;
+  --tone-chart-2: #e8437c;
+  --tone-font-display: "Poppins", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: heavy; /* real photography + icon badges, equal footing with data */
+  --tone-footnote-color: #a19cae;
+  /* section accent overrides — apply per-section, not globally */
+  --tone-section-blue: #1e4fbe;
+  --tone-section-purple: #6a3fd1;
+  --tone-section-orange: #f0862b;
+  --tone-section-pink: #e8437c;
+  --tone-section-green: #2fa36b;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #2fa36b;
+  --tone-down: #e8437c;
+}
+
+[data-tone="institutional"] {
+  --tone-bg: #ffffff;
+  --tone-surface: #ffffff;
+  --tone-panel: #f2f4f8;
+  --tone-text: #0b2559;
+  --tone-text-muted: #5a6478;
+  --tone-accent: #0b2559;
+  --tone-accent-2: #4c7ef3;
+  --tone-chart-1: #0b2559;
+  --tone-chart-2: #4c7ef3;
+  --tone-font-display: "Georgia", "Times New Roman", serif;
+  --tone-font-body: "Segoe UI", sans-serif;
+  --tone-imagery-density: minimal; /* cover only */
+  --tone-footnote-color: #8b93a5;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #1a7f4b;
+  --tone-down: #c0392b;
+}
+
+[data-tone="minimal"] {
+  --tone-bg: #faf7f2;
+  --tone-surface: #faf7f2;
+  --tone-panel: #f2ede4;
+  --tone-text: #1a1712;
+  --tone-text-muted: #7a7266;
+  --tone-accent: #8b4a32;
+  --tone-accent-2: #b9805f;
+  --tone-chart-1: #4c6a8b;
+  --tone-chart-2: #b9b2a3;
+  --tone-font-display: "Georgia", "Times New Roman", serif;
+  --tone-font-body: "Segoe UI", sans-serif;
+  --tone-imagery-density: none; /* zero photography, whitespace + type carry hierarchy */
+  --tone-footnote-color: #9c9585;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #4c6a8b;
+  --tone-down: #8b4a32;
+}
+
+
+/* ── escenario y escala tipográfica ── */
+/* ── stage ─────────────────────────────────────────────────────────────── */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0d0e12;
+  font-family:var(--tone-font-body,'Inter',system-ui,sans-serif);color:var(--tone-text,#16181d)}
+.deck{position:fixed;inset:0;overflow:hidden}
+/* centred via translate, NOT flex/grid centring: a 1600px box inside an 800px
+   viewport overflows its container, and centring layouts align it to the start. */
+.stage{position:absolute;left:50%;top:50%;width:1600px;height:900px;
+  transform:translate(-50%,-50%) scale(var(--fit,1));transform-origin:center;
+  background:var(--tone-surface,#fff);border-radius:6px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.45)}
+.slide{position:absolute;inset:0;padding:72px;opacity:0;visibility:hidden;overflow:hidden;
+  transform:translateX(4%) scale(.965);filter:blur(2px);
+  transition:opacity .42s cubic-bezier(.22,1,.36,1),transform .42s cubic-bezier(.22,1,.36,1),filter .42s ease,visibility 0s .42s}
+.slide.is-active{opacity:1;visibility:visible;transform:none;filter:none;transition-delay:0s}
+.slide.is-prev{transform:translateX(-4%) scale(.965)}
+.slide.pad0{padding:0}
+
+/* ── type scale (design px on the 1600×900 stage) ──────────────────────── */
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--tone-accent)}
+.headline{font-family:var(--tone-font-display,'Manrope',sans-serif);font-size:52px;line-height:1.08;font-weight:700;
+  letter-spacing:-.02em;margin:14px 0 0;max-width:20ch}
+.headline em{font-style:normal;color:var(--tone-accent)}
+.headline .ln{display:block;overflow:hidden}
+.headline .ln>span{display:block;clip-path:inset(0 100% 0 0);transition:clip-path .32s cubic-bezier(.22,1,.36,1)}
+.is-active .headline .ln>span{clip-path:inset(0)}
+.is-active .headline .ln:nth-child(2)>span{transition-delay:.06s}
+.is-active .headline .ln:nth-child(3)>span{transition-delay:.12s}
+.rule{height:4px;width:88px;background:var(--tone-accent);border-radius:2px;margin:22px 0 0;
+  transform:scaleX(0);transform-origin:left;transition:transform .42s cubic-bezier(.22,1,.36,1) .26s}
+.is-active .rule{transform:scaleX(1)}
+.lede{font-size:25px;line-height:1.4;color:var(--tone-text-muted);margin:18px 0 0;max-width:56ch}
+.body{font-size:21px;line-height:1.5}
+.label{font-size:16px;font-weight:600;color:var(--tone-text-muted)}
+.foot{font-size:13px;color:var(--tone-footnote-color,#8f93a3);opacity:0;transition:opacity .4s ease .9s}
+.is-active .foot{opacity:.75}
+.num{font-variant-numeric:tabular-nums;font-family:var(--tone-font-display,'Manrope',sans-serif);letter-spacing:-.02em}
+.hero-fig{font-size:172px;font-weight:800;line-height:.92;
+  background:linear-gradient(120deg,var(--tone-accent),var(--tone-accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:17px;font-weight:700;padding:5px 13px;border-radius:999px;
+  background:color-mix(in srgb,var(--tone-accent) 12%,transparent);color:var(--tone-accent)}
+.chip.up{background:rgba(26,127,75,.12);color:var(--tone-up,#1a7f4b)}
+.chip.down{background:rgba(192,57,43,.12);color:var(--tone-down,#c0392b)}
+.ghost{position:absolute;right:-24px;bottom:-56px;font-size:320px;font-weight:800;line-height:.8;
+  color:var(--tone-text);opacity:.045;pointer-events:none;letter-spacing:-.04em;font-family:var(--tone-font-display,sans-serif)}
+
+/* ── layout grammar ────────────────────────────────────────────────────── */
+/* minmax(0,1fr), never 1fr: a 68px figure has a min-content width larger than
+   its track and silently overflows the stage otherwise. */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:24px}
+.grid>*{min-width:0}
+.chrome{display:flex;justify-content:space-between;align-items:center}
+.chrome .pill{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--tone-text-muted);
+  border:1px solid color-mix(in srgb,var(--tone-text) 14%,transparent);padding:5px 12px;border-radius:999px}
+.panel{background:var(--tone-panel);border-radius:16px;padding:24px 26px}
+.kpi{background:var(--tone-panel);border-radius:16px;padding:22px 24px 18px;display:flex;flex-direction:column;gap:6px;
+  min-height:186px;transition:transform .25s ease,box-shadow .25s ease}
+.kpi:hover{transform:translateY(-4px);box-shadow:0 14px 34px rgba(0,0,0,.10)}
+.kpi .v{font-size:68px;font-weight:800;line-height:1;white-space:nowrap}
+.kpi .spark{height:44px;margin-top:auto}
+.rail li{font-size:21px;line-height:1.42;margin-bottom:16px;padding-left:20px;position:relative;color:var(--tone-text)}
+.rail li::before{content:"";position:absolute;left:0;top:12px;width:9px;height:9px;border-radius:3px;background:var(--tone-accent)}
+.rail li b{font-variant-numeric:tabular-nums}
+.card{background:var(--tone-panel);border-radius:18px;padding:26px 28px;display:flex;flex-direction:column;gap:12px;height:100%;
+  transition:transform .25s ease,box-shadow .25s ease}
+.card:hover{transform:translateY(-6px);box-shadow:0 18px 44px rgba(0,0,0,.12)}
+.card .tk{font-size:26px;font-weight:800}
+.card .pp{font-size:56px;font-weight:800;line-height:1}
+.card ul{margin:4px 0 0;padding:0;list-style:none}
+.card li{font-size:19px;line-height:1.38;margin-bottom:11px;color:var(--tone-text)}
+.card li strong{font-variant-numeric:tabular-nums}
+.card .src{font-size:13px;color:var(--tone-footnote-color);opacity:0;transition:opacity .2s ease}
+.card:hover .src{opacity:.85}
+.chart{width:100%}
+
+/* ── reveal choreography ───────────────────────────────────────────────── */
+[data-reveal]{opacity:0;transform:translateY(14px);
+  transition:opacity .44s ease var(--d,0s),transform .44s cubic-bezier(.22,1,.36,1) var(--d,0s)}
+.is-active [data-reveal]{opacity:1;transform:none}
+
+/* ── full-bleed slides ─────────────────────────────────────────────────── */
+.bleed{position:absolute;inset:0;overflow:hidden;background:var(--tone-bg)}
+.bleed img{width:100%;height:100%;object-fit:cover;transform:scale(1.06);opacity:.85;
+  filter:grayscale(.35) contrast(1.05)}
+.is-active .bleed img{animation:ken 14s ease-out forwards}
+@keyframes ken{from{transform:scale(1.06)}to{transform:scale(1)}}
+.scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,10,20,.94) 0%,rgba(8,10,20,.72) 46%,rgba(8,10,20,.28) 100%)}
+.cover-body{position:absolute;inset:0;padding:88px;display:flex;flex-direction:column;justify-content:flex-end;color:#fff}
+.cover-body .headline{color:#fff;font-size:150px;line-height:.94;max-width:16ch}
+.cover-figs{display:flex;gap:64px;margin-top:46px}
+.cover-figs .v{font-size:52px;font-weight:800;line-height:1}
+.cover-figs .l{font-size:16px;opacity:.72;margin-top:4px}
+.credit{position:absolute;right:22px;bottom:16px;font-size:13px;color:rgba(255,255,255,.55)}
+
+/* ── chrome / navigation ───────────────────────────────────────────────── */
+.progress{position:absolute;left:0;top:0;height:4px;background:var(--tone-accent);width:0;transition:width .42s ease;z-index:5}
+.nav{position:fixed;right:26px;bottom:22px;display:flex;align-items:center;gap:14px;z-index:20;color:#fff}
+.nav button{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);
+  color:#fff;font-size:19px;cursor:pointer;transition:background .2s ease,transform .2s ease}
+.nav button:hover{background:rgba(255,255,255,.2);transform:scale(1.06)}
+.nav .count{font-size:15px;font-variant-numeric:tabular-nums;opacity:.8;letter-spacing:.06em}
+.nav .next.pulse{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.34)}50%{box-shadow:0 0 0 12px rgba(255,255,255,0)}}
+.dots{position:fixed;left:26px;bottom:26px;display:flex;gap:8px;z-index:20}
+.dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);cursor:pointer;transition:all .25s ease}
+.dots i.on{background:#fff;width:24px;border-radius:4px}
+
+/* ── charts / tooltip / legend ─────────────────────────────────────────── */
+.donut-wrap{display:flex;align-items:center;gap:34px}
+.donut-wrap .ch-donut{width:296px;flex:none}
+.donut-legend{list-style:none;margin:0;padding:0;flex:1;max-width:460px}
+.donut-item{display:flex;align-items:center;gap:12px;font-size:20px;padding:9px 10px;border-radius:10px;cursor:pointer;transition:background .2s ease}
+.donut-item.is-on{background:color-mix(in srgb,var(--tone-accent) 10%,transparent)}
+.donut-item i{width:12px;height:12px;border-radius:4px;flex:none}
+.donut-item .dl-label{flex:1}
+.donut-item .dl-val{font-weight:800;font-variant-numeric:tabular-nums}
+.ch-pulse{animation:halo 2.4s ease-out infinite}
+@keyframes halo{0%{r:6;opacity:.5}70%{r:20;opacity:0}100%{opacity:0}}
+.deck-tip{position:fixed;z-index:50;pointer-events:none;opacity:0;transition:opacity .14s ease;
+  background:rgba(14,16,24,.94);color:#fff;border-radius:10px;padding:10px 13px;font-size:14px;line-height:1.4;
+  box-shadow:0 12px 30px rgba(0,0,0,.34);max-width:280px}
+.deck-tip b{display:block;font-size:13px;opacity:.7;font-weight:600}
+.deck-tip span{display:block;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.deck-tip i{display:block;font-style:normal;font-size:13px;opacity:.72;margin-top:3px}
+
+@media (prefers-reduced-motion: reduce){
+  .slide{transition:opacity .12s linear,visibility 0s .12s;transform:none;filter:none}
+  .slide.is-prev{transform:none}
+  [data-reveal],.headline .ln>span,.rule,.foot{transition:none!important;opacity:1;transform:none;clip-path:none}
+  .bleed img,.ch-pulse,.nav .next.pulse{animation:none}
+}

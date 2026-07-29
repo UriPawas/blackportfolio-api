@@ -928,8 +928,10 @@
       }
 
       /* ════════ III · CRONOLOGÍA ════════ */
+      // Con menos de 3 meses la sección no informa: un gráfico de dos barras y
+      // una tabla de dos filas que ni siquiera se puede partir entre páginas.
       var months = d.monthlyReturns || [];
-      if (months.length >= 2) {
+      if (months.length >= 3) {
         secHead('III', T.sections.III, T.hints.III, '3');
         blk('<div class="chart-box"><div class="chart-h">' + T.monthlyTitle + '</div>' +
             chart('monthly', { items: months.map(function (x) { return { label: monthName(x.ym), value: x.value }; }) },

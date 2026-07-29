@@ -6059,7 +6059,7 @@ async function fetchAIInsights(metrics, lang) {
   if (!user) throw new Error("No hay una sesion autenticada.");
   const token = await user.getIdToken();
   const twofaToken = localStorage.getItem("bp-2fa-token");
-  const res = await fetch(`${API_BASE_URL}/ai/insights`, {
+  const init = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -6067,7 +6067,23 @@ async function fetchAIInsights(metrics, lang) {
       ...(twofaToken ? { "X-2FA-Token": twofaToken } : {})
     },
     body: JSON.stringify({ metrics, lang: lang || "es" }),
-  });
+  };
+  // Un corte de red momentáneo (o un reinicio del backend) tumbaba todo el
+  // análisis del reporte con un "Failed to fetch". Se reintenta solo el fallo
+  // de TRANSPORTE: si el servidor responde —aunque sea 4xx/5xx— no se repite,
+  // para no cobrar dos veces la cuota de IA ni duplicar la llamada al modelo.
+  let res, lastErr;
+  for (let intento = 0; intento < 3; intento++) {
+    try { res = await fetch(`${API_BASE_URL}/ai/insights`, init); break; }
+    catch (e) {
+      lastErr = e;
+      if (intento < 2) await new Promise(r => setTimeout(r, 1200 * (intento + 1)));
+    }
+  }
+  if (!res) {
+    throw new Error("no se pudo contactar al servidor de análisis (" +
+      ((lastErr && lastErr.message) || "error de red") + "). Revisa tu conexión e inténtalo de nuevo.");
+  }
   if (!res.ok) {
     let detail = "";
     try { detail = (await res.json()).detail || ""; } catch (_) {}
@@ -6375,9 +6391,21 @@ function _portfolioEarliestDate(portfolio) {
   return dates.length ? dates.sort()[0] : null;
 }
 
-function openReportRangeModal() {
+// El modal de rango sirve a los dos formatos; `_reportFormat` decide cuál se
+// genera al enviar y qué controles se muestran.
+let _reportFormat = "pdf";
+
+function openReportRangeModal(format) {
+  _reportFormat = format === "deck" ? "deck" : "pdf";
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
+  const isDeck = _reportFormat === "deck";
+  const h = document.querySelector("#reportRangeModal .tracker-modal-header h3");
+  if (h) h.textContent = isDeck ? "Presentación por rango de fechas" : "Reporte por rango de fechas";
+  const toneRow = document.getElementById("deckToneRow");
+  if (toneRow) toneRow.hidden = !isDeck;
+  const submit = document.querySelector("#reportRangeForm button[type=submit]");
+  if (submit) submit.textContent = isDeck ? "Generar presentación" : "Generar reporte";
   const modal = document.getElementById("reportRangeModal");
   const fromI = document.getElementById("reportFromInput");
   const toI   = document.getElementById("reportToInput");
@@ -6437,7 +6465,15 @@ function _wireReportRangeModal() {
     const submitBtn = e.target.querySelector('button[type="submit"]');
     const _t = submitBtn ? submitBtn.textContent : "";
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Generando…"; }
-    try { await exportPortfolioPDF(start, end); close(); }
+    try {
+      if (_reportFormat === "deck") {
+        const tone = document.getElementById("deckToneSelect")?.value || "brand";
+        await exportPortfolioDeck(start, end, tone);
+      } else {
+        await exportPortfolioPDF(start, end);
+      }
+      close();
+    }
     finally { if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = _t; } }
   });
 }
@@ -6815,6 +6851,70 @@ async function _fetchMoverNews(tickers, startStr, endStr) {
     } catch (_) { /* sin noticia para ese ticker */ }
   }));
   return out;
+}
+
+// Presentación interactiva: mismo contrato de datos que el PDF, otro medio.
+// Se entrega como .html autocontenido y se abre en una pestaña nueva; el tono
+// se fija aquí, el archivo NO lleva selector de estilo.
+async function exportPortfolioDeck(startStr, endStr, tone) {
+  const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
+  if (!portfolio) return;
+  const currency = portfolio.currency || "USD";
+
+  let data;
+  try {
+    data = await computeHistoricalReport(portfolio, startStr, endStr);
+  } catch (e) {
+    alert("No se pudo generar la presentación: " + ((e && e.message) || e));
+    return;
+  }
+
+  const movers = [...(data.movers?.up || []), ...(data.movers?.down || [])].map(a => a.ticker);
+  const [news, images] = await Promise.all([
+    _fetchMoverNews(movers, startStr, endStr),
+    _fetchReportImagery(_bucketSectors(data).slice(0, 3)),
+  ]);
+
+  try {
+    await _loadLocalScript("assets/deck-report.js?v=1", "BPDeckReport");
+    const built = await window.BPDeckReport.build({
+      data, portfolio, tone: tone || "brand", lang: currentLang || "es",
+      images, news, assets: "assets/",
+      fmt: { money: (v, c) => formatCurrency(v, c || currency) },
+      helpers: {
+        posCurrency: pos => getPosCurrency(pos, currency),
+        sector: t => getTickerSector(t),
+        geo: t => getTickerGeo(t),
+      },
+    });
+    const blob = new Blob([built.html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (!win) {
+      // Bloqueada por el navegador: se ofrece como descarga en su lugar.
+      const safeName = (portfolio.name || "portafolio").replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, "_");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Presentacion_${safeName}_${startStr}_a_${endStr}.html`;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+  } catch (e) {
+    console.error("[Presentación]", e);
+    alert("No se pudo generar la presentación: " + ((e && e.message) || e));
+  }
+}
+
+// Sectores dominantes por valor — los usa la galería para elegir la fotografía.
+function _bucketSectors(data) {
+  const b = {};
+  (data.posData || []).forEach(d => {
+    if (d.currentValuePf > 0) {
+      const k = getTickerSector(d.pos.ticker);
+      b[k] = (b[k] || 0) + d.currentValuePf;
+    }
+  });
+  return Object.entries(b).sort((a, c) => c[1] - a[1]).map(([k]) => k);
 }
 
 async function exportPortfolioPDF(startStr, endStr) {
@@ -11152,7 +11252,8 @@ function initializeTrackerModule() {
   });
 
   document.getElementById("exportCsvBtn")?.addEventListener("click", exportTransactionsCSV);
-  document.getElementById("exportPdfBtn")?.addEventListener("click", () => { window.bpTrack?.("pdf_report_open"); openReportRangeModal(); });
+  document.getElementById("exportPdfBtn")?.addEventListener("click", () => { window.bpTrack?.("pdf_report_open"); openReportRangeModal("pdf"); });
+  document.getElementById("exportDeckBtn")?.addEventListener("click", () => { window.bpTrack?.("deck_report_open"); openReportRangeModal("deck"); });
   _wireReportRangeModal();
   document.getElementById("exportPositionsBtn")?.addEventListener("click", exportPositionsCSV);
   document.getElementById("sharePortfolioBtn")?.addEventListener("click", openShareModal);
