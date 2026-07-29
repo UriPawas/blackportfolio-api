@@ -17,3 +17,12 @@ backups/
 *.bpbackup
 .pytest_cache/
 
+# Cache local de la skill portfolio-report-design (Pexels/noticias)
+.claude/skills/portfolio-report-design/.cache/
+
+# Salidas locales de trabajo: tmp/reports contiene reportes con datos REALES de
+# portafolio (NUNCA commitear), y graphify-out se regenera con `graphify update .`
+tmp/
+graphify-out/
+files.zip
+
