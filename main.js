@@ -6054,24 +6054,6 @@ function importPositionsCSV(file) {
   reader.readAsText(file);
 }
 
-function _pdfBuildAllocationSVG(posData, totalCurrentValue) {
-  if (!posData.length) return "";
-  const COLORS = ["#6f86ff","#a78bfa","#34d399","#f59e0b","#f87171","#38bdf8","#fb923c","#e879f9"];
-  const barH = 19, gap = 7, labelW = 76, chartW = 360, pctW = 50;
-  const svgW = labelW + chartW + pctW + 10;
-  const svgH = posData.length * (barH + gap);
-  const maxVal = posData[0].currentValuePf || 1;
-  const bars = posData.map(({ pos, currentValuePf }, i) => {
-    const pct = totalCurrentValue > 0 ? currentValuePf / totalCurrentValue : 0;
-    const barW = Math.max(3, (currentValuePf / maxVal) * chartW);
-    const y = i * (barH + gap);
-    const color = COLORS[i % COLORS.length];
-    const label = (pos.ticker || "").substring(0, 9);
-    return `<text x="0" y="${y + barH * 0.72}" font-size="10.5" fill="#222" font-weight="700" font-family="Segoe UI,Arial,sans-serif">${label}</text><rect x="${labelW}" y="${y + 2}" width="${chartW}" height="${barH - 4}" fill="#eef1fb" rx="4"/><rect x="${labelW}" y="${y + 2}" width="${barW}" height="${barH - 4}" fill="${color}" rx="4" opacity="0.95"/><text x="${labelW + chartW + 8}" y="${y + barH * 0.72}" font-size="10.5" fill="#4a5168" font-weight="700" font-family="Segoe UI,Arial,sans-serif">${(pct * 100).toFixed(1)}%</text>`;
-  }).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${bars}</svg>`;
-}
-
 async function fetchAIInsights(metrics, lang) {
   const user = window.BlackPortfolioAuth?.firebaseAuth?.currentUser;
   if (!user) throw new Error("No hay una sesion autenticada.");
@@ -6383,104 +6365,6 @@ function _parseAISections(md) {
   return map;
 }
 
-// ── Gráficos SVG para el reporte PDF ───────────────────────────────────────────
-
-// Barras horizontales genéricas (sector, región, divisa). rows: [{label, value, pct}]
-function _pdfBuildBarsSVG(rows, opts = {}) {
-  if (!rows.length) return "";
-  const COLORS = ["#6f86ff","#a78bfa","#34d399","#f59e0b","#f87171","#38bdf8","#fb923c","#e879f9","#4ade80","#94a3b8"];
-  const barH = 17, gap = 6, labelW = opts.labelW || 96, chartW = 280, pctW = 48;
-  const svgW = labelW + chartW + pctW + 10;
-  const svgH = rows.length * (barH + gap);
-  const maxPct = Math.max(...rows.map(r => r.pct)) || 1;
-  const bars = rows.map((r, i) => {
-    const barW = Math.max(3, (r.pct / maxPct) * chartW);
-    const y = i * (barH + gap);
-    const color = r.color || COLORS[i % COLORS.length];
-    const label = String(r.label || "").substring(0, 16);
-    return `<text x="0" y="${y + barH * 0.72}" font-size="10" fill="#222" font-weight="600" font-family="Segoe UI,Arial,sans-serif">${label}</text><rect x="${labelW}" y="${y + 2}" width="${chartW}" height="${barH - 4}" fill="#eef1fb" rx="3"/><rect x="${labelW}" y="${y + 2}" width="${barW}" height="${barH - 4}" fill="${color}" rx="3" opacity="0.92"/><text x="${labelW + chartW + 7}" y="${y + barH * 0.72}" font-size="10" fill="#4a5168" font-weight="700" font-family="Segoe UI,Arial,sans-serif">${r.pct.toFixed(1)}%</text>`;
-  }).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${bars}</svg>`;
-}
-
-// Curva de valor acumulado: portafolio vs benchmark. series: [{date, value(%)}]
-function _pdfBuildLineSVG(port, bench, portLabel, benchLabel) {
-  if (!port || port.length < 2) return "";
-  const W = 520, H = 200, padL = 42, padR = 12, padT = 14, padB = 24;
-  const innerW = W - padL - padR, innerH = H - padT - padB;
-  const all = port.map(p => p.value).concat((bench || []).map(b => b.value));
-  let lo = Math.min(...all, 0), hi = Math.max(...all, 0);
-  if (hi === lo) { hi += 1; lo -= 1; }
-  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-  const x = i => padL + (i / (port.length - 1)) * innerW;
-  const y = v => padT + (1 - (v - lo) / (hi - lo)) * innerH;
-  const pathFrom = arr => arr.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join("");
-  const zeroY = y(0);
-  // Gridlines: 0%, max, min
-  const grid = [hi, (hi + lo) / 2, lo].map(v =>
-    `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}" stroke="#eef0f8" stroke-width="1"/><text x="${padL - 5}" y="${(y(v) + 3).toFixed(1)}" font-size="8.5" fill="#aaa" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">${v >= 0 ? "+" : ""}${v.toFixed(0)}%</text>`
-  ).join("");
-  const benchPath = bench && bench.length > 1
-    ? `<path d="${pathFrom(bench)}" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="4 3"/>` : "";
-  const lastP = port[port.length - 1].value;
-  const portColor = lastP >= 0 ? "#00a870" : "#d94040";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    ${grid}
-    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W - padR}" y2="${zeroY.toFixed(1)}" stroke="#d8dcec" stroke-width="1"/>
-    ${benchPath}
-    <path d="${pathFrom(port)}" fill="none" stroke="${portColor}" stroke-width="2.2"/>
-    <g font-family="Segoe UI,Arial,sans-serif" font-size="9.5">
-      <rect x="${padL + 4}" y="${padT + 2}" width="10" height="10" fill="${portColor}" rx="2"/><text x="${padL + 18}" y="${padT + 11}" fill="#444">${portLabel} (${lastP >= 0 ? "+" : ""}${lastP.toFixed(1)}%)</text>
-      ${bench && bench.length > 1 ? `<rect x="${padL + 4}" y="${padT + 16}" width="10" height="10" fill="#94a3b8" rx="2"/><text x="${padL + 18}" y="${padT + 25}" fill="#444">${benchLabel} (${bench[bench.length-1].value >= 0 ? "+" : ""}${bench[bench.length-1].value.toFixed(1)}%)</text>` : ""}
-    </g>
-  </svg>`;
-}
-
-// Curva de drawdown (underwater). dailyReturns: [r,...]
-function _pdfBuildDrawdownSVG(dailyReturns) {
-  if (!dailyReturns || dailyReturns.length < 2) return "";
-  let cum = 1, peak = 1; const dd = [];
-  dailyReturns.forEach(r => { cum *= (1 + r); if (cum > peak) peak = cum; dd.push(-(peak - cum) / peak * 100); });
-  const W = 520, H = 130, padL = 42, padR = 12, padT = 10, padB = 18;
-  const innerW = W - padL - padR, innerH = H - padT - padB;
-  const lo = Math.min(...dd, 0), hi = 0;
-  const x = i => padL + (i / (dd.length - 1)) * innerW;
-  const y = v => padT + (1 - (v - lo) / (hi - lo || 1)) * innerH;
-  const path = dd.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
-  const area = `M${x(0).toFixed(1)},${y(0).toFixed(1)} ${path.replace(/^M/, "L")} L${x(dd.length-1).toFixed(1)},${y(0).toFixed(1)} Z`;
-  const minDD = lo;
-  const grid = [0, lo / 2, lo].map(v =>
-    `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}" stroke="#f3eef0" stroke-width="1"/><text x="${padL - 5}" y="${(y(v) + 3).toFixed(1)}" font-size="8.5" fill="#bbb" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">${v.toFixed(0)}%</text>`
-  ).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    ${grid}
-    <path d="${area}" fill="#d94040" opacity="0.12"/>
-    <path d="${path}" fill="none" stroke="#d94040" stroke-width="1.8"/>
-    <text x="${W - padR}" y="${padT + 9}" font-size="9" fill="#d94040" text-anchor="end" font-family="Segoe UI,Arial,sans-serif">Drawdown máx: ${minDD.toFixed(1)}%</text>
-  </svg>`;
-}
-
-// Barras de contribución al P&L (positivas/negativas). rows: [{ticker, value}]
-function _pdfBuildContribSVG(rows) {
-  if (!rows.length) return "";
-  const barH = 18, gap = 8, labelW = 70, axisX = labelW + 130, half = 120;
-  const svgW = labelW + 260, svgH = rows.length * (barH + gap);
-  const maxAbs = Math.max(...rows.map(r => Math.abs(r.value))) || 1;
-  const bars = rows.map((r, i) => {
-    const y = i * (barH + gap);
-    const w = Math.max(1, Math.abs(r.value) / maxAbs * half);
-    const pos = r.value >= 0;
-    const rx = pos ? axisX : axisX - w;
-    const color = pos ? "#00a870" : "#d94040";
-    const valTxt = (pos ? "+" : "") + r.value.toFixed(2) + " pp";
-    const tx = pos ? rx + w + 5 : rx - 5;
-    const anchor = pos ? "start" : "end";
-    return `<text x="0" y="${y + barH * 0.72}" font-size="10.5" fill="#222" font-weight="600" font-family="Segoe UI,Arial,sans-serif">${(r.ticker||"").substring(0,9)}</text><rect x="${rx.toFixed(1)}" y="${y + 2}" width="${w.toFixed(1)}" height="${barH - 4}" fill="${color}" rx="2" opacity="0.9"/><text x="${tx.toFixed(1)}" y="${y + barH * 0.72}" font-size="9.5" fill="${color}" text-anchor="${anchor}" font-family="Segoe UI,Arial,sans-serif">${valTxt}</text>`;
-  }).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}"><line x1="${axisX}" y1="0" x2="${axisX}" y2="${svgH}" stroke="#d8dcec" stroke-width="1"/>${bars}</svg>`;
-}
-
-// Fecha más antigua del portafolio (compra/transacción) en formato YYYY-MM-DD.
 function _portfolioEarliestDate(portfolio) {
   const dates = [];
   (portfolio.positions || []).forEach(p => { if (p.purchaseDate) dates.push(String(p.purchaseDate).slice(0, 10)); });
@@ -6680,11 +6564,13 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
     });
     dailyReturns.push(r);
     cum = (1 + cum / 100) * (1 + r) * 100 - 100;
-    equityCurve.push({ date: d1.slice(5), value: cum });
+    // `date` (MM-DD) se conserva por compatibilidad; `iso` es la fecha completa
+    // que necesita el reporte largo para ejes, meses y crónica de la caída.
+    equityCurve.push({ date: d1.slice(5), iso: d1, value: cum });
     const b0 = benchAsOf(d0), b1 = benchAsOf(d1);
     if (b0 && b1 && b0 > 0) { const br = (b1 - b0) / b0; benchDaily.push(br); cumB = (1 + cumB / 100) * (1 + br) * 100 - 100; }
     else benchDaily.push(0);
-    benchCurve.push({ date: d1.slice(5), value: cumB });
+    benchCurve.push({ date: d1.slice(5), iso: d1, value: cumB });
   }
 
   // ── Métricas del periodo ──────────────────────────────────────────────────
@@ -6756,7 +6642,99 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
   const fxExposure = {};
   posData.forEach(d => { if (d.currentValuePf !== null) fxExposure[d.currency] = (fxExposure[d.currency] || 0) + d.currentValuePf; });
 
+  // ── Derivados del reporte largo ───────────────────────────────────────────
+  // Todo sale de lo que ya está en memoria: ni un fetch adicional.
+  // Ver .claude/skills/portfolio-report-design/references/pdf-document.md §6.
+
+  // Retorno por mes calendario (§III Cronología): compone el acumulado de cierre
+  // de cada mes contra el del mes anterior.
+  const monthlyReturns = [];
+  if (equityCurve.length) {
+    const lastOfMonth = new Map();
+    equityCurve.forEach(p => lastOfMonth.set(p.iso.slice(0, 7), p.value));
+    let prev = 0;
+    [...lastOfMonth.keys()].sort().forEach(ym => {
+      const v = lastOfMonth.get(ym);
+      // Mejor y peor posición del mes por retorno de precio (primer → último
+      // día con cotización dentro del mes). Da la columna narrativa de §III.
+      let best = null, worst = null;
+      Object.keys(byTicker).forEach(tk => {
+        const tMap = dateMap[tk] || {};
+        const days = Object.keys(tMap).filter(x => x.slice(0, 7) === ym && x >= startStr && x <= endStr).sort();
+        if (days.length < 2) return;
+        const p0 = tMap[days[0]], p1 = tMap[days[days.length - 1]];
+        if (!p0 || p0 <= 0) return;
+        const ret = (p1 - p0) / p0 * 100;
+        if (!best || ret > best.pct) best = { ticker: tk, pct: ret };
+        if (!worst || ret < worst.pct) worst = { ticker: tk, pct: ret };
+      });
+      monthlyReturns.push({ ym, value: (1 + v / 100) / (1 + prev / 100) * 100 - 100, best, worst });
+      prev = v;
+    });
+  }
+
+  // Crónica de la caída (§VIII): fechas de pico y mínimo, profundidad real
+  // ((1+v)/(1+pico)−1, no la resta de acumulados) y recuperación.
+  let drawdown = null;
+  if (equityCurve.length > 1) {
+    let peak = -Infinity, peakIso = null, peakIdx = 0, worst = null;
+    equityCurve.forEach((p, i) => {
+      if (p.value > peak) { peak = p.value; peakIso = p.iso; peakIdx = i; }
+      const dd = (1 + p.value / 100) / (1 + peak / 100) * 100 - 100;
+      if (!worst || dd < worst.depthPct) worst = { depthPct: dd, troughIso: p.iso, troughIdx: i, peakIso, peakIdx, peakValue: peak };
+    });
+    if (worst && worst.depthPct < -0.01) {
+      let recoveredIso = null, recoveredIdx = null;
+      for (let i = worst.troughIdx + 1; i < equityCurve.length; i++) {
+        if (equityCurve[i].value >= worst.peakValue) { recoveredIso = equityCurve[i].iso; recoveredIdx = i; break; }
+      }
+      drawdown = {
+        depthPct: worst.depthPct,
+        depthAmt: Math.abs(worst.depthPct) / 100 * ((totalAllCost || totalCostEnd) * (1 + worst.peakValue / 100)),
+        peakIso: worst.peakIso, troughIso: worst.troughIso, recoveredIso,
+        peakIdx: worst.peakIdx, troughIdx: worst.troughIdx,
+        sessionsUnder: (recoveredIdx ?? equityCurve.length - 1) - worst.peakIdx,
+        recovered: !!recoveredIso,
+      };
+    }
+  }
+
+  // Mejor y peor sesión (§IV): dailyReturns[i] corresponde a windowDates[i+1].
+  let bestSession = null, worstSession = null;
+  dailyReturns.forEach((r, i) => {
+    const s = { iso: windowDates[i + 1] || endStr, pct: r * 100 };
+    if (!bestSession || s.pct > bestSession.pct) bestSession = s;
+    if (!worstSession || s.pct < worstSession.pct) worstSession = s;
+  });
+
+  // Contribución en pp y serie normalizada por posición (§V, §VII).
+  const attribBase = totalCostEnd;
+  posData.forEach(d => {
+    const gain = d.periodPnl ?? d.pnlAmt;
+    d.contributionPp = (gain !== null && attribBase > 0) ? gain / attribBase * 100 : null;
+    const tMap = dateMap[d.pos.ticker] || {};
+    const days = Object.keys(tMap).filter(x => x >= startStr && x <= endStr).sort();
+    const s = [];
+    if (days.length > 1 && tMap[days[0]] > 0) {
+      const base = tMap[days[0]], step = Math.max(1, Math.floor(days.length / 40));
+      for (let i = 0; i < days.length; i += step) s.push(+(tMap[days[i]] / base * 100).toFixed(2));
+      const last = +(tMap[days[days.length - 1]] / base * 100).toFixed(2);
+      if (s[s.length - 1] !== last) s.push(last);
+    }
+    d.series = s;
+  });
+  const attribution = posData
+    .filter(d => d.contributionPp !== null)
+    .map(d => ({ ticker: d.pos.ticker, pnl: d.periodPnl ?? d.pnlAmt, pp: d.contributionPp }))
+    .sort((a, b) => b.pp - a.pp);
+  // Movers: los que superan el umbral de materialidad de 0.5pp (§ eligibility).
+  const movers = {
+    up: attribution.filter(a => a.pp >= 0.5).slice(0, 3),
+    down: attribution.filter(a => a.pp <= -0.5).slice(-3).reverse(),
+  };
+
   return {
+    monthlyReturns, drawdown, bestSession, worstSession, attribution, movers,
     currency, startStr, endStr, isEndToday, todayStr,
     posData, totalValueEnd, totalCostEnd, cashAtEnd,
     metrics: { sharpe: m.sharpe, volatility: m.volatility, var: m.var, beta, currentWeightedBeta, historicalBeta, maxDD, sortino },
@@ -6770,12 +6748,22 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
   };
 }
 
+// Carga perezosa de un script propio (mismo origen) en la ventana principal.
+function _loadLocalScript(src, globalName) {
+  if (globalName && window[globalName]) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("No se pudo cargar " + src));
+    document.head.appendChild(s);
+  });
+}
+
 async function exportPortfolioPDF(startStr, endStr) {
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
-
   const currency = portfolio.currency || "USD";
-  const today    = new Date().toLocaleDateString("es-MX", { year:"numeric", month:"long", day:"numeric" });
 
   // Reconstrucción histórica del portafolio al rango [startStr, endStr]
   let data;
@@ -6786,246 +6774,69 @@ async function exportPortfolioPDF(startStr, endStr) {
     return;
   }
 
-  const benchmark = data.benchmarkLabel;
-  const positions = data.posData;          // tenencias reconstruidas al endStr
-  const posData = data.posData;
-  const totalCurrentValue = data.totalValueEnd;
   const fmtPct2 = v => (v === null || v === undefined) ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
-
-  // KPIs del rango seleccionado: incluye resultado abierto, ventas realizadas y dividendos.
-  const totalInvestedTxt = formatCurrency(data.periodCapitalBase || data.totalCostEnd, currency);
-  const currentValueTxt  = formatCurrency(data.totalValueEnd, currency);
-  const _retAmt = data.periodResultAmt ?? (data.totalValueEnd - data.totalCostEnd);
-  const returnAmtTxt = (_retAmt >= 0 ? "+" : "") + formatCurrency(_retAmt, currency);
-  const returnPctTxt = data.periodResultPct !== null && data.periodResultPct !== undefined
-    ? fmtPct2(data.periodResultPct)
-    : (data.totalCostEnd > 0 ? fmtPct2(_retAmt / data.totalCostEnd * 100) : "—");
-  const openPeriodPnlTxt = (data.openPeriodPnl >= 0 ? "+" : "") + formatCurrency(data.openPeriodPnl || 0, currency);
-  const realizedPnlTxt = ((data.totalRealizedPnl || 0) >= 0 ? "+" : "") + formatCurrency(data.totalRealizedPnl || 0, currency);
-  const betaHistText = data.metrics.historicalBeta !== null && data.metrics.historicalBeta !== undefined
-    ? data.metrics.historicalBeta.toFixed(2)
-    : "—";
-
-  // Métricas del periodo (como texto)
-  const sharpe      = data.metrics.sharpe     != null ? data.metrics.sharpe.toFixed(2)        : "—";
-  const sortinoText = data.metrics.sortino    != null ? data.metrics.sortino.toFixed(2)       : "—";
-  const volatility  = data.metrics.volatility != null ? data.metrics.volatility.toFixed(1) + "%" : "—";
-  const varVal      = data.metrics.var        != null ? "-" + Math.abs(data.metrics.var).toFixed(2) + "%" : "—";
-  const beta        = data.metrics.beta       != null ? data.metrics.beta.toFixed(2)          : "—";
-  const maxDrawdown = data.metrics.maxDD      != null ? "-" + data.metrics.maxDD.toFixed(2) + "%" : "—";
-
-  const posRows = posData.map(({ pos, currentValuePf, pnlAmt, pnlPct }) => {
-    const weight = totalCurrentValue > 0 && currentValuePf !== null ? (currentValuePf / totalCurrentValue * 100) : null;
-    const pnlColor = pnlAmt === null ? "#333" : pnlAmt >= 0 ? "#00a870" : "#d94040";
-    return `<tr>
-      <td><strong>${pos.ticker}</strong></td>
-      <td>${getPosCurrency(pos, currency)}</td>
-      <td>${(pos.avgPrice || 0).toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:4 })}</td>
-      <td>${(pos.quantity || 0).toLocaleString("es-MX", { maximumFractionDigits:4 })}</td>
-      <td style="color:${pnlColor};font-weight:600">${pnlAmt !== null ? (pnlAmt >= 0 ? "+" : "") + formatCurrency(pnlAmt, currency) : "—"}</td>
-      <td style="color:${pnlColor};font-weight:600">${pnlPct !== null ? (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%" : "—"}</td>
-      <td>${weight !== null ? weight.toFixed(1) + "%" : "—"}</td>
-      <td>${pos.purchaseDate ? new Date(pos.purchaseDate).toLocaleDateString("es-MX") : "—"}</td>
-    </tr>`;
-  }).join("");
-
-  // Allocation SVG (top 8 por valor)
-  const sortedForChart = [...posData]
-    .filter(d => d.currentValuePf !== null && d.currentValuePf > 0)
-    .sort((a, b) => b.currentValuePf - a.currentValuePf)
-    .slice(0, 8);
-  const svgChart = _pdfBuildAllocationSVG(sortedForChart, totalCurrentValue);
-
-  const totalComm = data.totalComm;
-  const cagrText = data.cagrPct !== null ? (data.cagrPct >= 0 ? "+" : "") + data.cagrPct.toFixed(2) + "%" : "—";
-
-  const fxExposure = data.fxExposure;
-  const fxRows = Object.entries(fxExposure)
-    .sort((a, b) => b[1] - a[1])
-    .map(([cur, val]) => {
-      const pct = totalCurrentValue > 0 ? (val / totalCurrentValue * 100).toFixed(1) : "—";
-      return `<tr><td><strong>${cur}</strong></td><td>${formatCurrency(val, currency)}</td><td>${pct}%</td></tr>`;
-    }).join("");
-
-  const dividendTxs = data.dividends;
-  const totalDividends = data.totalDividends;
-
-  // ── Analítica avanzada para el reporte ────────────────────────────────────
-  const _num = s => { const n = parseFloat(String(s).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? null : n; };
-  const totInvNum = data.totalCostEnd;
-
-  // #3 Atribución de resultados — contribución de cada posición al retorno del periodo (en pp)
-  const attribAll = posData
-    .filter(d => (d.periodPnl ?? d.pnlAmt) !== null)
-    .map(d => {
-      const gain = d.periodPnl ?? d.pnlAmt;
-      return { ticker: d.pos.ticker, pnlAmt: gain, pp: totInvNum > 0 ? (gain / totInvNum * 100) : 0 };
-    })
-    .sort((a, b) => b.pp - a.pp);
-  const attribTop = attribAll.slice(0, 5);
-  const attribBottom = attribAll.slice(-5).filter(d => d.pp < 0 && !attribTop.includes(d));
-  const attribChartRows = [...attribTop, ...attribBottom]
-    .filter((d, i, arr) => arr.indexOf(d) === i)
-    .sort((a, b) => b.pp - a.pp);
-  const attribSVG = _pdfBuildContribSVG(attribChartRows.map(d => ({ ticker: d.ticker, value: d.pp })));
-
-  // #4 Concentración y diversificación
-  const weights = posData
-    .filter(d => d.currentValuePf !== null && d.currentValuePf > 0)
-    .map(d => ({ ticker: d.pos.ticker, w: d.currentValuePf / totalCurrentValue }));
-  const hhi = weights.reduce((s, x) => s + x.w * x.w, 0);
-  const effN = hhi > 0 ? 1 / hhi : 0;
-  const sortedW = [...weights].sort((a, b) => b.w - a.w);
-  const top3W = sortedW.slice(0, 3).reduce((s, x) => s + x.w, 0) * 100;
-  const maxW = sortedW.length ? sortedW[0].w * 100 : 0;
-  const concLabel = hhi > 0.25 ? "alta" : hhi > 0.15 ? "moderada" : "baja";
-  // Sector / región por valor actual
-  const _bucketBy = (fn) => {
-    const b = {};
-    posData.forEach(d => { if (d.currentValuePf > 0) { const k = fn(d.pos.ticker); b[k] = (b[k] || 0) + d.currentValuePf; } });
-    if ((portfolio.cashBalance || 0) > 0) b["Cash"] = (b["Cash"] || 0) + portfolio.cashBalance;
-    return Object.entries(b).sort((a, b2) => b2[1] - a[1])
-      .map(([label, value]) => ({ label, value, pct: totalCurrentValue > 0 ? value / totalCurrentValue * 100 : 0 }));
-  };
-  const sectorRows = _bucketBy(getTickerSector);
-  const geoRows = _bucketBy(getTickerGeo);
-  const sectorSVG = _pdfBuildBarsSVG(sectorRows);
-  const geoSVG = _pdfBuildBarsSVG(geoRows);
-  const concAlerts = [];
-  if (maxW > 25) concAlerts.push(`La mayor posición (${sortedW[0].ticker}) representa ${maxW.toFixed(1)}% del portafolio — riesgo de concentración.`);
-  if (top3W > 60) concAlerts.push(`Las 3 mayores posiciones suman ${top3W.toFixed(1)}% — diversificación limitada.`);
-  if (sectorRows.length && sectorRows[0].pct > 40 && sectorRows[0].label !== "Cash") concAlerts.push(`Sobreexposición a "${sectorRows[0].label}" (${sectorRows[0].pct.toFixed(1)}%).`);
-
-  // #5 Comparación vs benchmark (series reconstruidas al rango por el motor)
-  let benchCompare = null, eqSVG = "", ddSVG = "", benchMetricsHtml = "", perfSessions = 0;
-  if (data.equityCurve && data.equityCurve.length > 1) {
-    const eq = data.equityCurve;
-    const bm = data.benchCurve || [];
-    const portRet = eq[eq.length - 1].value;
-    const hasBench = bm.length > 1 && bm.some(p => p.value !== 0);
-    const benchRet = hasBench ? bm[bm.length - 1].value : null;
-    const active = hasBench ? portRet - benchRet : null;
-    let trackingError = null;
-    if (hasBench && data.benchDaily && data.benchDaily.length > 1) {
-      const dp = data.dailyReturns, db = data.benchDaily;
-      const n = Math.min(dp.length, db.length);
-      const diff = []; for (let i = 0; i < n; i++) diff.push(dp[i] - db[i]);
-      const m = diff.reduce((s, r) => s + r, 0) / n;
-      const v = diff.reduce((s, r) => s + (r - m) ** 2, 0) / Math.max(1, n - 1);
-      trackingError = Math.sqrt(v) * Math.sqrt(252) * 100;
-    }
-    perfSessions = data.sessions || 0;
-    benchCompare = { portRet, benchRet, active, trackingError, beta: data.metrics.beta, label: data.benchmarkLabel };
-    eqSVG = _pdfBuildLineSVG(eq, hasBench ? bm : [], "Portafolio", data.benchmarkLabel || "Benchmark");
-    ddSVG = _pdfBuildDrawdownSVG(data.dailyReturns);
-    const cell = (lbl, val, color) => `<div class="metric"><span>${lbl}</span><strong${color ? ` style="color:${color}"` : ""}>${val}</strong></div>`;
-    const fmtPct = v => v === null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
-    benchMetricsHtml = `<div class="metrics m4">
-    ${cell("Retorno portafolio", fmtPct(portRet), portRet >= 0 ? "#00a870" : "#d94040")}
-    ${cell("Retorno benchmark", fmtPct(benchRet))}
-    ${cell("Exceso (alpha activo)", fmtPct(active), active === null ? "" : active >= 0 ? "#00a870" : "#d94040")}
-    ${cell("Tracking error", trackingError === null ? "—" : trackingError.toFixed(2) + "%")}
-  </div>`;
-  }
-
-  // #7 Riesgo interpretado en lenguaje de cliente
-  const _sh = _num(sharpe), _vol = _num(volatility), _var = _num(varVal), _mdd = _num(maxDrawdown), _bt = _num(beta);
-  const riskBullets = [];
-  if (_var !== null) {
-    const varAmt = totalCurrentValue > 0 ? formatCurrency(Math.abs(_var) / 100 * totalCurrentValue, currency) : "—";
-    riskBullets.push(`**VaR 95%:** en un mal día (1 de cada 20) el portafolio podría perder hasta ~<strong>${Math.abs(_var).toFixed(2)}%</strong> (≈ ${varAmt}).`);
-  }
-  if (_mdd !== null) riskBullets.push(`**Máxima caída del periodo:** desde su punto más alto dentro del rango el portafolio llegó a caer <strong>${Math.abs(_mdd).toFixed(2)}%</strong>.`);
-  if (_vol !== null) riskBullets.push(`**Volatilidad:** ${_vol.toFixed(1)}% anual — ${_vol > 25 ? "alta, esperar oscilaciones amplias" : _vol > 15 ? "moderada" : "contenida"}.`);
-  if (_sh !== null) riskBullets.push(`**Sharpe ${_sh.toFixed(2)}:** ${_sh > 1 ? "buen retorno por unidad de riesgo" : _sh > 0 ? "retorno ajustado al riesgo modesto" : "el retorno no compensó el riesgo asumido"}.`);
-  if (_bt !== null) riskBullets.push(`**Beta actual ${_bt.toFixed(2)}:** exposición ponderada de las posiciones abiertas; la beta histórica del periodo fue ${betaHistText}.`);
-  const riskInterpHtml = riskBullets.length
-    ? `<div class="callout"><div class="callout-h">¿Qué significan estas métricas?</div>${_mdToBulletsHtml(riskBullets.map(b => "- " + b).join("\n"))}</div>`
-    : "";
-
-  // Executive summary
-  const sharpeNum = parseFloat(sharpe);
-  const riskLabel = isNaN(sharpeNum) ? "sin datos" : sharpeNum > 1 ? "buena" : sharpeNum > 0 ? "moderada" : "baja";
-  const execSummary = `Portafolio <strong>${portfolio.name}</strong> con <strong>${positions.length}</strong> posición${positions.length !== 1 ? "es" : ""} activa${positions.length !== 1 ? "s" : ""} en ${currency}. Resultado del periodo: <strong>${returnAmtTxt} (${returnPctTxt})</strong>. P/L abierto: <strong>${openPeriodPnlTxt}</strong>${data.closedTradesInWindow?.length ? ` · P/L realizado: <strong>${realizedPnlTxt}</strong>` : ""}. Riesgo/retorno <strong>${riskLabel}</strong> · Sharpe ${sharpe} · Sortino ${sortinoText}.`;
-
-  // ── #8 Periodo del reporte (del rango seleccionado) ────────────────────────
+  const totalCurrentValue = data.totalValueEnd;
+  const base = data.periodCapitalBase || data.totalCostEnd;
+  const retAmt = data.periodResultAmt ?? (data.totalValueEnd - data.totalCostEnd);
+  const retPct = data.periodResultPct ?? (data.totalCostEnd > 0 ? retAmt / data.totalCostEnd * 100 : null);
+  const m = data.metrics;
   const _fmtD = d => {
     if (!d) return "—";
     try {
       const dt = new Date(d + "T00:00:00");
-      return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" });
+      return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString(currentLang === "en" ? "en-US" : currentLang === "fr" ? "fr-FR" : "es-MX",
+        { year: "numeric", month: "short", day: "numeric" });
     } catch { return d; }
   };
   const periodLabel = `${_fmtD(data.startStr)} – ${_fmtD(data.endStr)}`;
 
-  // ── #11 Frescura / vigencia de los datos ───────────────────────────────────
-  const dataAsOf = `cierre del ${_fmtD(data.endStr)}${data.isEndToday ? " (más reciente)" : ""}`;
-  const missingPrices = data.missingPrices || [];
+  // Concentración (también la recalcula el constructor; aquí solo para la IA).
+  const weights = data.posData
+    .filter(d => d.currentValuePf !== null && d.currentValuePf > 0)
+    .map(d => ({ ticker: d.pos.ticker, w: d.currentValuePf / totalCurrentValue }))
+    .sort((a, b) => b.w - a.w);
+  const hhi = weights.reduce((s, x) => s + x.w * x.w, 0);
+  const top3W = weights.slice(0, 3).reduce((s, x) => s + x.w, 0) * 100;
+  const maxW = weights.length ? weights[0].w * 100 : 0;
+  const concLabel = hhi > 0.25 ? "alta" : hhi > 0.15 ? "moderada" : "baja";
+  const _bucketPct = (fn) => {
+    const b = {};
+    data.posData.forEach(d => { if (d.currentValuePf > 0) { const k = fn(d.pos.ticker); b[k] = (b[k] || 0) + d.currentValuePf; } });
+    return Object.entries(b).sort((a, b2) => b2[1] - a[1])
+      .map(([label, value]) => ({ label, pct: totalCurrentValue > 0 ? value / totalCurrentValue * 100 : 0 }));
+  };
 
-  // ── #8 Transacciones del periodo ───────────────────────────────────────────
-  const txs = data.txInWindow.slice(0, 80);
-  const totalTxCount = data.totalTxCount;
-  const txRows = txs.map(tx => {
-    const date = new Date(tx.date).toLocaleDateString("es-MX");
-    const typeColor = tx.type === "COMPRA" ? "#00a870" : tx.type === "DIVIDENDO" ? "#d4890a" : "#d94040";
-    return `<tr>
-      <td>${date}</td>
-      <td style="color:${typeColor};font-weight:600">${tx.type}</td>
-      <td><strong>${tx.ticker}</strong></td>
-      <td>${tx.quantity}</td>
-      <td>${(tx.price || 0).toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:4 })}</td>
-      <td>${(tx.commCost || 0).toFixed(2)}</td>
-      <td>${(tx.net || 0).toFixed(2)}</td>
-    </tr>`;
-  }).join("");
-  const txCaption = `${txs.length} en el periodo${data.txInWindow.length > txs.length ? ` (de ${data.txInWindow.length})` : ""} · ${totalTxCount} históricas`;
-  const closedTrades = (data.closedTradesInWindow || []).slice(0, 30);
-  const closedTradeRows = closedTrades.map(tr => {
-    const pnlColor = (tr.pnl || 0) >= 0 ? "#00a870" : "#d94040";
-    return `<tr>
-      <td><strong>${tr.ticker}</strong></td>
-      <td>${_fmtD(tr.buyDate || "")}</td>
-      <td>${_fmtD(tr.sellDate || "")}</td>
-      <td>${parseFloat((tr.qty || 0).toFixed(4))}</td>
-      <td>${formatCurrency(tr.cost || 0, currency)}</td>
-      <td>${formatCurrency(tr.proceeds || 0, currency)}</td>
-      <td style="color:${pnlColor};font-weight:700">${(tr.pnl || 0) >= 0 ? "+" : ""}${formatCurrency(tr.pnl || 0, currency)}</td>
-      <td style="color:${pnlColor};font-weight:700">${tr.pnlPct != null ? (tr.pnlPct >= 0 ? "+" : "") + tr.pnlPct.toFixed(2) + "%" : "—"}</td>
-    </tr>`;
-  }).join("");
-  const closedTradeCaption = `${closedTrades.length} venta${closedTrades.length !== 1 ? "s" : ""} cerrada${closedTrades.length !== 1 ? "s" : ""} en el periodo`;
-
-  // ── Insights con IA (OpenRouter vía backend de Railway) ────────────────────
+  // ── Insights con IA (OpenRouter vía backend) — mismo payload que ya
+  //    entiende el system prompt de api.py; no cambiar los nombres de clave.
   const aiMetrics = {
     portafolio: portfolio.name,
     moneda: currency,
     periodo_reporte: periodLabel,
-    retorno_periodo_pct: data.periodResultPct != null ? +data.periodResultPct.toFixed(2) : null,
+    retorno_periodo_pct: retPct != null ? +retPct.toFixed(2) : null,
     twr_periodo_pct: data.periodReturnPct !== null ? +data.periodReturnPct.toFixed(2) : null,
-    posiciones_activas: positions.length,
-    capital_base_periodo: totalInvestedTxt,
-    valor_actual: currentValueTxt,
-    resultado_periodo: `${returnAmtTxt} (${returnPctTxt})`,
-    pnl_abierto_periodo: openPeriodPnlTxt,
-    pnl_realizado_ventas_periodo: realizedPnlTxt,
-    cagr_estimado: cagrText,
-    sharpe, sortino: sortinoText, volatilidad: volatility,
-    var_95: varVal,
-    beta_actual: beta,
-    beta_historica_periodo: betaHistText,
-    max_drawdown_periodo: maxDrawdown,
-    benchmark,
-    comisiones_totales: formatCurrency(totalComm, currency),
-    dividendos_cobrados: dividendTxs.length ? formatCurrency(totalDividends, currency) : "0",
-    ventas_realizadas: closedTrades.map(tr => ({
-      ticker: tr.ticker,
-      fecha_venta: tr.sellDate,
-      costo: +((tr.cost || 0).toFixed(2)),
-      ingreso: +((tr.proceeds || 0).toFixed(2)),
-      pnl: +((tr.pnl || 0).toFixed(2)),
-      pnl_pct: tr.pnlPct != null ? +(tr.pnlPct.toFixed(2)) : null,
+    posiciones_activas: data.posData.length,
+    capital_base_periodo: formatCurrency(base, currency),
+    valor_actual: formatCurrency(data.totalValueEnd, currency),
+    resultado_periodo: `${retAmt >= 0 ? "+" : ""}${formatCurrency(retAmt, currency)} (${fmtPct2(retPct)})`,
+    pnl_abierto_periodo: `${(data.openPeriodPnl || 0) >= 0 ? "+" : ""}${formatCurrency(data.openPeriodPnl || 0, currency)}`,
+    pnl_realizado_ventas_periodo: `${(data.totalRealizedPnl || 0) >= 0 ? "+" : ""}${formatCurrency(data.totalRealizedPnl || 0, currency)}`,
+    cagr_estimado: data.cagrPct !== null ? fmtPct2(data.cagrPct) : "—",
+    sharpe: m.sharpe != null ? m.sharpe.toFixed(2) : "—",
+    sortino: m.sortino != null ? m.sortino.toFixed(2) : "—",
+    volatilidad: m.volatility != null ? m.volatility.toFixed(1) + "%" : "—",
+    var_95: m.var != null ? "-" + Math.abs(m.var).toFixed(2) + "%" : "—",
+    beta_actual: m.beta != null ? m.beta.toFixed(2) : "—",
+    beta_historica_periodo: m.historicalBeta != null ? m.historicalBeta.toFixed(2) : "—",
+    max_drawdown_periodo: m.maxDD != null ? "-" + m.maxDD.toFixed(2) + "%" : "—",
+    benchmark: data.benchmarkLabel,
+    comisiones_totales: formatCurrency(data.totalComm, currency),
+    dividendos_cobrados: data.dividends.length ? formatCurrency(data.totalDividends, currency) : "0",
+    ventas_realizadas: (data.closedTradesInWindow || []).slice(0, 30).map(tr => ({
+      ticker: tr.ticker, fecha_venta: tr.sellDate,
+      costo: +((tr.cost || 0).toFixed(2)), ingreso: +((tr.proceeds || 0).toFixed(2)),
+      pnl: +((tr.pnl || 0).toFixed(2)), pnl_pct: tr.pnlPct != null ? +(tr.pnlPct.toFixed(2)) : null,
     })),
-    posiciones: posData
+    posiciones: data.posData
       .filter(d => d.currentValuePf !== null)
       .sort((a, b) => (b.currentValuePf || 0) - (a.currentValuePf || 0))
       .slice(0, 15)
@@ -7035,431 +6846,77 @@ async function exportPortfolioPDF(startStr, endStr) {
         pnl_pct: d.pnlPct !== null ? +d.pnlPct.toFixed(2) : null,
         divisa: getPosCurrency(d.pos, currency),
       })),
-    exposicion_divisa: Object.entries(fxExposure).map(([cur, val]) => ({
-      divisa: cur,
-      peso_pct: totalCurrentValue > 0 ? +(val / totalCurrentValue * 100).toFixed(1) : null,
+    exposicion_divisa: Object.entries(data.fxExposure).map(([cur, val]) => ({
+      divisa: cur, peso_pct: totalCurrentValue > 0 ? +(val / totalCurrentValue * 100).toFixed(1) : null,
     })),
     concentracion: {
-      hhi: +hhi.toFixed(3),
-      nivel: concLabel,
-      holdings_efectivos: +effN.toFixed(1),
-      top3_peso_pct: +top3W.toFixed(1),
-      mayor_posicion_pct: +maxW.toFixed(1),
+      hhi: +hhi.toFixed(3), nivel: concLabel,
+      holdings_efectivos: +(hhi > 0 ? 1 / hhi : 0).toFixed(1),
+      top3_peso_pct: +top3W.toFixed(1), mayor_posicion_pct: +maxW.toFixed(1),
     },
-    exposicion_sector: sectorRows.slice(0, 8).map(r => ({ sector: r.label, peso_pct: +r.pct.toFixed(1) })),
-    exposicion_region: geoRows.slice(0, 8).map(r => ({ region: r.label, peso_pct: +r.pct.toFixed(1) })),
+    exposicion_sector: _bucketPct(getTickerSector).slice(0, 8).map(r => ({ sector: r.label, peso_pct: +r.pct.toFixed(1) })),
+    exposicion_region: _bucketPct(getTickerGeo).slice(0, 8).map(r => ({ region: r.label, peso_pct: +r.pct.toFixed(1) })),
     atribucion: {
-      mayores_contribuidores: attribAll.slice(0, 3).map(d => ({ ticker: d.ticker, contribucion_pp: +d.pp.toFixed(2) })),
-      mayores_detractores: attribAll.slice(-3).filter(d => d.pp < 0).map(d => ({ ticker: d.ticker, contribucion_pp: +d.pp.toFixed(2) })),
+      mayores_contribuidores: (data.movers?.up || []).map(a => ({ ticker: a.ticker, contribucion_pp: +a.pp.toFixed(2) })),
+      mayores_detractores: (data.movers?.down || []).map(a => ({ ticker: a.ticker, contribucion_pp: +a.pp.toFixed(2) })),
     },
-    comparacion_benchmark: benchCompare ? {
-      retorno_portafolio_pct: +benchCompare.portRet.toFixed(2),
-      retorno_benchmark_pct: benchCompare.benchRet === null ? null : +benchCompare.benchRet.toFixed(2),
-      exceso_pp: benchCompare.active === null ? null : +benchCompare.active.toFixed(2),
-      tracking_error_pct: benchCompare.trackingError === null ? null : +benchCompare.trackingError.toFixed(2),
-      beta_actual: data.metrics.beta == null ? null : +data.metrics.beta.toFixed(2),
-      beta_historica_periodo: data.metrics.historicalBeta == null ? null : +data.metrics.historicalBeta.toFixed(2),
+    cronologia_mensual: (data.monthlyReturns || []).map(x => ({ mes: x.ym, retorno_pct: +x.value.toFixed(2) })),
+    caida_maxima: data.drawdown ? {
+      profundidad_pct: +data.drawdown.depthPct.toFixed(2),
+      profundidad_dinero: formatCurrency(data.drawdown.depthAmt, currency),
+      fecha_pico: data.drawdown.peakIso, fecha_minimo: data.drawdown.troughIso,
+      sesiones_bajo_el_agua: data.drawdown.sessionsUnder, recuperada: data.drawdown.recovered,
+    } : null,
+    comparacion_benchmark: (data.equityCurve && data.equityCurve.length > 1) ? {
+      retorno_portafolio_pct: +data.equityCurve[data.equityCurve.length - 1].value.toFixed(2),
+      retorno_benchmark_pct: (data.benchCurve && data.benchCurve.length > 1)
+        ? +data.benchCurve[data.benchCurve.length - 1].value.toFixed(2) : null,
+      beta_actual: m.beta == null ? null : +m.beta.toFixed(2),
+      beta_historica_periodo: m.historicalBeta == null ? null : +m.historicalBeta.toFixed(2),
     } : null,
   };
 
   let aiSections = {}, aiModel = "", aiError = "";
   try {
-    const ai = await fetchAIInsights(aiMetrics, "es");
+    const ai = await fetchAIInsights(aiMetrics, currentLang || "es");
     if (ai.text) { aiSections = _parseAISections(ai.text); aiModel = ai.model || ""; }
     if (!Object.keys(aiSections).length) aiError = "la IA devolvió una respuesta vacía";
   } catch (e) {
     aiError = (e && e.message) || String(e);
     console.warn("[Reporte PDF] Análisis IA no disponible:", aiError);
   }
-  // Nota de IA intercalable junto a un gráfico/sección
-  const aiNote = (key) => aiSections[key]
-    ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections[key]}</div>` : "";
-  const aiHasAny = Object.keys(aiSections).length > 0;
-  const reportId = `BP-${String(portfolio.id || "PF").slice(-5).toUpperCase()}-${String(data.endStr || "").replace(/-/g, "")}`;
-  const diagStatus = (status) => status === "good" ? "Fuerte" : status === "warn" ? "Vigilar" : status === "bad" ? "Riesgo" : "Info";
-  const diagItems = [
-    {
-      label: "Rendimiento",
-      value: `${returnAmtTxt} (${returnPctTxt})`,
-      status: _retAmt >= 0 ? "good" : "bad",
-      note: `Sobre ${totalInvestedTxt} invertidos`,
-    },
-    {
-      label: "Riesgo/retorno",
-      value: `Sharpe ${sharpe}`,
-      status: isNaN(sharpeNum) ? "neutral" : sharpeNum > 1 ? "good" : sharpeNum > 0 ? "warn" : "bad",
-      note: `Sortino ${sortinoText} · volatilidad ${volatility}`,
-    },
-    {
-      label: "Diversificación",
-      value: `${concLabel} · top 3 ${top3W.toFixed(1)}%`,
-      status: concLabel === "baja" ? "good" : concLabel === "moderada" ? "warn" : "bad",
-      note: `${effN.toFixed(1)} holdings efectivos`,
-    },
-    {
-      label: "Benchmark",
-      value: benchCompare?.active === null || !benchCompare ? "Sin base suficiente" : `${benchCompare.active >= 0 ? "+" : ""}${benchCompare.active.toFixed(2)} pp`,
-      status: !benchCompare || benchCompare.active === null ? "neutral" : benchCompare.active >= 0 ? "good" : "warn",
-      note: benchCompare ? `Vs ${benchCompare.label || benchmark}` : `Benchmark: ${benchmark || "no disponible"}`,
-    },
-  ];
-  const diagHtml = diagItems.map(item => `<div class="diag-card ${item.status}">
-    <span>${item.label}</span>
-    <strong>${item.value}</strong>
-    <small>${diagStatus(item.status)} · ${item.note}</small>
-  </div>`).join("");
-  const qualityItems = [
-    ["Folio", reportId],
-    ["Vigencia de precios", dataAsOf],
-    ["Benchmark", benchmark || "No disponible"],
-    ["Tasa libre de riesgo", `${perfRfr.rate.toFixed(2)}% (${perfRfr.label})`],
-    ["Beta actual / histórica", `${beta} / ${betaHistText}`],
-    ["Ventas cerradas", `${closedTrades.length} · P/L ${realizedPnlTxt}`],
-    ["Precios faltantes", missingPrices.length ? `${missingPrices.length}: ${missingPrices.slice(0, 8).join(", ")}${missingPrices.length > 8 ? "..." : ""}` : "0"],
-    ["IA del reporte", aiModel ? aiModel : (aiError ? "No disponible" : "No solicitada")],
-  ];
-  const qualityHtml = qualityItems.map(([label, value]) => `<div class="quality-item"><span>${label}</span><strong>${value}</strong></div>`).join("");
-  let pdfSecNo = 1;
-  const nExec = pdfSecNo++;
-  const nBench = pdfSecNo++;
-  const nRisk = pdfSecNo++;
-  const nDist = pdfSecNo++;
-  const nAttrib = attribChartRows.length ? pdfSecNo++ : null;
-  const nClosed = closedTradeRows ? pdfSecNo++ : null;
-  const nPos = posRows ? pdfSecNo++ : null;
-  const nTx = txRows ? pdfSecNo++ : null;
-  const nQuality = pdfSecNo++;
-  const nRebal = aiSections.rebalanceo ? pdfSecNo++ : null;
-  const nGlossary = pdfSecNo++;
 
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Reporte — ${portfolio.name}</title>
-  <style>
-    :root{
-      --ink:#171b2a; --muted:#646b7c; --faint:#98a0b2;
-      --pri:#5668f2; --pri-dk:#3544c8; --soft:#f7f8fc; --soft2:#edf1ff;
-      --border:#e3e7f2; --green:#00a870; --red:#d94040; --amber:#f5b84c;
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:var(--ink);padding:24px 32px;font-size:12px;line-height:1.38}
-    h1,h2,h3{font-weight:700}
-    /* Cover */
-    .cover{display:flex;justify-content:space-between;align-items:flex-end;gap:22px;padding:0 0 12px;margin-bottom:6px;border-bottom:3px solid var(--pri)}
-    .brand{font-size:24px;font-weight:800;letter-spacing:-.6px;color:var(--ink)}
-    .brand span{color:var(--pri)}
-    .brand-sub{font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.5px;text-transform:uppercase}
-    .cover-right{text-align:right}
-    .cover-name{font-size:19px;font-weight:800;color:var(--ink);margin-bottom:3px}
-    .cover-meta{font-size:10px;color:var(--muted);line-height:1.55}
-    .cover-meta b{color:var(--ink);font-weight:600}
-    .report-hero{display:grid;grid-template-columns:1.3fr .9fr;gap:14px;background:linear-gradient(135deg,#f8f9ff 0%,#eef2ff 100%);border:1px solid var(--border);border-radius:12px;padding:15px 17px;margin:14px 0 14px}
-    .hero-eyebrow{font-size:9px;color:var(--pri-dk);font-weight:800;letter-spacing:.7px;text-transform:uppercase;margin-bottom:5px}
-    .hero-title{font-size:23px;font-weight:850;letter-spacing:-.7px;line-height:1.05;margin-bottom:8px}
-    .hero-copy{font-size:11.5px;color:#394056;line-height:1.55;max-width:430px}
-    .hero-side{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .hero-stat{background:#fff;border:1px solid #dfe4f5;border-radius:9px;padding:10px 11px}
-    .hero-stat span{display:block;font-size:8.7px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.45px;margin-bottom:4px}
-    .hero-stat strong{display:block;font-size:15px;color:var(--ink);font-weight:850}
-    /* Freshness ribbon */
-    .ribbon{display:flex;gap:8px;flex-wrap:wrap;font-size:9.7px;color:var(--muted);padding:6px 0 0;margin-bottom:12px}
-    .ribbon .pill{background:var(--soft);border:1px solid var(--border);border-radius:20px;padding:3px 9px}
-    .warn{background:#fff3f3;border:1px solid #f3c9c9;color:#a44;border-radius:7px;padding:7px 10px;font-size:10px;margin-bottom:10px}
-    /* Sections */
-    .sec{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:750;color:var(--ink);text-transform:uppercase;letter-spacing:.55px;margin:0 0 9px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-    .sec .n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px;background:var(--pri);color:#fff;font-size:10px;font-weight:850;letter-spacing:0}
-    .sec .hint{margin-left:auto;font-size:9px;font-weight:500;color:var(--faint);text-transform:none;letter-spacing:0}
-    section{margin-bottom:18px}
-    /* Grids */
-    .g2{display:grid;grid-template-columns:1fr 1fr;gap:13px;align-items:start}
-    .g-perf{display:grid;grid-template-columns:1.55fr 1fr;gap:13px;align-items:start}
-    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:start}
-    /* Text blocks */
-    .exec{background:var(--soft2);border-left:3px solid var(--pri);border-radius:7px;padding:11px 13px;font-size:11.5px;line-height:1.5;color:#2c3142}
-    .ai-note{background:#f7f9ff;border:1px solid #dde4ff;border-left:3px solid var(--pri);border-radius:7px;padding:10px 12px;font-size:10.8px;color:#2a2f45;line-height:1.45}
-    .ai-note-h{font-size:9px;font-weight:800;color:var(--pri-dk);text-transform:uppercase;letter-spacing:.55px;margin-bottom:5px}
-    .ai-note ul{margin:2px 0 0;padding-left:15px;line-height:1.45}
-    .callout{background:#fbfcff;border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:10.8px;color:#333}
-    .callout-h{font-size:9.5px;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
-    .ai-h{font-size:10.5px;font-weight:700;color:var(--pri-dk);margin:8px 0 2px}
-    .ai-h:first-child{margin-top:0}
-    /* KPIs / metrics */
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
-    .kpi{background:linear-gradient(180deg,#f8f9ff,#f3f5fc);border:1px solid var(--border);border-radius:8px;padding:10px 11px;border-top:3px solid var(--pri)}
-    .kpi span{font-size:8.7px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.45px}
-    .kpi strong{font-size:15.5px;font-weight:850;color:var(--ink)}
-    .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-bottom:10px}
-    .metrics.m4{grid-template-columns:repeat(4,1fr)}
-    .metric{background:var(--soft);border:1px solid var(--border);border-radius:7px;padding:8px 7px;text-align:center}
-    .metric span{font-size:8px;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
-    .metric strong{font-size:12.5px;font-weight:850;color:var(--ink)}
-    .diag-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
-    .diag-card{background:#fff;border:1px solid var(--border);border-left:4px solid var(--faint);border-radius:8px;padding:9px 10px;min-height:76px}
-    .diag-card.good{border-left-color:var(--green)}
-    .diag-card.warn{border-left-color:var(--amber)}
-    .diag-card.bad{border-left-color:var(--red)}
-    .diag-card span{display:block;font-size:8.5px;color:var(--muted);font-weight:800;letter-spacing:.45px;text-transform:uppercase;margin-bottom:4px}
-    .diag-card strong{display:block;font-size:13.5px;font-weight:850;color:var(--ink);line-height:1.2;margin-bottom:5px}
-    .diag-card small{display:block;font-size:9.2px;color:#606879;line-height:1.35}
-    /* Charts */
-    .chart{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px}
-    .chart-h{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.45px;margin-bottom:7px;font-weight:700}
-    .chart svg{max-width:100%;height:auto}
-    .cap{font-size:8.5px;color:var(--faint);margin-top:6px}
-    /* Stats list */
-    .stat-box{background:var(--soft);border:1px solid var(--border);border-radius:8px;padding:9px 10px;margin-bottom:7px}
-    .stat-box span{font-size:8.7px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
-    .stat-box strong{font-size:13px;font-weight:850;color:var(--ink)}
-    /* Tables */
-    table{width:100%;border-collapse:collapse;font-size:10.3px}
-    thead th{background:var(--soft2);color:#4a5168;font-size:8.3px;font-weight:750;text-transform:uppercase;padding:6px 7px;text-align:left;letter-spacing:.25px}
-    tbody td{border-bottom:1px solid #edeef4;padding:5px 7px}
-    tbody tr:last-child td{border-bottom:none}
-    .quality-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-    .quality-item{background:var(--soft);border:1px solid var(--border);border-radius:7px;padding:9px 10px;min-height:54px}
-    .quality-item span{display:block;font-size:8.5px;color:var(--muted);font-weight:800;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px}
-    .quality-item strong{font-size:10.5px;line-height:1.35;color:var(--ink);font-weight:700;word-break:break-word}
-    /* Glossary */
-    .gloss{columns:2;column-gap:20px;font-size:9.8px;color:#444}
-    .gloss div{break-inside:avoid;margin-bottom:6px}
-    .gloss b{color:var(--ink)}
-    .disclaimer{background:#fff8e7;border-left:3px solid var(--amber);border-radius:6px;padding:8px 11px;margin-bottom:10px;font-size:9.6px;color:#7a6020}
-    .alerts{background:#fff3f3;border:1px solid #f3c9c9;border-left:3px solid var(--red);border-radius:7px;padding:8px 11px;font-size:9.8px;color:#a44;margin-bottom:10px;line-height:1.55}
-    .footer{margin-top:6px;padding-top:9px;border-top:1px solid var(--border);font-size:9px;color:var(--faint);display:flex;justify-content:space-between;align-items:center}
-    /* Saltos de página: fuera de @media print para que html2pdf (renderiza en
-       medio "screen") los respete al paginar el PDF descargado. */
-    .report-hero,.kpis,.metrics,.chart,.kpi,.metric,.diag-card,.quality-item,.ai-note,.callout{page-break-inside:avoid;break-inside:avoid}
-    .sec{page-break-after:avoid;break-after:avoid}
-    .dense-section{margin-bottom:14px}
-    table{page-break-inside:auto}
-    tr{page-break-inside:avoid;break-inside:avoid}
-    @media print{
-      body{padding:18px 22px}
-      thead{display:table-header-group}
-    }
-  </style>
-</head>
-<body>
-  <header class="cover">
-    <div>
-      <div class="brand"><span>B</span>lackPortfolio</div>
-      <div class="brand-sub">Reporte de portafolio · Para uso del asesor</div>
-    </div>
-    <div class="cover-right">
-      <div class="cover-name">${portfolio.name}</div>
-      <div class="cover-meta"><b>Periodo:</b> ${periodLabel}</div>
-      <div class="cover-meta">Benchmark: ${benchmark} &nbsp;·&nbsp; Moneda: ${currency}</div>
-      <div class="cover-meta">Generado el ${today}</div>
-    </div>
-  </header>
-  <div class="report-hero">
-    <div>
-      <div class="hero-eyebrow">Diagnóstico ejecutivo</div>
-      <div class="hero-title">${portfolio.name}</div>
-      <div class="hero-copy">${execSummary}</div>
-    </div>
-    <div class="hero-side">
-      <div class="hero-stat"><span>Valor actual</span><strong>${currentValueTxt}</strong></div>
-      <div class="hero-stat"><span>Resultado periodo</span><strong>${returnPctTxt}</strong></div>
-      <div class="hero-stat"><span>Riesgo/retorno</span><strong>${riskLabel}</strong></div>
-      <div class="hero-stat"><span>Folio</span><strong>${reportId}</strong></div>
-    </div>
-  </div>
-  <div class="ribbon">
-    <span class="pill">Periodo: ${periodLabel}</span>
-    <span class="pill">Valuado al ${dataAsOf}</span>
-    <span class="pill">${positions.length} posiciones · ${currency}</span>
-    ${!data.isEndToday ? `<span class="pill">Reconstruido a fecha histórica</span>` : ""}
-  </div>
-  ${missingPrices.length ? `<div class="warn">${missingPrices.length} posición(es) sin precio de cierre en la fecha (${missingPrices.slice(0,6).join(", ")}${missingPrices.length>6?"…":""}); quedan en "—". Puede deberse a tickers sin histórico disponible para el rango.</div>` : ""}
-  ${!data.isEndToday ? `<div class="warn" style="background:#fff8e7;border-color:#f0d9a8;color:#7a6020">El saldo en efectivo (Cash) solo se incluye cuando la fecha final es hoy; en reportes históricos el valor refleja únicamente las posiciones.</div>` : ""}
-
-  <!-- Resumen ejecutivo -->
-  <section class="dense-section">
-    <h2 class="sec"><span class="n">${nExec}</span>Diagnóstico ejecutivo</h2>
-    <div class="diag-grid">${diagHtml}</div>
-    <div class="${(aiSections.tesis || aiSections.general) ? "g2" : ""}" style="margin-bottom:10px">
-      <div class="exec">${execSummary}</div>
-      ${aiNote("tesis") || (aiSections.general ? `<div class="ai-note"><div class="ai-note-h">★ Análisis IA</div>${aiSections.general}</div>` : (aiError ? `<div class="warn" style="margin-bottom:0">⚠ Análisis IA no disponible: ${String(aiError).replace(/&/g,"&amp;").replace(/</g,"&lt;")}. El resto del reporte se generó con normalidad.</div>` : ""))}
-    </div>
-    <div class="kpis">
-      <div class="kpi"><span>Capital base</span><strong>${totalInvestedTxt}</strong></div>
-      <div class="kpi"><span>Valor actual</span><strong>${currentValueTxt}</strong></div>
-      <div class="kpi"><span>Resultado $</span><strong>${returnAmtTxt}</strong></div>
-      <div class="kpi"><span>Resultado %</span><strong>${returnPctTxt}</strong></div>
-    </div>
-  </section>
-
-  <!-- Rendimiento vs benchmark -->
-  <section>
-    <h2 class="sec"><span class="n">${nBench}</span>Rendimiento vs benchmark<span class="hint">${perfSessions ? perfSessions + " sesiones · " + periodLabel : periodLabel}</span></h2>
-    ${eqSVG ? `<div class="g-perf">
-      <div class="chart"><div class="chart-h">Valor acumulado · Portafolio vs ${benchCompare?.label || "Benchmark"}</div>${eqSVG}<div class="cap">Retorno compuesto acumulado en el periodo. Línea punteada = benchmark.</div></div>
-      <div>
-        ${benchMetricsHtml}
-        ${aiNote("benchmark")}
-      </div>
-    </div>` : `<div class="callout">No hay suficientes datos de precios históricos para construir la serie en el rango seleccionado. Prueba un rango más amplio o verifica que los tickers tengan histórico disponible.</div>`}
-  </section>
-
-  <!-- Riesgo -->
-  <section>
-    <h2 class="sec"><span class="n">${nRisk}</span>Riesgo y volatilidad</h2>
-    <div class="metrics">
-      <div class="metric"><span>Sharpe</span><strong>${sharpe}</strong></div>
-      <div class="metric"><span>Sortino</span><strong>${sortinoText}</strong></div>
-      <div class="metric"><span>Volatilidad</span><strong>${volatility}</strong></div>
-      <div class="metric"><span>VaR (95%)</span><strong>${varVal}</strong></div>
-      <div class="metric"><span>Beta actual</span><strong>${beta}</strong></div>
-      <div class="metric"><span>Drawdown periodo</span><strong>${maxDrawdown}</strong></div>
-    </div>
-    <div class="${ddSVG ? "g2" : ""}">
-      ${ddSVG ? `<div class="chart"><div class="chart-h">Drawdown · caídas desde máximos</div>${ddSVG}</div>` : ""}
-      <div>
-        ${riskInterpHtml}
-        ${aiNote("riesgos")}
-      </div>
-    </div>
-  </section>
-
-  <!-- Distribución y diversificación -->
-  <section>
-    <h2 class="sec"><span class="n">${nDist}</span>Distribución y diversificación</h2>
-    <div class="metrics m4">
-      <div class="metric"><span>Concentración (HHI)</span><strong>${hhi.toFixed(3)} · ${concLabel}</strong></div>
-      <div class="metric"><span>Holdings efectivos</span><strong>${effN.toFixed(1)}</strong></div>
-      <div class="metric"><span>Top 3 (peso)</span><strong>${top3W.toFixed(1)}%</strong></div>
-      <div class="metric"><span>Mayor posición</span><strong>${maxW.toFixed(1)}%</strong></div>
-    </div>
-    ${concAlerts.length ? `<div class="alerts">${concAlerts.map(a => "• " + a).join("<br>")}</div>` : ""}
-    <div class="g2" style="margin-bottom:14px">
-      <div class="chart"><div class="chart-h">Distribución por posición (top ${sortedForChart.length})</div>${svgChart || "<span style='color:#aaa;font-size:11px'>Sin precios en caché para graficar</span>"}</div>
-      <div>
-        <div class="stat-box"><span>P/L abierto del periodo</span><strong>${openPeriodPnlTxt}</strong></div>
-        ${closedTradeRows ? `<div class="stat-box"><span>P/L realizado por ventas</span><strong>${realizedPnlTxt}</strong></div>` : ""}
-        <div class="stat-box"><span>CAGR estimado</span><strong>${cagrText}</strong></div>
-        <div class="stat-box"><span>Comisiones totales</span><strong>${formatCurrency(totalComm, currency)}</strong></div>
-        ${dividendTxs.length ? `<div class="stat-box"><span>Dividendos cobrados (${dividendTxs.length} pagos)</span><strong>${formatCurrency(totalDividends, currency)}</strong></div>` : ""}
-      </div>
-    </div>
-    <div class="g3">
-      <div class="chart"><div class="chart-h">Por sector</div>${sectorSVG || "<span style='color:#aaa;font-size:11px'>Sin datos</span>"}</div>
-      <div class="chart"><div class="chart-h">Por región</div>${geoSVG || "<span style='color:#aaa;font-size:11px'>Sin datos</span>"}</div>
-      <div class="chart"><div class="chart-h">Por divisa</div>${fxRows ? `<table style="margin:0"><thead><tr><th>Divisa</th><th>Valor</th><th>Peso</th></tr></thead><tbody>${fxRows}</tbody></table>` : "<span style='color:#aaa;font-size:11px'>—</span>"}</div>
-    </div>
-  </section>
-
-  <!-- Atribución -->
-  ${attribChartRows.length ? `<section>
-    <h2 class="sec"><span class="n">${nAttrib}</span>Atribución de resultados<span class="hint">contribución al retorno, en puntos %</span></h2>
-    <div class="${aiSections.atribucion ? "g-perf" : ""}">
-      <div class="chart">${attribSVG}<div class="cap">Aporte de cada posición al retorno sobre el capital invertido. Verde = sumó, rojo = restó.</div></div>
-      ${aiNote("atribucion")}
-    </div>
-  </section>` : ""}
-
-  <!-- Operaciones cerradas -->
-  ${closedTradeRows ? `<section>
-    <h2 class="sec"><span class="n">${nClosed}</span>Operaciones cerradas del periodo<span class="hint">${closedTradeCaption}</span></h2>
-    <table>
-      <thead><tr><th>Ticker</th><th>Compra</th><th>Venta</th><th>Cantidad</th><th>Costo</th><th>Ingreso</th><th>P/L</th><th>Retorno</th></tr></thead>
-      <tbody>${closedTradeRows}</tbody>
-    </table>
-  </section>` : ""}
-
-  <!-- Posiciones -->
-  ${posRows ? `<section>
-    <h2 class="sec"><span class="n">${nPos}</span>Posiciones al ${_fmtD(data.endStr)}<span class="hint">${positions.length} posiciones · precios al cierre</span></h2>
-    <table>
-      <thead><tr><th>Ticker</th><th>Divisa</th><th>Costo prom.</th><th>Cantidad</th><th>P&L $</th><th>P&L %</th><th>Peso</th><th>1ª compra</th></tr></thead>
-      <tbody>${posRows}</tbody>
-    </table>
-  </section>` : ""}
-
-  <!-- Transacciones -->
-  ${txRows ? `<section>
-    <h2 class="sec"><span class="n">${nTx}</span>Historial de transacciones<span class="hint">${txCaption}</span></h2>
-    <table>
-      <thead><tr><th>Fecha</th><th>Tipo</th><th>Ticker</th><th>Cantidad</th><th>Precio</th><th>Comisión $</th><th>Neto</th></tr></thead>
-      <tbody>${txRows}</tbody>
-    </table>
-  </section>` : ""}
-
-  <!-- Calidad de datos -->
-  <section class="dense-section">
-    <h2 class="sec"><span class="n">${nQuality}</span>Calidad de datos y supuestos<span class="hint">trazabilidad del reporte</span></h2>
-    <div class="quality-grid">${qualityHtml}</div>
-  </section>
-
-  <!-- Recomendaciones IA -->
-  ${aiSections.rebalanceo ? `<section>
-    <h2 class="sec"><span class="n">${nRebal}</span>Acciones de rebalanceo sugeridas<span class="hint">generado por IA</span></h2>
-    <div class="ai-note"><div class="ai-note-h">★ Análisis IA · educativo, no es asesoría</div>${aiSections.rebalanceo}</div>
-  </section>` : ""}
-
-  <!-- Glosario y metodología -->
-  <section>
-    <h2 class="sec"><span class="n">${nGlossary}</span>Glosario y metodología</h2>
-    <div class="gloss">
-      <div><b>CAGR</b> — tasa de crecimiento anual compuesta del valor del portafolio desde la primera operación.</div>
-      <div><b>Sharpe</b> — retorno por unidad de riesgo total: (retorno − tasa libre de riesgo) ÷ volatilidad. Mayor es mejor.</div>
-      <div><b>Sortino</b> — variante del Sharpe que solo penaliza la volatilidad a la baja (caídas).</div>
-      <div><b>Volatilidad</b> — desviación estándar anualizada de los retornos diarios; mide cuánto oscila el valor.</div>
-      <div><b>VaR 95%</b> — pérdida máxima esperada en el 95% de los días; en 1 de cada 20 días podría superarse.</div>
-      <div><b>Beta actual</b> — beta ponderada de las posiciones abiertas; la beta histórica del periodo se muestra en calidad de datos.</div>
-      <div><b>Max Drawdown</b> — mayor caída dentro del rango seleccionado desde un máximo local hasta el siguiente mínimo.</div>
-      <div><b>Alpha (exceso)</b> — retorno del portafolio por encima del benchmark en el periodo.</div>
-      <div><b>Tracking error</b> — desviación estándar anualizada de la diferencia portafolio − benchmark.</div>
-      <div><b>HHI</b> — índice de concentración (suma de pesos²). Mayor = más concentrado; &gt;0.25 se considera alto.</div>
-      <div><b>Holdings efectivos</b> — 1 ÷ HHI; número equivalente de posiciones igualmente ponderadas.</div>
-      <div><b>Atribución (pp)</b> — contribución de cada posición al retorno total, en puntos porcentuales sobre el capital invertido.</div>
-    </div>
-    <div style="font-size:9.5px;color:var(--faint);margin-top:10px">Tasa libre de riesgo: ${perfRfr.rate.toFixed(2)}% (${perfRfr.label}). Métricas de riesgo calculadas sobre ${periodLabel}.${aiModel ? ` Secciones marcadas ★ generadas por IA (${aiModel}).` : ""}</div>
-  </section>
-
-  <div class="disclaimer">Este reporte es generado automáticamente con fines informativos. No constituye asesoría de inversión ni recomendación de compra o venta de valores. Las observaciones de IA pueden contener errores; verifica las cifras antes de tomar decisiones.</div>
-  <div class="footer">
-    <span>BlackPortfolio · blackportfolio.ai · ${reportId}</span>
-    <span>Generado el ${today}${aiModel ? " · IA: " + aiModel : ""}</span>
-  </div>
-</body>
-</html>`;
-
-  // Render en iframe oculto (ancho A4 @96dpi) y descarga directa como PDF.
-  const iframe = document.createElement("iframe");
-  iframe.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;visibility:hidden";
-  document.body.appendChild(iframe);
+  // ── Construcción del documento paginado ───────────────────────────────────
+  let built;
   try {
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    // html2pdf debe ejecutarse DENTRO del iframe: si corre en la ventana
-    // principal clona el reporte al documento del dashboard (tema oscuro) y
-    // main.css pisa los estilos blancos del reporte (fondos negros, layout roto).
-    await new Promise((resolve, reject) => {
-      const s = iframe.contentDocument.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js";
-      s.onload = resolve;
-      s.onerror = () => reject(new Error("No se pudo cargar el generador de PDF (revisa tu conexión)."));
-      iframe.contentDocument.head.appendChild(s);
+    await _loadLocalScript("assets/pdf-report.js?v=1", "BPPdfReport");
+    built = window.BPPdfReport.build({
+      data, portfolio, tone: "brand", lang: currentLang || "es",
+      ai: { sections: aiSections, model: aiModel, error: aiError },
+      fmt: { money: (v, c) => formatCurrency(v, c || currency) },
+      helpers: {
+        posCurrency: pos => getPosCurrency(pos, currency),
+        sector: t => getTickerSector(t),
+        geo: t => getTickerGeo(t),
+      },
+      rfr: perfRfr,
     });
-    await new Promise(r => setTimeout(r, 400)); // deja renderizar fuentes y SVGs
+  } catch (e) {
+    alert("No se pudo construir el reporte: " + ((e && e.message) || e));
+    return;
+  }
+
+  // Render + paginación + PDF (implementación única en assets/pdf-report.js).
+  try {
+    const out = await window.BPPdfReport.renderToPdf({
+      built, host: document, assets: "assets/", currency,
+      locale: currentLang === "en" ? "en-US" : currentLang === "fr" ? "fr-FR" : "es-MX",
+    });
+    if (out.pdfPages !== out.pages) {
+      console.warn(`[Reporte PDF] ${out.pages} páginas maquetadas vs ${out.pdfPages} en el PDF`);
+    }
     const safeName = (portfolio.name || "portafolio").replace(/[^\wáéíóúñÁÉÍÓÚÑ-]+/g, "_");
-    // El margen debe crearse con el Array del iframe: html2pdf valida
-    // margin.constructor === Array y un array de otra ventana no lo cumple.
-    // El PDF se saca como blob y la descarga se dispara desde la ventana
-    // principal: un .save() dentro del iframe muere al remover el iframe
-    // (el click diferido y el blob URL pertenecen a ese documento).
-    const blob = await iframe.contentWindow.html2pdf().set({
-      margin: new iframe.contentWindow.Array(16, 0, 16, 0),
-      image: { type: "jpeg", quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 794 },
-      jsPDF: { unit: "px", format: [794, 1123], orientation: "portrait", hotfixes: ["px_scaling"] },
-      pagebreak: { mode: ["css", "legacy"] },
-    }).from(iframe.contentDocument.body).outputPdf("blob");
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(out.blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `Reporte_${safeName}_${startStr}_a_${endStr}.pdf`;
@@ -7468,9 +6925,8 @@ async function exportPortfolioPDF(startStr, endStr) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
+    console.error("[Reporte PDF]", e);
     alert("No se pudo descargar el PDF: " + ((e && e.message) || e));
-  } finally {
-    iframe.remove();
   }
 }
 

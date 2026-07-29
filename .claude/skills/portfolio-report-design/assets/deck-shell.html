@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<!--
+  deck-shell.html — runnable skeleton for the interactive HTML presentation.
+  Implements references/html-presentation.md: 1600×900 stage, type scale,
+  4-layer slide grammar, the entrance choreography, count-up, navigation,
+  reduced-motion, and one example of every chart in assets/deck-charts.js.
+
+  HOW TO USE
+  1. Copy this file + deck-charts.js + tone-tokens.css into the build.
+  2. Replace DECK_DATA (bottom) with the real data contract for the portfolio.
+  3. Replace STR with the es/en/fr string map for the app's currentLang.
+  4. Set data-tone on <html> at build time. NEVER add a tone switcher here.
+  5. Inline tone-tokens.css and deck-charts.js into the single delivered file.
+
+  Everything below the DATA marker is placeholder. Nothing portfolio-specific
+  belongs anywhere else in this file.
+-->
+<html lang="es" data-tone="brand">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio deck — shell</title>
+<link rel="stylesheet" href="tone-tokens.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── stage ─────────────────────────────────────────────────────────────── */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0d0e12;
+  font-family:var(--tone-font-body,'Inter',system-ui,sans-serif);color:var(--tone-text,#16181d)}
+.deck{position:fixed;inset:0;overflow:hidden}
+/* centred via translate, NOT flex/grid centring: a 1600px box inside an 800px
+   viewport overflows its container, and centring layouts align it to the start. */
+.stage{position:absolute;left:50%;top:50%;width:1600px;height:900px;
+  transform:translate(-50%,-50%) scale(var(--fit,1));transform-origin:center;
+  background:var(--tone-surface,#fff);border-radius:6px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.45)}
+.slide{position:absolute;inset:0;padding:72px;opacity:0;visibility:hidden;overflow:hidden;
+  transform:translateX(4%) scale(.965);filter:blur(2px);
+  transition:opacity .42s cubic-bezier(.22,1,.36,1),transform .42s cubic-bezier(.22,1,.36,1),filter .42s ease,visibility 0s .42s}
+.slide.is-active{opacity:1;visibility:visible;transform:none;filter:none;transition-delay:0s}
+.slide.is-prev{transform:translateX(-4%) scale(.965)}
+.slide.pad0{padding:0}
+
+/* ── type scale (design px on the 1600×900 stage) ──────────────────────── */
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--tone-accent)}
+.headline{font-family:var(--tone-font-display,'Manrope',sans-serif);font-size:52px;line-height:1.08;font-weight:700;
+  letter-spacing:-.02em;margin:14px 0 0;max-width:20ch}
+.headline em{font-style:normal;color:var(--tone-accent)}
+.headline .ln{display:block;overflow:hidden}
+.headline .ln>span{display:block;clip-path:inset(0 100% 0 0);transition:clip-path .32s cubic-bezier(.22,1,.36,1)}
+.is-active .headline .ln>span{clip-path:inset(0)}
+.is-active .headline .ln:nth-child(2)>span{transition-delay:.06s}
+.is-active .headline .ln:nth-child(3)>span{transition-delay:.12s}
+.rule{height:4px;width:88px;background:var(--tone-accent);border-radius:2px;margin:22px 0 0;
+  transform:scaleX(0);transform-origin:left;transition:transform .42s cubic-bezier(.22,1,.36,1) .26s}
+.is-active .rule{transform:scaleX(1)}
+.lede{font-size:25px;line-height:1.4;color:var(--tone-text-muted);margin:18px 0 0;max-width:56ch}
+.body{font-size:21px;line-height:1.5}
+.label{font-size:16px;font-weight:600;color:var(--tone-text-muted)}
+.foot{font-size:13px;color:var(--tone-footnote-color,#8f93a3);opacity:0;transition:opacity .4s ease .9s}
+.is-active .foot{opacity:.75}
+.num{font-variant-numeric:tabular-nums;font-family:var(--tone-font-display,'Manrope',sans-serif);letter-spacing:-.02em}
+.hero-fig{font-size:172px;font-weight:800;line-height:.92;
+  background:linear-gradient(120deg,var(--tone-accent),var(--tone-accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:17px;font-weight:700;padding:5px 13px;border-radius:999px;
+  background:color-mix(in srgb,var(--tone-accent) 12%,transparent);color:var(--tone-accent)}
+.chip.up{background:rgba(26,127,75,.12);color:var(--tone-up,#1a7f4b)}
+.chip.down{background:rgba(192,57,43,.12);color:var(--tone-down,#c0392b)}
+.ghost{position:absolute;right:-24px;bottom:-56px;font-size:320px;font-weight:800;line-height:.8;
+  color:var(--tone-text);opacity:.045;pointer-events:none;letter-spacing:-.04em;font-family:var(--tone-font-display,sans-serif)}
+
+/* ── layout grammar ────────────────────────────────────────────────────── */
+/* minmax(0,1fr), never 1fr: a 68px figure has a min-content width larger than
+   its track and silently overflows the stage otherwise. */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:24px}
+.grid>*{min-width:0}
+.chrome{display:flex;justify-content:space-between;align-items:center}
+.chrome .pill{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--tone-text-muted);
+  border:1px solid color-mix(in srgb,var(--tone-text) 14%,transparent);padding:5px 12px;border-radius:999px}
+.panel{background:var(--tone-panel);border-radius:16px;padding:24px 26px}
+.kpi{background:var(--tone-panel);border-radius:16px;padding:22px 24px 18px;display:flex;flex-direction:column;gap:6px;
+  min-height:186px;transition:transform .25s ease,box-shadow .25s ease}
+.kpi:hover{transform:translateY(-4px);box-shadow:0 14px 34px rgba(0,0,0,.10)}
+.kpi .v{font-size:68px;font-weight:800;line-height:1;white-space:nowrap}
+.kpi .spark{height:44px;margin-top:auto}
+.rail li{font-size:21px;line-height:1.42;margin-bottom:16px;padding-left:20px;position:relative;color:var(--tone-text)}
+.rail li::before{content:"";position:absolute;left:0;top:12px;width:9px;height:9px;border-radius:3px;background:var(--tone-accent)}
+.rail li b{font-variant-numeric:tabular-nums}
+.card{background:var(--tone-panel);border-radius:18px;padding:26px 28px;display:flex;flex-direction:column;gap:12px;height:100%;
+  transition:transform .25s ease,box-shadow .25s ease}
+.card:hover{transform:translateY(-6px);box-shadow:0 18px 44px rgba(0,0,0,.12)}
+.card .tk{font-size:26px;font-weight:800}
+.card .pp{font-size:56px;font-weight:800;line-height:1}
+.card ul{margin:4px 0 0;padding:0;list-style:none}
+.card li{font-size:19px;line-height:1.38;margin-bottom:11px;color:var(--tone-text)}
+.card li strong{font-variant-numeric:tabular-nums}
+.card .src{font-size:13px;color:var(--tone-footnote-color);opacity:0;transition:opacity .2s ease}
+.card:hover .src{opacity:.85}
+.chart{width:100%}
+
+/* ── reveal choreography ───────────────────────────────────────────────── */
+[data-reveal]{opacity:0;transform:translateY(14px);
+  transition:opacity .44s ease var(--d,0s),transform .44s cubic-bezier(.22,1,.36,1) var(--d,0s)}
+.is-active [data-reveal]{opacity:1;transform:none}
+
+/* ── full-bleed slides ─────────────────────────────────────────────────── */
+.bleed{position:absolute;inset:0;overflow:hidden;background:var(--tone-bg)}
+.bleed img{width:100%;height:100%;object-fit:cover;transform:scale(1.06);opacity:.85;
+  filter:grayscale(.35) contrast(1.05)}
+.is-active .bleed img{animation:ken 14s ease-out forwards}
+@keyframes ken{from{transform:scale(1.06)}to{transform:scale(1)}}
+.scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,10,20,.94) 0%,rgba(8,10,20,.72) 46%,rgba(8,10,20,.28) 100%)}
+.cover-body{position:absolute;inset:0;padding:88px;display:flex;flex-direction:column;justify-content:flex-end;color:#fff}
+.cover-body .headline{color:#fff;font-size:150px;line-height:.94;max-width:16ch}
+.cover-figs{display:flex;gap:64px;margin-top:46px}
+.cover-figs .v{font-size:52px;font-weight:800;line-height:1}
+.cover-figs .l{font-size:16px;opacity:.72;margin-top:4px}
+.credit{position:absolute;right:22px;bottom:16px;font-size:13px;color:rgba(255,255,255,.55)}
+
+/* ── chrome / navigation ───────────────────────────────────────────────── */
+.progress{position:absolute;left:0;top:0;height:4px;background:var(--tone-accent);width:0;transition:width .42s ease;z-index:5}
+.nav{position:fixed;right:26px;bottom:22px;display:flex;align-items:center;gap:14px;z-index:20;color:#fff}
+.nav button{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);
+  color:#fff;font-size:19px;cursor:pointer;transition:background .2s ease,transform .2s ease}
+.nav button:hover{background:rgba(255,255,255,.2);transform:scale(1.06)}
+.nav .count{font-size:15px;font-variant-numeric:tabular-nums;opacity:.8;letter-spacing:.06em}
+.nav .next.pulse{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.34)}50%{box-shadow:0 0 0 12px rgba(255,255,255,0)}}
+.dots{position:fixed;left:26px;bottom:26px;display:flex;gap:8px;z-index:20}
+.dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);cursor:pointer;transition:all .25s ease}
+.dots i.on{background:#fff;width:24px;border-radius:4px}
+
+/* ── charts / tooltip / legend ─────────────────────────────────────────── */
+.donut-wrap{display:flex;align-items:center;gap:34px}
+.donut-wrap .ch-donut{width:296px;flex:none}
+.donut-legend{list-style:none;margin:0;padding:0;flex:1;max-width:460px}
+.donut-item{display:flex;align-items:center;gap:12px;font-size:20px;padding:9px 10px;border-radius:10px;cursor:pointer;transition:background .2s ease}
+.donut-item.is-on{background:color-mix(in srgb,var(--tone-accent) 10%,transparent)}
+.donut-item i{width:12px;height:12px;border-radius:4px;flex:none}
+.donut-item .dl-label{flex:1}
+.donut-item .dl-val{font-weight:800;font-variant-numeric:tabular-nums}
+.ch-pulse{animation:halo 2.4s ease-out infinite}
+@keyframes halo{0%{r:6;opacity:.5}70%{r:20;opacity:0}100%{opacity:0}}
+.deck-tip{position:fixed;z-index:50;pointer-events:none;opacity:0;transition:opacity .14s ease;
+  background:rgba(14,16,24,.94);color:#fff;border-radius:10px;padding:10px 13px;font-size:14px;line-height:1.4;
+  box-shadow:0 12px 30px rgba(0,0,0,.34);max-width:280px}
+.deck-tip b{display:block;font-size:13px;opacity:.7;font-weight:600}
+.deck-tip span{display:block;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.deck-tip i{display:block;font-style:normal;font-size:13px;opacity:.72;margin-top:3px}
+
+@media (prefers-reduced-motion: reduce){
+  .slide{transition:opacity .12s linear,visibility 0s .12s;transform:none;filter:none}
+  .slide.is-prev{transform:none}
+  [data-reveal],.headline .ln>span,.rule,.foot{transition:none!important;opacity:1;transform:none;clip-path:none}
+  .bleed img,.ch-pulse,.nav .next.pulse{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+  <div class="stage" id="stage">
+    <div class="progress" id="progress"></div>
+
+    <!-- 1 · COVER — full-bleed image, 3 headline figures -->
+    <section class="slide pad0" data-slide>
+      <div class="bleed">
+        <img id="coverImg" alt="" onerror="this.style.display='none'">
+        <div class="scrim"></div>
+      </div>
+      <div class="cover-body">
+        <div class="eyebrow" data-reveal style="--d:.08s;color:#fff;opacity:.8">BlackPortfolio · <span data-t="period"></span></div>
+        <h1 class="headline"><span class="ln"><span data-t="portfolioName"></span></span></h1>
+        <div class="cover-figs">
+          <div data-reveal style="--d:.34s"><div class="v num" data-count data-fmt="money" data-key="kpis.totalValueEnd"></div><div class="l" data-t="l.value"></div></div>
+          <div data-reveal style="--d:.42s"><div class="v num" data-count data-fmt="pct" data-key="kpis.periodReturnPct"></div><div class="l" data-t="l.periodReturn"></div></div>
+          <div data-reveal style="--d:.5s"><div class="v num" data-count data-fmt="money" data-key="kpis.periodResultAmt"></div><div class="l" data-t="l.result"></div></div>
+        </div>
+      </div>
+      <div class="credit" id="coverCredit"></div>
+    </section>
+
+    <!-- 2 · VERDICT — hero figure + KPI quad -->
+    <section class="slide" data-slide>
+      <div class="chrome"><span class="eyebrow" data-reveal>01 · <span data-t="s.verdict"></span></span><span class="pill" data-t="period"></span></div>
+      <div class="grid" style="margin-top:26px;align-items:start">
+        <div style="grid-column:span 5">
+          <div class="hero-fig num" data-count data-fmt="pct" data-key="kpis.periodReturnPct" data-reveal style="--d:.34s"></div>
+          <h2 class="headline" style="font-size:44px"><span class="ln"><span><span data-t="h.verdict1"></span></span></span><span class="ln"><span><em data-t="h.verdict2"></em></span></span></h2>
+          <div class="rule"></div>
+          <p class="lede" data-reveal style="--d:.6s"><span data-t="h.verdictLede"></span></p>
+        </div>
+        <div class="grid" style="grid-column:span 7;grid-template-columns:repeat(2,minmax(0,1fr));height:604px">
+          <div class="kpi" data-reveal style="--d:.62s"><span class="label" data-t="l.value"></span><span class="v num" data-count data-fmt="money" data-key="kpis.totalValueEnd"></span><div class="spark" data-chart="sparkline" data-key="spark.value"></div></div>
+          <div class="kpi" data-reveal style="--d:.69s"><span class="label" data-t="l.result"></span><span class="v num" data-count data-fmt="money" data-key="kpis.periodResultAmt"></span><div class="spark" data-chart="sparkline" data-key="spark.pnl"></div></div>
+          <div class="kpi" data-reveal style="--d:.76s"><span class="label" data-t="l.alpha"></span><span class="v num" data-count data-fmt="pp" data-key="derived.alphaPp"></span><span class="label" data-t="l.vsBench"></span></div>
+          <div class="kpi" data-reveal style="--d:.83s"><span class="label" data-t="l.sharpe"></span><span class="v num" data-count data-fmt="num" data-key="risk_metrics.sharpe"></span><span class="label" data-t="l.sharpeVerdict"></span></div>
+        </div>
+      </div>
+      <div class="foot" style="position:absolute;left:72px;bottom:40px" data-t="f.verdict"></div>
+    </section>
+
+    <!-- 3 · PERFORMANCE — chart-rail -->
+    <section class="slide" data-slide>
+      <div class="chrome"><span class="eyebrow" data-reveal>02 · <span data-t="s.performance"></span></span><span class="pill" data-t="period"></span></div>
+      <h2 class="headline" style="font-size:46px;margin-top:12px"><span class="ln"><span data-t="h.perf"></span></span></h2>
+      <div class="rule"></div>
+      <div class="grid" style="margin-top:22px">
+        <div style="grid-column:span 8;height:418px" data-reveal="" >
+          <div class="chart" data-chart="area" data-key="charts.equity" style="height:418px"></div>
+        </div>
+        <div style="grid-column:span 4">
+          <ul class="rail" style="list-style:none;padding:0;margin:0">
+            <li data-reveal style="--d:.62s"><span data-t="r.perf1"></span></li>
+            <li data-reveal style="--d:.69s"><span data-t="r.perf2"></span></li>
+            <li data-reveal style="--d:.76s"><span data-t="r.perf3"></span></li>
+          </ul>
+          <div class="panel" style="margin-top:18px" data-reveal="" ><span class="label" data-t="l.bestWorst"></span>
+            <div class="num" style="font-size:34px;font-weight:800;margin-top:6px"><span data-t="v.bestWorst"></span></div>
+          </div>
+        </div>
+      </div>
+      <!-- support strip — the 4th grammar layer; without it this slide leaves a dead band -->
+      <div class="grid" style="margin-top:16px">
+        <div class="panel" style="grid-column:span 3;padding:14px 20px" data-reveal="" ><span class="label" data-t="l.sessions"></span><div class="num" style="font-size:30px;font-weight:800" data-t="v.sessions"></div></div>
+        <div class="panel" style="grid-column:span 3;padding:14px 20px" data-reveal="" ><span class="label" data-t="l.upDays"></span><div class="num" style="font-size:30px;font-weight:800" data-t="v.upDays"></div></div>
+        <div class="panel" style="grid-column:span 3;padding:14px 20px" data-reveal="" ><span class="label" data-t="l.recovery"></span><div class="num" style="font-size:30px;font-weight:800" data-t="v.recovery"></div></div>
+        <div class="panel" style="grid-column:span 3;padding:14px 20px" data-reveal="" ><span class="label" data-t="l.capitalBase"></span><div class="num" style="font-size:30px;font-weight:800" data-t="v.capitalBase"></div></div>
+      </div>
+      <div class="foot" style="position:absolute;left:72px;bottom:22px" data-t="f.perf"></div>
+    </section>
+
+    <!-- 4 · ATTRIBUTION — waterfall -->
+    <section class="slide" data-slide>
+      <div class="chrome"><span class="eyebrow" data-reveal>03 · <span data-t="s.attribution"></span></span><span class="pill" data-t="period"></span></div>
+      <h2 class="headline" style="font-size:46px;margin-top:12px"><span class="ln"><span data-t="h.attr"></span></span></h2>
+      <div class="rule"></div>
+      <div class="chart" data-chart="waterfall" data-key="charts.waterfall" style="height:420px;margin-top:22px"></div>
+      <div class="grid" style="margin-top:6px">
+        <div class="panel" style="grid-column:span 4" data-reveal="" ><span class="label" data-t="l.topContrib"></span><div class="num" style="font-size:32px;font-weight:800" data-t="v.topContrib"></div></div>
+        <div class="panel" style="grid-column:span 4" data-reveal="" ><span class="label" data-t="l.topDetract"></span><div class="num" style="font-size:32px;font-weight:800" data-t="v.topDetract"></div></div>
+        <div class="panel" style="grid-column:span 4" data-reveal="" ><span class="label" data-t="l.breadth"></span><div class="num" style="font-size:32px;font-weight:800" data-t="v.breadth"></div></div>
+      </div>
+    </section>
+
+    <!-- 5 · MOVERS — cards-3, four-bullet structure (market-narrative.md) -->
+    <section class="slide" data-slide>
+      <div class="chrome"><span class="eyebrow" data-reveal>04 · <span data-t="s.movers"></span></span><span class="pill" data-t="period"></span></div>
+      <h2 class="headline" style="font-size:44px;margin-top:12px"><span class="ln"><span data-t="h.movers"></span></span></h2>
+      <div class="rule"></div>
+      <div class="grid" id="moverCards" style="margin-top:26px;height:520px"></div>
+      <div class="foot" style="position:absolute;left:72px;bottom:26px" data-t="f.movers"></div>
+    </section>
+
+    <!-- 6 · COMPOSITION — donut + concentration gauge -->
+    <section class="slide" data-slide>
+      <div class="chrome"><span class="eyebrow" data-reveal>05 · <span data-t="s.composition"></span></span><span class="pill" data-t="period"></span></div>
+      <h2 class="headline" style="font-size:46px;margin-top:12px"><span class="ln"><span data-t="h.comp"></span></span></h2>
+      <div class="rule"></div>
+      <div class="grid" style="margin-top:18px;align-items:center;height:392px">
+        <div style="grid-column:span 8" data-reveal=""><div data-chart="donut" data-key="charts.donut"></div></div>
+        <div style="grid-column:span 4">
+          <div data-chart="gauge" data-key="charts.hhi" data-reveal="" style="max-width:300px"></div>
+          <ul class="rail" style="list-style:none;padding:0;margin:14px 0 0">
+            <li data-reveal style="--d:.7s"><span data-t="r.comp1"></span></li>
+            <li data-reveal style="--d:.77s"><span data-t="r.comp2"></span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="grid" style="margin-top:20px">
+        <div class="panel" style="grid-column:span 4;padding:14px 20px" data-reveal="" ><span class="label" data-t="l.top1"></span><div class="num" style="font-size:30px;font-weight:800" data-t="v.top1"></div></div>
+        <div class="panel" style="grid-column:span 4;padding:14px 20px" data-reveal="" ><span class="label" data-t="l.effective"></span><div class="num" style="font-size:30px;font-weight:800" data-t="v.effective"></div></div>
+        <div class="panel" style="grid-column:span 4;padding:14px 20px" data-reveal="" ><span class="label" data-t="l.newPos"></span><div class="num" style="font-size:30px;font-weight:800" data-t="v.newPos"></div></div>
+      </div>
+      <div class="ghost" data-t="ghost.comp"></div>
+    </section>
+
+    <!-- 7 · RISK — gauge quad -->
+    <section class="slide" data-slide>
+      <div class="chrome"><span class="eyebrow" data-reveal>06 · <span data-t="s.risk"></span></span><span class="pill" data-t="period"></span></div>
+      <h2 class="headline" style="font-size:46px;margin-top:12px"><span class="ln"><span data-t="h.risk"></span></span></h2>
+      <div class="rule"></div>
+      <div class="grid" style="margin-top:22px">
+        <div class="panel" style="grid-column:span 3" data-reveal=""><div data-chart="gauge" data-key="charts.gSharpe"></div></div>
+        <div class="panel" style="grid-column:span 3" data-reveal="" ><div data-chart="gauge" data-key="charts.gVol"></div></div>
+        <div class="panel" style="grid-column:span 3" data-reveal="" ><div data-chart="gauge" data-key="charts.gDD"></div></div>
+        <div class="panel" style="grid-column:span 3" data-reveal="" ><div data-chart="gauge" data-key="charts.gBeta"></div></div>
+      </div>
+      <div class="chart" data-chart="underwater" data-key="charts.underwater" style="height:300px;margin-top:14px"></div>
+      <div class="foot" style="position:absolute;left:72px;bottom:24px" data-t="f.risk"></div>
+    </section>
+
+    <!-- 8 · FX / SECTOR — stacked -->
+    <section class="slide" data-slide>
+      <div class="chrome"><span class="eyebrow" data-reveal>07 · <span data-t="s.exposure"></span></span><span class="pill" data-t="period"></span></div>
+      <h2 class="headline" style="font-size:46px;margin-top:12px"><span class="ln"><span data-t="h.fx"></span></span></h2>
+      <div class="rule"></div>
+      <div class="chart" data-chart="stacked" data-key="charts.fx" style="margin-top:34px"></div>
+      <div class="grid" style="margin-top:30px">
+        <div style="grid-column:span 7">
+          <ul class="rail" style="list-style:none;padding:0;margin:0">
+            <li data-reveal style="--d:.62s"><span data-t="r.fx1"></span></li>
+            <li data-reveal style="--d:.69s"><span data-t="r.fx2"></span></li>
+          </ul>
+        </div>
+        <div class="panel" style="grid-column:span 5" data-reveal="" ><span class="label" data-t="l.fxImpact"></span>
+          <div class="num" style="font-size:44px;font-weight:800" data-t="v.fxImpact"></div></div>
+      </div>
+      <div class="grid" style="margin-top:26px">
+        <div class="card" style="grid-column:span 4" data-reveal="" ><span class="tk" data-t="fx1.t"></span><div class="body" data-t="fx1.b"></div></div>
+        <div class="card" style="grid-column:span 4" data-reveal="" ><span class="tk" data-t="fx2.t"></span><div class="body" data-t="fx2.b"></div></div>
+        <div class="card" style="grid-column:span 4" data-reveal="" ><span class="tk" data-t="fx3.t"></span><div class="body" data-t="fx3.b"></div></div>
+      </div>
+    </section>
+
+    <!-- 9 · CLOSING — full-bleed -->
+    <section class="slide pad0" data-slide>
+      <div class="bleed" style="background:var(--tone-bg)"></div>
+      <div class="cover-body" style="justify-content:center">
+        <div class="eyebrow" data-reveal style="color:#fff;opacity:.75">BlackPortfolio</div>
+        <h2 class="headline" style="color:#fff;font-size:92px"><span class="ln"><span data-t="h.close"></span></span></h2>
+        <p class="lede" data-reveal style="--d:.4s;color:rgba(255,255,255,.8);max-width:44ch"><span data-t="h.closeLede"></span></p>
+        <div class="foot" style="color:rgba(255,255,255,.6);margin-top:34px" data-t="f.legal"></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="dots" id="dots"></div>
+<div class="nav">
+  <span class="count" id="count">01 / 09</span>
+  <button id="prev" aria-label="Anterior">‹</button>
+  <button id="next" class="next" aria-label="Siguiente">›</button>
+</div>
+
+<script src="deck-charts.js"></script>
+<script>
+/* ══ DATA — everything below is replaced at build time ══════════════════ */
+const DECK_DATA = {
+  meta:{ portfolio_name:"Portafolio demo", period_label:"1 abr – 30 jun 2026", lang:"es", currency:"USD", tone:"brand" },
+  kpis:{ totalValueEnd:128450, periodReturnPct:7.4, periodResultAmt:8860 },
+  risk_metrics:{ sharpe:1.42, volatility:14.8, maxDD:-9.6, beta:1.08 },
+  derived:{ alphaPp:2.1 },
+  spark:{ value:[100,101,99,104,103,107,109,108,112,114], pnl:[0,1,-2,4,3,7,9,8,12,14] },
+  cover:{ image:"https://images.pexels.com/photos/33719783/pexels-photo-33719783.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940", photographer:"Zulfugar Karimov" },
+  charts:{
+    equity:{ format:"num", benchLabel:"S&P 500", ddBand:{from:3,to:6},
+      series:[{date:"01 abr",value:100},{date:"15 abr",value:102.4},{date:"30 abr",value:101.1},{date:"15 may",value:97.8},{date:"31 may",value:99.4},{date:"15 jun",value:104.2},{date:"30 jun",value:107.4}],
+      bench:[{date:"01 abr",value:100},{date:"15 abr",value:101.2},{date:"30 abr",value:100.4},{date:"15 may",value:98.9},{date:"31 may",value:100.2},{date:"15 jun",value:103.1},{date:"30 jun",value:105.3}] },
+    waterfall:{ format:"money", start:{label:"Inicio",value:119590}, end:{label:"Final",value:128450},
+      items:[{label:"NVDA",value:5200,meta:"+3.4 pp"},{label:"MSFT",value:2600,meta:"+1.7 pp"},{label:"ASR.MX",value:-1900,meta:"−1.2 pp"},{label:"FMTY14.MX",value:-640,meta:"−0.4 pp"},{label:"Otros (7)",value:3600,meta:"+2.3 pp"}] },
+    donut:{ centerLabel:"5 posiciones", slices:[{label:"NVDA",value:38400},{label:"MSFT",value:29100},{label:"ASR.MX",value:22300},{label:"FMTY14.MX",value:18900},{label:"Otros (7)",value:19750}] },
+    hhi:{ value:0.24, min:0, max:0.5, display:"0.24", label:"HHI", verdict:"Concentración media",
+      bands:[{from:0,to:0.15,color:"#1a7f4b"},{from:0.15,to:0.25,color:"#c9a227"},{from:0.25,to:0.5,color:"#c0392b"}] },
+    gSharpe:{ value:1.42, min:0, max:3, display:"1.42", label:"Sharpe", verdict:"Sólido", bands:[{from:0,to:1,color:"#c0392b"},{from:1,to:2,color:"#c9a227"},{from:2,to:3,color:"#1a7f4b"}] },
+    gVol:{ value:14.8, min:0, max:40, display:"14.8%", label:"Volatilidad anual", verdict:"Moderada", bands:[{from:0,to:15,color:"#1a7f4b"},{from:15,to:25,color:"#c9a227"},{from:25,to:40,color:"#c0392b"}] },
+    gDD:{ value:9.6, min:0, max:40, display:"−9.6%", label:"Máx. drawdown", verdict:"Contenido", bands:[{from:0,to:10,color:"#1a7f4b"},{from:10,to:20,color:"#c9a227"},{from:20,to:40,color:"#c0392b"}] },
+    gBeta:{ value:1.08, min:0, max:2, display:"1.08", label:"Beta vs S&P 500", verdict:"En línea", bands:[{from:0,to:.8,color:"#1a7f4b"},{from:.8,to:1.2,color:"#c9a227"},{from:1.2,to:2,color:"#c0392b"}] },
+    underwater:{ series:[{date:"01 abr",dd:0},{date:"15 abr",dd:-1.2},{date:"30 abr",dd:-3.4},{date:"15 may",dd:-9.6},{date:"31 may",dd:-5.1},{date:"15 jun",dd:-1.4},{date:"30 jun",dd:0}] },
+    fx:{ segments:[{label:"USD",value:67500},{label:"MXN",value:41200},{label:"EUR",value:19750}] }
+  },
+  movers:[
+    { ticker:"NVDA", direction:"positive", pp:3.4, spark:[100,104,102,110,116,121,128],
+      bullets:["<b>12 may · Reuters</b> — Guía trimestral por encima del consenso. La posición subió <strong>+21.3%</strong>.",
+               "Las órdenes de centros de datos se contratan con 2 trimestres de anticipación: la guía valida ingresos ya comprometidos, no una proyección.",
+               "Aportó <strong>US$ 5,200</strong>: <strong>+3.4 pp</strong> del +7.4% del periodo. Su peso pasó de 24.1% a 29.9%."],
+      src:"Reuters · 12 may 2026" },
+    { ticker:"ASR.MX", direction:"negative", pp:-1.2, spark:[100,98,95,91,88,90,89],
+      bullets:["<b>10 jun · Barron's</b> — Tensión geopolítica y costo del combustible llevan al sector a mínimos. Cedió <strong>−12.3%</strong>.",
+               "El combustible es ~30% del costo de las aerolíneas; menos vuelos programados reduce el tráfico de pasajeros, que es la base tarifaria del aeropuerto.",
+               "Restó <strong>US$ 1,900</strong>: <strong>−1.2 pp</strong> del periodo. Su peso bajó de 19.4% a 17.4%."],
+      src:"Barron's · 10 jun 2026" },
+    { ticker:"FMTY14.MX", direction:"negative", pp:-0.4, spark:[100,99,98,97,96,97,96],
+      bullets:["<b>Sin catalizador identificable</b> — no se encontraron titulares en la ventana.",
+               "Cayó <strong>−3.8%</strong> con beta <strong>0.6</strong> mientras el índice local cedió <strong>−5.2%</strong>: se movió menos que el mercado, consistente con su perfil defensivo.",
+               "Restó <strong>US$ 640</strong>: <strong>−0.4 pp</strong>. Peso estable en 14.7%."],
+      src:"" }
+  ]
+};
+
+/* ══ STRINGS — per-language map keyed by DECK_DATA.meta.lang ════════════ */
+const STR = { es:{
+  "period":"1 abr – 30 jun 2026", "portfolioName":"Portafolio demo",
+  "l.value":"Valor final","l.periodReturn":"Retorno del periodo","l.result":"Resultado","l.alpha":"Alfa vs benchmark",
+  "l.vsBench":"S&P 500","l.sharpe":"Sharpe","l.sharpeVerdict":"Sólido (>1.0)","l.bestWorst":"Mejor / peor sesión",
+  "l.topContrib":"Mayor aporte","l.topDetract":"Mayor detractor","l.breadth":"Posiciones en positivo","l.fxImpact":"Efecto FX en el resultado",
+  "l.sessions":"Sesiones","l.upDays":"Días en positivo","l.recovery":"Recuperación del drawdown","l.capitalBase":"Capital base del periodo",
+  "v.sessions":"63","v.upDays":"60%","v.recovery":"21 sesiones","v.capitalBase":"$119,590",
+  "l.top1":"Mayor posición","l.effective":"Posiciones efectivas","l.newPos":"Altas en el periodo",
+  "v.top1":"NVDA · 29.9%","v.effective":"4.2 de 12","v.newPos":"2",
+  "fx1.t":"USD 52.5%","fx1.b":"Base del reporte. Sin efecto cambiario sobre esta porción.",
+  "fx2.t":"MXN 32.1%","fx2.b":"El peso se depreció 1.9%: <b>−$780</b> al convertir a dólares.",
+  "fx3.t":"EUR 15.4%","fx3.b":"El euro se apreció 0.8%: <b>+$150</b>, compensa una quinta parte del efecto MXN.",
+  "s.verdict":"Diagnóstico","s.performance":"Rendimiento","s.attribution":"Atribución","s.movers":"Qué movió al mercado",
+  "s.composition":"Composición","s.risk":"Riesgo","s.exposure":"Exposición",
+  "h.verdict1":"El portafolio superó al mercado","h.verdict2":"por concentración, no por diversificación.",
+  "h.verdictLede":"Dos posiciones explican 5.1 de los 7.4 puntos del trimestre; el resto del portafolio se movió en línea con su índice.",
+  "h.perf":"Ganaste 2.1 pp sobre el S&P 500 tolerando una caída intermedia de 9.6%",
+  "h.attr":"Cinco posiciones explican el 88% del resultado del periodo",
+  "h.movers":"Cada movimiento, con su causa y su efecto en tu dinero",
+  "h.comp":"El 30% del portafolio depende de un solo emisor",
+  "h.risk":"Riesgo tomado: moderado en volatilidad, alto en concentración",
+  "h.fx":"El peso mexicano restó 0.6 pp al resultado en dólares",
+  "h.close":"El detalle completo está en el PDF","h.closeLede":"Narrativa extendida, tablas completas, metodología y glosario.",
+  "r.perf1":"<b>+7.4%</b> del portafolio vs <b>+5.3%</b> del benchmark: <b>+2.1 pp</b> de alfa en 63 sesiones.",
+  "r.perf2":"La caída de mayo llevó el drawdown a <b>−9.6%</b> y se recuperó en <b>21 sesiones</b>.",
+  "r.perf3":"El portafolio subió en <b>38 de 63</b> sesiones (60%), frente al 56% del índice.",
+  "r.comp1":"Las <b>2</b> mayores posiciones pesan <b>53%</b> del portafolio.",
+  "r.comp2":"Un HHI de <b>0.24</b> equivale a estar diversificado en apenas <b>4.2</b> posiciones efectivas.",
+  "r.fx1":"El <b>32%</b> de la cartera cotiza en MXN; el peso se depreció <b>1.9%</b> en la ventana.",
+  "r.fx2":"Sin ese movimiento cambiario el resultado habría sido <b>+8.0%</b> en lugar de +7.4%.",
+  "v.bestWorst":"+3.2% / −4.1%","v.topContrib":"NVDA +3.4 pp","v.topDetract":"ASR.MX −1.2 pp","v.breadth":"8 de 12","v.fxImpact":"−0.6 pp",
+  "ghost.comp":"53%",
+  "f.verdict":"Resultado y capital base calculados sobre el periodo reportado. Cifras en USD convertidas al tipo de cambio vigente.",
+  "f.perf":"Serie de retornos diarios ponderada por costo dentro de la ventana. Benchmark: S&P 500 (precio, sin dividendos).",
+  "f.movers":"Titulares vía Yahoo Finance. Un movimiento sin titular se explica con métricas, nunca con una causa supuesta.",
+  "f.risk":"Sharpe y volatilidad anualizados sobre retornos diarios. Drawdown medido pico-valle dentro de la ventana.",
+  "f.legal":"Documento informativo. No constituye asesoría de inversión. Fotografías: Pexels."
+}};
+
+/* ══ RUNTIME ════════════════════════════════════════════════════════════ */
+(function(){
+  const L = STR[DECK_DATA.meta.lang] || STR.es;
+  const slides = [...document.querySelectorAll('[data-slide]')];
+  const stage = document.getElementById('stage');
+  let idx = 0, lock = false, idleTimer;
+
+  BPDeckCharts.configure({ locale: DECK_DATA.meta.lang === 'es' ? 'es-MX' : 'en-US', currency: DECK_DATA.meta.currency });
+
+  /* stage fit */
+  const fit = () => document.documentElement.style.setProperty('--fit',
+    Math.min(innerWidth / 1600, innerHeight / 900).toFixed(4));
+  addEventListener('resize', fit); fit();
+
+  /* strings */
+  document.querySelectorAll('[data-t]').forEach(n => { n.innerHTML = L[n.dataset.t] ?? ''; });
+
+  /* cover imagery — degrades to the tone gradient if Pexels is unreachable */
+  if (DECK_DATA.cover?.image) {
+    document.getElementById('coverImg').src = DECK_DATA.cover.image;
+    document.getElementById('coverCredit').textContent = DECK_DATA.cover.photographer ? 'Foto: ' + DECK_DATA.cover.photographer + ' / Pexels' : '';
+  }
+
+  /* mover cards (market-narrative.md structure) */
+  const mc = document.getElementById('moverCards');
+  DECK_DATA.movers.forEach((m, i) => {
+    const up = m.direction === 'positive';
+    const el = document.createElement('div');
+    el.className = 'card'; el.style.gridColumn = 'span 4';
+    el.setAttribute('data-reveal', ''); el.style.setProperty('--d', (0.55 + i * 0.08) + 's');
+    el.innerHTML =
+      `<div style="display:flex;justify-content:space-between;align-items:center">
+         <span class="tk">${m.ticker}</span><span class="chip ${up?'up':'down'}">${up?'▲':'▼'} ${m.pp>0?'+':''}${m.pp} pp</span>
+       </div>
+       <div class="pp num" style="color:var(--tone-${up?'up':'down'})">${m.pp>0?'+':''}${m.pp}<span style="font-size:22px"> pp</span></div>
+       <div style="height:44px" data-chart="sparkline" data-key="movers.${i}.spark"></div>
+       <ul>${m.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+       <div class="src">${m.src || ''}</div>`;
+    mc.appendChild(el);
+  });
+
+  /* charts */
+  const dig = (path) => path.split('.').reduce((o, k) => (o ? o[k] : undefined), DECK_DATA);
+  document.querySelectorAll('[data-chart]').forEach(n => {
+    const key = n.dataset.key, type = n.dataset.chart;
+    let data = dig(key);
+    if (type === 'sparkline') data = { values: Array.isArray(data) ? data : (data?.values || []), positive: !String(key).includes('.2') };
+    if (data) BPDeckCharts.mount(n, type, data);
+  });
+
+  /* count-up */
+  const fmtVal = (v, kind) => kind === 'money' ? BPDeckCharts.fmt.money(v)
+    : kind === 'pct' ? BPDeckCharts.fmt.pct(v) : kind === 'pp' ? BPDeckCharts.fmt.pp(v) : (+v).toFixed(2);
+  function countUp(node) {
+    const target = +dig(node.dataset.key), kind = node.dataset.fmt;
+    if (!isFinite(target)) { node.textContent = ''; return; }
+    if (BPDeckCharts.reduced) { node.textContent = fmtVal(target, kind); return; }
+    const t0 = performance.now(), dur = 900;
+    (function step(t) {
+      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      node.textContent = fmtVal(target * e, kind);
+      if (p < 1) requestAnimationFrame(step);
+    })(t0);
+  }
+
+  /* navigation */
+  const dots = document.getElementById('dots');
+  slides.forEach((_, i) => {
+    const d = document.createElement('i');
+    d.addEventListener('click', () => go(i));
+    dots.appendChild(d);
+  });
+  const pad = n => String(n).padStart(2, '0');
+
+  function go(n) {
+    n = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, i) => {
+      s.classList.toggle('is-active', i === n);
+      s.classList.toggle('is-prev', i < n);
+    });
+    [...dots.children].forEach((d, i) => d.classList.toggle('on', i === n));
+    document.getElementById('progress').style.width = ((n + 1) / slides.length * 100) + '%';
+    document.getElementById('count').textContent = pad(n + 1) + ' / ' + pad(slides.length);
+    idx = n;
+    history.replaceState(null, '', '#' + (n + 1));
+    const active = slides[n];
+    setTimeout(() => {
+      active.querySelectorAll('[data-count]').forEach(countUp);
+      active.querySelectorAll('[data-chart]').forEach(c => c._play && c._play());
+    }, 340);
+    clearTimeout(idleTimer);
+    document.getElementById('next').classList.remove('pulse');
+    idleTimer = setTimeout(() => document.getElementById('next').classList.add('pulse'), 4000);
+  }
+
+  document.getElementById('next').addEventListener('click', () => go(idx + 1));
+  document.getElementById('prev').addEventListener('click', () => go(idx - 1));
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(idx + 1); }
+    if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+  addEventListener('wheel', e => {
+    if (lock) return;
+    if (Math.abs(e.deltaY) < 18) return;
+    lock = true; setTimeout(() => lock = false, 700);
+    go(idx + (e.deltaY > 0 ? 1 : -1));
+  }, { passive: true });
+  let tx = 0;
+  addEventListener('touchstart', e => tx = e.touches[0].clientX, { passive: true });
+  addEventListener('touchend', e => {
+    const d = e.changedTouches[0].clientX - tx;
+    if (Math.abs(d) > 60) go(idx + (d < 0 ? 1 : -1));
+  }, { passive: true });
+
+  go(Math.max(0, (parseInt(location.hash.slice(1), 10) || 1) - 1));
+})();
+</script>
+</body>
+</html>

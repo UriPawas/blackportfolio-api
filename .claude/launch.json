@@ -4,14 +4,43 @@
     {
       "name": "landing",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "-p", "3000", "."],
+      "runtimeArgs": [
+        "serve",
+        "-p",
+        "3000",
+        "."
+      ],
       "port": 3000
     },
     {
       "name": "api",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["api.py"],
+      "runtimeArgs": [
+        "api.py"
+      ],
       "port": 8000
+    },
+    {
+      "name": "report-assets",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3210",
+        "--directory",
+        ".claude/skills/portfolio-report-design/assets"
+      ],
+      "port": 3210
+    },
+    {
+      "name": "repo-root",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3220"
+      ],
+      "port": 3220
     }
   ]
 }

@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reporte de portafolio — PDF shell</title>
+<!-- Real webfonts (display + body pairing). For an offline-proof PDF, base64 the
+     woff2 files into @font-face instead; the fallback stack in the tone tokens
+     must still look deliberate if the request fails. -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!--
+  pdf-shell.html — runnable skeleton for the report PDF (vertical formal document).
+  Implements references/pdf-document.md: fixed page model, measured pagination,
+  print type scale, section accent rotation, the seven image/text patterns,
+  static print charts, splittable tables with repeated headers.
+
+  Copy this file, replace REPORT + STR with the real data contract / language map,
+  and keep the page model and the build order intact:
+      DOM → embed images → fonts.ready → img.decode() → paginate → chrome → html2pdf
+  The sample portfolio below is fictional and lives ONLY in this shell — nothing
+  portfolio-specific belongs in a template (SKILL.md § Key constraints).
+-->
+<style>
+/* ── tone tokens (brand default — see assets/tone-tokens.css) ─────────────── */
+:root{
+  --tone-text:#171b2a; --tone-text-muted:#646b7c; --tone-panel:#f2f4fd;
+  --tone-accent:#556eff; --tone-accent-2:#7892ff; --tone-footnote-color:#98a0b2;
+  --tone-up:#12996b; --tone-down:#e0483d;
+  --tone-font-display:"Manrope","Segoe UI",sans-serif;
+  --tone-font-body:"Inter","Segoe UI",sans-serif;
+
+  /* paper palette (pdf-document.md §4) */
+  --pdf-paper:#fff; --pdf-paper-2:var(--tone-panel);
+  --pdf-ink:var(--tone-text); --pdf-ink-soft:#454b5e;
+  --pdf-ink-muted:var(--tone-text-muted); --pdf-ink-faint:var(--tone-footnote-color);
+  --pdf-rule:#e3e7f2;
+  --pdf-accent:var(--tone-accent); --pdf-accent-2:var(--tone-accent-2);
+  --pdf-up:var(--tone-up); --pdf-down:var(--tone-down);
+  /* section accent rotation */
+  --pdf-section-1:#556eff; --pdf-section-2:#0e7c86; --pdf-section-3:#a86212;
+  --pdf-section-4:#6a3fd1; --pdf-section-5:#b03a63;
+}
+[data-acc="1"]{--sec:var(--pdf-section-1)} [data-acc="2"]{--sec:var(--pdf-section-2)}
+[data-acc="3"]{--sec:var(--pdf-section-3)} [data-acc="4"]{--sec:var(--pdf-section-4)}
+[data-acc="5"]{--sec:var(--pdf-section-5)}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#40434d}
+/* preview chrome only — removed by .exporting before html2pdf runs */
+#doc{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 0}
+body.exporting{background:#fff}
+body.exporting #doc{gap:0;padding:0;display:block}
+body.exporting .page{box-shadow:none;margin:0 auto}
+body.exporting [data-dev]{display:none!important}
+
+/* ── page model (pdf-document.md §1) ──────────────────────────────────────── */
+.page,#flow{font-family:var(--tone-font-body);color:var(--pdf-ink);font-size:11.5px;line-height:1.62;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.page{width:794px;height:1123px;position:relative;overflow:hidden;background:var(--pdf-paper);
+  box-shadow:0 2px 18px rgba(0,0,0,.35)}
+/* Sin page-break-before/break-before: html2pdf inserta un espaciador por cada
+   regla de salto y genera una hoja en blanco por página (medido con 0.10.2).
+   La geometría fija ya pagina 1:1 — ver references/pdf-document.md §1. */
+.page-body{position:absolute;left:48px;top:58px;width:698px;height:1000px}
+.page-body > :first-child{margin-top:0!important}
+.page-head{position:absolute;left:48px;right:48px;top:24px;height:22px;display:flex;
+  justify-content:space-between;align-items:flex-end;padding-bottom:5px;border-bottom:1px solid var(--pdf-rule);
+  font-size:7.6px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--pdf-ink-faint)}
+.page-foot{position:absolute;left:48px;right:48px;bottom:26px;height:22px;display:flex;
+  justify-content:space-between;align-items:flex-start;padding-top:5px;border-top:1px solid var(--pdf-rule);
+  font-size:7.5px;color:var(--pdf-ink-faint);letter-spacing:.04em}
+.page-foot b{color:var(--pdf-ink-muted);font-weight:700}
+#flow{position:fixed;left:-10000px;top:0;width:698px}
+
+/* ── type (pdf-document.md §3) ────────────────────────────────────────────── */
+.eyebrow{font-size:7.8px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--sec,var(--pdf-accent))}
+.sec-head{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;padding-bottom:7px;
+  border-bottom:2px solid var(--sec,var(--pdf-accent))}
+.sec-head .num{font-family:var(--tone-font-display);font-size:20px;font-weight:800;
+  color:var(--sec,var(--pdf-accent));letter-spacing:-.02em;min-width:26px}
+.sec-head h2{font-family:var(--tone-font-display);font-size:20px;font-weight:750;letter-spacing:-.015em}
+.sec-head .hint{margin-left:auto;font-size:8px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--pdf-ink-faint)}
+h3.h3{font-size:12px;font-weight:750;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--sec,var(--pdf-accent));margin:0 0 6px}
+.verdict{font-family:var(--tone-font-display);font-size:24px;font-weight:750;line-height:1.15;
+  letter-spacing:-.02em;margin:0 0 8px}
+.verdict em{font-style:normal;color:var(--sec,var(--pdf-accent))}
+.lede{font-size:13.5px;line-height:1.5;color:var(--pdf-ink-soft);margin:0 0 12px;max-width:560px}
+p.body{font-size:11.5px;line-height:1.62;color:var(--pdf-ink-soft);margin:0 0 9px;max-width:500px}
+p.body strong{color:var(--pdf-ink);font-weight:700}
+/* Capitular como <span>, no ::first-letter: html2canvas rasteriza mal el
+   pseudo-elemento flotado y la primera línea sale descolocada. */
+.dc{float:left;font-family:var(--tone-font-display);font-size:31px;line-height:.82;font-weight:800;
+  margin:3px 4px 0 0;color:var(--sec,var(--pdf-accent))}
+.prose-rail{display:grid;grid-template-columns:452px 219px;gap:27px;align-items:start}
+.sidenote{font-size:8.8px;line-height:1.5;color:var(--pdf-ink-muted);border-left:2px solid var(--sec,var(--pdf-accent));
+  padding-left:9px;margin-bottom:12px}
+.sidenote b{display:block;font-family:var(--tone-font-display);font-size:15px;font-weight:800;
+  color:var(--pdf-ink);letter-spacing:-.01em}
+.pullquote{font-family:var(--tone-font-display);font-size:18px;line-height:1.3;font-weight:700;
+  letter-spacing:-.015em;color:#fff;max-width:400px}
+.footnote{font-size:7.5px;line-height:1.5;color:var(--pdf-ink-faint);margin-top:6px}
+
+/* ── components ───────────────────────────────────────────────────────────── */
+/* minmax(0,1fr): con 1fr una cifra larga no deja encoger el track y la fila se
+   sale de los 698px — se imprime recortada contra el borde de la página. */
+.kpi-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:0 0 12px}
+.kpi-row.k3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.kpi-row.k6{grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
+.kpi-row.k6 .kpi{padding:7px 7px 8px}
+.kpi-row.k6 .kpi strong{font-size:14.5px}
+.kpi-row.k6 .kpi span{font-size:7.6px;letter-spacing:.03em}
+.kpi{border-top:2px solid var(--sec,var(--pdf-accent));background:var(--pdf-paper-2);border-radius:0 0 6px 6px;
+  padding:8px 9px 9px}
+.kpi span{display:block;font-size:7.8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);margin-bottom:3px}
+.kpi strong{display:block;font-family:var(--tone-font-display);font-size:19px;font-weight:800;letter-spacing:-.02em}
+.kpi small{display:block;font-size:7.6px;color:var(--pdf-ink-faint);margin-top:2px}
+.up{color:var(--pdf-up)} .down{color:var(--pdf-down)}
+.diag-row{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:12px}
+.diag{border:1px solid var(--pdf-rule);border-left:3px solid var(--pdf-ink-faint);border-radius:5px;padding:8px 9px}
+.diag.good{border-left-color:var(--pdf-up)} .diag.warn{border-left-color:#c98a12} .diag.bad{border-left-color:var(--pdf-down)}
+.diag span{display:block;font-size:7.6px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);margin-bottom:3px}
+.diag strong{display:block;font-family:var(--tone-font-display);font-size:14px;font-weight:800;line-height:1.2}
+.diag small{display:block;font-size:8px;color:var(--pdf-ink-muted);line-height:1.4;margin-top:3px}
+.chart-box{border:1px solid var(--pdf-rule);border-radius:6px;padding:10px 11px 9px;margin-bottom:12px}
+.chart-h{font-size:8.2px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);margin-bottom:8px}
+.cap{font-size:7.8px;color:var(--pdf-ink-faint);line-height:1.45;margin-top:7px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-bottom:12px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start;margin-bottom:12px}
+.callout{background:var(--pdf-paper-2);border-left:3px solid var(--sec,var(--pdf-accent));border-radius:0 5px 5px 0;
+  padding:9px 12px;margin-bottom:12px;font-size:10.5px;line-height:1.55;color:var(--pdf-ink-soft)}
+.callout b{color:var(--pdf-ink)}
+.alerts{border:1px solid #f1cfcf;background:#fdf5f5;border-left:3px solid var(--pdf-down);border-radius:0 5px 5px 0;
+  padding:8px 11px;margin-bottom:12px;font-size:9.6px;line-height:1.6;color:#8e3b3b}
+.metric-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.metric{border:1px solid var(--pdf-rule);border-radius:5px;padding:7px 8px;text-align:center}
+.metric span{display:block;font-size:7.6px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);margin-bottom:2px}
+.metric strong{font-family:var(--tone-font-display);font-size:14px;font-weight:800}
+.metric em{display:block;font-style:normal;font-size:7.6px;color:var(--pdf-ink-faint);margin-top:1px}
+
+/* mover card (§VI) + dossier (§VII) */
+.mover{display:grid;grid-template-columns:150px 1fr;gap:14px;border:1px solid var(--pdf-rule);border-radius:6px;
+  padding:11px 12px;margin-bottom:11px}
+.mover .t{font-family:var(--tone-font-display);font-size:17px;font-weight:800;letter-spacing:-.01em}
+.mover .figs{font-size:8.6px;color:var(--pdf-ink-muted);margin:2px 0 7px;line-height:1.5}
+.mover ul{list-style:none;font-size:10px;line-height:1.5}
+.mover li{padding-left:66px;position:relative;margin-bottom:4px;color:var(--pdf-ink-soft)}
+.mover li b{position:absolute;left:0;top:1px;width:60px;font-size:7.6px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--sec,var(--pdf-accent))}
+.dossier{display:grid;grid-template-columns:96px 1fr;gap:12px;border:1px solid var(--pdf-rule);border-radius:6px;
+  padding:11px 12px;margin-bottom:10px}
+.dossier .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+.dossier .hd b{font-family:var(--tone-font-display);font-size:15px;font-weight:800}
+.dossier .hd span{font-size:8px;color:var(--pdf-ink-faint);letter-spacing:.06em;text-transform:uppercase}
+.dossier .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0}
+.dossier .grid div{font-size:8.2px;color:var(--pdf-ink-muted)}
+.dossier .grid strong{display:block;font-size:11px;color:var(--pdf-ink);font-weight:800}
+.dossier p{font-size:9.6px;line-height:1.5;color:var(--pdf-ink-soft)}
+
+/* ── tables (pdf-document.md §9) ──────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:9.2px}
+thead th{border-bottom:1px solid var(--pdf-ink-muted);font-size:8px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--pdf-ink-muted);padding:5px 7px;text-align:left}
+tbody td{border-bottom:1px solid var(--pdf-rule);padding:5px 7px;height:17px}
+tbody tr:last-child td{border-bottom:none}
+th.n,td.n{text-align:right}
+.tbl{margin-bottom:12px}
+.tbl-cont{font-size:7.6px;color:var(--pdf-ink-faint);text-align:right;padding-top:4px;font-style:italic}
+.tbl-cont-head{font-size:7.6px;color:var(--pdf-ink-faint);padding-bottom:4px;font-style:italic}
+.gloss{columns:2;column-gap:26px;font-size:9.4px;line-height:1.5;color:var(--pdf-ink-soft)}
+.gloss div{break-inside:avoid;margin-bottom:7px}
+.gloss b{color:var(--pdf-ink)}
+
+/* ── imagery patterns (pdf-document.md §5) ────────────────────────────────── */
+.img-wrap{position:relative;overflow:hidden;background:var(--pdf-paper-2)}
+.img-wrap img{display:block;width:100%;height:100%;object-fit:cover;filter:saturate(.18) contrast(1.05)}
+.img-wrap .tint{position:absolute;inset:0;background:var(--sec,var(--pdf-accent));mix-blend-mode:multiply;opacity:.42}
+.img-wrap .scrim{position:absolute;inset:0}
+.credit{font-size:7.5px;color:var(--pdf-ink-faint);margin-top:4px;letter-spacing:.02em}
+.credit.on-img{position:absolute;right:10px;bottom:8px;color:rgba(255,255,255,.72);margin:0}
+.credit.on-img.top{top:10px;bottom:auto}
+/* cover */
+.cover-img{position:absolute;left:0;top:0;width:794px;height:640px}
+.cover-card{position:absolute;left:48px;right:48px;top:500px;background:var(--pdf-paper);padding:26px 28px 22px;
+  border-top:4px solid var(--pdf-accent)}
+.cover-index{position:absolute;left:48px;right:48px;top:790px}
+.cover-index .k{font-size:7.8px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);border-bottom:1px solid var(--pdf-rule);padding-bottom:6px;margin-bottom:10px}
+.cover-index ol{list-style:none;columns:3;column-gap:22px;font-size:9px;color:var(--pdf-ink-muted);line-height:1.45}
+.cover-index li{break-inside:avoid;margin-bottom:7px}
+.cover-index li b{display:block;font-size:10px;font-weight:750;color:var(--pdf-ink)}
+.cover-index li b i{font-style:normal;color:var(--pdf-accent);margin-right:5px}
+.cover-read{font-size:9.2px;color:var(--pdf-ink-muted);line-height:1.5;margin-top:12px;padding-top:10px;
+  border-top:1px solid var(--pdf-rule);max-width:560px}
+.cover-title{font-family:var(--tone-font-display);font-size:46px;font-weight:800;letter-spacing:-.025em;line-height:1.02}
+.cover-sub{font-size:11px;color:var(--pdf-ink-muted);margin-top:8px;letter-spacing:.02em}
+.cover-figs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px;padding-top:16px;
+  border-top:1px solid var(--pdf-rule)}
+.cover-figs span{display:block;font-size:7.8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);margin-bottom:3px}
+.cover-figs strong{font-family:var(--tone-font-display);font-size:26px;font-weight:800;letter-spacing:-.02em}
+.cover-foot{position:absolute;left:48px;right:48px;bottom:44px;display:flex;justify-content:space-between;
+  font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--pdf-ink-faint)}
+/* section opener */
+.opener-img{position:absolute;left:0;top:0;width:794px;height:470px}
+.opener-num{position:absolute;left:44px;bottom:18px;font-family:var(--tone-font-display);font-size:132px;
+  font-weight:800;line-height:.8;color:rgba(255,255,255,.30);letter-spacing:-.05em}
+.opener-body{position:absolute;left:48px;right:48px;top:522px}
+.opener-figs{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:26px;padding-top:18px;
+  border-top:1px solid var(--pdf-rule)}
+.opener-figs span{display:block;font-size:7.8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);margin-bottom:4px}
+.opener-figs strong{font-family:var(--tone-font-display);font-size:24px;font-weight:800;letter-spacing:-.02em}
+.opener-figs small{display:block;font-size:8.6px;color:var(--pdf-ink-muted);margin-top:3px;line-height:1.4}
+.opener-body h2{font-family:var(--tone-font-display);font-size:34px;font-weight:800;letter-spacing:-.025em;
+  line-height:1.08;margin:8px 0 12px}
+.opener-body .lede{font-size:14px;max-width:600px}
+.opener-toc{position:absolute;left:48px;right:48px;bottom:120px;border-top:1px solid var(--pdf-rule);padding-top:12px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:9px;color:var(--pdf-ink-muted)}
+.opener-toc b{display:block;color:var(--pdf-ink);font-size:10px;font-weight:750}
+/* band + duotone + rail + inset */
+.img-band{width:698px;height:150px;border-radius:6px;margin-bottom:12px;display:flex;align-items:center;padding:0 26px}
+.img-duotone{width:698px;height:190px;border-radius:6px;margin-bottom:12px;display:flex;align-items:center;padding:0 26px}
+.img-rail{width:219px;height:280px;border-radius:6px}
+.img-inset{width:96px;height:96px;border-radius:8px}
+.img-closing{position:absolute;left:0;bottom:0;width:794px;height:560px}
+.closing-body{position:absolute;left:48px;right:48px;top:88px}
+.closing-body h2{font-family:var(--tone-font-display);font-size:30px;font-weight:800;letter-spacing:-.02em;margin-bottom:14px}
+.closing-figs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 16px;
+  padding:14px 0;border-top:1px solid var(--pdf-rule);border-bottom:1px solid var(--pdf-rule)}
+.closing-figs span{display:block;font-size:7.6px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--pdf-ink-muted);margin-bottom:3px}
+.closing-figs strong{font-family:var(--tone-font-display);font-size:16px;font-weight:800}
+.disclaimer{border:1px solid var(--pdf-rule);border-left:3px solid #c98a12;border-radius:0 5px 5px 0;padding:10px 12px;
+  font-size:9.4px;line-height:1.6;color:var(--pdf-ink-soft);margin-bottom:12px}
+
+/* dev toolbar — never part of the deliverable */
+.devbar{position:fixed;left:12px;bottom:12px;z-index:99;background:#15161c;color:#e8eaf2;border:1px solid #333;
+  border-radius:8px;padding:9px 12px;font:12px/1.5 ui-monospace,monospace;display:flex;gap:10px;align-items:center}
+.devbar button{background:var(--pdf-accent);color:#fff;border:0;border-radius:5px;padding:5px 10px;font:inherit;cursor:pointer}
+.devbar .ok{color:#4ade80} .devbar .bad{color:#f87171}
+[data-oversize],[data-overflow]{outline:2px dashed #f87171!important}
+</style>
+</head>
+<body>
+
+<div id="doc"></div>
+<div id="flow"></div>
+
+<div class="devbar" data-dev>
+  <span id="audit">paginando…</span>
+  <button onclick="exportPdf()">Descargar PDF</button>
+</div>
+
+<script src="pdf-charts.js"></script>
+<script src="pdf-paginate.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. DATA — mirrors references/data-contract.md. Fictional sample: replace the
+   whole object with the real computeHistoricalReport() output. Nothing below
+   this block may contain a ticker, a name or a figure.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const REPORT = {
+  meta: { name:'Portafolio Núcleo', currency:'USD', lang:'es', tone:'brand',
+          folio:'BP-7K3D9-20260715', period:'15 ene 2026 – 15 jul 2026',
+          generated:'15 de julio de 2026', benchmark:'S&P 500 (SPY)', sessions:126 },
+  head: { valueEnd:128450, capitalBase:112300, resultAmt:16150, resultPct:14.38,
+          openPnl:12980, realizedPnl:3170, dividends:842, commissions:196, cagr:null },
+  diag: [
+    { label:'Rendimiento', value:'+US$16,150', status:'good', note:'+14.38% sobre US$112,300' },
+    { label:'Riesgo/retorno', value:'Sharpe 1.34', status:'good', note:'Sortino 1.81 · vol 18.2%' },
+    { label:'Diversificación', value:'Aceptable', status:'warn', note:'top 3 = 52.8% · 7.3 efectivos' },
+    { label:'vs Benchmark', value:'+3.71 pp', status:'good', note:'SPY +10.67% en el periodo' }
+  ],
+  bridge: [
+    { label:'Capital base', value:112300, type:'start' },
+    { label:'Mercado', value:12980, sub:'posiciones abiertas' },
+    { label:'Ventas', value:3170, sub:'realizado' },
+    { label:'Dividendos', value:842, sub:'9 pagos' },
+    { label:'Comisiones', value:-196, sub:'18 operaciones' },
+    { label:'Aportes', value:-646, sub:'retiro neto' },
+    { label:'Valor final', value:128450, type:'end' }
+  ],
+  months: [
+    { label:'Ene', value:2.1 }, { label:'Feb', value:4.8 }, { label:'Mar', value:-3.2 },
+    { label:'Abr', value:1.4 }, { label:'May', value:6.9 }, { label:'Jun', value:-1.8 },
+    { label:'Jul', value:3.6 }
+  ],
+  chronicle: [
+    ['Ene','+2.1%','+US$2,358','NVDA +1.4 pp','FMTY14.MX −0.3 pp','2 compras','Arranque tibio: el rally de semiconductores compensó la debilidad del componente inmobiliario mexicano.'],
+    ['Feb','+4.8%','+US$5,502','NVDA +2.9 pp','BIMBOA.MX −0.4 pp','1 compra · 1 dividendo','Mejor mes del periodo; resultados trimestrales por encima de lo esperado en el bloque tecnológico.'],
+    ['Mar','−3.2%','−US$3,842','VOO +0.2 pp','PLTR −1.9 pp','3 ventas','Corrección amplia; la posición de mayor beta explicó dos tercios de la caída mensual.'],
+    ['Abr','+1.4%','+US$1,631','TSM +0.9 pp','SHOP.TO −0.5 pp','1 compra','Recuperación parcial con volumen bajo y dispersión alta entre posiciones.'],
+    ['May','+6.9%','+US$8,214','NVDA +3.6 pp','MSFT −0.1 pp','2 dividendos','El mes que definió el periodo: la mitad del resultado acumulado se generó aquí.'],
+    ['Jun','−1.8%','−US$2,291','VOO +0.3 pp','NVDA −1.5 pp','1 venta','Toma de utilidades en el líder del periodo tras seis semanas de avance continuo.'],
+    ['Jul','+3.6%','+US$4,578','TSM +1.2 pp','PLTR −0.4 pp','1 compra','Cierre firme; la rotación hacia posiciones defensivas redujo la volatilidad realizada.']
+  ],
+  attribution: [
+    { ticker:'NVDA', pnl:7420, pp:6.61 }, { ticker:'TSM', pnl:3180, pp:2.83 },
+    { ticker:'MSFT', pnl:2240, pp:1.99 }, { ticker:'VOO', pnl:1890, pp:1.68 },
+    { ticker:'BIMBOA.MX', pnl:640, pp:0.57 }, { ticker:'SHOP.TO', pnl:-410, pp:-0.37 },
+    { ticker:'FMTY14.MX', pnl:-520, pp:-0.46 }, { ticker:'PLTR', pnl:-1290, pp:-1.15 }
+  ],
+  movers: [
+    { ticker:'NVDA', dir:'up', pnl:'+US$7,420', pp:'+6.61 pp', weight:'21.4%',
+      spark:[100,104,109,107,116,122,119,131,138,136,145],
+      event:'Resultados del 2T por encima del consenso, con guía de centro de datos revisada al alza (28 may 2026).',
+      mech:'La expansión de margen bruto se trasladó directo a la valuación del bloque de semiconductores.',
+      impact:'Aportó US$7,420 al resultado del periodo: 6.61 pp de los 14.38 pp totales, casi la mitad del avance.',
+      watch:'Peso de 21.4% supera el umbral de concentración de 20%; próximos resultados el 26 ago 2026.' },
+    { ticker:'TSM', dir:'up', pnl:'+US$3,180', pp:'+2.83 pp', weight:'12.8%',
+      spark:[100,101,98,103,107,105,112,116,114,119,124],
+      event:'Aumento de capacidad de empaquetado avanzado anunciado el 11 jun 2026.',
+      mech:'Mayor visibilidad de ingresos 2027 comprimió la prima de riesgo del papel.',
+      impact:'Sumó US$3,180 (2.83 pp). Segunda mayor contribución del periodo con 12.8% del portafolio.',
+      watch:'Exposición cambiaria indirecta y concentración geográfica del proveedor.' },
+    { ticker:'PLTR', dir:'down', pnl:'−US$1,290', pp:'−1.15 pp', weight:'5.2%',
+      spark:[100,108,112,104,96,92,98,90,86,89,84],
+      event:'Recorte de guía anual tras el retraso de dos contratos gubernamentales (19 mar 2026).',
+      mech:'El mercado repreció el múltiplo de crecimiento ante ingresos recurrentes menos previsibles.',
+      impact:'Restó US$1,290 (−1.15 pp). Sin esta posición el periodo habría cerrado en +15.53%.',
+      watch:'Beta 1.72, la más alta del portafolio; siguiente reporte el 4 ago 2026.' }
+  ],
+  positions: [
+    { t:'NVDA', name:'NVIDIA Corp', cur:'USD', w:21.4, avg:'US$412.80', qty:'66.5', pnl:'+US$7,420', pnlPct:'+37.1%', pp:'+6.61 pp', earn:'26 ago 2026',
+      spark:[100,104,109,107,116,122,119,131,138,136,145],
+      note:'Mayor posición y mayor contribuyente. Su peso rebasa el umbral de 20%: una corrección de 20% en el papel restaría ~4.3 pp al portafolio completo.' },
+    { t:'MSFT', name:'Microsoft Corp', cur:'USD', w:16.1, avg:'US$392.15', qty:'52.8', pnl:'+US$2,240', pnlPct:'+12.4%', pp:'+1.99 pp', earn:'29 jul 2026',
+      spark:[100,102,105,104,108,111,110,113,115,114,118],
+      note:'Ancla defensiva del portafolio con la menor volatilidad realizada del grupo (14.1%). Sostuvo el resultado durante la corrección de marzo.' },
+    { t:'VOO', name:'Vanguard S&P 500 ETF', cur:'USD', w:15.3, avg:'US$498.40', qty:'39.4', pnl:'+US$1,890', pnlPct:'+10.9%', pp:'+1.68 pp', earn:'—',
+      spark:[100,101,103,102,105,107,106,108,110,109,111],
+      note:'Componente de mercado amplio: replica el benchmark y reduce el error de seguimiento agregado. Su aporte es proporcional a su peso, sin sesgo activo.' },
+    { t:'TSM', name:'Taiwan Semiconductor', cur:'USD', w:12.8, avg:'US$168.30', qty:'96.2', pnl:'+US$3,180', pnlPct:'+24.6%', pp:'+2.83 pp', earn:'17 oct 2026',
+      spark:[100,101,98,103,107,105,112,116,114,119,124],
+      note:'Segunda mayor contribución con la mitad del peso de la primera. Concentra riesgo geopolítico difícil de cubrir con las posiciones actuales.' },
+    { t:'BIMBOA.MX', name:'Grupo Bimbo SAB', cur:'MXN', w:7.9, avg:'MX$62.40', qty:'2,980', pnl:'+US$640', pnlPct:'+6.8%', pp:'+0.57 pp', earn:'22 jul 2026',
+      spark:[100,99,101,103,102,104,106,105,107,106,108],
+      note:'Cotiza en MXN: su aporte en dólares depende del tipo de cambio a la fecha de valuación, no del precio local únicamente.' },
+    { t:'PLTR', name:'Palantir Technologies', cur:'USD', w:5.2, avg:'US$28.90', qty:'214.0', pnl:'−US$1,290', pnlPct:'−17.4%', pp:'−1.15 pp', earn:'4 ago 2026',
+      spark:[100,108,112,104,96,92,98,90,86,89,84],
+      note:'Único detractor material del periodo y la beta más alta (1.72). Con 5.2% de peso aportó 8% de la volatilidad total del portafolio.' }
+  ],
+  risk: { sharpe:'1.34', sortino:'1.81', vol:'18.2%', var95:'−2.41%', varMoney:'US$3,096', beta:'1.08',
+          maxDD:'−9.4%', ddMoney:'US$11,420', ddPeak:'26 feb 2026', ddTrough:'18 mar 2026', ddDays:34, ddRecovered:'6 may 2026' },
+  // pesos de las 8 posiciones + efectivo = 100.0% (los bloques derivados cuadran con esto)
+  weights: { NVDA:21.4, MSFT:16.1, VOO:15.3, TSM:12.8, 'BIMBOA.MX':7.9,
+             'FMTY14.MX':6.1, PLTR:5.2, 'SHOP.TO':4.8 },
+  composition: [
+    { label:'NVDA', value:21.4 }, { label:'MSFT', value:16.1 }, { label:'VOO', value:15.3 },
+    { label:'TSM', value:12.8 }, { label:'BIMBOA.MX', value:7.9 },
+    { label:'Otros (3)', value:16.1 }, { label:'Efectivo', value:10.4 }
+  ],
+  sectors: [ { label:'Tecnología', value:55.5 }, { label:'Índice amplio', value:15.3 },
+             { label:'Efectivo', value:10.4 }, { label:'Consumo básico', value:7.9 },
+             { label:'Inmobiliario', value:6.1 }, { label:'Servicios', value:4.8 } ],
+  regions: [ { label:'EE. UU.', value:58.0 }, { label:'México', value:14.0 },
+             { label:'Asia', value:12.8 }, { label:'Efectivo', value:10.4 }, { label:'Canadá', value:4.8 } ],
+  fx: [ ['USD','US$ 104,301','81.2%'], ['MXN','US$ 17,983','14.0%'], ['CAD','US$ 6,166','4.8%'] ],
+  closed: [
+    ['PLTR','12 ene 2026','17 mar 2026','60','US$1,734','US$1,398','−US$336','−19.4%'],
+    ['SHOP.TO','04 feb 2026','19 mar 2026','25','US$2,140','US$1,982','−US$158','−7.4%'],
+    ['NVDA','08 nov 2025','11 jun 2026','12','US$3,960','US$7,224','+US$3,264','+82.4%'],
+    ['VOO','20 dic 2025','23 mar 2026','4','US$1,984','US$2,384','+US$400','+20.2%']
+  ],
+  txCount: 18, txTotal: 214,
+  quality: [
+    ['Folio','BP-7K3D9-20260715'], ['Vigencia de precios','cierre del 15 jul 2026 (más reciente)'],
+    ['Benchmark','S&P 500 (SPY)'], ['Tasa libre de riesgo','4.25% (T-Bill 3M)'],
+    ['Beta actual / histórica','1.08 / 1.14'], ['Ventas cerradas','4 · P/L +US$3,170'],
+    ['Precios faltantes','0'], ['Modelo de IA','anthropic/claude-sonnet-5']
+  ],
+  images: {
+    cover:   { src:'https://images.pexels.com/photos/12903905/pexels-photo-12903905.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', by:'Jan van der Wolf', avg:'#99ADB4' },
+    opener:  { src:'https://images.pexels.com/photos/26970225/pexels-photo-26970225.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', by:'John Benedict Malong', avg:'#879EB0' },
+    rail:    { src:'https://images.pexels.com/photos/29442862/pexels-photo-29442862.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', by:'Gupta Sahil', avg:'#A58C76' },
+    band:    { src:'https://images.pexels.com/photos/33719783/pexels-photo-33719783.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', by:'Zulfugar Karimov', avg:'#93A1A1' },
+    closing: { src:'https://images.pexels.com/photos/303328/pexels-photo-303328.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', by:'Dom J', avg:'#4C3F3F' }
+  }
+};
+
+/* Static strings — replace with the es/en/fr map keyed by currentLang. */
+const STR = {
+  reportKind:'Reporte de portafolio', period:'Periodo', generated:'Generado el',
+  valueEnd:'Valor final', resultAmt:'Resultado del periodo', resultPct:'Retorno',
+  continues:'continúa en la página siguiente', continued:'continuación',
+  photos:'Fotografías: Pexels'
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. BUILD — blocks pushed into #flow in reading order. Each declares how it
+   may break (pdf-document.md §2).
+   ═══════════════════════════════════════════════════════════════════════════ */
+const flow = document.getElementById('flow');
+const charts = [];   // [node, type, data, opts] — mounted before pagination
+
+function blk(html, attrs) {
+  const d = document.createElement('div');
+  d.innerHTML = html.trim();
+  const node = d.children.length === 1 ? d.firstElementChild : d;
+  if (d.children.length !== 1) d.className = 'blk';
+  Object.entries(attrs || {}).forEach(([k, v]) => node.setAttribute(k, v));
+  flow.appendChild(node);
+  return node;
+}
+function chart(type, data, opts) {
+  const id = 'c' + charts.length;
+  charts.push([id, type, data, opts || {}]);
+  return '<div id="' + id + '"></div>';
+}
+function img(pattern, key, extra, creditTop) {
+  const im = REPORT.images[key];
+  const sz = { 'img-band':[698,150], 'img-duotone':[698,190], 'img-rail':[219,280],
+               'img-inset':[96,96], 'cover-img':[794,640], 'opener-img':[794,470], 'img-closing':[794,560] }[pattern];
+  return '<div class="img-wrap ' + pattern + '" style="background:' + im.avg + '">' +
+         '<img src="' + im.src + '" width="' + sz[0] + '" height="' + sz[1] + '" alt="">' +
+         '<div class="tint"></div>' + (extra || '') +
+         '<span class="credit on-img' + (creditTop ? ' top' : '') + '">Foto: ' + im.by + ' · Pexels</span></div>';
+}
+function secHead(num, title, hint, acc) {
+  return blk('<div class="sec-head"><span class="num">' + num + '</span><h2>' + title + '</h2>' +
+             (hint ? '<span class="hint">' + hint + '</span>' : '') + '</div>',
+             { 'data-keep-with-next':'', 'data-min-space':'170', 'data-acc':acc,
+               'data-section':num + ' · ' + title });
+}
+
+/* ── cover ─────────────────────────────────────────────────────────────────── */
+blk(
+  img('cover-img','cover', '', true) +
+  '<div class="cover-card">' +
+    '<div class="eyebrow">' + STR.reportKind + ' · ' + REPORT.meta.benchmark + '</div>' +
+    '<div class="cover-title">' + REPORT.meta.name + '</div>' +
+    '<div class="cover-sub">' + REPORT.meta.period + ' · ' + REPORT.meta.currency +
+      ' · ' + REPORT.meta.sessions + ' sesiones</div>' +
+    '<div class="cover-figs">' +
+      '<div><span>' + STR.valueEnd + '</span><strong>US$128,450</strong></div>' +
+      '<div><span>' + STR.resultAmt + '</span><strong class="up">+US$16,150</strong></div>' +
+      '<div><span>' + STR.resultPct + '</span><strong class="up">+14.38%</strong></div>' +
+    '</div>' +
+  '</div>' +
+  '<div class="cover-index"><div class="k">En esta edición</div><ol>' +
+    [['I','El periodo en una página','diagnóstico y puente del dinero'],
+     ['II','Carta del periodo','qué pasó, por qué y qué costó'],
+     ['III','Cronología','los siete meses, uno por uno'],
+     ['IV','Rendimiento vs benchmark','+3.71 pp de exceso'],
+     ['V','Atribución','quién puso los 14.4 puntos'],
+     ['VI','Qué movió a tus posiciones','eventos con impacto en dinero'],
+     ['VII','Dossier por posición','las 6 mayores, una por una'],
+     ['VIII','Riesgo y volatilidad','lo que costó el resultado'],
+     ['IX','Composición y exposición','concentración, sector, divisa']]
+      .map(s => '<li><b><i>' + s[0] + '</i>' + s[1] + '</b>' + s[2] + '</li>').join('') +
+  '</ol>' +
+  '<div class="cover-read">Cada sección abre con el hallazgo, no con el tema. Las cifras van en dinero antes ' +
+  'que en porcentaje y toda afirmación de causa está anclada a un evento con fecha. Las secciones X a XII ' +
+  'contienen la actividad del periodo, los supuestos de cálculo y el glosario.</div></div>' +
+  '<div class="cover-foot"><span>BlackPortfolio</span><span>' + REPORT.meta.folio + ' · ' +
+    STR.generated + ' ' + REPORT.meta.generated + '</span></div>',
+  { 'data-page':'bleed' });
+
+/* ── I. El periodo en una página ───────────────────────────────────────────── */
+secHead('I','El periodo en una página','diagnóstico ejecutivo','1');
+blk('<div class="verdict">El periodo lo definió <em>la concentración</em>, no el mercado: ' +
+    'dos posiciones explican 9.4 de los 14.4 puntos de avance.</div>' +
+    '<div class="lede">El portafolio cerró en US$128,450 tras un resultado de +US$16,150 sobre un capital base ' +
+    'de US$112,300, superando al S&amp;P 500 por 3.71 puntos porcentuales en 126 sesiones.</div>',
+    { 'data-acc':'1', 'data-keep-with-next':'' });
+blk('<div class="diag-row">' + REPORT.diag.map(d =>
+    '<div class="diag ' + d.status + '"><span>' + d.label + '</span><strong>' + d.value +
+    '</strong><small>' + d.note + '</small></div>').join('') + '</div>', { 'data-acc':'1' });
+blk('<div class="chart-box"><div class="chart-h">Puente del dinero · de dónde salió el resultado</div>' +
+    chart('waterfall', { items: REPORT.bridge, format:'money' }, { width:676, height:216 }) +
+    '<div class="cap">Del capital base al valor final: mercado (posiciones abiertas), ventas realizadas, ' +
+    'dividendos cobrados, comisiones pagadas y flujo neto de aportes/retiros.</div></div>', { 'data-acc':'1' });
+blk('<div class="kpi-row k6">' +
+    kpi('Capital base','US$112,300','') + kpi('Valor final','US$128,450','') +
+    kpi('Resultado','+US$16,150','','up') + kpi('Retorno','+14.38%','','up') +
+    kpi('P/L abierto','+US$12,980','') + kpi('P/L realizado','+US$3,170','') + '</div>', { 'data-acc':'1' });
+blk('<p class="body">El resultado se construyó con US$12,980 de revaluación en posiciones abiertas, ' +
+    'US$3,170 de utilidades realizadas en cuatro ventas y US$842 de dividendos, contra US$196 de comisiones. ' +
+    'La cartera asumió una volatilidad anualizada de 18.2% y una caída máxima de 9.4% ' +
+    '(US$11,420) para conseguirlo.</p>', { 'data-acc':'1' });
+function kpi(label, value, sub, cls) {
+  return '<div class="kpi"><span>' + label + '</span><strong' + (cls ? ' class="' + cls + '"' : '') + '>' +
+         value + '</strong>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
+}
+
+/* ── II. Carta del periodo (opener page + narrative) ───────────────────────── */
+blk(img('opener-img','opener','<div class="opener-num">II</div>') +
+    '<div class="opener-body"><div class="eyebrow">Sección II</div>' +
+    '<h2>Carta del periodo</h2>' +
+    '<div class="lede">Qué pasó con el dinero entre el 15 de enero y el 15 de julio de 2026, ' +
+    'por qué pasó, cuánto costó en riesgo y qué queda por vigilar.</div>' +
+    '<div class="opener-figs">' +
+      '<div><span>Resultado</span><strong class="up">+US$16,150</strong>' +
+        '<small>+14.38% sobre US$112,300 de capital base</small></div>' +
+      '<div><span>Exceso vs benchmark</span><strong class="up">+3.71 pp</strong>' +
+        '<small>S&amp;P 500 +10.67% en las mismas 126 sesiones</small></div>' +
+      '<div><span>Costo en riesgo</span><strong class="down">−9.4%</strong>' +
+        '<small>caída máxima (US$11,420), 34 sesiones bajo el agua</small></div>' +
+    '</div></div>' +
+    '<div class="opener-toc">' +
+    '<div><b>Atribución</b>Quién puso los 14.4 puntos</div>' +
+    '<div><b>Riesgo</b>Lo que costó conseguirlos</div>' +
+    '<div><b>A vigilar</b>Tres umbrales concretos</div></div>',
+    { 'data-page':'bleed', 'data-acc':'2', 'data-section':'II · Carta del periodo' });
+
+blk('<div class="prose-rail">' +
+    '<div>' +
+      '<p class="body"><span class="dc">E</span>l semestre cerró con un resultado de <strong>+US$16,150</strong> sobre un capital ' +
+      'base de US$112,300, equivalente a <strong>+14.38%</strong>. El valor de la cartera pasó de US$112,300 a ' +
+      'US$128,450, y el avance superó al S&amp;P 500 por 3.71 puntos porcentuales en el mismo periodo.</p>' +
+      '<p class="body">El origen del resultado está concentrado. NVDA aportó US$7,420 (6.61 pp) y TSM US$3,180 ' +
+      '(2.83 pp): entre las dos explican 9.4 de los 14.4 puntos de avance, con 34.2% del portafolio. ' +
+      'Las seis posiciones restantes aportaron los 5.0 puntos que faltan.</p>' +
+      '<p class="body">El contexto lo dieron dos eventos concretos. La revisión al alza de la guía de centro de ' +
+      'datos del 28 de mayo trasladó expansión de margen directo a la valuación del bloque de semiconductores; ' +
+      'el anuncio de capacidad de empaquetado avanzado del 11 de junio hizo lo propio con la segunda posición. ' +
+      'En sentido contrario, el recorte de guía anual del 19 de marzo restó US$1,290.</p>' +
+      '<p class="body">El resultado no fue gratis. La volatilidad anualizada fue de <strong>18.2%</strong> contra ' +
+      '14.9% del benchmark, y entre el 26 de febrero y el 18 de marzo la cartera cayó 9.4% ' +
+      '(US$11,420), tardando 34 sesiones en recuperar el máximo previo. El Sharpe de 1.34 indica que ese ' +
+      'riesgo sí se pagó.</p>' +
+      '<p class="body"><strong>Contrafactual:</strong> sin PLTR —único detractor material— el periodo habría ' +
+      'cerrado en +15.53% en lugar de +14.38%. Sin NVDA, en +7.77%: la misma concentración que ' +
+      'produjo el resultado es la que lo hace frágil.</p>' +
+    '</div>' +
+    '<div>' +
+      '<div class="sidenote"><b>+3.71 pp</b>por encima del S&amp;P 500 en 126 sesiones</div>' +
+      '<div class="sidenote"><b>9.4 pp</b>de los 14.4 puntos vienen de dos posiciones</div>' +
+      '<div class="sidenote"><b>US$11,420</b>caída máxima del periodo, recuperada el 6 may</div>' +
+      img('img-rail','rail') +
+      '<div class="credit">Fotografía de contexto · Pexels</div>' +
+    '</div></div>', { 'data-acc':'2' });
+
+blk('<div class="img-duotone img-wrap" style="background:' + REPORT.images.band.avg + '">' +
+    '<img src="' + REPORT.images.band.src + '" width="698" height="190" alt="">' +
+    '<div class="tint"></div>' +
+    '<div class="scrim" style="background:linear-gradient(90deg,rgba(17,20,34,.86) 42%,rgba(17,20,34,.15))"></div>' +
+    '<div class="pullquote" style="position:relative">La misma concentración que produjo el resultado ' +
+    'es la que lo hace frágil.</div>' +
+    '<span class="credit on-img">Foto: ' + REPORT.images.band.by + ' · Pexels</span></div>', { 'data-acc':'2' });
+
+blk('<h3 class="h3">A vigilar en el próximo periodo</h3>' +
+    '<div class="callout"><b>1 · Concentración.</b> NVDA pesa 21.4%, por encima del umbral de 20%. ' +
+    'Una corrección de 20% en el papel restaría ~4.3 pp al portafolio completo.<br>' +
+    '<b>2 · Beta.</b> La beta agregada subió a 1.08; PLTR (1.72) aporta 8% de la volatilidad total con 5.2% del peso.<br>' +
+    '<b>3 · Divisa.</b> 17.5% del valor cotiza en MXN: el aporte en dólares depende del tipo de cambio ' +
+    'a la fecha de valuación, no solo del precio local.</div>', { 'data-acc':'2' });
+
+/* ── III. Cronología ───────────────────────────────────────────────────────── */
+secHead('III','Cronología del periodo','mes a mes','3');
+blk('<div class="chart-box"><div class="chart-h">Retorno mensual</div>' +
+    chart('monthly', { items: REPORT.months }, { width:676, height:132 }) +
+    '<div class="cap">Retorno del portafolio por mes calendario dentro del rango seleccionado.</div></div>',
+    { 'data-acc':'3' });
+blk('<div class="tbl"><table><thead><tr><th>Mes</th><th class="n">Retorno</th><th class="n">Resultado</th>' +
+    '<th>Mejor</th><th>Peor</th><th>Actividad</th><th>Qué pasó</th></tr></thead><tbody>' +
+    REPORT.chronicle.map(r => '<tr><td><strong>' + r[0] + '</strong></td><td class="n ' +
+      (r[1].startsWith('−') ? 'down' : 'up') + '">' + r[1] + '</td><td class="n">' + r[2] + '</td><td>' +
+      r[3] + '</td><td>' + r[4] + '</td><td>' + r[5] + '</td><td style="width:230px">' + r[6] + '</td></tr>').join('') +
+    '</tbody></table></div>', { 'data-flow':'table', 'data-acc':'3' });
+
+/* ── IV. Rendimiento vs benchmark ──────────────────────────────────────────── */
+secHead('IV','Rendimiento vs benchmark','126 sesiones · ' + REPORT.meta.period,'4');
+blk('<div class="chart-box"><div class="chart-h">Retorno acumulado · portafolio vs S&amp;P 500</div>' +
+    chart('equity', series(), { width:676, height:236 }) +
+    '<div class="cap">Retorno compuesto acumulado desde el inicio del rango. Línea punteada = benchmark; ' +
+    'banda sombreada = ventana de la caída máxima (26 feb – 18 mar).</div></div>', { 'data-acc':'4' });
+blk('<div class="metric-strip">' +
+    metric('Portafolio','+14.38%','126 sesiones','up') + metric('Benchmark','+10.67%','S&P 500') +
+    metric('Exceso','+3.71 pp','alpha activo','up') + metric('Tracking error','6.4%','anualizado') +
+    metric('Beta','1.08','vs benchmark') + '</div>', { 'data-acc':'4' });
+blk('<p class="body">El portafolio superó al índice en 3.71 puntos porcentuales, pero con un error de ' +
+    'seguimiento de 6.4%: la diferencia no vino de replicar mejor al mercado sino de dos apuestas activas ' +
+    'concretas. La beta de 1.08 indica que se asumió 8% más de riesgo sistemático que el índice.</p>' +
+    '<p class="body">La mejor sesión (+3.1%, 28 de mayo) y la peor (−2.8%, 12 de marzo) coinciden con los dos ' +
+    'eventos que la sección VI documenta. Fuera de esas dos fechas, el portafolio se movió dentro de ' +
+    '±1.4% diario en el 92% de las sesiones.</p>', { 'data-acc':'4' });
+function metric(l, v, e, cls) {
+  return '<div class="metric"><span>' + l + '</span><strong' + (cls ? ' class="' + cls + '"' : '') + '>' + v +
+         '</strong><em>' + e + '</em></div>';
+}
+
+/* ── V. Atribución ─────────────────────────────────────────────────────────── */
+secHead('V','Atribución de resultados','contribución al retorno, en puntos porcentuales','5');
+blk('<div class="chart-box"><div class="chart-h">Contribución por posición</div>' +
+    chart('waterfall', { items: REPORT.attribution.map(a => ({ label:a.ticker, value:a.pnl }))
+      .concat([{ label:'Total', value:16150, type:'end' }]), format:'money' }, { width:676, height:214 }) +
+    '<div class="cap">Aporte de cada posición al resultado del periodo, en dinero. La barra final es el ' +
+    'resultado total incluyendo dividendos y comisiones.</div></div>', { 'data-acc':'5' });
+blk('<div class="g2">' +
+    '<div class="chart-box"><div class="chart-h">Ganadores y perdedores (pp)</div>' +
+    chart('diverging', { items: REPORT.attribution.map(a => ({ label:a.ticker, value:a.pp })), format:'pp' },
+      { width:307 }) + '</div>' +
+    '<div><h3 class="h3">Lectura</h3>' +
+    '<p class="body" style="font-size:10.5px">Los tres primeros nombres aportaron 11.43 pp de los 14.38 pp ' +
+    'del periodo. El único detractor material fue PLTR con −1.15 pp; los otros dos negativos suman −0.83 pp ' +
+    'combinados, por debajo del umbral de materialidad.</p>' +
+    '<div class="callout" style="font-size:10px"><b>Contrafactual:</b> excluyendo las tres mayores ' +
+    'contribuciones, el periodo habría cerrado en <b>+2.95%</b> en lugar de +14.38%.</div></div>' +
+    '</div>', { 'data-acc':'5' });
+blk('<div class="tbl"><table><thead><tr><th>Ticker</th><th class="n">P/L del periodo</th>' +
+    '<th class="n">Contribución</th><th class="n">Peso</th><th>Divisa</th></tr></thead><tbody>' +
+    REPORT.attribution.map(a => {
+      const cur = /\.MX$/.test(a.ticker) ? 'MXN' : /\.TO$/.test(a.ticker) ? 'CAD' : 'USD';
+      return '<tr><td><strong>' + a.ticker + '</strong></td><td class="n ' + (a.pnl >= 0 ? 'up' : 'down') + '">' +
+        (a.pnl >= 0 ? '+' : '−') + 'US$' + Math.abs(a.pnl).toLocaleString('es-MX') + '</td><td class="n ' +
+        (a.pp >= 0 ? 'up' : 'down') + '">' + (a.pp >= 0 ? '+' : '') + a.pp.toFixed(2) + ' pp</td><td class="n">' +
+        REPORT.weights[a.ticker].toFixed(1) + '%</td><td>' + cur + '</td></tr>'; }).join('') +
+    '</tbody></table></div>', { 'data-flow':'table', 'data-acc':'5' });
+
+/* ── VI. Qué movió a tus posiciones ────────────────────────────────────────── */
+secHead('VI','Qué movió a tus posiciones','eventos con impacto cuantificado','1');
+REPORT.movers.forEach(m => {
+  blk('<div class="mover">' +
+      '<div><div class="t">' + m.ticker + '</div>' +
+      '<div class="figs">' + m.pnl + ' · ' + m.pp + '<br>peso ' + m.weight + '</div>' +
+      chart('sparkline', { values:m.spark }, { width:138, height:34 }) + '</div>' +
+      '<ul>' +
+      '<li><b>Evento</b>' + m.event + '</li>' +
+      '<li><b>Mecanismo</b>' + m.mech + '</li>' +
+      '<li><b>Impacto</b>' + m.impact + '</li>' +
+      '<li><b>A vigilar</b>' + m.watch + '</li>' +
+      '</ul></div>', { 'data-acc':'1', 'data-min-space':'150' });
+});
+blk('<div class="footnote">Fuente de los eventos: titulares recuperados vía yfinance para cada posición ' +
+    'en la ventana del reporte. Las relaciones causa-efecto se limitan a lo publicado; ninguna afirmación ' +
+    'de esta sección se genera sin una nota de origen.</div>', { 'data-acc':'1' });
+
+/* ── VII. Dossier por posición ─────────────────────────────────────────────── */
+secHead('VII','Dossier por posición','8 posiciones · las 6 mayores por peso','2');
+// La imagen del dossier se deriva del sector de la posición (SECTOR_QUERIES en
+// scripts/fetch_pexels_images.py); aquí se rota el caché de muestra.
+const INSETS = ['rail','band','opener','closing','cover','rail'];
+blk('<div>' + REPORT.positions.map((p, i) =>
+    '<div class="dossier">' + img('img-inset', INSETS[i % INSETS.length]) +
+    '<div><div class="hd"><b>' + p.t + '</b><span>' + p.name + ' · ' + p.cur + '</span></div>' +
+    '<div class="grid">' +
+      '<div>Peso<strong>' + p.w.toFixed(1) + '%</strong></div>' +
+      '<div>Costo medio<strong>' + p.avg + '</strong></div>' +
+      '<div>P/L periodo<strong class="' + (p.pnl.startsWith('−') ? 'down' : 'up') + '">' + p.pnl + '</strong></div>' +
+      '<div>Contribución<strong class="' + (p.pp.startsWith('−') ? 'down' : 'up') + '">' + p.pp + '</strong></div>' +
+    '</div><p>' + p.note + '</p></div></div>').join('') + '</div>',
+    { 'data-flow':'split', 'data-acc':'2' });
+
+/* ── VIII. Riesgo ──────────────────────────────────────────────────────────── */
+secHead('VIII','Riesgo y volatilidad','métricas del periodo con interpretación','3');
+blk('<div class="metric-strip">' +
+    metric('Sharpe', REPORT.risk.sharpe,'sólido','up') + metric('Sortino', REPORT.risk.sortino,'buena asimetría') +
+    metric('Volatilidad', REPORT.risk.vol,'moderada') + metric('VaR 95%', REPORT.risk.var95, REPORT.risk.varMoney) +
+    metric('Caída máxima', REPORT.risk.maxDD, REPORT.risk.ddMoney,'down') + '</div>', { 'data-acc':'3' });
+blk('<div class="chart-box"><div class="chart-h">Bajo el agua · caídas desde máximos</div>' +
+    chart('underwater', { series: underwaterSeries() }, { width:676, height:150 }) +
+    '<div class="cap">Distancia al máximo previo en cada sesión. El punto anotado es el mínimo del periodo.</div></div>',
+    { 'data-acc':'3' });
+blk('<div class="g2"><div><h3 class="h3">Crónica de la caída</h3>' +
+    '<p class="body" style="font-size:10.5px">Máximo el <strong>' + REPORT.risk.ddPeak + '</strong>, mínimo el ' +
+    '<strong>' + REPORT.risk.ddTrough + '</strong>: −9.4% equivalente a US$11,420 sobre el valor de entonces. ' +
+    'La cartera pasó 34 sesiones bajo el agua y recuperó el máximo el ' + REPORT.risk.ddRecovered + '.</p></div>' +
+    '<div><h3 class="h3">Qué significan</h3>' +
+    '<p class="body" style="font-size:10.5px">Un VaR de −2.41% implica que en 1 de cada 20 días la pérdida ' +
+    'podría superar US$3,096 al valor actual. El Sharpe de 1.34 indica que el retorno compensó el riesgo ' +
+    'asumido; la beta de 1.08 que la cartera amplifica ligeramente los movimientos del índice.</p></div></div>',
+    { 'data-acc':'3' });
+
+/* ── IX. Composición y exposición ──────────────────────────────────────────── */
+secHead('IX','Composición y exposición','al cierre del 15 jul 2026','4');
+blk('<div class="g2">' +
+    '<div class="chart-box"><div class="chart-h">Distribución por posición</div>' +
+    chart('donut', { slices: REPORT.composition, centerValue:'7.3', centerLabel:'holdings efectivos' },
+      { width:307, height:172 }) + '</div>' +
+    '<div class="chart-box"><div class="chart-h">Por sector</div>' +
+    chart('bars', { items: REPORT.sectors, format:'pct' }, { width:283 }) + '</div></div>', { 'data-acc':'4' });
+blk('<div class="g2">' +
+    '<div class="chart-box"><div class="chart-h">Por región</div>' +
+    chart('bars', { items: REPORT.regions, format:'pct' }, { width:283 }) + '</div>' +
+    '<div class="chart-box"><div class="chart-h">Por divisa</div><table><thead><tr><th>Divisa</th>' +
+    '<th class="n">Valor</th><th class="n">Peso</th></tr></thead><tbody>' +
+    REPORT.fx.map(r => '<tr><td><strong>' + r[0] + '</strong></td><td class="n">' + r[1] +
+      '</td><td class="n">' + r[2] + '</td></tr>').join('') + '</tbody></table></div></div>', { 'data-acc':'4' });
+blk('<div class="alerts">• La mayor posición (NVDA) representa 21.4% del portafolio — por encima del umbral ' +
+    'de concentración de 20%.<br>• Las 3 mayores suman 52.8%: la diversificación efectiva equivale a ' +
+    '7.3 posiciones igualmente ponderadas (HHI 0.137).<br>• Sobreexposición al sector Tecnología (55.5%).</div>',
+    { 'data-acc':'4' });
+
+/* ── X. Actividad del periodo ──────────────────────────────────────────────── */
+secHead('X','Actividad del periodo','18 operaciones · 4 ventas cerradas','5');
+blk('<h3 class="h3">Operaciones cerradas</h3>' +
+    '<div class="tbl"><table><thead><tr><th>Ticker</th><th>Compra</th><th>Venta</th><th class="n">Cantidad</th>' +
+    '<th class="n">Costo</th><th class="n">Ingreso</th><th class="n">P/L</th><th class="n">Retorno</th></tr></thead><tbody>' +
+    REPORT.closed.map(r => '<tr><td><strong>' + r[0] + '</strong></td><td>' + r[1] + '</td><td>' + r[2] +
+      '</td><td class="n">' + r[3] + '</td><td class="n">' + r[4] + '</td><td class="n">' + r[5] +
+      '</td><td class="n ' + (r[6].startsWith('−') ? 'down' : 'up') + '">' + r[6] + '</td><td class="n ' +
+      (r[7].startsWith('−') ? 'down' : 'up') + '">' + r[7] + '</td></tr>').join('') +
+    '</tbody></table></div>', { 'data-flow':'table', 'data-acc':'5', 'data-keep-with-next':'' });
+blk('<h3 class="h3">Historial de transacciones</h3>' +
+    '<div class="tbl"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Ticker</th><th class="n">Cantidad</th>' +
+    '<th class="n">Precio</th><th class="n">Comisión</th><th class="n">Neto</th></tr></thead><tbody>' +
+    txRows() + '</tbody></table></div>' +
+    '<div class="footnote">18 operaciones en el periodo de 214 históricas. Comisiones del periodo: US$196.</div>',
+    { 'data-flow':'table', 'data-acc':'5' });
+
+/* ── XI. Calidad de datos y metodología ────────────────────────────────────── */
+secHead('XI','Calidad de datos y metodología','trazabilidad del reporte','1');
+blk('<div class="g3">' + REPORT.quality.map(q =>
+    '<div class="kpi" style="border-top-width:1px"><span>' + q[0] + '</span>' +
+    '<strong style="font-size:10.5px;font-weight:700;line-height:1.35">' + q[1] + '</strong></div>').join('') +
+    '</div>', { 'data-acc':'1' });
+blk('<div class="callout" style="font-size:10px"><b>Supuestos.</b> Las conversiones de divisa usan el tipo de ' +
+    'cambio vigente a la fecha de generación, no el histórico de cada operación. La divisa de cada posición se ' +
+    'resuelve por el sufijo del ticker (.MX → MXN, .TO → CAD), que es autoritativo sobre el campo guardado. ' +
+    'El saldo en efectivo solo se incluye cuando la fecha final del rango es hoy. Las métricas de riesgo se ' +
+    'calculan sobre 126 sesiones con una tasa libre de riesgo de 4.25%.</div>', { 'data-acc':'1' });
+
+/* ── XII. Glosario ─────────────────────────────────────────────────────────── */
+secHead('XII','Glosario','definiciones usadas en este reporte','2');
+blk('<div class="gloss">' + [
+  ['Sharpe','retorno por unidad de riesgo total: (retorno − tasa libre de riesgo) ÷ volatilidad.'],
+  ['Sortino','variante del Sharpe que solo penaliza la volatilidad a la baja.'],
+  ['Volatilidad','desviación estándar anualizada de los retornos diarios.'],
+  ['VaR 95%','pérdida máxima esperada en el 95% de los días.'],
+  ['Beta','sensibilidad del portafolio a los movimientos del benchmark.'],
+  ['Caída máxima','mayor descenso desde un máximo previo dentro del rango.'],
+  ['Alpha (exceso)','retorno por encima del benchmark en el periodo.'],
+  ['Tracking error','desviación estándar anualizada de la diferencia contra el benchmark.'],
+  ['HHI','índice de concentración (suma de pesos²); &gt;0.25 se considera alto.'],
+  ['Holdings efectivos','1 ÷ HHI; posiciones equivalentes igualmente ponderadas.'],
+  ['Contribución (pp)','aporte de una posición al retorno total, en puntos porcentuales.'],
+  ['Puente del dinero','descomposición del cambio de valor entre capital base y valor final.']
+].map(g => '<div><b>' + g[0] + '</b> — ' + g[1] + '</div>').join('') + '</div>',
+  { 'data-flow':'split', 'data-acc':'2' });
+
+/* ── closing ───────────────────────────────────────────────────────────────── */
+blk('<div class="closing-body">' +
+    '<div class="eyebrow" style="--sec:var(--pdf-accent)">' + REPORT.meta.folio + '</div>' +
+    '<h2>Fin del reporte</h2>' +
+    '<div class="closing-figs">' +
+      '<div><span>Valor final</span><strong>US$128,450</strong></div>' +
+      '<div><span>Resultado</span><strong class="up">+US$16,150</strong></div>' +
+      '<div><span>Retorno</span><strong class="up">+14.38%</strong></div>' +
+      '<div><span>vs benchmark</span><strong class="up">+3.71 pp</strong></div>' +
+      '<div><span>Caída máxima</span><strong class="down">−9.4%</strong></div>' +
+    '</div>' +
+    '<div class="disclaimer">Este reporte se genera automáticamente con fines informativos. No constituye ' +
+    'asesoría de inversión ni recomendación de compra o venta de valores. Las secciones marcadas como ' +
+    'generadas por IA pueden contener errores; verifica las cifras antes de tomar decisiones.</div>' +
+    '<div class="footnote">' + STR.photos + ' — ' +
+    [...new Set(Object.values(REPORT.images).map(i => i.by))].join(', ') + '. ' +
+    'Datos de mercado: Yahoo Finance. Análisis asistido por anthropic/claude-sonnet-5.<br>' +
+    'BlackPortfolio · blackportfolio.ai · ' + REPORT.meta.folio + ' · ' + REPORT.meta.generated + '</div></div>' +
+    img('img-closing','closing'), { 'data-page':'bleed', 'data-section':'' });
+
+/* sample series generators — real builds pass data.equityCurve straight through */
+// Curva sintética con forma controlada: pico en la sesión 30, mínimo en la 45
+// (caída máxima −9.4% desde el máximo previo) y cierre en +14.38%, para que el
+// gráfico, el chart underwater y el texto de la carta digan lo mismo.
+function series() {
+  const n = 126, port = [], bench = [], cost = [];
+  const keyP = [[0,0],[30,9.8],[45,-0.83],[62,5.4],[78,9.6],[92,7.2],[108,12.1],[118,10.4],[125,14.38]];
+  const keyB = [[0,0],[30,7.1],[45,1.2],[62,4.6],[78,7.8],[92,6.4],[108,9.6],[118,8.7],[125,10.67]];
+  const at = (keys, i) => {
+    for (let k = 1; k < keys.length; k++) {
+      if (i <= keys[k][0]) {
+        const [x0, y0] = keys[k - 1], [x1, y1] = keys[k];
+        const u = (i - x0) / (x1 - x0);
+        return y0 + (y1 - y0) * (u * u * (3 - 2 * u));            // smoothstep
+      }
+    }
+    return keys[keys.length - 1][1];
+  };
+  for (let i = 0; i < n; i++) {
+    const iso = new Date(2026, 0, 15 + Math.round(i * 1.43)).toISOString().slice(0, 10);
+    const noise = Math.sin(i / 2.7) * 0.22 + Math.sin(i / 6.1) * 0.16;   // determinista
+    port.push({ t: iso, value: +(at(keyP, i) + noise).toFixed(2) });
+    bench.push({ t: iso, value: +(at(keyB, i) + noise * 0.6).toFixed(2) });
+    cost.push({ t: iso, value: +(i * 0.018).toFixed(2) });
+  }
+  return { series: port, bench: bench, extra: cost, format:'pct', ddFrom:30, ddTo:45,
+           seriesLabel:'Portafolio', benchLabel:'S&P 500', extraLabel:'Capital invertido', ddLabel:'caída máxima −9.4%' };
+}
+// Caída real desde el máximo previo, no la resta de retornos acumulados:
+// (1+v)/(1+pico) − 1. La diferencia entre ambas es lo que hacía que el gráfico
+// dijera −30% mientras el texto decía −9.4%.
+function underwaterSeries() {
+  const s = series().series, out = [];
+  let peak = -Infinity;
+  s.forEach(p => {
+    peak = Math.max(peak, p.value);
+    out.push({ t: p.t, value: +(((1 + p.value / 100) / (1 + peak / 100) - 1) * 100).toFixed(2) });
+  });
+  return out;
+}
+function txRows() {
+  const kinds = [['COMPRA','up'], ['VENTA','down'], ['DIVIDENDO','']];
+  const tk = ['NVDA','MSFT','VOO','TSM','BIMBOA.MX','PLTR','SHOP.TO','FMTY14.MX'];
+  let out = '';
+  for (let i = 0; i < 18; i++) {
+    const k = kinds[i % 3], t = tk[i % tk.length];
+    const d = new Date(2026, 0, 18 + i * 9).toLocaleDateString('es-MX');
+    out += '<tr><td>' + d + '</td><td class="' + k[1] + '"><strong>' + k[0] + '</strong></td><td><strong>' + t +
+      '</strong></td><td class="n">' + (4 + i % 7) + '</td><td class="n">' + (120 + i * 13.4).toFixed(2) +
+      '</td><td class="n">' + (2 + i % 4).toFixed(2) + '</td><td class="n">' + (480 + i * 61).toFixed(2) + '</td></tr>';
+  }
+  return out;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. RENDER — strict order: charts → images → fonts/decode → paginate → chrome
+   ═══════════════════════════════════════════════════════════════════════════ */
+BPPdfCharts.configure({ locale:'es-MX', currency: REPORT.meta.currency });
+charts.forEach(([id, type, data, opts]) => {
+  const n = document.getElementById(id);
+  if (n) BPPdfCharts.mount(n, type, data, opts);
+});
+
+// html2canvas silently drops cross-origin images: embed them as data URIs first.
+// Falls back to the tone panel (avg_color already painted) if the fetch fails.
+async function embedImages(root) {
+  const seen = new Map();
+  await Promise.all([...root.querySelectorAll('img[src^="http"]')].map(async el => {
+    try {
+      if (!seen.has(el.src)) {
+        seen.set(el.src, fetch(el.src, { mode:'cors' }).then(r => r.blob()).then(b =>
+          new Promise(res => { const f = new FileReader(); f.onload = () => res(f.result); f.readAsDataURL(b); })));
+      }
+      el.src = await seen.get(el.src);
+    } catch (e) { console.warn('[pdf] imagen no embebida, se usa el panel de tono:', e.message); el.remove(); }
+  }));
+}
+
+(async function build() {
+  await embedImages(flow);
+  await BPPdfPaginate.ready(document);
+  const r = BPPdfPaginate.run({
+    flow, mount: document.getElementById('doc'),
+    strings: { continues: STR.continues, continued: STR.continued },
+    chrome(page, n, total, section) {
+      if (page.classList.contains('bleed')) return;
+      const h = document.createElement('div');
+      h.className = 'page-head';
+      h.innerHTML = '<span>' + REPORT.meta.name + ' · ' + REPORT.meta.period + '</span><span>' + section + '</span>';
+      const f = document.createElement('div');
+      f.className = 'page-foot';
+      f.innerHTML = '<span>BlackPortfolio · ' + REPORT.meta.folio + '</span><span><b>' + n + '</b> / ' + total + '</span>';
+      page.appendChild(h); page.appendChild(f);
+    }
+  });
+  window.__pdfAudit = { pages: r.pages.length, warnings: r.warnings };
+  const el = document.getElementById('audit');
+  el.className = r.warnings.length ? 'bad' : 'ok';
+  el.textContent = r.pages.length + ' páginas · ' +
+    (r.warnings.length ? r.warnings.length + ' avisos: ' + r.warnings[0] : 'sin desbordes');
+})();
+
+/* html2pdf with the settings that match the page model (pdf-document.md §1). */
+async function exportPdf() {
+  if (!window.html2pdf) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js';
+      s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar html2pdf'));
+      document.head.appendChild(s);
+    });
+  }
+  document.body.classList.add('exporting');
+  try {
+    await html2pdf().set({
+      margin: 0,
+      image: { type:'jpeg', quality:0.96 },
+      // scale ENTERO: html2pdf corta en floor(1123 × scale); con 1.6 el sobrante
+      // acumulado agrega una página casi en blanco al final (medido).
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', logging:false },
+      jsPDF: { unit:'px', format:[794, 1123], orientation:'portrait', hotfixes:['px_scaling'] },
+      pagebreak: { mode:[] }
+    }).from(document.getElementById('doc')).save('Reporte_' + REPORT.meta.folio + '.pdf');
+  } finally { document.body.classList.remove('exporting'); }
+}
+</script>
+</body>
+</html>

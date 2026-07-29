@@ -1,0 +1,180 @@
+/*
+  Tone token sets for the portfolio report — one block per `data-tone` value.
+  Apply `data-tone="..."` to the report's root element; every visual rule in
+  the report template should read these custom properties, never a literal
+  color/font. See references/design-system.md for the reasoning behind each
+  palette and the deck it was extracted from.
+*/
+
+/* DEFAULT — BlackPortfolio's own brand palette (styles.css --primary family).
+   Applied via :root so an unset/unknown data-tone renders as *this app*,
+   never as a reference company's identity. The future user-customization
+   section overrides exactly these variables. */
+:root,
+[data-tone="brand"] {
+  --tone-bg: linear-gradient(135deg, #556eff 0%, #6f86ff 55%, #7892ff 100%);
+  --tone-surface: #ffffff;
+  --tone-panel: #f1f3fe;
+  --tone-text: #1a1a1e;
+  --tone-text-muted: #666a78;
+  --tone-accent: #556eff;
+  --tone-accent-2: #7892ff;
+  --tone-chart-1: #556eff;
+  --tone-chart-2: #a9b8ff;
+  --tone-font-display: "Manrope", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: high;
+  --tone-footnote-color: #8f93a3;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #12996b;
+  --tone-down: #e0483d;
+}
+
+/* ── Paper palette (PDF only) ──────────────────────────────────────────────
+   The PDF is read on paper and on white screens, so it derives its own tokens
+   from the tone instead of reusing the deck's. `--pdf-section-1..5` is the
+   section accent rotation (opener numeral, section rule, H3s, that section's
+   primary data series, KPI top border) — what makes a 20-page document
+   navigable by thumb. See references/pdf-document.md §4.
+   Override the whole block inside a [data-tone="…"] rule to retune a tone. */
+:root {
+  --pdf-paper: #ffffff;
+  --pdf-paper-2: var(--tone-panel);
+  --pdf-ink: var(--tone-text);
+  --pdf-ink-soft: #454b5e;
+  --pdf-ink-muted: var(--tone-text-muted);
+  --pdf-ink-faint: var(--tone-footnote-color);
+  --pdf-rule: #e3e7f2;
+  --pdf-accent: var(--tone-accent);
+  --pdf-accent-2: var(--tone-accent-2);
+  --pdf-chart-1: var(--tone-chart-1);
+  --pdf-chart-2: var(--tone-chart-2);
+  --pdf-up: var(--tone-up);
+  --pdf-down: var(--tone-down);
+  --pdf-section-1: #556eff; --pdf-section-2: #0e7c86; --pdf-section-3: #a86212;
+  --pdf-section-4: #6a3fd1; --pdf-section-5: #b03a63;
+}
+/* premium-dark keeps its dark cover/openers, but tables and dense prose must
+   sit on light paper — 9px white-on-black body text is unreadable in print. */
+[data-tone="premium-dark"] {
+  --pdf-paper: #ffffff; --pdf-ink: #17171a; --pdf-ink-soft: #3f3f45;
+  --pdf-rule: #e6e2d8;
+  --pdf-section-1: #8a6a12; --pdf-section-2: #4d4d50; --pdf-section-3: #c9a227;
+  --pdf-section-4: #6b5a2a; --pdf-section-5: #2f2f31;
+}
+[data-tone="institutional"] {
+  --pdf-section-1: #0b2559; --pdf-section-2: #2f5fa8; --pdf-section-3: #4c7ef3;
+  --pdf-section-4: #17406e; --pdf-section-5: #5a6478;
+}
+[data-tone="minimal"] {
+  --pdf-paper: #faf7f2; --pdf-rule: #e4ddd1;
+  --pdf-section-1: #8b4a32; --pdf-section-2: #4c6a8b; --pdf-section-3: #7a6a4a;
+  --pdf-section-4: #5c5548; --pdf-section-5: #b9805f;
+}
+[data-tone="editorial"] {
+  --pdf-section-1: var(--tone-section-blue); --pdf-section-2: var(--tone-section-purple);
+  --pdf-section-3: var(--tone-section-orange); --pdf-section-4: var(--tone-section-pink);
+  --pdf-section-5: var(--tone-section-green);
+}
+
+/* Nu-inspired preset — opt-in alternate, NOT the default. */
+[data-tone="gradient"] {
+  --tone-bg: linear-gradient(135deg, #6a3fd1 0%, #8b5cf6 55%, #b794f6 100%);
+  --tone-surface: #ffffff;
+  --tone-panel: #f5f2fd;
+  --tone-text: #1a1523;
+  --tone-text-muted: #6b6478;
+  --tone-accent: #6a3fd1;
+  --tone-accent-2: #b794f6;
+  --tone-chart-1: #6a3fd1;
+  --tone-chart-2: #b794f6;
+  --tone-font-display: "Manrope", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: high; /* glossy product/portrait photography */
+  --tone-footnote-color: #948da2;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #12996b;
+  --tone-down: #e0483d;
+}
+
+[data-tone="premium-dark"] {
+  --tone-bg: #0b0b0c;
+  --tone-surface: #17171a;
+  --tone-panel: #1c1c1e;
+  --tone-text: #f5f5f4;
+  --tone-text-muted: #9a9a9d;
+  --tone-accent: #c9a227;
+  --tone-accent-2: #e6c65c;
+  --tone-chart-1: #c9a227;
+  --tone-chart-2: #4d4d50;
+  --tone-font-display: "Manrope", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: minimal; /* abstract/product macro only, sparingly */
+  --tone-footnote-color: #6f6f73;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #3ecf8e;
+  --tone-down: #ff6b5e;
+}
+
+[data-tone="editorial"] {
+  --tone-bg: #ffffff;
+  --tone-surface: #ffffff;
+  --tone-panel: #f7f7f8;
+  --tone-text: #1f1b2e;
+  --tone-text-muted: #736c85;
+  --tone-accent: #1e4fbe;
+  --tone-accent-2: #f0862b;
+  --tone-chart-1: #1e4fbe;
+  --tone-chart-2: #e8437c;
+  --tone-font-display: "Poppins", "Segoe UI", sans-serif;
+  --tone-font-body: "Inter", "Segoe UI", sans-serif;
+  --tone-imagery-density: heavy; /* real photography + icon badges, equal footing with data */
+  --tone-footnote-color: #a19cae;
+  /* section accent overrides — apply per-section, not globally */
+  --tone-section-blue: #1e4fbe;
+  --tone-section-purple: #6a3fd1;
+  --tone-section-orange: #f0862b;
+  --tone-section-pink: #e8437c;
+  --tone-section-green: #2fa36b;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #2fa36b;
+  --tone-down: #e8437c;
+}
+
+[data-tone="institutional"] {
+  --tone-bg: #ffffff;
+  --tone-surface: #ffffff;
+  --tone-panel: #f2f4f8;
+  --tone-text: #0b2559;
+  --tone-text-muted: #5a6478;
+  --tone-accent: #0b2559;
+  --tone-accent-2: #4c7ef3;
+  --tone-chart-1: #0b2559;
+  --tone-chart-2: #4c7ef3;
+  --tone-font-display: "Georgia", "Times New Roman", serif;
+  --tone-font-body: "Segoe UI", sans-serif;
+  --tone-imagery-density: minimal; /* cover only */
+  --tone-footnote-color: #8b93a5;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #1a7f4b;
+  --tone-down: #c0392b;
+}
+
+[data-tone="minimal"] {
+  --tone-bg: #faf7f2;
+  --tone-surface: #faf7f2;
+  --tone-panel: #f2ede4;
+  --tone-text: #1a1712;
+  --tone-text-muted: #7a7266;
+  --tone-accent: #8b4a32;
+  --tone-accent-2: #b9805f;
+  --tone-chart-1: #4c6a8b;
+  --tone-chart-2: #b9b2a3;
+  --tone-font-display: "Georgia", "Times New Roman", serif;
+  --tone-font-body: "Segoe UI", sans-serif;
+  --tone-imagery-density: none; /* zero photography, whitespace + type carry hierarchy */
+  --tone-footnote-color: #9c9585;
+  /* semantic — win/loss, read by deck-charts.js */
+  --tone-up: #4c6a8b;
+  --tone-down: #8b4a32;
+}
