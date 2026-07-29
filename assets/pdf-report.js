@@ -223,6 +223,8 @@
                '<span class="credit on-img' + (creditTop ? ' top' : '') + '">Foto: ' + esc(im.by || 'Pexels') +
                ' · Pexels</span></div>';
       }
+      var NEWS = ctx.news || {};
+      var newsTickers = Object.keys(NEWS).filter(function (k) { return (NEWS[k] || []).length; });
       var photographers = [];
       Object.keys(IMG).forEach(function (k) {
         if (IMG[k] && IMG[k].by && photographers.indexOf(IMG[k].by) < 0) photographers.push(IMG[k].by);
@@ -642,11 +644,21 @@
           if (w != null && w <= 20 && Math.abs(mv.pp) > 1) watch.push((mv.pp >= 0 ? 'Aporta ' : 'Resta ') + Math.abs(mv.pp).toFixed(2) +
             ' pp con ' + w.toFixed(1) + '% del peso: su comportamiento pesa más que su tamaño.');
           if (!watch.length) watch.push('Sin alertas de concentración: su contribución es proporcional a su peso.');
+          // El titular es la ÚNICA fuente admisible para atribuir el movimiento
+          // a un hecho del mundo; sin noticia la tarjeta se queda en las cifras.
+          var items = (NEWS[mv.ticker] || []).slice(0, 2);
+          var eventLi = items.length
+            ? '<li><b>' + T.event + '</b>' + items.map(function (n) {
+                return esc(n.title) + ' <span class="src">(' + esc(n.source || 'fuente') +
+                       (n.date ? ' · ' + dateFull(n.date) : '') + ')</span>';
+              }).join('<br>') + '</li>'
+            : '';
           blk('<div class="mover">' +
               '<div><div class="t">' + esc(mv.ticker) + '</div><div class="figs">' + amt(mv.pnl) + ' · ' + pp(mv.pp) +
               (w != null ? '<br>peso ' + w.toFixed(1) + '%' : '') + '</div>' +
               (p && p.series && p.series.length > 1 ? chart('sparkline', { values: p.series }, { width: 138, height: 34 }) : '') +
               '</div><ul>' +
+              eventLi +
               '<li><b>' + T.impact + '</b>' + (mv.pp >= 0 ? 'Aportó ' : 'Restó ') + money(Math.abs(mv.pnl), cur) +
               ' al resultado del periodo: ' + Math.abs(mv.pp).toFixed(2) + ' pp' +
               (resultPct ? ' de los ' + Math.abs(resultPct).toFixed(2) + ' pp totales' : '') + '.</li>' +
@@ -654,8 +666,14 @@
               '<li><b>' + T.toWatch + '</b>' + watch[0] + '</li>' +
               '</ul></div>', { 'data-acc': '1', 'data-min-space': '150' });
         });
-        blk('<div class="footnote">Las explicaciones de esta sección se derivan de las cifras del propio portafolio ' +
-            '(precio, peso y contribución). No incluyen atribución a eventos de mercado.</div>', { 'data-acc': '1' });
+        if (aiNote('movers')) blk(aiNote('movers'), { 'data-acc': '1' });
+        blk('<div class="footnote">' + (newsTickers.length
+              ? 'Titulares recuperados para ' + esc(newsTickers.join(', ')) + ' dentro de la ventana del reporte. ' +
+                'Las relaciones causa-efecto se limitan a lo publicado; el resto de las explicaciones se deriva de ' +
+                'las cifras del propio portafolio (precio, peso y contribución).'
+              : 'Las explicaciones de esta sección se derivan de las cifras del propio portafolio (precio, peso y ' +
+                'contribución). No hubo titulares disponibles para estas posiciones en la ventana del reporte.') +
+            '</div>', { 'data-acc': '1' });
       }
 
       /* ════════ VII · DOSSIER POR POSICIÓN ════════ */
@@ -948,6 +966,7 @@
     '.mover li{padding-left:66px;position:relative;margin-bottom:4px;color:var(--pdf-ink-soft)}',
     '.mover li b{position:absolute;left:0;top:1px;width:60px;font-size:7.6px;font-weight:800;letter-spacing:.05em;',
     'text-transform:uppercase;color:var(--sec,var(--pdf-accent))}',
+    '.mover .src{color:var(--pdf-ink-faint);font-size:8.6px;white-space:nowrap}',
     '.dossier{display:grid;grid-template-columns:96px 1fr;gap:12px;border:1px solid var(--pdf-rule);border-radius:6px;padding:11px 12px;margin-bottom:10px}',
     '.dossier-spark{padding-top:14px}',
     '.dossier .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}',

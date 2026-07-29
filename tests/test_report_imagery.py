@@ -95,7 +95,8 @@ def test_imagery_devuelve_un_hueco_por_patron(client, monkeypatch):
     monkeypatch.setattr(api, "_HTTP_SESSION",
                         _FakeSession({"https://api.pexels.com/v1/search": _Res(200, _photos())}))
     slots = client.get("/api/report/imagery?sectors=Tecnología").json()["slots"]
-    assert set(slots) == {"cover", "opener", "rail", "band", "closing", "inset"}
+    # Un hueco por patrón de la maqueta: portada, portadilla, riel, banda y cierre.
+    assert set(slots) == {"cover", "opener", "rail", "band", "closing"}
     for s in slots.values():
         assert isinstance(s["id"], int) and s["by"] and s["avg"].startswith("#")
 

@@ -2779,7 +2779,8 @@ def ai_insights(
     if cached:
         return {"insights": cached["text"], "model": cached["model"], "cached": True}
     consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
-    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    _lang = str(body.lang or "es")
+    lang_name = "francés" if _lang.startswith("fr") else "inglés" if _lang.startswith("en") else "español"
     system_msg = (
         "Eres un analista financiero senior (CFA), objetivo y prudente, que redacta la sección de "
         "análisis de un reporte profesional para un gestor de inversión.\n"
@@ -2804,7 +2805,14 @@ def ai_insights(
         "8) Si existen 'ventas_realizadas', separa P&L realizado de P&L abierto; no lo mezcles con "
         "el valor actual de posiciones abiertas.\n"
         "9) Usa 'beta_actual' para hablar de la beta visible del portafolio y 'beta_historica_periodo' "
-        "solo como dato metodológico del rango seleccionado."
+        "solo como dato metodológico del rango seleccionado.\n"
+        "10) NOTICIAS: 'noticias' (si viene) es la ÚNICA fuente admisible para atribuir un movimiento a un "
+        "hecho del mundo. Cita el titular con su fecha y su medio. Si una posición no trae noticia, explica "
+        "su movimiento solo con sus propias cifras (peso, precio, contribución) y dilo así; jamás inventes "
+        "un evento, una cifra de resultados ni una razón de mercado que no esté en esa lista.\n"
+        "11) CONTRAFACTUAL: cuando exista un detractor material, calcula y menciona cuánto habría rendido el "
+        "periodo sin él (resultado del periodo menos su contribución en pp). Es la frase que convierte la "
+        "atribución en una decisión."
     )
     user_msg = (
         f"Analiza el siguiente portafolio y redacta el análisis en {lang_name}, en Markdown, "
@@ -2824,6 +2832,12 @@ def ai_insights(
         "## Desempeño vs benchmark — Compara el retorno del portafolio vs el benchmark, el exceso (alpha) en "
         "pp y en $, el tracking error, la beta actual y la beta histórica del periodo. Di si se batió al mercado y a costa de cuánto riesgo "
         "relativo. Omite esta sección solo si 'comparacion_benchmark' es null.\n"
+        "## Qué movió a tus posiciones — Solo si viene 'noticias'. Una viñeta por posición de la lista, en "
+        "este orden y sin saltarse ninguno: **evento** (titular, medio y fecha, tal como aparece en "
+        "'noticias'), **mecanismo** (por qué ese hecho mueve el precio; si el titular no lo explica, dilo y "
+        "quédate en las cifras), **impacto** (cuánto aportó o restó esa posición a ESTE portafolio, en dinero "
+        "y en pp) y **a vigilar** (el umbral concreto que hay que seguir). Nunca uses un titular sin cerrar "
+        "con su impacto cuantificado.\n"
         "## Acciones de rebalanceo sugeridas — 2-3 viñetas concretas (qué sobreponderar o reducir y por qué), "
         "en términos educativos, sin órdenes de compra/venta personalizadas.\n\n"
         "Sé concreto y profesional. Omite una sección solo si de verdad no hay datos para ella.\n\n"
@@ -2866,7 +2880,8 @@ def ai_analyzer(
     if cached:
         return {"verdict": cached["text"], "model": cached["model"], "cached": True}
     consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
-    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    _lang = str(body.lang or "es")
+    lang_name = "francés" if _lang.startswith("fr") else "inglés" if _lang.startswith("en") else "español"
     system_msg = (
         "Eres un analista financiero senior (CFA) con experiencia en research de buy-side, objetivo y "
         "prudente. Recibes la salida de un motor cuantitativo que integra: valoración DCF multi-escenario, "
@@ -2943,7 +2958,8 @@ def ai_rebalance(
     if cached:
         return {"explanation": cached["text"], "model": cached["model"], "cached": True}
     consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
-    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    _lang = str(body.lang or "es")
+    lang_name = "francés" if _lang.startswith("fr") else "inglés" if _lang.startswith("en") else "español"
     periodo = body.metrics.get("periodo", "el periodo analizado")
     system_msg = (
         "Eres un analista financiero senior (CFA), objetivo y prudente. Recibes el resultado de un "
@@ -3011,7 +3027,8 @@ def ai_chat(
 
     consume_ai_quota(session, ai_user["uid"], ai_user["plan"])
     models = models_for_plan(ai_user["plan"])
-    lang_name = "español" if str(body.lang).startswith("es") else "inglés"
+    _lang = str(body.lang or "es")
+    lang_name = "francés" if _lang.startswith("fr") else "inglés" if _lang.startswith("en") else "español"
     system_msg = (
         "Eres el asistente de inversión de BlackPortfolio: un analista financiero senior (CFA), "
         "objetivo, prudente y didáctico, que conversa con el dueño de un portafolio dentro de la "

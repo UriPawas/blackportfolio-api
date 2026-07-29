@@ -6345,6 +6345,9 @@ function _parseAISections(md) {
   const keyFor = t => {
     const s = (t || "").toLowerCase();
     if (/tesis|diagn[oó]stico/.test(s)) return "tesis";
+    // Antes que "resultado": el título de esta sección lo contiene y si no va
+    // primero, las tarjetas de movers acabarían dentro de "atribucion".
+    if (/movi[oó]|qu[eé] movi/.test(s)) return "movers";
     if (/puente|reconcil|capital/.test(s)) return "atribucion";
     if (/atribuci[oó]n|resultado/.test(s)) return "atribucion";
     if (/riesgo/.test(s)) return "riesgos";
@@ -6786,6 +6789,34 @@ async function _fetchReportImagery(sectors) {
   return out;
 }
 
+// Noticias de las posiciones que movieron el periodo. Reusa /api/news/{symbol}
+// (ya cacheado 15 min en el backend); se limita a los movers materiales para no
+// gastar la cuota de RapidAPI ni inflar el payload de la IA. Cualquier fallo
+// deja esa posición sin noticia: la tarjeta se explica solo con sus cifras.
+async function _fetchMoverNews(tickers, startStr, endStr) {
+  const out = {};
+  await Promise.all(tickers.slice(0, 6).map(async ticker => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/news/${encodeURIComponent(ticker)}?language=${currentLang || "es"}`);
+      if (!res.ok) return;
+      const items = ((await res.json()).news || [])
+        .map(n => ({
+          title: n.article_title || "",
+          source: n.source || "",
+          url: n.article_url || n.url || "",
+          date: n.post_time_utc ? String(n.post_time_utc).slice(0, 10) : "",
+        }))
+        .filter(n => n.title)
+        // Dentro de la ventana del reporte (con margen: una noticia del día
+        // anterior al cierre sigue explicando el periodo).
+        .filter(n => !n.date || (n.date >= startStr && n.date <= endStr))
+        .slice(0, 2);
+      if (items.length) out[ticker] = items;
+    } catch (_) { /* sin noticia para ese ticker */ }
+  }));
+  return out;
+}
+
 async function exportPortfolioPDF(startStr, endStr) {
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
@@ -6831,6 +6862,12 @@ async function exportPortfolioPDF(startStr, endStr) {
     return Object.entries(b).sort((a, b2) => b2[1] - a[1])
       .map(([label, value]) => ({ label, pct: totalCurrentValue > 0 ? value / totalCurrentValue * 100 : 0 }));
   };
+
+  // Noticias de los movers: alimentan tanto el prompt de la IA como las
+  // tarjetas de la sección VI del documento.
+  const moverNews = await _fetchMoverNews(
+    [...(data.movers?.up || []), ...(data.movers?.down || [])].map(a => a.ticker),
+    startStr, endStr);
 
   // ── Insights con IA (OpenRouter vía backend) — mismo payload que ya
   //    entiende el system prompt de api.py; no cambiar los nombres de clave.
@@ -6886,6 +6923,12 @@ async function exportPortfolioPDF(startStr, endStr) {
       mayores_contribuidores: (data.movers?.up || []).map(a => ({ ticker: a.ticker, contribucion_pp: +a.pp.toFixed(2) })),
       mayores_detractores: (data.movers?.down || []).map(a => ({ ticker: a.ticker, contribucion_pp: +a.pp.toFixed(2) })),
     },
+    // Única fuente admisible para atribuir un movimiento a un hecho del mundo
+    // (regla 10 del system prompt). Sin esto, la IA no debe inventar eventos.
+    noticias: Object.entries(moverNews).map(([ticker, items]) => ({
+      ticker,
+      titulares: items.map(n => ({ titular: n.title, medio: n.source, fecha: n.date })),
+    })),
     cronologia_mensual: (data.monthlyReturns || []).map(x => ({ mes: x.ym, retorno_pct: +x.value.toFixed(2) })),
     caida_maxima: data.drawdown ? {
       profundidad_pct: +data.drawdown.depthPct.toFixed(2),
@@ -6922,7 +6965,7 @@ async function exportPortfolioPDF(startStr, endStr) {
   try {
     await _loadLocalScript("assets/pdf-report.js?v=2", "BPPdfReport");
     built = window.BPPdfReport.build({
-      data, portfolio, tone: "brand", lang: currentLang || "es", images,
+      data, portfolio, tone: "brand", lang: currentLang || "es", images, news: moverNews,
       ai: { sections: aiSections, model: aiModel, error: aiError },
       fmt: { money: (v, c) => formatCurrency(v, c || currency) },
       helpers: {
