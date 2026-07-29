@@ -6949,7 +6949,11 @@ async function exportPortfolioPDF(startStr, endStr) {
   try {
     const ai = await fetchAIInsights(aiMetrics, currentLang || "es");
     if (ai.text) { aiSections = _parseAISections(ai.text); aiModel = ai.model || ""; }
-    if (!Object.keys(aiSections).length) aiError = "la IA devolvió una respuesta vacía";
+    if (!Object.keys(aiSections).length) {
+      aiError = currentLang === "en" ? "the AI returned an empty response"
+        : currentLang === "fr" ? "l’IA a renvoyé une réponse vide"
+        : "la IA devolvió una respuesta vacía";
+    }
   } catch (e) {
     aiError = (e && e.message) || String(e);
     console.warn("[Reporte PDF] Análisis IA no disponible:", aiError);

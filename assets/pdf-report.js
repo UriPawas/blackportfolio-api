@@ -17,13 +17,16 @@
   'use strict';
 
   /* ── i18n ───────────────────────────────────────────────────────────────
-     Fase 1 cubre `es`; en/fr se completan en la pasada de i18n (el resto del
-     documento ya lee de aquí, no hay strings sueltos en el markup). */
+     Un bloque por idioma de la app (currentLang: es/en/fr). `n` son las frases
+     que el documento REDACTA: viven aquí, no incrustadas en el constructor, que
+     es lo que hacía imposible traducir el reporte. Cada una recibe ya
+     formateados el dinero, los porcentajes y las fechas.                      */
   var STR = {
     es: {
       kind: 'Reporte de portafolio', period: 'Periodo', generated: 'Generado el',
       valueEnd: 'Valor final', resultAmt: 'Resultado del periodo', resultAmtShort: 'Resultado', resultPct: 'Retorno',
-      inThisEdition: 'En esta edición', howToRead: 'Cada sección abre con el hallazgo, no con el tema. Las cifras van en dinero antes que en porcentaje. Las secciones finales contienen la actividad del periodo, los supuestos de cálculo y el glosario.',
+      inThisEdition: 'En esta edición',
+      howToRead: 'Cada sección abre con el hallazgo, no con el tema. Las cifras van en dinero antes que en porcentaje. Las secciones finales contienen la actividad del periodo, los supuestos de cálculo y el glosario.',
       continues: 'continúa en la página siguiente', continued: 'continuación',
       sections: {
         I: 'El periodo en una página', II: 'Carta del periodo', III: 'Cronología del periodo',
@@ -41,34 +44,42 @@
       bridgeTitle: 'Puente del dinero · de dónde salió el resultado',
       bridgeCap: 'Del capital base al valor final: mercado (posiciones abiertas), ventas realizadas, dividendos cobrados y comisiones pagadas.',
       performance: 'Rendimiento', riskReturn: 'Riesgo/retorno', diversification: 'Diversificación', vsBench: 'vs Benchmark',
-      strong: 'Fuerte', watch: 'Vigilar', risk: 'Riesgo', info: 'Info',
+      concHigh: 'alta', concMid: 'moderada', concLow: 'baja',
       monthlyTitle: 'Retorno mensual', monthlyCap: 'Retorno del portafolio por mes calendario dentro del rango.',
       month: 'Mes', ret: 'Retorno', result: 'Resultado', best: 'Mejor', worst: 'Peor', activity: 'Actividad', whatHappened: 'Qué pasó',
-      equityTitle: 'Retorno acumulado · portafolio vs ', equityCap: 'Retorno compuesto acumulado desde el inicio del rango. Línea punteada = benchmark; banda sombreada = ventana de la caída máxima.',
+      equityTitle: 'Retorno acumulado · portafolio vs ',
+      equityCap: 'Retorno compuesto acumulado desde el inicio del rango. Línea punteada = benchmark; banda sombreada = ventana de la caída máxima.',
       portfolio: 'Portafolio', benchmark: 'Benchmark', investedCapital: 'Capital invertido',
       excess: 'Exceso', trackingError: 'Tracking error', beta: 'Beta', sessions: 'sesiones', activeAlpha: 'alpha activo',
-      bestSession: 'Mejor sesión', worstSession: 'Peor sesión',
-      contribTitle: 'Contribución por posición', contribCap: 'Aporte de cada posición al resultado del periodo, en dinero. La barra final es el resultado total.',
+      annualized: 'anualizado', riskCost: 'Costo en riesgo', sectionN: 'Sección',
+      contribTitle: 'Contribución por posición',
+      contribCap: 'Aporte de cada posición al resultado del periodo, en dinero. La barra final es el resultado total.',
       total: 'Total', winnersLosers: 'Ganadores y perdedores (pp)', reading: 'Lectura', counterfactual: 'Contrafactual',
       ticker: 'Ticker', periodPnl: 'P/L del periodo', contribution: 'Contribución', weight: 'Peso', currency: 'Divisa',
       event: 'Evento', mechanism: 'Mecanismo', impact: 'Impacto', toWatch: 'A vigilar',
       avgCost: 'Costo medio', quantity: 'Cantidad', firstBuy: '1ª compra',
       sharpe: 'Sharpe', sortino: 'Sortino', volatility: 'Volatilidad', var95: 'VaR 95%', maxDD: 'Caída máxima',
-      underwaterTitle: 'Bajo el agua · caídas desde máximos', underwaterCap: 'Distancia al máximo previo en cada sesión. El punto anotado es el mínimo del periodo.',
+      solid: 'sólido', modest: 'modesto', insufficient: 'insuficiente', asymmetry: 'asimetría',
+      volHigh: 'alta', volMid: 'moderada', volLow: 'contenida',
+      underwaterTitle: 'Bajo el agua · caídas desde máximos',
+      underwaterCap: 'Distancia al máximo previo en cada sesión. El punto anotado es el mínimo del periodo.',
       ddChronicle: 'Crónica de la caída', whatTheyMean: 'Qué significan',
       byPosition: 'Distribución por posición', bySector: 'Por sector', byRegion: 'Por región', byCurrency: 'Por divisa',
-      effHoldings: 'holdings efectivos', value: 'Valor',
+      effHoldings: 'holdings efectivos', value: 'Valor', others: 'Otros', cash: 'Efectivo',
       closedTrades: 'Operaciones cerradas', txHistory: 'Historial de transacciones',
       buy: 'Compra', sell: 'Venta', cost: 'Costo', proceeds: 'Ingreso', date: 'Fecha', type: 'Tipo', price: 'Precio', net: 'Neto',
+      operations: 'operaciones', closedSales: 'ventas cerradas', suggestedActions: 'Acciones sugeridas',
       endOfReport: 'Fin del reporte',
       disclaimer: 'Este reporte se genera automáticamente con fines informativos. No constituye asesoría de inversión ni recomendación de compra o venta de valores. Las secciones marcadas como generadas por IA pueden contener errores; verifica las cifras antes de tomar decisiones.',
-      aiTag: '★ Análisis IA', aiUnavailable: 'Análisis IA no disponible',
+      aiTag: '★ Análisis IA', aiEdu: '★ Análisis IA · educativo, no es asesoría', aiUnavailable: 'Análisis IA no disponible',
       noSeries: 'No hay suficientes datos de precios históricos para construir la serie en el rango seleccionado.',
-      missingPrices: 'posición(es) sin precio de cierre en la fecha; quedan sin valuar.',
       cashNote: 'El saldo en efectivo solo se incluye cuando la fecha final es hoy; en reportes históricos el valor refleja únicamente las posiciones.',
-      assumptions: 'Supuestos', assumptionsBody: 'Las conversiones de divisa usan el tipo de cambio vigente a la fecha de generación, no el histórico de cada operación. La divisa de cada posición se resuelve por el sufijo del ticker, que es autoritativo sobre el campo guardado. El saldo en efectivo solo se incluye cuando la fecha final del rango es hoy.',
-      folio: 'Folio', priceAsOf: 'Vigencia de precios', rfr: 'Tasa libre de riesgo', betaCurHist: 'Beta actual / histórica',
-      aiModel: 'Modelo de IA', notRequested: 'No solicitada', notAvailable: 'No disponible', none: '0',
+      assumptions: 'Supuestos',
+      folio: 'Folio', priceAsOf: 'Vigencia de precios', mostRecent: 'más reciente', rfr: 'Tasa libre de riesgo',
+      betaCurHist: 'Beta actual / histórica', missingPricesLabel: 'Precios faltantes',
+      aiModel: 'Modelo de IA', notRequested: 'No solicitada', notAvailable: 'No disponible',
+      dataSources: 'Datos de mercado: Yahoo Finance / CoinGecko.',
+      photoBy: 'Foto:',
       glossary: [
         ['Sharpe', 'retorno por unidad de riesgo total: (retorno − tasa libre de riesgo) ÷ volatilidad.'],
         ['Sortino', 'variante del Sharpe que solo penaliza la volatilidad a la baja.'],
@@ -82,7 +93,419 @@
         ['Holdings efectivos', '1 ÷ HHI; posiciones equivalentes igualmente ponderadas.'],
         ['Contribución (pp)', 'aporte de una posición al retorno total, en puntos porcentuales.'],
         ['Puente del dinero', 'descomposición del cambio de valor entre capital base y valor final.']
-      ]
+      ],
+      n: {
+        verdictConc: o => `El periodo lo definió <em>la concentración</em>: las tres mayores posiciones pesan ${o.top3}% del portafolio.`,
+        verdictWin: o => `El portafolio cerró el periodo en positivo con <em>${o.amt}</em> sobre ${o.base} de capital base.`,
+        verdictLoss: o => `El periodo cerró en negativo: <em>${o.amt}</em> sobre ${o.base} de capital base.`,
+        lede: o => `El portafolio cerró en <strong>${o.value}</strong> tras un resultado de <strong>${o.amt} (${o.pct})</strong> sobre un capital base de ${o.base}${o.vs}${o.sessions}.`,
+        ledeVsUp: o => `, superando ${o.bench} por ${o.pp} puntos porcentuales`,
+        ledeVsDown: o => `, quedando por debajo de ${o.bench} por ${o.pp} puntos porcentuales`,
+        ledeSessions: o => ` en ${o.n} sesiones`,
+        diagOver: o => `${o.pct} sobre ${o.base}`,
+        openerLede: o => `Qué pasó con el dinero entre el ${o.start} y el ${o.end}, por qué pasó, cuánto costó en riesgo y qué queda por vigilar.`,
+        openerResult: o => `${o.pct} sobre ${o.base} de capital base`,
+        openerExcess: o => `${o.bench} ${o.pct} en las mismas ${o.n} sesiones`,
+        openerRisk: o => `caída máxima (${o.amt}), ${o.n} sesiones bajo el agua`,
+        tocAttrib: o => `Quién puso los ${o.pts} puntos`, tocAttribAlt: () => 'Contribución posición por posición',
+        tocRisk: () => 'Lo que costó conseguirlos', tocRiskAlt: () => 'Volatilidad y riesgo asumido',
+        tocComp: o => `La mayor posición pesa ${o.pct}`, tocCompAlt: () => 'Concentración y exposición',
+        p1: o => `l periodo cerró con un resultado de <strong>${o.amt}</strong> sobre un capital base de ${o.base}, equivalente a <strong>${o.pct}</strong>. El valor de la cartera terminó en ${o.value} con ${o.n} posiciones activas en ${o.cur}.`,
+        p1First: 'E',
+        p2: o => `El resultado se concentró en ${o.list}: entre ${o.subject} ${o.sum} de los ${o.total} puntos del periodo.`,
+        p2One: 'esa posición aportó', p2Many: o => `esas ${o.n} posiciones aportaron`,
+        p3: o => `En sentido contrario, ${o.list}. Sin ${o.first} el periodo habría cerrado en ${o.without} en lugar de ${o.actual}.`,
+        p3Item: o => `<strong>${o.ticker}</strong> restó ${o.amt} (${o.pp})`,
+        p4: o => `El resultado no fue gratis: la volatilidad anualizada fue de ${o.vol}${o.te}.`,
+        p4Te: o => ` con un error de seguimiento de ${o.te}`,
+        p4Dd: o => ` Entre el ${o.peak} y el ${o.trough} la cartera cayó ${o.depth} (${o.amt}), ${o.rec}`,
+        p4Recovered: o => `recuperando el máximo el ${o.date}.`,
+        p4NotRecovered: () => 'y cerró el periodo sin recuperar el máximo previo.',
+        p4Sharpe: o => ` El Sharpe de ${o.v} indica que ${o.reading}`,
+        sharpePaid: 'ese riesgo sí se pagó.', sharpeModest: 'el retorno ajustado al riesgo fue modesto.',
+        sharpeUnpaid: 'el retorno no compensó el riesgo asumido.',
+        noteVs: o => `${o.dir} ${o.bench} en ${o.n} sesiones`, noteAbove: 'por encima de', noteBelow: 'por debajo de',
+        noteDd: o => `caída máxima del periodo${o.rec}`, noteDdRec: o => `, recuperada el ${o.date}`, noteDdNotRec: ', sin recuperar',
+        noteDiv: o => `${o.n} pagos de dividendos cobrados`,
+        noteMaxW: o => `peso de la mayor posición (${o.ticker})`,
+        chronBest: 'Mejor mes del periodo', chronWorst: 'Peor mes del periodo',
+        chronAbove: 'Avance por encima del promedio del periodo', chronModerate: 'Avance moderado',
+        chronNegative: 'Mes en negativo',
+        chronDriver: o => `, impulsado por ${o.ticker} (${o.pct})`,
+        chronDrag: o => `${o.and}frenado por ${o.ticker} (${o.pct})`, chronAnd: ' y ', chronComma: ', ',
+        sessBestWorst: o => `La mejor sesión del periodo fue el ${o.bestDate} (${o.bestPct}) y la peor el ${o.worstDate} (${o.worstPct}).`,
+        vsIndex: o => `El portafolio ${o.verb} al índice en ${o.pp} puntos porcentuales${o.te}${o.beta}.`,
+        vsBeat: 'superó', vsLag: 'quedó por debajo de',
+        vsTe: o => `, con un error de seguimiento de ${o.te}: la diferencia ${o.reading}`,
+        vsTeActive: 'vino de apuestas activas concretas, no de replicar al mercado',
+        vsTeClose: 'se mantuvo cerca del índice',
+        vsBeta: o => `. La beta de ${o.beta} indica que se asumió ${o.dir} de riesgo sistemático que el índice`,
+        vsBetaMore: o => `${o.pct}% más`, vsBetaLess: o => `${o.pct}% menos`,
+        attribReading: o => `Las tres mayores contribuciones aportaron ${o.pp} pp${o.of}. `,
+        attribOf: o => ` de los ${o.total} pp del periodo`,
+        attribDetractor: o => `El principal detractor fue ${o.ticker} con ${o.pp}.`,
+        attribNoDetractor: 'Ninguna posición restó más de 0.5 pp.',
+        attribCf: o => `excluyendo las tres mayores contribuciones, el periodo habría cerrado en <b>${o.without}</b> en lugar de ${o.actual}.`,
+        moverImpact: o => `${o.verb} ${o.amt} al resultado del periodo: ${o.pp} pp${o.of}.`,
+        moverGave: 'Aportó', moverTook: 'Restó', moverOf: o => ` de los ${o.total} pp totales`,
+        mechUp: o => `El precio avanzó ${o.pct} desde el costo medio; con ${o.w} del portafolio, ese movimiento se transmitió al resultado en la proporción de su peso.`,
+        mechDown: o => `La caída del precio se transmitió al resultado en la proporción de su peso (${o.w} del portafolio).`,
+        watchConc: o => `Su peso de ${o.w} supera el umbral de concentración de 20%: una corrección de 20% en el papel restaría ~${o.pp} pp al portafolio.`,
+        watchOversize: o => `${o.verb} ${o.pp} pp con ${o.w} del peso: su comportamiento pesa más que su tamaño.`,
+        watchGives: 'Aporta', watchTakes: 'Resta',
+        watchNone: 'Sin alertas de concentración: su contribución es proporcional a su peso.',
+        newsFootWith: o => `Titulares recuperados para ${o.tickers} dentro de la ventana del reporte. Las relaciones causa-efecto se limitan a lo publicado; el resto de las explicaciones se deriva de las cifras del propio portafolio (precio, peso y contribución).`,
+        newsFootWithout: 'Las explicaciones de esta sección se derivan de las cifras del propio portafolio (precio, peso y contribución). No hubo titulares disponibles para estas posiciones en la ventana del reporte.',
+        dossierBase: o => `Representa ${o.w} del portafolio y ${o.verb} al resultado del periodo.`,
+        dossierGave: o => `aportó ${o.pp} pp`, dossierTook: o => `restó ${o.pp} pp`, dossierNone: 'no tiene contribución calculable',
+        dossierConc: 'Su peso rebasa el umbral de concentración de 20%.',
+        dossierDetractor: 'Es uno de los detractores materiales del periodo.',
+        dossierProportional: 'Su aporte es proporcional a su tamaño en la cartera.',
+        dossierFx: o => `Cotiza en ${o.cur}: su aporte en ${o.base} depende del tipo de cambio a la fecha de valuación.`,
+        ddChronicle: o => `Máximo el <strong>${o.peak}</strong>, mínimo el <strong>${o.trough}</strong>: ${o.pct} equivalente a ${o.amt}. La cartera pasó ${o.n} sesiones bajo el agua y ${o.rec}`,
+        ddRecovered: o => `recuperó el máximo el ${o.date}.`, ddNotRecovered: 'cerró el periodo sin recuperarlo.',
+        meanVar: o => `Un VaR de ${o.pct} implica que en 1 de cada 20 días la pérdida podría superar ${o.amt} al valor actual.`,
+        meanSharpe: o => `El Sharpe de ${o.v} indica que el retorno ${o.reading} el riesgo asumido.`,
+        meanSharpeGood: 'compensó bien', meanSharpeOk: 'compensó de forma modesta', meanSharpeBad: 'no compensó',
+        meanBeta: o => `La beta de ${o.v} indica que la cartera ${o.verb} los movimientos del índice.`,
+        betaAmplifies: 'amplifica', betaDampens: 'atenúa',
+        alertMaxW: o => `La mayor posición (${o.ticker}) representa ${o.w} del portafolio — riesgo de concentración.`,
+        alertTop3: o => `Las 3 mayores suman ${o.top3}: la diversificación efectiva equivale a ${o.eff} posiciones igualmente ponderadas (HHI ${o.hhi}).`,
+        alertSector: o => `Sobreexposición al sector ${o.sector} (${o.pct}).`,
+        missingPrices: o => `${o.n} posición(es) sin precio de cierre en la fecha; quedan sin valuar`,
+        txFoot: o => `${o.shown} de ${o.total} operaciones históricas · comisiones del periodo: ${o.comm}`,
+        assumptionsBody: o => `Las conversiones de divisa usan el tipo de cambio vigente a la fecha de generación, no el histórico de cada operación. La divisa de cada posición se resuelve por el sufijo del ticker, que es autoritativo sobre el campo guardado. El saldo en efectivo solo se incluye cuando la fecha final del rango es hoy. Las métricas de riesgo se calculan sobre ${o.sessions} sesiones${o.rfr}.`,
+        assumptionsRfr: o => ` con una tasa libre de riesgo de ${o.rate}`,
+        bandTicker: o => `${o.ticker} explicó ${o.pp} de los ${o.total} puntos del periodo.`,
+        bandDd: o => `El periodo costó ${o.pct} de caída máxima: ${o.amt}.`,
+        bandResult: o => `El resultado del periodo fue ${o.amt} sobre ${o.base}.`,
+        aiAssisted: o => ` Análisis asistido por ${o.model}.`,
+        photoCredits: o => ` Fotografías: Pexels — ${o.list}.`
+      }
+    },
+
+    en: {
+      kind: 'Portfolio report', period: 'Period', generated: 'Generated on',
+      valueEnd: 'Ending value', resultAmt: 'Period result', resultAmtShort: 'Result', resultPct: 'Return',
+      inThisEdition: 'In this edition',
+      howToRead: 'Every section opens with the finding, not the topic. Figures are stated in money before percentages. The closing sections carry the period activity, the calculation assumptions and the glossary.',
+      continues: 'continued on the next page', continued: 'continued',
+      sections: {
+        I: 'The period on one page', II: 'Letter for the period', III: 'Period timeline',
+        IV: 'Performance vs benchmark', V: 'Return attribution', VI: 'What moved your positions',
+        VII: 'Position dossier', VIII: 'Risk and volatility', IX: 'Composition and exposure',
+        X: 'Period activity', XI: 'Data quality and methodology', XII: 'Glossary'
+      },
+      hints: {
+        I: 'executive diagnosis', III: 'month by month', V: 'contribution to return, in percentage points',
+        VI: 'with quantified impact', VII: 'largest by weight', VIII: 'metrics with interpretation',
+        IX: 'as of period end', XI: 'report traceability', XII: 'definitions used in this report'
+      },
+      capitalBase: 'Capital base', openPnl: 'Open P/L', realizedPnl: 'Realized P/L',
+      dividends: 'Dividends', commissions: 'Commissions', flows: 'Flows', market: 'Market', sales: 'Sales',
+      bridgeTitle: 'Money bridge · where the result came from',
+      bridgeCap: 'From capital base to ending value: market (open positions), realized sales, dividends collected and commissions paid.',
+      performance: 'Performance', riskReturn: 'Risk/return', diversification: 'Diversification', vsBench: 'vs Benchmark',
+      concHigh: 'high', concMid: 'moderate', concLow: 'low',
+      monthlyTitle: 'Monthly return', monthlyCap: 'Portfolio return per calendar month within the range.',
+      month: 'Month', ret: 'Return', result: 'Result', best: 'Best', worst: 'Worst', activity: 'Activity', whatHappened: 'What happened',
+      equityTitle: 'Cumulative return · portfolio vs ',
+      equityCap: 'Compound return accumulated from the start of the range. Dashed line = benchmark; shaded band = maximum drawdown window.',
+      portfolio: 'Portfolio', benchmark: 'Benchmark', investedCapital: 'Invested capital',
+      excess: 'Excess', trackingError: 'Tracking error', beta: 'Beta', sessions: 'sessions', activeAlpha: 'active alpha',
+      annualized: 'annualized', riskCost: 'Cost in risk', sectionN: 'Section',
+      contribTitle: 'Contribution by position',
+      contribCap: 'Each position’s contribution to the period result, in money. The final bar is the total result.',
+      total: 'Total', winnersLosers: 'Winners and losers (pp)', reading: 'Reading', counterfactual: 'Counterfactual',
+      ticker: 'Ticker', periodPnl: 'Period P/L', contribution: 'Contribution', weight: 'Weight', currency: 'Currency',
+      event: 'Event', mechanism: 'Mechanism', impact: 'Impact', toWatch: 'To watch',
+      avgCost: 'Average cost', quantity: 'Quantity', firstBuy: 'First buy',
+      sharpe: 'Sharpe', sortino: 'Sortino', volatility: 'Volatility', var95: 'VaR 95%', maxDD: 'Max drawdown',
+      solid: 'solid', modest: 'modest', insufficient: 'insufficient', asymmetry: 'asymmetry',
+      volHigh: 'high', volMid: 'moderate', volLow: 'contained',
+      underwaterTitle: 'Underwater · drawdowns from highs',
+      underwaterCap: 'Distance to the previous high on each session. The annotated point is the period low.',
+      ddChronicle: 'Drawdown chronicle', whatTheyMean: 'What they mean',
+      byPosition: 'Breakdown by position', bySector: 'By sector', byRegion: 'By region', byCurrency: 'By currency',
+      effHoldings: 'effective holdings', value: 'Value', others: 'Others', cash: 'Cash',
+      closedTrades: 'Closed trades', txHistory: 'Transaction history',
+      buy: 'Buy', sell: 'Sell', cost: 'Cost', proceeds: 'Proceeds', date: 'Date', type: 'Type', price: 'Price', net: 'Net',
+      operations: 'transactions', closedSales: 'closed sales', suggestedActions: 'Suggested actions',
+      endOfReport: 'End of report',
+      disclaimer: 'This report is generated automatically for informational purposes. It is not investment advice nor a recommendation to buy or sell securities. Sections marked as AI-generated may contain errors; verify the figures before making decisions.',
+      aiTag: '★ AI analysis', aiEdu: '★ AI analysis · educational, not advice', aiUnavailable: 'AI analysis unavailable',
+      noSeries: 'There is not enough historical price data to build the series for the selected range.',
+      cashNote: 'Cash is only included when the end date is today; in historical reports the value reflects positions only.',
+      assumptions: 'Assumptions',
+      folio: 'Reference', priceAsOf: 'Prices as of', mostRecent: 'most recent', rfr: 'Risk-free rate',
+      betaCurHist: 'Current / historical beta', missingPricesLabel: 'Missing prices',
+      aiModel: 'AI model', notRequested: 'Not requested', notAvailable: 'Not available',
+      dataSources: 'Market data: Yahoo Finance / CoinGecko.',
+      photoBy: 'Photo:',
+      glossary: [
+        ['Sharpe', 'return per unit of total risk: (return − risk-free rate) ÷ volatility.'],
+        ['Sortino', 'a Sharpe variant that only penalises downside volatility.'],
+        ['Volatility', 'annualised standard deviation of daily returns.'],
+        ['VaR 95%', 'maximum expected loss on 95% of days.'],
+        ['Beta', 'sensitivity of the portfolio to benchmark moves.'],
+        ['Max drawdown', 'largest decline from a previous high within the range.'],
+        ['Alpha (excess)', 'return above the benchmark over the period.'],
+        ['Tracking error', 'annualised standard deviation of the difference against the benchmark.'],
+        ['HHI', 'concentration index (sum of squared weights); &gt;0.25 is considered high.'],
+        ['Effective holdings', '1 ÷ HHI; equivalent equally weighted positions.'],
+        ['Contribution (pp)', 'a position’s contribution to total return, in percentage points.'],
+        ['Money bridge', 'breakdown of the change in value between capital base and ending value.']
+      ],
+      n: {
+        verdictConc: o => `<em>Concentration</em> defined the period: the three largest positions carry ${o.top3}% of the portfolio.`,
+        verdictWin: o => `The portfolio closed the period in positive territory with <em>${o.amt}</em> on ${o.base} of capital base.`,
+        verdictLoss: o => `The period closed negative: <em>${o.amt}</em> on ${o.base} of capital base.`,
+        lede: o => `The portfolio closed at <strong>${o.value}</strong> after a result of <strong>${o.amt} (${o.pct})</strong> on a capital base of ${o.base}${o.vs}${o.sessions}.`,
+        ledeVsUp: o => `, beating ${o.bench} by ${o.pp} percentage points`,
+        ledeVsDown: o => `, trailing ${o.bench} by ${o.pp} percentage points`,
+        ledeSessions: o => ` over ${o.n} sessions`,
+        diagOver: o => `${o.pct} on ${o.base}`,
+        openerLede: o => `What happened to the money between ${o.start} and ${o.end}, why it happened, what it cost in risk and what is left to watch.`,
+        openerResult: o => `${o.pct} on ${o.base} of capital base`,
+        openerExcess: o => `${o.bench} ${o.pct} over the same ${o.n} sessions`,
+        openerRisk: o => `max drawdown (${o.amt}), ${o.n} sessions underwater`,
+        tocAttrib: o => `Who delivered the ${o.pts} points`, tocAttribAlt: () => 'Contribution position by position',
+        tocRisk: () => 'What it cost to get them', tocRiskAlt: () => 'Volatility and risk taken',
+        tocComp: o => `The largest position carries ${o.pct}`, tocCompAlt: () => 'Concentration and exposure',
+        p1: o => `he period closed with a result of <strong>${o.amt}</strong> on a capital base of ${o.base}, equal to <strong>${o.pct}</strong>. The portfolio ended at ${o.value} with ${o.n} active positions in ${o.cur}.`,
+        p1First: 'T',
+        p2: o => `The result was concentrated in ${o.list}: together ${o.subject} ${o.sum} of the period’s ${o.total} points.`,
+        p2One: 'that position delivered', p2Many: o => `those ${o.n} positions delivered`,
+        p3: o => `On the other side, ${o.list}. Without ${o.first} the period would have closed at ${o.without} instead of ${o.actual}.`,
+        p3Item: o => `<strong>${o.ticker}</strong> subtracted ${o.amt} (${o.pp})`,
+        p4: o => `The result was not free: annualised volatility was ${o.vol}${o.te}.`,
+        p4Te: o => ` with a tracking error of ${o.te}`,
+        p4Dd: o => ` Between ${o.peak} and ${o.trough} the portfolio fell ${o.depth} (${o.amt}), ${o.rec}`,
+        p4Recovered: o => `recovering its high on ${o.date}.`,
+        p4NotRecovered: () => 'and closed the period without recovering the previous high.',
+        p4Sharpe: o => ` A Sharpe of ${o.v} means ${o.reading}`,
+        sharpePaid: 'that risk did pay off.', sharpeModest: 'risk-adjusted return was modest.',
+        sharpeUnpaid: 'the return did not compensate the risk taken.',
+        noteVs: o => `${o.dir} ${o.bench} over ${o.n} sessions`, noteAbove: 'above', noteBelow: 'below',
+        noteDd: o => `period max drawdown${o.rec}`, noteDdRec: o => `, recovered on ${o.date}`, noteDdNotRec: ', not recovered',
+        noteDiv: o => `${o.n} dividend payments collected`,
+        noteMaxW: o => `weight of the largest position (${o.ticker})`,
+        chronBest: 'Best month of the period', chronWorst: 'Worst month of the period',
+        chronAbove: 'Gain above the period average', chronModerate: 'Moderate gain',
+        chronNegative: 'Month in negative territory',
+        chronDriver: o => `, driven by ${o.ticker} (${o.pct})`,
+        chronDrag: o => `${o.and}held back by ${o.ticker} (${o.pct})`, chronAnd: ' and ', chronComma: ', ',
+        sessBestWorst: o => `The best session of the period was ${o.bestDate} (${o.bestPct}) and the worst ${o.worstDate} (${o.worstPct}).`,
+        vsIndex: o => `The portfolio ${o.verb} the index by ${o.pp} percentage points${o.te}${o.beta}.`,
+        vsBeat: 'beat', vsLag: 'trailed',
+        vsTe: o => `, with a tracking error of ${o.te}: the difference ${o.reading}`,
+        vsTeActive: 'came from specific active bets, not from tracking the market',
+        vsTeClose: 'stayed close to the index',
+        vsBeta: o => `. A beta of ${o.beta} means ${o.dir} systematic risk than the index was taken`,
+        vsBetaMore: o => `${o.pct}% more`, vsBetaLess: o => `${o.pct}% less`,
+        attribReading: o => `The three largest contributions delivered ${o.pp} pp${o.of}. `,
+        attribOf: o => ` of the period’s ${o.total} pp`,
+        attribDetractor: o => `The main detractor was ${o.ticker} at ${o.pp}.`,
+        attribNoDetractor: 'No position subtracted more than 0.5 pp.',
+        attribCf: o => `excluding the three largest contributions, the period would have closed at <b>${o.without}</b> instead of ${o.actual}.`,
+        moverImpact: o => `${o.verb} ${o.amt} to the period result: ${o.pp} pp${o.of}.`,
+        moverGave: 'Added', moverTook: 'Subtracted', moverOf: o => ` of the ${o.total} pp total`,
+        mechUp: o => `The price rose ${o.pct} from average cost; at ${o.w} of the portfolio, that move passed through to the result in proportion to its weight.`,
+        mechDown: o => `The price decline passed through to the result in proportion to its weight (${o.w} of the portfolio).`,
+        watchConc: o => `Its ${o.w} weight exceeds the 20% concentration threshold: a 20% correction in the stock would subtract ~${o.pp} pp from the portfolio.`,
+        watchOversize: o => `It ${o.verb} ${o.pp} pp with ${o.w} of the weight: its behaviour matters more than its size.`,
+        watchGives: 'adds', watchTakes: 'subtracts',
+        watchNone: 'No concentration alerts: its contribution is proportional to its weight.',
+        newsFootWith: o => `Headlines retrieved for ${o.tickers} within the report window. Cause-and-effect claims are limited to what was published; every other explanation is derived from the portfolio’s own figures (price, weight and contribution).`,
+        newsFootWithout: 'The explanations in this section derive from the portfolio’s own figures (price, weight and contribution). No headlines were available for these positions within the report window.',
+        dossierBase: o => `It carries ${o.w} of the portfolio and ${o.verb} to the period result.`,
+        dossierGave: o => `added ${o.pp} pp`, dossierTook: o => `subtracted ${o.pp} pp`, dossierNone: 'has no computable contribution',
+        dossierConc: 'Its weight exceeds the 20% concentration threshold.',
+        dossierDetractor: 'It is one of the material detractors of the period.',
+        dossierProportional: 'Its contribution is proportional to its size in the portfolio.',
+        dossierFx: o => `It trades in ${o.cur}: its contribution in ${o.base} depends on the exchange rate at the valuation date.`,
+        ddChronicle: o => `High on <strong>${o.peak}</strong>, low on <strong>${o.trough}</strong>: ${o.pct} equal to ${o.amt}. The portfolio spent ${o.n} sessions underwater and ${o.rec}`,
+        ddRecovered: o => `recovered its high on ${o.date}.`, ddNotRecovered: 'closed the period without recovering it.',
+        meanVar: o => `A VaR of ${o.pct} means that on 1 in 20 days the loss could exceed ${o.amt} at the current value.`,
+        meanSharpe: o => `A Sharpe of ${o.v} means the return ${o.reading} the risk taken.`,
+        meanSharpeGood: 'compensated well for', meanSharpeOk: 'modestly compensated for', meanSharpeBad: 'did not compensate for',
+        meanBeta: o => `A beta of ${o.v} means the portfolio ${o.verb} index moves.`,
+        betaAmplifies: 'amplifies', betaDampens: 'dampens',
+        alertMaxW: o => `The largest position (${o.ticker}) is ${o.w} of the portfolio — concentration risk.`,
+        alertTop3: o => `The top 3 add up to ${o.top3}: effective diversification equals ${o.eff} equally weighted positions (HHI ${o.hhi}).`,
+        alertSector: o => `Overexposure to the ${o.sector} sector (${o.pct}).`,
+        missingPrices: o => `${o.n} position(s) without a closing price on the date; they are left unvalued`,
+        txFoot: o => `${o.shown} of ${o.total} historical transactions · period commissions: ${o.comm}`,
+        assumptionsBody: o => `Currency conversions use the exchange rate in force at generation time, not the historical rate of each transaction. Each position’s currency is resolved from the ticker suffix, which overrides the stored field. Cash is only included when the end date of the range is today. Risk metrics are computed over ${o.sessions} sessions${o.rfr}.`,
+        assumptionsRfr: o => ` with a risk-free rate of ${o.rate}`,
+        bandTicker: o => `${o.ticker} explained ${o.pp} of the period’s ${o.total} points.`,
+        bandDd: o => `The period cost ${o.pct} of maximum drawdown: ${o.amt}.`,
+        bandResult: o => `The period result was ${o.amt} on ${o.base}.`,
+        aiAssisted: o => ` Analysis assisted by ${o.model}.`,
+        photoCredits: o => ` Photography: Pexels — ${o.list}.`
+      }
+    },
+
+    fr: {
+      kind: 'Rapport de portefeuille', period: 'Période', generated: 'Généré le',
+      valueEnd: 'Valeur finale', resultAmt: 'Résultat de la période', resultAmtShort: 'Résultat', resultPct: 'Rendement',
+      inThisEdition: 'Dans cette édition',
+      howToRead: 'Chaque section commence par le constat, pas par le thème. Les chiffres sont exprimés en argent avant les pourcentages. Les dernières sections contiennent l’activité de la période, les hypothèses de calcul et le glossaire.',
+      continues: 'suite à la page suivante', continued: 'suite',
+      sections: {
+        I: 'La période en une page', II: 'Lettre de la période', III: 'Chronologie de la période',
+        IV: 'Performance vs indice', V: 'Attribution des résultats', VI: 'Ce qui a bougé vos positions',
+        VII: 'Dossier par position', VIII: 'Risque et volatilité', IX: 'Composition et exposition',
+        X: 'Activité de la période', XI: 'Qualité des données et méthodologie', XII: 'Glossaire'
+      },
+      hints: {
+        I: 'diagnostic exécutif', III: 'mois par mois', V: 'contribution au rendement, en points de pourcentage',
+        VI: 'avec impact chiffré', VII: 'les plus importantes par poids', VIII: 'métriques interprétées',
+        IX: 'à la clôture de la période', XI: 'traçabilité du rapport', XII: 'définitions utilisées dans ce rapport'
+      },
+      capitalBase: 'Capital de base', openPnl: 'P/L ouvert', realizedPnl: 'P/L réalisé',
+      dividends: 'Dividendes', commissions: 'Commissions', flows: 'Apports', market: 'Marché', sales: 'Ventes',
+      bridgeTitle: 'Pont de l’argent · d’où vient le résultat',
+      bridgeCap: 'Du capital de base à la valeur finale : marché (positions ouvertes), ventes réalisées, dividendes encaissés et commissions payées.',
+      performance: 'Performance', riskReturn: 'Risque/rendement', diversification: 'Diversification', vsBench: 'vs Indice',
+      concHigh: 'élevée', concMid: 'modérée', concLow: 'faible',
+      monthlyTitle: 'Rendement mensuel', monthlyCap: 'Rendement du portefeuille par mois calendaire dans la plage.',
+      month: 'Mois', ret: 'Rendement', result: 'Résultat', best: 'Meilleur', worst: 'Pire', activity: 'Activité', whatHappened: 'Ce qui s’est passé',
+      equityTitle: 'Rendement cumulé · portefeuille vs ',
+      equityCap: 'Rendement composé cumulé depuis le début de la plage. Ligne pointillée = indice ; bande ombrée = fenêtre de la baisse maximale.',
+      portfolio: 'Portefeuille', benchmark: 'Indice', investedCapital: 'Capital investi',
+      excess: 'Excédent', trackingError: 'Tracking error', beta: 'Bêta', sessions: 'séances', activeAlpha: 'alpha actif',
+      annualized: 'annualisé', riskCost: 'Coût en risque', sectionN: 'Section',
+      contribTitle: 'Contribution par position',
+      contribCap: 'Apport de chaque position au résultat de la période, en argent. La dernière barre est le résultat total.',
+      total: 'Total', winnersLosers: 'Gagnants et perdants (pp)', reading: 'Lecture', counterfactual: 'Contrefactuel',
+      ticker: 'Titre', periodPnl: 'P/L de la période', contribution: 'Contribution', weight: 'Poids', currency: 'Devise',
+      event: 'Événement', mechanism: 'Mécanisme', impact: 'Impact', toWatch: 'À surveiller',
+      avgCost: 'Coût moyen', quantity: 'Quantité', firstBuy: 'Premier achat',
+      sharpe: 'Sharpe', sortino: 'Sortino', volatility: 'Volatilité', var95: 'VaR 95%', maxDD: 'Baisse maximale',
+      solid: 'solide', modest: 'modeste', insufficient: 'insuffisant', asymmetry: 'asymétrie',
+      volHigh: 'élevée', volMid: 'modérée', volLow: 'contenue',
+      underwaterTitle: 'Sous l’eau · baisses depuis les sommets',
+      underwaterCap: 'Distance au sommet précédent à chaque séance. Le point annoté est le plus bas de la période.',
+      ddChronicle: 'Chronique de la baisse', whatTheyMean: 'Ce qu’elles signifient',
+      byPosition: 'Répartition par position', bySector: 'Par secteur', byRegion: 'Par région', byCurrency: 'Par devise',
+      effHoldings: 'positions effectives', value: 'Valeur', others: 'Autres', cash: 'Liquidités',
+      closedTrades: 'Opérations clôturées', txHistory: 'Historique des transactions',
+      buy: 'Achat', sell: 'Vente', cost: 'Coût', proceeds: 'Produit', date: 'Date', type: 'Type', price: 'Prix', net: 'Net',
+      operations: 'opérations', closedSales: 'ventes clôturées', suggestedActions: 'Actions suggérées',
+      endOfReport: 'Fin du rapport',
+      disclaimer: 'Ce rapport est généré automatiquement à titre informatif. Il ne constitue ni un conseil en investissement ni une recommandation d’achat ou de vente de titres. Les sections générées par IA peuvent contenir des erreurs ; vérifiez les chiffres avant toute décision.',
+      aiTag: '★ Analyse IA', aiEdu: '★ Analyse IA · pédagogique, pas un conseil', aiUnavailable: 'Analyse IA indisponible',
+      noSeries: 'Les données de prix historiques sont insuffisantes pour construire la série sur la plage sélectionnée.',
+      cashNote: 'Les liquidités ne sont incluses que si la date de fin est aujourd’hui ; dans un rapport historique la valeur ne reflète que les positions.',
+      assumptions: 'Hypothèses',
+      folio: 'Référence', priceAsOf: 'Prix arrêtés au', mostRecent: 'le plus récent', rfr: 'Taux sans risque',
+      betaCurHist: 'Bêta actuel / historique', missingPricesLabel: 'Prix manquants',
+      aiModel: 'Modèle d’IA', notRequested: 'Non demandée', notAvailable: 'Non disponible',
+      dataSources: 'Données de marché : Yahoo Finance / CoinGecko.',
+      photoBy: 'Photo :',
+      glossary: [
+        ['Sharpe', 'rendement par unité de risque total : (rendement − taux sans risque) ÷ volatilité.'],
+        ['Sortino', 'variante du Sharpe qui ne pénalise que la volatilité à la baisse.'],
+        ['Volatilité', 'écart-type annualisé des rendements quotidiens.'],
+        ['VaR 95%', 'perte maximale attendue sur 95% des jours.'],
+        ['Bêta', 'sensibilité du portefeuille aux mouvements de l’indice.'],
+        ['Baisse maximale', 'plus forte baisse depuis un sommet précédent dans la plage.'],
+        ['Alpha (excédent)', 'rendement au-dessus de l’indice sur la période.'],
+        ['Tracking error', 'écart-type annualisé de la différence avec l’indice.'],
+        ['HHI', 'indice de concentration (somme des poids²) ; &gt;0,25 est considéré élevé.'],
+        ['Positions effectives', '1 ÷ HHI ; positions équivalentes équipondérées.'],
+        ['Contribution (pp)', 'apport d’une position au rendement total, en points de pourcentage.'],
+        ['Pont de l’argent', 'décomposition de la variation de valeur entre capital de base et valeur finale.']
+      ],
+      n: {
+        verdictConc: o => `<em>La concentration</em> a défini la période : les trois plus grandes positions pèsent ${o.top3}% du portefeuille.`,
+        verdictWin: o => `Le portefeuille a clôturé la période en positif avec <em>${o.amt}</em> sur ${o.base} de capital de base.`,
+        verdictLoss: o => `La période s’est clôturée en négatif : <em>${o.amt}</em> sur ${o.base} de capital de base.`,
+        lede: o => `Le portefeuille a clôturé à <strong>${o.value}</strong> après un résultat de <strong>${o.amt} (${o.pct})</strong> sur un capital de base de ${o.base}${o.vs}${o.sessions}.`,
+        ledeVsUp: o => `, dépassant ${o.bench} de ${o.pp} points de pourcentage`,
+        ledeVsDown: o => `, en retrait de ${o.pp} points de pourcentage sur ${o.bench}`,
+        ledeSessions: o => ` sur ${o.n} séances`,
+        diagOver: o => `${o.pct} sur ${o.base}`,
+        openerLede: o => `Ce qui est arrivé à l’argent entre le ${o.start} et le ${o.end}, pourquoi, ce que cela a coûté en risque et ce qu’il reste à surveiller.`,
+        openerResult: o => `${o.pct} sur ${o.base} de capital de base`,
+        openerExcess: o => `${o.bench} ${o.pct} sur les mêmes ${o.n} séances`,
+        openerRisk: o => `baisse maximale (${o.amt}), ${o.n} séances sous l’eau`,
+        tocAttrib: o => `Qui a apporté les ${o.pts} points`, tocAttribAlt: () => 'Contribution position par position',
+        tocRisk: () => 'Ce qu’il a fallu pour les obtenir', tocRiskAlt: () => 'Volatilité et risque assumé',
+        tocComp: o => `La plus grande position pèse ${o.pct}`, tocCompAlt: () => 'Concentration et exposition',
+        p1: o => `a période s’est clôturée sur un résultat de <strong>${o.amt}</strong> sur un capital de base de ${o.base}, soit <strong>${o.pct}</strong>. La valeur du portefeuille a terminé à ${o.value} avec ${o.n} positions actives en ${o.cur}.`,
+        p1First: 'L',
+        p2: o => `Le résultat s’est concentré sur ${o.list} : à elles ${o.subject} ${o.sum} des ${o.total} points de la période.`,
+        p2One: 'seules, cette position a apporté', p2Many: o => `seules, ces ${o.n} positions ont apporté`,
+        p3: o => `À l’inverse, ${o.list}. Sans ${o.first}, la période aurait clôturé à ${o.without} au lieu de ${o.actual}.`,
+        p3Item: o => `<strong>${o.ticker}</strong> a retiré ${o.amt} (${o.pp})`,
+        p4: o => `Le résultat n’a pas été gratuit : la volatilité annualisée a été de ${o.vol}${o.te}.`,
+        p4Te: o => ` avec une tracking error de ${o.te}`,
+        p4Dd: o => ` Entre le ${o.peak} et le ${o.trough} le portefeuille a chuté de ${o.depth} (${o.amt}), ${o.rec}`,
+        p4Recovered: o => `retrouvant son sommet le ${o.date}.`,
+        p4NotRecovered: () => 'et a clôturé la période sans retrouver son sommet précédent.',
+        p4Sharpe: o => ` Le Sharpe de ${o.v} indique que ${o.reading}`,
+        sharpePaid: 'ce risque a été payé.', sharpeModest: 'le rendement ajusté du risque a été modeste.',
+        sharpeUnpaid: 'le rendement n’a pas compensé le risque assumé.',
+        noteVs: o => `${o.dir} ${o.bench} sur ${o.n} séances`, noteAbove: 'au-dessus de', noteBelow: 'en dessous de',
+        noteDd: o => `baisse maximale de la période${o.rec}`, noteDdRec: o => `, retrouvée le ${o.date}`, noteDdNotRec: ', non retrouvée',
+        noteDiv: o => `${o.n} versements de dividendes encaissés`,
+        noteMaxW: o => `poids de la plus grande position (${o.ticker})`,
+        chronBest: 'Meilleur mois de la période', chronWorst: 'Pire mois de la période',
+        chronAbove: 'Progression au-dessus de la moyenne de la période', chronModerate: 'Progression modérée',
+        chronNegative: 'Mois en négatif',
+        chronDriver: o => `, porté par ${o.ticker} (${o.pct})`,
+        chronDrag: o => `${o.and}freiné par ${o.ticker} (${o.pct})`, chronAnd: ' et ', chronComma: ', ',
+        sessBestWorst: o => `La meilleure séance de la période a été le ${o.bestDate} (${o.bestPct}) et la pire le ${o.worstDate} (${o.worstPct}).`,
+        vsIndex: o => `Le portefeuille ${o.verb} l’indice de ${o.pp} points de pourcentage${o.te}${o.beta}.`,
+        vsBeat: 'a dépassé', vsLag: 'est resté en dessous de',
+        vsTe: o => `, avec une tracking error de ${o.te} : la différence ${o.reading}`,
+        vsTeActive: 'vient de paris actifs précis, pas d’une réplication du marché',
+        vsTeClose: 'est restée proche de l’indice',
+        vsBeta: o => `. Le bêta de ${o.beta} indique que ${o.dir} de risque systématique que l’indice a été assumé`,
+        vsBetaMore: o => `${o.pct}% de plus`, vsBetaLess: o => `${o.pct}% de moins`,
+        attribReading: o => `Les trois plus grandes contributions ont apporté ${o.pp} pp${o.of}. `,
+        attribOf: o => ` des ${o.total} pp de la période`,
+        attribDetractor: o => `Le principal détracteur a été ${o.ticker} avec ${o.pp}.`,
+        attribNoDetractor: 'Aucune position n’a retiré plus de 0,5 pp.',
+        attribCf: o => `en excluant les trois plus grandes contributions, la période aurait clôturé à <b>${o.without}</b> au lieu de ${o.actual}.`,
+        moverImpact: o => `${o.verb} ${o.amt} au résultat de la période : ${o.pp} pp${o.of}.`,
+        moverGave: 'A apporté', moverTook: 'A retiré', moverOf: o => ` des ${o.total} pp totaux`,
+        mechUp: o => `Le prix a progressé de ${o.pct} depuis le coût moyen ; avec ${o.w} du portefeuille, ce mouvement s’est transmis au résultat à hauteur de son poids.`,
+        mechDown: o => `La baisse du prix s’est transmise au résultat à hauteur de son poids (${o.w} du portefeuille).`,
+        watchConc: o => `Son poids de ${o.w} dépasse le seuil de concentration de 20% : une correction de 20% du titre retirerait ~${o.pp} pp au portefeuille.`,
+        watchOversize: o => `${o.verb} ${o.pp} pp avec ${o.w} du poids : son comportement pèse plus que sa taille.`,
+        watchGives: 'Apporte', watchTakes: 'Retire',
+        watchNone: 'Aucune alerte de concentration : sa contribution est proportionnelle à son poids.',
+        newsFootWith: o => `Titres récupérés pour ${o.tickers} dans la fenêtre du rapport. Les liens de cause à effet se limitent à ce qui a été publié ; le reste des explications provient des chiffres du portefeuille lui-même (prix, poids et contribution).`,
+        newsFootWithout: 'Les explications de cette section proviennent des chiffres du portefeuille lui-même (prix, poids et contribution). Aucun titre n’était disponible pour ces positions dans la fenêtre du rapport.',
+        dossierBase: o => `Elle représente ${o.w} du portefeuille et ${o.verb} au résultat de la période.`,
+        dossierGave: o => `a apporté ${o.pp} pp`, dossierTook: o => `a retiré ${o.pp} pp`, dossierNone: 'n’a pas de contribution calculable',
+        dossierConc: 'Son poids dépasse le seuil de concentration de 20%.',
+        dossierDetractor: 'C’est l’un des détracteurs matériels de la période.',
+        dossierProportional: 'Son apport est proportionnel à sa taille dans le portefeuille.',
+        dossierFx: o => `Elle cote en ${o.cur} : son apport en ${o.base} dépend du taux de change à la date de valorisation.`,
+        ddChronicle: o => `Sommet le <strong>${o.peak}</strong>, plus bas le <strong>${o.trough}</strong> : ${o.pct} soit ${o.amt}. Le portefeuille a passé ${o.n} séances sous l’eau et ${o.rec}`,
+        ddRecovered: o => `a retrouvé son sommet le ${o.date}.`, ddNotRecovered: 'a clôturé la période sans le retrouver.',
+        meanVar: o => `Une VaR de ${o.pct} implique que 1 jour sur 20 la perte pourrait dépasser ${o.amt} à la valeur actuelle.`,
+        meanSharpe: o => `Le Sharpe de ${o.v} indique que le rendement ${o.reading} le risque assumé.`,
+        meanSharpeGood: 'a bien compensé', meanSharpeOk: 'a modestement compensé', meanSharpeBad: 'n’a pas compensé',
+        meanBeta: o => `Le bêta de ${o.v} indique que le portefeuille ${o.verb} les mouvements de l’indice.`,
+        betaAmplifies: 'amplifie', betaDampens: 'atténue',
+        alertMaxW: o => `La plus grande position (${o.ticker}) représente ${o.w} du portefeuille — risque de concentration.`,
+        alertTop3: o => `Les 3 plus grandes totalisent ${o.top3} : la diversification effective équivaut à ${o.eff} positions équipondérées (HHI ${o.hhi}).`,
+        alertSector: o => `Surexposition au secteur ${o.sector} (${o.pct}).`,
+        missingPrices: o => `${o.n} position(s) sans cours de clôture à la date ; elles restent non valorisées`,
+        txFoot: o => `${o.shown} sur ${o.total} transactions historiques · commissions de la période : ${o.comm}`,
+        assumptionsBody: o => `Les conversions de devises utilisent le taux de change en vigueur à la date de génération, pas le taux historique de chaque opération. La devise de chaque position est déterminée par le suffixe du titre, qui prime sur le champ enregistré. Les liquidités ne sont incluses que si la date de fin de la plage est aujourd’hui. Les métriques de risque sont calculées sur ${o.sessions} séances${o.rfr}.`,
+        assumptionsRfr: o => ` avec un taux sans risque de ${o.rate}`,
+        bandTicker: o => `${o.ticker} explique ${o.pp} des ${o.total} points de la période.`,
+        bandDd: o => `La période a coûté ${o.pct} de baisse maximale : ${o.amt}.`,
+        bandResult: o => `Le résultat de la période a été ${o.amt} sur ${o.base}.`,
+        aiAssisted: o => ` Analyse assistée par ${o.model}.`,
+        photoCredits: o => ` Photographies : Pexels — ${o.list}.`
+      }
     }
   };
 
@@ -181,7 +604,7 @@
     build: function (ctx) {
       var d = ctx.data, pf = ctx.portfolio, ai = ctx.ai || {};
       var lang = STR[ctx.lang] ? ctx.lang : 'es';
-      var T = STR[lang], LOC = locale(lang);
+      var T = STR[lang], N = T.n, LOC = locale(lang);
       var cur = d.currency;
       var money = ctx.fmt.money;
       var charts = [], blocks = [];
@@ -220,8 +643,8 @@
         return '<div class="img-wrap ' + pattern + '" style="background:' + esc(im.avg || '#8a94a6') + '">' +
                '<img src="' + im.src + '" width="' + sz[0] + '" height="' + sz[1] + '" alt="">' +
                '<div class="tint"></div>' + (extra || '') +
-               '<span class="credit on-img' + (creditTop ? ' top' : '') + '">Foto: ' + esc(im.by || 'Pexels') +
-               ' · Pexels</span></div>';
+               '<span class="credit on-img' + (creditTop ? ' top' : '') + '">' + T.photoBy + ' ' +
+               esc(im.by || 'Pexels') + ' · Pexels</span></div>';
       }
       var NEWS = ctx.news || {};
       var newsTickers = Object.keys(NEWS).filter(function (k) { return (NEWS[k] || []).length; });
@@ -272,7 +695,7 @@
       var effN = hhi > 0 ? 1 / hhi : 0;
       var top3 = weights.slice(0, 3).reduce(function (s, x) { return s + x.w; }, 0) * 100;
       var maxW = weights.length ? weights[0].w * 100 : 0;
-      var concLabel = hhi > 0.25 ? 'alta' : hhi > 0.15 ? 'moderada' : 'baja';
+      var concLabel = hhi > 0.25 ? T.concHigh : hhi > 0.15 ? T.concMid : T.concLow;
       var wByTicker = {};
       weights.forEach(function (x) { wByTicker[x.ticker] = x.w * 100; });
 
@@ -331,21 +754,23 @@
       secHead('I', T.sections.I, T.hints.I, '1');
 
       var verdict = weights.length && top3 > 50
-        ? 'El periodo lo definió <em>la concentración</em>: las tres mayores posiciones pesan ' + top3.toFixed(1) + '% del portafolio.'
+        ? N.verdictConc({ top3: top3.toFixed(1) })
         : (resultAmt >= 0
-            ? 'El portafolio cerró el periodo en positivo con <em>' + amt(resultAmt) + '</em> sobre ' + money(base, cur) + ' de capital base.'
-            : 'El periodo cerró en negativo: <em>' + amt(resultAmt) + '</em> sobre ' + money(base, cur) + ' de capital base.');
-      var lede = 'El portafolio cerró en <strong>' + money(valueEnd, cur) + '</strong> tras un resultado de <strong>' +
-        amt(resultAmt) + ' (' + pct(resultPct) + ')</strong> sobre un capital base de ' + money(base, cur) +
-        (active != null ? ', ' + (active >= 0 ? 'superando' : 'quedando por debajo de') + ' ' + esc(d.benchmarkLabel) +
-         ' por ' + Math.abs(active).toFixed(2) + ' puntos porcentuales' : '') + ' en ' + d.sessions + ' ' + T.sessions + '.';
+            ? N.verdictWin({ amt: amt(resultAmt), base: money(base, cur) })
+            : N.verdictLoss({ amt: amt(resultAmt), base: money(base, cur) }));
+      var lede = N.lede({
+        value: money(valueEnd, cur), amt: amt(resultAmt), pct: pct(resultPct), base: money(base, cur),
+        vs: active == null ? '' : (active >= 0 ? N.ledeVsUp : N.ledeVsDown)(
+              { bench: esc(d.benchmarkLabel), pp: Math.abs(active).toFixed(2) }),
+        sessions: N.ledeSessions({ n: d.sessions })
+      });
       blk('<div class="verdict">' + verdict + '</div><div class="lede">' + lede + '</div>',
           { 'data-acc': '1', 'data-keep-with-next': '' });
 
       var sharpeN = m.sharpe;
       var diag = [
         { label: T.performance, value: amt(resultAmt), status: resultAmt >= 0 ? 'good' : 'bad',
-          note: pct(resultPct) + ' sobre ' + money(base, cur) },
+          note: N.diagOver({ pct: pct(resultPct), base: money(base, cur) }) },
         { label: T.riskReturn, value: 'Sharpe ' + (sharpeN != null ? sharpeN.toFixed(2) : '—'),
           status: sharpeN == null ? 'neutral' : sharpeN > 1 ? 'good' : sharpeN > 0 ? 'warn' : 'bad',
           note: (m.sortino != null ? 'Sortino ' + m.sortino.toFixed(2) + ' · ' : '') +
@@ -384,7 +809,7 @@
       blk('<div class="kpi-row k' + kpis.length + '">' + kpis.join('') + '</div>', { 'data-acc': '1' });
 
       if (d.missingPrices && d.missingPrices.length) {
-        blk('<div class="alerts">' + d.missingPrices.length + ' ' + T.missingPrices + ' (' +
+        blk('<div class="alerts">' + N.missingPrices({ n: d.missingPrices.length }) + ' (' +
             esc(d.missingPrices.slice(0, 8).join(', ')) + (d.missingPrices.length > 8 ? '…' : '') + ')</div>', { 'data-acc': '1' });
       }
       if (!d.isEndToday) blk('<div class="callout">' + T.cashNote + '</div>', { 'data-acc': '1' });
@@ -396,29 +821,25 @@
       // sin foto, abre en línea con el encabezado normal.
       if (hasImg('opener')) {
         blk(img('opener-img', 'opener', '<div class="opener-num">II</div>') +
-            '<div class="opener-body"><div class="eyebrow" style="--sec:var(--pdf-section-2)">Sección II</div>' +
+            '<div class="opener-body"><div class="eyebrow" style="--sec:var(--pdf-section-2)">' + T.sectionN + ' II</div>' +
             '<h2>' + esc(T.sections.II) + '</h2>' +
-            '<div class="lede">Qué pasó con el dinero entre el ' + dateFull(d.startStr) + ' y el ' +
-            dateFull(d.endStr) + ', por qué pasó, cuánto costó en riesgo y qué queda por vigilar.</div>' +
+            '<div class="lede">' + N.openerLede({ start: dateFull(d.startStr), end: dateFull(d.endStr) }) + '</div>' +
             '<div class="opener-figs">' +
               '<div><span>' + T.resultAmtShort + '</span><strong class="' + sign(resultAmt) + '">' + amt(resultAmt) +
-                '</strong><small>' + pct(resultPct) + ' sobre ' + money(base, cur) + ' de capital base</small></div>' +
+                '</strong><small>' + N.openerResult({ pct: pct(resultPct), base: money(base, cur) }) + '</small></div>' +
               (active != null ? '<div><span>' + T.excess + '</span><strong class="' + sign(active) + '">' + pp(active) +
-                '</strong><small>' + esc(d.benchmarkLabel) + ' ' + pct(benchRet) + ' en las mismas ' + d.sessions +
-                ' ' + T.sessions + '</small></div>' : '') +
-              (d.drawdown ? '<div><span>Costo en riesgo</span><strong class="down">' + pct(d.drawdown.depthPct) +
-                '</strong><small>' + T.maxDD.toLowerCase() + ' (' + money(d.drawdown.depthAmt, cur) + '), ' +
-                d.drawdown.sessionsUnder + ' sesiones bajo el agua</small></div>' : '') +
+                '</strong><small>' + N.openerExcess({ bench: esc(d.benchmarkLabel), pct: pct(benchRet), n: d.sessions }) +
+                '</small></div>' : '') +
+              (d.drawdown ? '<div><span>' + T.riskCost + '</span><strong class="down">' + pct(d.drawdown.depthPct) +
+                '</strong><small>' + N.openerRisk({ amt: money(d.drawdown.depthAmt, cur), n: d.drawdown.sessionsUnder }) +
+                '</small></div>' : '') +
             '</div></div>' +
             '<div class="opener-toc">' +
-              '<div><b>' + esc(T.sections.V) + '</b>' + (upTop.length
-                ? 'Quién puso los ' + (resultPct != null ? Math.abs(resultPct).toFixed(1) : '—') + ' puntos'
-                : 'Contribución posición por posición') + '</div>' +
-              '<div><b>' + esc(T.sections.VIII) + '</b>' + (d.drawdown
-                ? 'Lo que costó conseguirlos'
-                : 'Volatilidad y riesgo asumido') + '</div>' +
-              '<div><b>' + esc(T.sections.IX) + '</b>' + (maxW ? 'La mayor posición pesa ' + maxW.toFixed(1) + '%'
-                : 'Concentración y exposición') + '</div>' +
+              '<div><b>' + esc(T.sections.V) + '</b>' + (upTop.length && resultPct != null
+                ? N.tocAttrib({ pts: Math.abs(resultPct).toFixed(1) }) : N.tocAttribAlt()) + '</div>' +
+              '<div><b>' + esc(T.sections.VIII) + '</b>' + (d.drawdown ? N.tocRisk() : N.tocRiskAlt()) + '</div>' +
+              '<div><b>' + esc(T.sections.IX) + '</b>' + (maxW ? N.tocComp({ pct: maxW.toFixed(1) + '%' })
+                : N.tocCompAlt()) + '</div>' +
             '</div>',
             { 'data-page': 'bleed', 'data-acc': '2', 'data-section': 'II · ' + T.sections.II });
       } else {
@@ -426,48 +847,57 @@
       }
 
       var paras = [];
-      paras.push('<p class="body"><span class="dc">' + (lang === 'es' ? 'E' : 'T') + '</span>' +
-        (lang === 'es' ? 'l periodo' : 'he period') + ' cerró con un resultado de <strong>' + amt(resultAmt) +
-        '</strong> sobre un capital base de ' + money(base, cur) + ', equivalente a <strong>' + pct(resultPct) +
-        '</strong>. El valor de la cartera terminó en ' + money(valueEnd, cur) + ' con ' + nPos +
-        ' posiciones activas en ' + esc(cur) + '.</p>');
+      paras.push('<p class="body"><span class="dc">' + N.p1First + '</span>' + N.p1({
+        amt: amt(resultAmt), base: money(base, cur), pct: pct(resultPct),
+        value: money(valueEnd, cur), n: nPos, cur: esc(cur)
+      }) + '</p>');
       if (upTop.length) {
         var sumUp = upTop.reduce(function (s, x) { return s + x.pp; }, 0);
-        paras.push('<p class="body">El resultado se concentró en ' + upTop.map(function (x) {
-          return '<strong>' + esc(x.ticker) + '</strong> (' + amt(x.pnl) + ', ' + pp(x.pp) + ')';
-        }).join(', ') + ': entre ' + (upTop.length === 1 ? 'esa posición aportó' : 'esas ' + upTop.length + ' posiciones aportaron') +
-        ' ' + sumUp.toFixed(2) + ' de los ' + (resultPct != null ? resultPct.toFixed(2) : '—') + ' puntos del periodo.</p>');
+        paras.push('<p class="body">' + N.p2({
+          list: upTop.map(function (x) {
+            return '<strong>' + esc(x.ticker) + '</strong> (' + amt(x.pnl) + ', ' + pp(x.pp) + ')';
+          }).join(', '),
+          subject: upTop.length === 1 ? N.p2One : N.p2Many({ n: upTop.length }),
+          sum: sumUp.toFixed(2), total: resultPct != null ? resultPct.toFixed(2) : '—'
+        }) + '</p>');
       }
       if (downTop.length) {
-        paras.push('<p class="body">En sentido contrario, ' + downTop.map(function (x) {
-          return '<strong>' + esc(x.ticker) + '</strong> restó ' + money(Math.abs(x.pnl), cur) + ' (' + pp(x.pp) + ')';
-        }).join(' y ') + '. Sin ' + esc(downTop[0].ticker) + ' el periodo habría cerrado en ' +
-        pct(resultPct != null ? resultPct - downTop[0].pp : null) + ' en lugar de ' + pct(resultPct) + '.</p>');
+        paras.push('<p class="body">' + N.p3({
+          list: downTop.map(function (x) {
+            return N.p3Item({ ticker: esc(x.ticker), amt: money(Math.abs(x.pnl), cur), pp: pp(x.pp) });
+          }).join(N.chronAnd),
+          first: esc(downTop[0].ticker),
+          without: pct(resultPct != null ? resultPct - downTop[0].pp : null), actual: pct(resultPct)
+        }) + '</p>');
       }
-      var riskPara = 'El resultado no fue gratis: la volatilidad anualizada fue de ' +
-        (m.volatility != null ? '<strong>' + m.volatility.toFixed(1) + '%</strong>' : '—') +
-        (trackingError != null ? ' con un error de seguimiento de ' + trackingError.toFixed(1) + '%' : '') + '.';
+      var riskPara = N.p4({
+        vol: m.volatility != null ? '<strong>' + m.volatility.toFixed(1) + '%</strong>' : '—',
+        te: trackingError != null ? N.p4Te({ te: trackingError.toFixed(1) + '%' }) : ''
+      });
       if (d.drawdown) {
-        riskPara += ' Entre el ' + dateFull(d.drawdown.peakIso) + ' y el ' + dateFull(d.drawdown.troughIso) +
-          ' la cartera cayó ' + Math.abs(d.drawdown.depthPct).toFixed(2) + '% (' + money(d.drawdown.depthAmt, cur) + '), ' +
-          (d.drawdown.recovered ? 'recuperando el máximo el ' + dateFull(d.drawdown.recoveredIso) + '.'
-                                : 'y cerró el periodo sin recuperar el máximo previo.');
+        riskPara += N.p4Dd({
+          peak: dateFull(d.drawdown.peakIso), trough: dateFull(d.drawdown.troughIso),
+          depth: Math.abs(d.drawdown.depthPct).toFixed(2) + '%', amt: money(d.drawdown.depthAmt, cur),
+          rec: d.drawdown.recovered ? N.p4Recovered({ date: dateFull(d.drawdown.recoveredIso) }) : N.p4NotRecovered()
+        });
       }
       if (m.sharpe != null) {
-        riskPara += ' El Sharpe de ' + m.sharpe.toFixed(2) + ' indica que ' +
-          (m.sharpe > 1 ? 'ese riesgo sí se pagó.' : m.sharpe > 0 ? 'el retorno ajustado al riesgo fue modesto.' : 'el retorno no compensó el riesgo asumido.');
+        riskPara += N.p4Sharpe({
+          v: m.sharpe.toFixed(2),
+          reading: m.sharpe > 1 ? N.sharpePaid : m.sharpe > 0 ? N.sharpeModest : N.sharpeUnpaid
+        });
       }
       paras.push('<p class="body">' + riskPara + '</p>');
 
       var notes = [];
       if (active != null) notes.push('<div class="sidenote"><b>' + pp(active) + '</b>' +
-        (active >= 0 ? 'por encima de ' : 'por debajo de ') + esc(d.benchmarkLabel) + ' en ' + d.sessions + ' ' + T.sessions + '</div>');
-      if (d.drawdown) notes.push('<div class="sidenote"><b>' + money(d.drawdown.depthAmt, cur) + '</b>caída máxima del periodo' +
-        (d.drawdown.recovered ? ', recuperada el ' + dateFull(d.drawdown.recoveredIso) : ', sin recuperar') + '</div>');
+        N.noteVs({ dir: active >= 0 ? N.noteAbove : N.noteBelow, bench: esc(d.benchmarkLabel), n: d.sessions }) + '</div>');
+      if (d.drawdown) notes.push('<div class="sidenote"><b>' + money(d.drawdown.depthAmt, cur) + '</b>' +
+        N.noteDd({ rec: d.drawdown.recovered ? N.noteDdRec({ date: dateFull(d.drawdown.recoveredIso) }) : N.noteDdNotRec }) + '</div>');
       if (d.totalDividends) notes.push('<div class="sidenote"><b>' + money(d.totalDividends, cur) + '</b>' +
-        d.dividends.length + ' pagos de dividendos cobrados</div>');
-      if (maxW) notes.push('<div class="sidenote"><b>' + maxW.toFixed(1) + '%</b>peso de la mayor posición (' +
-        esc(weights[0].ticker) + ')</div>');
+        N.noteDiv({ n: d.dividends.length }) + '</div>');
+      if (maxW) notes.push('<div class="sidenote"><b>' + maxW.toFixed(1) + '%</b>' +
+        N.noteMaxW({ ticker: esc(weights[0].ticker) }) + '</div>');
 
       var railFig = img('img-rail', 'rail');
       blk('<div class="prose-rail"><div>' + paras.join('') + '</div><div>' + notes.join('') + railFig + '</div></div>',
@@ -477,18 +907,18 @@
       // cifra del periodo (nunca una frase decorativa sin dato detrás).
       if (hasImg('band')) {
         var quote = upTop.length && top3 > 50
-          ? esc(upTop[0].ticker) + ' explicó ' + Math.abs(upTop[0].pp).toFixed(2) + ' de los ' +
-            (resultPct != null ? Math.abs(resultPct).toFixed(2) : '—') + ' puntos del periodo.'
+          ? N.bandTicker({ ticker: esc(upTop[0].ticker), pp: Math.abs(upTop[0].pp).toFixed(2),
+                           total: resultPct != null ? Math.abs(resultPct).toFixed(2) : '—' })
           : d.drawdown
-            ? 'El periodo costó ' + Math.abs(d.drawdown.depthPct).toFixed(1) + '% de caída máxima: ' +
-              money(d.drawdown.depthAmt, cur) + '.'
-            : 'El resultado del periodo fue ' + amt(resultAmt) + ' sobre ' + money(base, cur) + '.';
+            ? N.bandDd({ pct: Math.abs(d.drawdown.depthPct).toFixed(1) + '%', amt: money(d.drawdown.depthAmt, cur) })
+            : N.bandResult({ amt: amt(resultAmt), base: money(base, cur) });
         blk('<div class="img-wrap img-duotone" style="background:' + esc(IMG.band.avg || '#8a94a6') + '">' +
             '<img src="' + IMG.band.src + '" width="698" height="190" alt="">' +
             '<div class="tint"></div>' +
             '<div class="scrim"></div>' +
             '<div class="pullquote">' + quote + '</div>' +
-            '<span class="credit on-img">Foto: ' + esc(IMG.band.by || 'Pexels') + ' · Pexels</span></div>',
+            '<span class="credit on-img">' + T.photoBy + ' ' + esc(IMG.band.by || 'Pexels') +
+            ' · Pexels</span></div>',
             { 'data-acc': '2' });
       }
       if (ai.sections && (ai.sections.tesis || ai.sections.general)) {
@@ -520,17 +950,19 @@
           var actTxt = [act.COMPRA ? act.COMPRA + ' ' + T.buy.toLowerCase() + (act.COMPRA > 1 ? 's' : '') : '',
                         act.VENTA ? act.VENTA + ' ' + T.sell.toLowerCase() + (act.VENTA > 1 ? 's' : '') : '',
                         act.DIVIDENDO ? act.DIVIDENDO + ' div.' : ''].filter(Boolean).join(' · ') || '—';
+          // el texto varía por posición del mes en el periodo; ver STR[lang].n
           // Varía el encabezado por posición del mes en el periodo, y solo nombra
           // al motor cuando su movimiento es material (≥1%): si no, la columna
           // repite la misma frase mes tras mes y deja de informar.
-          var story = x.value === mMax ? 'Mejor mes del periodo'
-            : x.value === mMin ? 'Peor mes del periodo'
-            : x.value >= 0 ? (x.value > avg ? 'Avance por encima del promedio del periodo' : 'Avance moderado')
-            : 'Mes en negativo';
-          if (x.best && Math.abs(x.best.pct) >= 1) story += ', impulsado por ' + esc(x.best.ticker) + ' (' + pct(x.best.pct, 1) + ')';
+          var story = x.value === mMax ? N.chronBest
+            : x.value === mMin ? N.chronWorst
+            : x.value >= 0 ? (x.value > avg ? N.chronAbove : N.chronModerate)
+            : N.chronNegative;
+          var hasDriver = x.best && Math.abs(x.best.pct) >= 1;
+          if (hasDriver) story += N.chronDriver({ ticker: esc(x.best.ticker), pct: pct(x.best.pct, 1) });
           if (x.worst && x.worst.pct <= -1 && x.worst.ticker !== (x.best && x.best.ticker)) {
-            story += (Math.abs(x.best && x.best.pct || 0) >= 1 ? ' y frenado por ' : ', frenado por ') +
-              esc(x.worst.ticker) + ' (' + pct(x.worst.pct, 1) + ')';
+            story += N.chronDrag({ and: hasDriver ? N.chronAnd : N.chronComma,
+                                   ticker: esc(x.worst.ticker), pct: pct(x.worst.pct, 1) });
           }
           return '<tr><td><strong>' + monthName(x.ym) + '</strong></td><td class="n ' + sign(x.value) + '">' + pct(x.value, 1) +
             '</td><td>' + (x.best ? esc(x.best.ticker) + ' <span class="up">' + pct(x.best.pct, 1) + '</span>' : '—') +
@@ -564,23 +996,31 @@
           strip.push(metric(T.benchmark, pct(benchRet), esc(d.benchmarkLabel)));
           strip.push(metric(T.excess, pp(active), T.activeAlpha, sign(active)));
         }
-        if (trackingError != null) strip.push(metric(T.trackingError, trackingError.toFixed(2) + '%', 'anualizado'));
+        if (trackingError != null) strip.push(metric(T.trackingError, trackingError.toFixed(2) + '%', T.annualized));
         if (m.beta != null) strip.push(metric(T.beta, m.beta.toFixed(2), T.vsBench.toLowerCase()));
         blk('<div class="metric-strip m' + strip.length + '">' + strip.join('') + '</div>', { 'data-acc': '4' });
 
         var perf = [];
         if (d.bestSession && d.worstSession) {
-          perf.push('<p class="body">La mejor sesión del periodo fue el ' + dateFull(d.bestSession.iso) + ' (' +
-            pct(d.bestSession.pct) + ') y la peor el ' + dateFull(d.worstSession.iso) + ' (' + pct(d.worstSession.pct) + ').</p>');
+          perf.push('<p class="body">' + N.sessBestWorst({
+            bestDate: dateFull(d.bestSession.iso), bestPct: pct(d.bestSession.pct),
+            worstDate: dateFull(d.worstSession.iso), worstPct: pct(d.worstSession.pct)
+          }) + '</p>');
         }
         if (active != null) {
-          perf.push('<p class="body">El portafolio ' + (active >= 0 ? 'superó' : 'quedó por debajo de') + ' al índice en ' +
-            Math.abs(active).toFixed(2) + ' puntos porcentuales' +
-            (trackingError != null ? ', con un error de seguimiento de ' + trackingError.toFixed(2) + '%: la diferencia ' +
-             (trackingError > 5 ? 'vino de apuestas activas concretas, no de replicar al mercado' : 'se mantuvo cerca del índice') : '') +
-            (m.beta != null ? '. La beta de ' + m.beta.toFixed(2) + ' indica que se asumió ' +
-             (m.beta > 1 ? Math.round((m.beta - 1) * 100) + '% más' : Math.round((1 - m.beta) * 100) + '% menos') +
-             ' de riesgo sistemático que el índice' : '') + '.</p>');
+          perf.push('<p class="body">' + N.vsIndex({
+            verb: active >= 0 ? N.vsBeat : N.vsLag,
+            pp: Math.abs(active).toFixed(2),
+            te: trackingError == null ? '' : N.vsTe({
+              te: trackingError.toFixed(2) + '%',
+              reading: trackingError > 5 ? N.vsTeActive : N.vsTeClose
+            }),
+            beta: m.beta == null ? '' : N.vsBeta({
+              beta: m.beta.toFixed(2),
+              dir: m.beta > 1 ? N.vsBetaMore({ pct: Math.round((m.beta - 1) * 100) })
+                              : N.vsBetaLess({ pct: Math.round((1 - m.beta) * 100) })
+            })
+          }) + '</p>');
         }
         if (perf.length) blk(perf.join(''), { 'data-acc': '4' });
         if (aiNote('benchmark')) blk(aiNote('benchmark'), { 'data-acc': '4' });
@@ -603,13 +1043,12 @@
             chart('diverging', { items: attrib.map(function (a) { return { label: a.ticker, value: a.pp }; }), format: 'pp' },
                   { width: 307 }) + '</div>' +
             '<div><h3 class="h3">' + T.reading + '</h3><p class="body" style="font-size:10.5px">' +
-            'Las tres mayores contribuciones aportaron ' + top3pp.toFixed(2) + ' pp' +
-            (resultPct != null ? ' de los ' + resultPct.toFixed(2) + ' pp del periodo' : '') + '. ' +
-            (downTop.length ? 'El principal detractor fue ' + esc(downTop[0].ticker) + ' con ' + pp(downTop[0].pp) + '.'
-                            : 'Ninguna posición restó más de 0.5 pp.') + '</p>' +
-            (resultPct != null ? '<div class="callout" style="font-size:10px"><b>' + T.counterfactual + ':</b> excluyendo ' +
-             'las tres mayores contribuciones, el periodo habría cerrado en <b>' + pct(resultPct - top3pp) + '</b> ' +
-             'en lugar de ' + pct(resultPct) + '.</div>' : '') +
+            N.attribReading({ pp: top3pp.toFixed(2),
+                              of: resultPct != null ? N.attribOf({ total: resultPct.toFixed(2) }) : '' }) +
+            (downTop.length ? N.attribDetractor({ ticker: esc(downTop[0].ticker), pp: pp(downTop[0].pp) })
+                            : N.attribNoDetractor) + '</p>' +
+            (resultPct != null ? '<div class="callout" style="font-size:10px"><b>' + T.counterfactual + ':</b> ' +
+             N.attribCf({ without: pct(resultPct - top3pp), actual: pct(resultPct) }) + '</div>' : '') +
             '</div></div>', { 'data-acc': '5' });
         if (aiNote('atribucion')) blk(aiNote('atribucion'), { 'data-acc': '5' });
 
@@ -634,23 +1073,24 @@
         moverList.forEach(function (mv) {
           var p = positions.filter(function (x) { return x.pos.ticker === mv.ticker; })[0];
           var w = wByTicker[mv.ticker];
+          var wTxt = w != null ? w.toFixed(1) + '%' : '—';
           var mech = mv.pp >= 0
-            ? 'El precio avanzó ' + (p && p.pnlPct != null ? pct(p.pnlPct) : '') + ' desde el costo medio; con ' +
-              (w != null ? w.toFixed(1) + '%' : '—') + ' del portafolio, ese movimiento se transmitió al resultado en la proporción de su peso.'
-            : 'La caída del precio se transmitió al resultado en la proporción de su peso (' +
-              (w != null ? w.toFixed(1) + '%' : '—') + ' del portafolio).';
+            ? N.mechUp({ pct: p && p.pnlPct != null ? pct(p.pnlPct) : '—', w: wTxt })
+            : N.mechDown({ w: wTxt });
           var watch = [];
-          if (w != null && w > 20) watch.push('Su peso de ' + w.toFixed(1) + '% supera el umbral de concentración de 20%: una corrección de 20% en el papel restaría ~' + (w * 0.2).toFixed(1) + ' pp al portafolio.');
-          if (w != null && w <= 20 && Math.abs(mv.pp) > 1) watch.push((mv.pp >= 0 ? 'Aporta ' : 'Resta ') + Math.abs(mv.pp).toFixed(2) +
-            ' pp con ' + w.toFixed(1) + '% del peso: su comportamiento pesa más que su tamaño.');
-          if (!watch.length) watch.push('Sin alertas de concentración: su contribución es proporcional a su peso.');
+          if (w != null && w > 20) watch.push(N.watchConc({ w: wTxt, pp: (w * 0.2).toFixed(1) }));
+          if (w != null && w <= 20 && Math.abs(mv.pp) > 1) {
+            watch.push(N.watchOversize({ verb: mv.pp >= 0 ? N.watchGives : N.watchTakes,
+                                         pp: Math.abs(mv.pp).toFixed(2), w: wTxt }));
+          }
+          if (!watch.length) watch.push(N.watchNone);
           // El titular es la ÚNICA fuente admisible para atribuir el movimiento
           // a un hecho del mundo; sin noticia la tarjeta se queda en las cifras.
           var items = (NEWS[mv.ticker] || []).slice(0, 2);
           var eventLi = items.length
             ? '<li><b>' + T.event + '</b>' + items.map(function (n) {
-                return esc(n.title) + ' <span class="src">(' + esc(n.source || 'fuente') +
-                       (n.date ? ' · ' + dateFull(n.date) : '') + ')</span>';
+                return esc(n.title) + ' <span class="src">(' + esc(n.source || '') +
+                       (n.date ? (n.source ? ' · ' : '') + dateFull(n.date) : '') + ')</span>';
               }).join('<br>') + '</li>'
             : '';
           blk('<div class="mover">' +
@@ -659,21 +1099,19 @@
               (p && p.series && p.series.length > 1 ? chart('sparkline', { values: p.series }, { width: 138, height: 34 }) : '') +
               '</div><ul>' +
               eventLi +
-              '<li><b>' + T.impact + '</b>' + (mv.pp >= 0 ? 'Aportó ' : 'Restó ') + money(Math.abs(mv.pnl), cur) +
-              ' al resultado del periodo: ' + Math.abs(mv.pp).toFixed(2) + ' pp' +
-              (resultPct ? ' de los ' + Math.abs(resultPct).toFixed(2) + ' pp totales' : '') + '.</li>' +
+              '<li><b>' + T.impact + '</b>' + N.moverImpact({
+                verb: mv.pp >= 0 ? N.moverGave : N.moverTook, amt: money(Math.abs(mv.pnl), cur),
+                pp: Math.abs(mv.pp).toFixed(2),
+                of: resultPct ? N.moverOf({ total: Math.abs(resultPct).toFixed(2) }) : ''
+              }) + '</li>' +
               '<li><b>' + T.mechanism + '</b>' + mech + '</li>' +
               '<li><b>' + T.toWatch + '</b>' + watch[0] + '</li>' +
               '</ul></div>', { 'data-acc': '1', 'data-min-space': '150' });
         });
         if (aiNote('movers')) blk(aiNote('movers'), { 'data-acc': '1' });
         blk('<div class="footnote">' + (newsTickers.length
-              ? 'Titulares recuperados para ' + esc(newsTickers.join(', ')) + ' dentro de la ventana del reporte. ' +
-                'Las relaciones causa-efecto se limitan a lo publicado; el resto de las explicaciones se deriva de ' +
-                'las cifras del propio portafolio (precio, peso y contribución).'
-              : 'Las explicaciones de esta sección se derivan de las cifras del propio portafolio (precio, peso y ' +
-                'contribución). No hubo titulares disponibles para estas posiciones en la ventana del reporte.') +
-            '</div>', { 'data-acc': '1' });
+              ? N.newsFootWith({ tickers: esc(newsTickers.join(', ')) })
+              : N.newsFootWithout) + '</div>', { 'data-acc': '1' });
       }
 
       /* ════════ VII · DOSSIER POR POSICIÓN ════════ */
@@ -686,19 +1124,21 @@
         })
         .slice(0, 8);
       if (dossier.length) {
-        secHead('VII', T.sections.VII, dossier.length + ' de ' + nPos + ' · ' + T.hints.VII, '2');
+        secHead('VII', T.sections.VII, dossier.length + '/' + nPos + ' · ' + T.hints.VII, '2');
         blk(dossier.map(function (p) {
           var w = wByTicker[p.pos.ticker];
           var cp = p.contributionPp;
-          var note = 'Representa ' + (w != null ? w.toFixed(1) + '%' : '—') + ' del portafolio y ' +
-            (cp == null ? 'no tiene contribución calculable'
-                        : (cp >= 0 ? 'aportó ' : 'restó ') + Math.abs(cp).toFixed(2) + ' pp') +
-            ' al resultado del periodo.';
-          if (w != null && w > 20) note += ' Su peso rebasa el umbral de concentración de 20%.';
-          else if (p.contributionPp != null && p.contributionPp < -0.5) note += ' Es uno de los detractores materiales del periodo.';
-          else note += ' Su aporte es proporcional a su tamaño en la cartera.';
-          if (ctx.helpers.posCurrency(p.pos) !== cur) note += ' Cotiza en ' + esc(ctx.helpers.posCurrency(p.pos)) +
-            ': su aporte en ' + esc(cur) + ' depende del tipo de cambio a la fecha de valuación.';
+          var note = N.dossierBase({
+            w: w != null ? w.toFixed(1) + '%' : '—',
+            verb: cp == null ? N.dossierNone
+                : (cp >= 0 ? N.dossierGave : N.dossierTook)({ pp: Math.abs(cp).toFixed(2) })
+          });
+          if (w != null && w > 20) note += ' ' + N.dossierConc;
+          else if (cp != null && cp < -0.5) note += ' ' + N.dossierDetractor;
+          else note += ' ' + N.dossierProportional;
+          if (ctx.helpers.posCurrency(p.pos) !== cur) {
+            note += ' ' + N.dossierFx({ cur: esc(ctx.helpers.posCurrency(p.pos)), base: esc(cur) });
+          }
           return '<div class="dossier"><div class="dossier-spark">' +
             (p.series && p.series.length > 1 ? chart('sparkline', { values: p.series }, { width: 96, height: 40 }) : '') +
             '</div><div><div class="hd"><b>' + esc(p.pos.ticker) + '</b><span>' + esc(ctx.helpers.posCurrency(p.pos)) +
@@ -715,9 +1155,11 @@
       /* ════════ VIII · RIESGO ════════ */
       secHead('VIII', T.sections.VIII, T.hints.VIII, '3');
       var rm = [];
-      if (m.sharpe != null) rm.push(metric(T.sharpe, m.sharpe.toFixed(2), m.sharpe > 1 ? 'sólido' : m.sharpe > 0 ? 'modesto' : 'insuficiente', m.sharpe > 0 ? 'up' : 'down'));
-      if (m.sortino != null && (m.sharpe == null || Math.abs(m.sortino - m.sharpe) >= 0.3)) rm.push(metric(T.sortino, m.sortino.toFixed(2), 'asimetría'));
-      if (m.volatility != null) rm.push(metric(T.volatility, m.volatility.toFixed(1) + '%', m.volatility > 25 ? 'alta' : m.volatility > 15 ? 'moderada' : 'contenida'));
+      if (m.sharpe != null) rm.push(metric(T.sharpe, m.sharpe.toFixed(2),
+        m.sharpe > 1 ? T.solid : m.sharpe > 0 ? T.modest : T.insufficient, m.sharpe > 0 ? 'up' : 'down'));
+      if (m.sortino != null && (m.sharpe == null || Math.abs(m.sortino - m.sharpe) >= 0.3)) rm.push(metric(T.sortino, m.sortino.toFixed(2), T.asymmetry));
+      if (m.volatility != null) rm.push(metric(T.volatility, m.volatility.toFixed(1) + '%',
+        m.volatility > 25 ? T.volHigh : m.volatility > 15 ? T.volMid : T.volLow));
       if (m.var != null && d.sessions >= 60) rm.push(metric(T.var95, '−' + Math.abs(m.var).toFixed(2) + '%',
         valueEnd > 0 ? money(Math.abs(m.var) / 100 * valueEnd, cur) : ''));
       if (m.maxDD != null) rm.push(metric(T.maxDD, '−' + Math.abs(m.maxDD).toFixed(2) + '%',
@@ -736,20 +1178,20 @@
       }
       var riskCols = [];
       if (d.drawdown) {
-        riskCols.push('<div><h3 class="h3">' + T.ddChronicle + '</h3><p class="body" style="font-size:10.5px">Máximo el <strong>' +
-          dateFull(d.drawdown.peakIso) + '</strong>, mínimo el <strong>' + dateFull(d.drawdown.troughIso) + '</strong>: ' +
-          pct(d.drawdown.depthPct) + ' equivalente a ' + money(d.drawdown.depthAmt, cur) + '. La cartera pasó ' +
-          d.drawdown.sessionsUnder + ' sesiones bajo el agua y ' +
-          (d.drawdown.recovered ? 'recuperó el máximo el ' + dateFull(d.drawdown.recoveredIso) + '.' : 'cerró el periodo sin recuperarlo.') +
-          '</p></div>');
+        riskCols.push('<div><h3 class="h3">' + T.ddChronicle + '</h3><p class="body" style="font-size:10.5px">' +
+          N.ddChronicle({
+            peak: dateFull(d.drawdown.peakIso), trough: dateFull(d.drawdown.troughIso),
+            pct: pct(d.drawdown.depthPct), amt: money(d.drawdown.depthAmt, cur), n: d.drawdown.sessionsUnder,
+            rec: d.drawdown.recovered ? N.ddRecovered({ date: dateFull(d.drawdown.recoveredIso) }) : N.ddNotRecovered
+          }) + '</p></div>');
       }
       var meaning = [];
-      if (m.var != null && d.sessions >= 60 && valueEnd > 0) meaning.push('Un VaR de −' + Math.abs(m.var).toFixed(2) +
-        '% implica que en 1 de cada 20 días la pérdida podría superar ' + money(Math.abs(m.var) / 100 * valueEnd, cur) + ' al valor actual.');
-      if (m.sharpe != null) meaning.push('El Sharpe de ' + m.sharpe.toFixed(2) + ' indica que el retorno ' +
-        (m.sharpe > 1 ? 'compensó bien' : m.sharpe > 0 ? 'compensó de forma modesta' : 'no compensó') + ' el riesgo asumido.');
-      if (m.beta != null) meaning.push('La beta de ' + m.beta.toFixed(2) + ' indica que la cartera ' +
-        (m.beta > 1 ? 'amplifica' : 'atenúa') + ' los movimientos del índice.');
+      if (m.var != null && d.sessions >= 60 && valueEnd > 0) meaning.push(N.meanVar({
+        pct: '−' + Math.abs(m.var).toFixed(2) + '%', amt: money(Math.abs(m.var) / 100 * valueEnd, cur) }));
+      if (m.sharpe != null) meaning.push(N.meanSharpe({ v: m.sharpe.toFixed(2),
+        reading: m.sharpe > 1 ? N.meanSharpeGood : m.sharpe > 0 ? N.meanSharpeOk : N.meanSharpeBad }));
+      if (m.beta != null) meaning.push(N.meanBeta({ v: m.beta.toFixed(2),
+        verb: m.beta > 1 ? N.betaAmplifies : N.betaDampens }));
       if (meaning.length) riskCols.push('<div><h3 class="h3">' + T.whatTheyMean + '</h3><p class="body" style="font-size:10.5px">' +
         meaning.join(' ') + '</p></div>');
       if (riskCols.length) blk('<div class="g2">' + riskCols.join('') + '</div>', { 'data-acc': '3' });
@@ -759,8 +1201,8 @@
       secHead('IX', T.sections.IX, T.hints.IX, '4');
       var slices = weights.slice(0, 5).map(function (x) { return { label: x.ticker, value: x.w * 100 }; });
       var restW = weights.slice(5).reduce(function (s, x) { return s + x.w; }, 0) * 100;
-      if (restW > 0.05) slices.push({ label: 'Otros (' + (weights.length - 5) + ')', value: restW });
-      if (d.cashAtEnd > 0 && valueEnd > 0) slices.push({ label: 'Efectivo', value: d.cashAtEnd / valueEnd * 100 });
+      if (restW > 0.05) slices.push({ label: T.others + ' (' + (weights.length - 5) + ')', value: restW });
+      if (d.cashAtEnd > 0 && valueEnd > 0) slices.push({ label: T.cash, value: d.cashAtEnd / valueEnd * 100 });
       blk('<div class="g2"><div class="chart-box"><div class="chart-h">' + T.byPosition + '</div>' +
           chart('donut', { slices: slices, centerValue: effN.toFixed(1), centerLabel: T.effHoldings },
                 { width: 307, height: Math.max(172, 24 + slices.length * 15) }) + '</div>' +
@@ -780,16 +1222,19 @@
           }).join('') + '</tbody></table></div></div>', { 'data-acc': '4' });
 
       var alerts = [];
-      if (maxW > 25) alerts.push('La mayor posición (' + esc(weights[0].ticker) + ') representa ' + maxW.toFixed(1) + '% del portafolio — riesgo de concentración.');
-      if (top3 > 60) alerts.push('Las 3 mayores suman ' + top3.toFixed(1) + '%: la diversificación efectiva equivale a ' + effN.toFixed(1) + ' posiciones igualmente ponderadas (HHI ' + hhi.toFixed(3) + ').');
-      if (sectorRows.length && sectorRows[0].value > 40 && sectorRows[0].label !== 'Cash') alerts.push('Sobreexposición al sector ' + esc(sectorRows[0].label) + ' (' + sectorRows[0].value.toFixed(1) + '%).');
+      if (maxW > 25) alerts.push(N.alertMaxW({ ticker: esc(weights[0].ticker), w: maxW.toFixed(1) + '%' }));
+      if (top3 > 60) alerts.push(N.alertTop3({ top3: top3.toFixed(1) + '%', eff: effN.toFixed(1), hhi: hhi.toFixed(3) }));
+      if (sectorRows.length && sectorRows[0].value > 40 && sectorRows[0].label !== 'Cash') {
+        alerts.push(N.alertSector({ sector: esc(sectorRows[0].label), pct: sectorRows[0].value.toFixed(1) + '%' }));
+      }
       if (alerts.length) blk('<div class="alerts">' + alerts.map(function (a) { return '• ' + a; }).join('<br>') + '</div>', { 'data-acc': '4' });
 
       /* ════════ X · ACTIVIDAD ════════ */
       var closed = (d.closedTradesInWindow || []).slice(0, 30);
       var txs = (d.txInWindow || []).slice(0, 80);
       if (closed.length || txs.length) {
-        secHead('X', T.sections.X, (d.txInWindow || []).length + ' operaciones · ' + closed.length + ' ventas cerradas', '5');
+        secHead('X', T.sections.X, (d.txInWindow || []).length + ' ' + T.operations + ' · ' +
+                closed.length + ' ' + T.closedSales, '5');
         if (closed.length) {
           blk('<h3 class="h3">' + T.closedTrades + '</h3><div class="tbl"><table><thead><tr><th>' + T.ticker + '</th><th>' +
               T.buy + '</th><th>' + T.sell + '</th><th class="n">' + T.quantity + '</th><th class="n">' + T.cost +
@@ -813,8 +1258,8 @@
                   (tx.quantity || 0) + '</td><td class="n">' + (tx.price || 0).toLocaleString(LOC, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) +
                   '</td><td class="n">' + (tx.commCost || 0).toFixed(2) + '</td><td class="n">' + (tx.net || 0).toFixed(2) + '</td></tr>';
               }).join('') + '</tbody></table>' +
-              '<div class="footnote">' + txs.length + ' de ' + d.totalTxCount + ' operaciones históricas · comisiones del periodo: ' +
-              money(d.totalComm || 0, cur) + '</div></div>',
+              '<div class="footnote">' + N.txFoot({ shown: txs.length, total: d.totalTxCount,
+                comm: money(d.totalComm || 0, cur) }) + '</div></div>',
               { 'data-flow': 'table', 'data-acc': '5' });
         }
       }
@@ -823,23 +1268,26 @@
       secHead('XI', T.sections.XI, T.hints.XI, '1');
       var q = [
         [T.folio, folio],
-        [T.priceAsOf, dateFull(d.endStr) + (d.isEndToday ? ' (más reciente)' : '')],
+        [T.priceAsOf, dateFull(d.endStr) + (d.isEndToday ? ' (' + T.mostRecent + ')' : '')],
         [T.benchmark, d.benchmarkLabel || T.notAvailable],
         [T.rfr, ctx.rfr ? ctx.rfr.rate.toFixed(2) + '% (' + ctx.rfr.label + ')' : '—'],
         [T.betaCurHist, (m.currentWeightedBeta != null ? m.currentWeightedBeta.toFixed(2) : '—') + ' / ' +
           (m.historicalBeta != null ? m.historicalBeta.toFixed(2) : '—')],
         [T.aiModel, ai.model || (ai.error ? T.notAvailable : T.notRequested)]
       ];
-      if (d.missingPrices && d.missingPrices.length) q.push(['Precios faltantes', d.missingPrices.length + ': ' + esc(d.missingPrices.slice(0, 6).join(', '))]);
+      if (d.missingPrices && d.missingPrices.length) {
+        q.push([T.missingPricesLabel, d.missingPrices.length + ': ' + esc(d.missingPrices.slice(0, 6).join(', '))]);
+      }
       blk('<div class="g3">' + q.map(function (x) {
         return '<div class="kpi flat"><span>' + esc(x[0]) + '</span><strong>' + x[1] + '</strong></div>';
       }).join('') + '</div>', { 'data-acc': '1' });
-      blk('<div class="callout" style="font-size:10px"><b>' + T.assumptions + '.</b> ' + T.assumptionsBody +
-          ' Las métricas de riesgo se calculan sobre ' + d.sessions + ' ' + T.sessions +
-          (ctx.rfr ? ' con una tasa libre de riesgo de ' + ctx.rfr.rate.toFixed(2) + '%' : '') + '.</div>', { 'data-acc': '1' });
+      blk('<div class="callout" style="font-size:10px"><b>' + T.assumptions + '.</b> ' + N.assumptionsBody({
+        sessions: d.sessions,
+        rfr: ctx.rfr ? N.assumptionsRfr({ rate: ctx.rfr.rate.toFixed(2) + '%' }) : ''
+      }) + '</div>', { 'data-acc': '1' });
       if (ai.sections && ai.sections.rebalanceo) {
-        blk('<h3 class="h3">Acciones sugeridas</h3><div class="callout"><b>' + T.aiTag +
-            ' · educativo, no es asesoría</b><br>' + ai.sections.rebalanceo + '</div>', { 'data-acc': '1' });
+        blk('<h3 class="h3">' + T.suggestedActions + '</h3><div class="callout"><b>' + T.aiEdu +
+            '</b><br>' + ai.sections.rebalanceo + '</div>', { 'data-acc': '1' });
       }
 
       /* ════════ XII · GLOSARIO ════════ */
@@ -858,9 +1306,9 @@
             (d.drawdown ? '<div><span>' + T.maxDD + '</span><strong class="down">' + pct(d.drawdown.depthPct) + '</strong></div>' : '') +
           '</div>' +
           '<div class="disclaimer">' + T.disclaimer + '</div>' +
-          '<div class="footnote">Datos de mercado: Yahoo Finance / CoinGecko.' +
-          (ai.model ? ' Análisis asistido por ' + esc(ai.model) + '.' : '') +
-          (photographers.length ? ' Fotografías: Pexels — ' + esc(photographers.join(', ')) + '.' : '') +
+          '<div class="footnote">' + T.dataSources +
+          (ai.model ? N.aiAssisted({ model: esc(ai.model) }) : '') +
+          (photographers.length ? N.photoCredits({ list: esc(photographers.join(', ')) }) : '') +
           '<br>BlackPortfolio · blackportfolio.ai · ' + folio + ' · ' + esc(dateFull(d.todayStr || d.endStr)) + '</div></div>' +
           (img('img-closing', 'closing') || '<div class="closing-art"></div>'),
           { 'data-page': 'bleed', 'data-section': '' });
