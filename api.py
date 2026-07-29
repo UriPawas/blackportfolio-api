@@ -98,12 +98,13 @@ _NEWS_CACHE           = _TTLCache(maxsize=100, ttl=900)   # 15 min
 _REPORT_IMG_META      = _TTLCache(maxsize=40,  ttl=86400) # 24 h — id/autor/color
 _REPORT_IMG_BYTES     = _TTLCache(maxsize=12,  ttl=3600)  # 1 h  — JPEG del reporte
 _BINANCE_PRICE_CACHE  = _TTLCache(maxsize=200, ttl=30)    # 30 s  — precios crypto
+_TICKER_LOGO_CACHE    = _TTLCache(maxsize=300, ttl=86400) # 24 h  — URL de logo
 
 _ALL_CACHES = [
     _CHART_CACHE, _SEASONALITY_CACHE_V2, _CALENDAR_CACHE_V2, _TIIE_CACHE_V2,
     _SEARCH_CACHE, _INFO_CACHE, _FINANCIALS_CACHE, _HOLDINGS_CACHE,
     _DIVIDENDS_CACHE, _NEWS_CACHE, _BINANCE_PRICE_CACHE,
-    _REPORT_IMG_META, _REPORT_IMG_BYTES,
+    _REPORT_IMG_META, _REPORT_IMG_BYTES, _TICKER_LOGO_CACHE,
 ]
 
 def _make_malloc_trim():
@@ -1805,6 +1806,48 @@ def bond_info(request: Request, isin: str):
     if isinstance(data, list) and len(data) == 0:
         raise HTTPException(status_code=404, detail=f"No se encontraron datos para el ISIN {isin}. Esta API cubre bonos del mercado indio (NSDL/BSE/NSE).")
     return data[0] if isinstance(data, list) else data
+
+RAPIDAPI_TWELVE_HOST = "twelve-data1.p.rapidapi.com"
+
+
+@app.get("/api/ticker-logo/{symbol}")
+@limiter.limit("120/minute")
+def ticker_logo(request: Request, symbol: str):
+    """URL del logo de un ticker.
+
+    Existe para que la clave de RapidAPI no viaje al navegador: antes el
+    front la llevaba incrustada y cualquiera podía extraerla del bundle.
+    Devuelve siempre 200 con `url: null` cuando no hay logo — es decoración,
+    un fallo aquí no debe ensuciar la consola del cliente.
+    """
+    sym = (symbol or "").strip().upper()[:20]
+    if not sym or not all(c.isalnum() or c in ".-^=" for c in sym):
+        return {"url": None}
+
+    cached = _TICKER_LOGO_CACHE.get(sym)
+    if cached is not None:
+        return {"url": cached or None}
+    if not RAPIDAPI_KEY:
+        return {"url": None}
+
+    try:
+        res = _HTTP_SESSION.get(
+            f"https://{RAPIDAPI_TWELVE_HOST}/logo",
+            params={"symbol": sym},
+            headers={
+                "x-rapidapi-key": RAPIDAPI_KEY,
+                "x-rapidapi-host": RAPIDAPI_TWELVE_HOST,
+            },
+            timeout=8,
+        )
+        url = res.json().get("url") if res.status_code == 200 else None
+    except Exception:
+        url = None
+
+    # Cachea también el vacío: evita repreguntar por tickers sin logo.
+    _TICKER_LOGO_CACHE.set(sym, url or "")
+    return {"url": url or None}
+
 
 RAPIDAPI_FINANCE_HOST = "real-time-finance-data.p.rapidapi.com"
 RAPIDAPI_MORNINGSTAR_HOST = "morning-star.p.rapidapi.com"

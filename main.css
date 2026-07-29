@@ -3889,10 +3889,16 @@ body.light-mode .consolidated-bar {
   gap: 6px;
   margin-left: auto;
   align-items: center;
+  /* Los botones internos llevan `min-width:max-content`, así que la fila se
+     quedaba en su ancho intrínseco (406px) dentro de una pista de 308px: el
+     borde derecho —y con él el degradado que indica que scrollea— caía fuera
+     de la pantalla. max-width la ata a la pista; el scroll interno se conserva. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ── Acciones de la lista de portafolios (importar / nuevo) ── */
-.tracker-list-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tracker-list-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-width: 0; max-width: 100%; }
 
 /* ── Controles de rebalanceo ── */
 .rebal-controls {
@@ -4026,6 +4032,13 @@ body.light-mode .consolidated-bar {
 .tracker-price-status-msg.ok      { color: #32d6a2; }
 .tracker-price-status-msg.warn    { color: #f5b84c; }
 .tracker-price-status-msg.error   { color: #ff6b81; }
+
+/* Los hex de arriba están calibrados para fondo oscuro: sobre blanco el verde
+   daba 1.8:1. En claro se usan los tokens ya oscurecidos (ver --gain/--loss). */
+/* --gain (#16a34a) da 3.1:1 y esto es texto de 12px, no una cifra grande */
+body.light-mode .tracker-price-status-msg.ok    { color: #15803d; }
+body.light-mode .tracker-price-status-msg.warn  { color: #a16207; }
+body.light-mode .tracker-price-status-msg.error { color: var(--loss); }
 
 .tracker-refresh-btn {
   font-size: 0.8rem;
@@ -4713,7 +4726,7 @@ body.light-mode .skel-line {
 }
 
 body.light-mode .tab-group-label {
-  color: rgba(15, 23, 42, 0.45);
+  color: rgba(15, 23, 42, 0.62);
 }
 
 body.light-mode .tab-group-sep {
@@ -10753,10 +10766,11 @@ body.light-mode .tracker-tab-nav {
   background: rgba(15, 23, 42, 0.07);
 }
 body.light-mode .tracker-tab-btn {
-  color: rgba(15, 23, 42, 0.45);
+  /* 0.45 daba 2.9:1 sobre blanco en texto de 14px */
+  color: rgba(15, 23, 42, 0.62);
 }
 body.light-mode .tracker-tab-btn:hover {
-  color: rgba(15, 23, 42, 0.75);
+  color: rgba(15, 23, 42, 0.85);
 }
 body.light-mode .tracker-tab-btn.active {
   background: #ffffff;
@@ -10767,6 +10781,14 @@ body.light-mode .tracker-tab-btn.active {
 /* ── Perf period & var buttons ────────────────────────────────────────── */
 body.light-mode .perf-period-btn {
   border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Blanco sobre --primary (#6f86ff) da 3.2:1; en claro se usa un azul más
+   profundo para el estado activo (~6.8:1) sin cambiar el token global. */
+body.light-mode .perf-period-btn.active {
+  background: #3f4fbf;
+  border-color: #3f4fbf;
+  color: #fff;
 }
 
 /* ── Ticker suggestion item additional ───────────────────────────────── */
@@ -10959,6 +10981,12 @@ body.light-mode .hw-pb-empty { color: rgba(15,23,42,0.35); }
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* #9fb0ff sobre el fondo lavanda claro daba 1.9:1 */
+body.light-mode .settings-kicker {
+  color: #3f4fbf;
+  border-color: rgba(var(--primary-rgb), 0.38);
 }
 
 .settings-overview-copy h2 {
@@ -11161,6 +11189,13 @@ body.light-mode .hw-pb-empty { color: rgba(15,23,42,0.35); }
 .settings-grid .dashboard-card:hover {
   border-color: rgba(var(--primary-rgb), 0.2);
   box-shadow: 0 18px 50px rgba(0,0,0,0.18);
+}
+
+.settings-lang-note {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .button.lang-btn {
@@ -11417,6 +11452,7 @@ body.light-mode .button.lang-btn:hover {
 }
 .app-toast--error  { border-color: rgba(248, 113, 113, 0.55); }
 .app-toast--success { border-color: rgba(74, 222, 128, 0.5); }
+.app-toast--info   { border-color: rgba(var(--primary-rgb), 0.5); }
 .app-toast-action {
   background: rgba(var(--primary-rgb), 0.2);
   border: 1px solid rgba(var(--primary-rgb), 0.4);
@@ -12842,7 +12878,8 @@ body.light-mode .investor-modal-close { color: #64748b; border-color: rgba(15, 2
 
 body.light-mode .portfolio-weight-heading span,
 body.light-mode .donut-legend-value {
-  color: rgba(23, 32, 51, 0.52);
+  /* 0.52 daba 3.4:1 sobre blanco; 0.68 sube a ~5.6:1 sin perder jerarquía */
+  color: rgba(23, 32, 51, 0.68);
 }
 
 body.light-mode .donut-chart-tooltip {
@@ -15428,6 +15465,23 @@ body.light-mode .value-custom-popover input[type="date"] { color: #172033; borde
 }
 @media (prefers-reduced-motion: reduce) {
   .chart-loading::after { animation: none; }
+}
+
+/* ── Tabla de posiciones en tablet (721–1000px) ────────────────────────────
+   Abajo de 720px la tabla ya se convierte en tarjetas; arriba de 1000px cabe
+   entera. En la franja intermedia quedaban 12 columnas (~1390px) dentro de
+   ~730px: dos pantallas de scroll lateral por fila. Se ocultan las tres menos
+   accionables — la minigráfica decorativa, la fecha (visible al desplegar los
+   lotes) y el costo total (derivable de precio promedio × cantidad). */
+@media (min-width: 721px) and (max-width: 1000px) {
+  .tracker-table--positions > thead > tr > th.th-sparkline,
+  .tracker-table--positions > thead > tr > th:nth-child(3),
+  .tracker-table--positions > thead > tr > th:nth-child(8),
+  #positionsTableBody > .pos-row > td[data-label="30 días"],
+  #positionsTableBody > .pos-row > td[data-label="Fecha"],
+  #positionsTableBody > .pos-row > td[data-label="Costo total"] {
+    display: none;
+  }
 }
 
 /* ── Jerarquía de tarjetas de posición en móvil (Mobile 3) ─────────────────── */

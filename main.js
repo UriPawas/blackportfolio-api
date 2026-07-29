@@ -970,17 +970,11 @@ async function fetchSuggestions(query) {
     }));
 }
 
-const TWELVE_DATA_API_KEY = "03aab7a2aamsh5f6964b96339010p1ec652jsnbff2ece7211e";
-const TWELVE_DATA_LOGO_BASE = "https://twelve-data1.p.rapidapi.com/logo";
-
+// El logo se pide a nuestro propio API: la clave de RapidAPI vive sólo en el
+// servidor. Antes iba incrustada en este bundle y era extraíble por cualquiera.
 async function fetchTickerLogo(symbol) {
   try {
-    const res = await fetch(`${TWELVE_DATA_LOGO_BASE}?symbol=${encodeURIComponent(symbol)}`, {
-      headers: {
-        "x-rapidapi-host": "twelve-data1.p.rapidapi.com",
-        "x-rapidapi-key": TWELVE_DATA_API_KEY
-      }
-    });
+    const res = await fetch(`${API_BASE_URL}/ticker-logo/${encodeURIComponent(symbol)}`);
     if (!res.ok) return null;
     const data = await res.json();
     return data?.url || null;
@@ -5873,7 +5867,7 @@ function exportTransactionsCSV() {
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
   const txs = portfolio.transactions || [];
-  if (!txs.length) { alert("No hay transacciones para exportar."); return; }
+  if (!txs.length) { showToast("No hay transacciones para exportar.", { type: "info" }); return; }
   const rows = [["Fecha","Tipo","Ticker","Cantidad","Precio","Moneda","Comisión (%)","Costo comisión","Neto"]];
   txs.forEach(tx => {
     const date = new Date(tx.date).toLocaleDateString("es-MX", { year:"numeric", month:"2-digit", day:"2-digit" });
@@ -5906,7 +5900,7 @@ function exportPositionsCSV() {
   const portfolio = getPortfolios().find(p => p.id === activePortfolioId);
   if (!portfolio) return;
   const positions = (portfolio.positions || []).filter(p => (p.quantity || 0) > 0);
-  if (!positions.length) { alert("No hay posiciones para exportar."); return; }
+  if (!positions.length) { showToast("No hay posiciones para exportar.", { type: "info" }); return; }
   const rows = [["Ticker", "Cantidad", "Precio promedio", "Moneda", "Fecha compra", "Comision %", "Aplica IVA", "Tasa IVA %"]];
   positions.forEach(p => {
     rows.push([
@@ -5982,7 +5976,7 @@ function importPositionsCSV(file) {
     try {
       const text = String(reader.result || "").replace(/^﻿/, "");
       const rows = parseCSV(text).filter(r => r.some(c => String(c).trim() !== ""));
-      if (rows.length < 2) { alert("El CSV no contiene posiciones."); return; }
+      if (rows.length < 2) { showToast("El CSV no contiene posiciones.", { type: "error" }); return; }
       const header = rows[0].map(h => h.trim().toLowerCase());
       const idx = (names) => header.findIndex(h => names.some(n => h.includes(n)));
       // Alias ampliados para reconocer exportaciones de brokers (GBM, IBKR, Binance, eToro, etc.)
@@ -5995,7 +5989,7 @@ function importPositionsCSV(file) {
       const iIva = idx(["aplica iva"]);
       const iIvaRate = idx(["tasa iva", "tasa de iva"]);
       if (iTicker === -1 || iQty === -1 || iPrice === -1) {
-        alert("El CSV debe incluir al menos las columnas: Ticker, Cantidad, Precio promedio.");
+        showToast("El CSV debe incluir al menos las columnas: Ticker, Cantidad, Precio promedio.", { type: "error", duration: 7000 });
         return;
       }
       const validCur = new Set(["USD", "MXN", "EUR", "GBP", "CAD", "BRL"]);
@@ -6019,7 +6013,7 @@ function importPositionsCSV(file) {
         const ivaRate = iIvaRate !== -1 ? (_csvNum(row[iIvaRate]) || 0) : 0;
         positions.push({ id: generateId(), ticker, avgPrice, quantity, commissionPercent, applyIva, ivaRate, purchaseDate, currency });
       }
-      if (!positions.length) { alert("No se encontraron posiciones válidas en el CSV."); return; }
+      if (!positions.length) { showToast("No se encontraron posiciones válidas en el CSV.", { type: "error" }); return; }
       // Registrar una COMPRA por posición para que las transacciones sean la fuente de
       // verdad del P/L realizado (L1.3) — necesario para ventas futuras de lo importado.
       const transactions = positions.map((p) => {
@@ -6046,9 +6040,9 @@ function importPositionsCSV(file) {
       });
       savePortfolios(portfolios);
       renderPortfolioCards();
-      alert(`Portafolio creado con ${positions.length} posición(es).`);
+      showToast(`Portafolio creado con ${positions.length} posición(es).`, { type: "success" });
     } catch (err) {
-      alert("No se pudo leer el CSV. Verifica el formato.");
+      showToast("No se pudo leer el CSV. Verifica el formato.", { type: "error" });
     }
   };
   reader.readAsText(file);
@@ -6865,7 +6859,7 @@ async function exportPortfolioDeck(startStr, endStr, tone) {
   try {
     data = await computeHistoricalReport(portfolio, startStr, endStr);
   } catch (e) {
-    alert("No se pudo generar la presentación: " + ((e && e.message) || e));
+    showToast("No se pudo generar la presentación: " + ((e && e.message) || e), { type: "error", duration: 7000 });
     return;
   }
 
@@ -6901,7 +6895,7 @@ async function exportPortfolioDeck(startStr, endStr, tone) {
     setTimeout(() => URL.revokeObjectURL(url), 120000);
   } catch (e) {
     console.error("[Presentación]", e);
-    alert("No se pudo generar la presentación: " + ((e && e.message) || e));
+    showToast("No se pudo generar la presentación: " + ((e && e.message) || e), { type: "error", duration: 7000 });
   }
 }
 
@@ -6927,7 +6921,7 @@ async function exportPortfolioPDF(startStr, endStr) {
   try {
     data = await computeHistoricalReport(portfolio, startStr, endStr);
   } catch (e) {
-    alert("No se pudo generar el reporte: " + ((e && e.message) || e));
+    showToast("No se pudo generar el reporte: " + ((e && e.message) || e), { type: "error", duration: 7000 });
     return;
   }
 
@@ -7080,7 +7074,7 @@ async function exportPortfolioPDF(startStr, endStr) {
       rfr: perfRfr,
     });
   } catch (e) {
-    alert("No se pudo construir el reporte: " + ((e && e.message) || e));
+    showToast("No se pudo construir el reporte: " + ((e && e.message) || e), { type: "error", duration: 7000 });
     return;
   }
 
@@ -7104,7 +7098,7 @@ async function exportPortfolioPDF(startStr, endStr) {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
     console.error("[Reporte PDF]", e);
-    alert("No se pudo descargar el PDF: " + ((e && e.message) || e));
+    showToast("No se pudo descargar el PDF: " + ((e && e.message) || e), { type: "error", duration: 7000 });
   }
 }
 
@@ -14434,6 +14428,9 @@ function applyLanguage(lang) {
   const t = translations[lang] || translations.es;
   currentLang = lang;
   localStorage.setItem(langStorageKey, lang);
+  // Sin esto el documento sigue anunciándose como `lang="es"` con contenido en
+  // otro idioma: los lectores de pantalla lo pronuncian mal.
+  document.documentElement.lang = translations[lang] ? lang : "es";
 
   document.querySelectorAll("[data-i18n]").forEach(el => {
     const key = el.dataset.i18n;

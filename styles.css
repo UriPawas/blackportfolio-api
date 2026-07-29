@@ -2019,6 +2019,22 @@ h1, h2, h3,
   color: var(--text);
 }
 
+/* En táctil los enlaces del pie medían 16-19px de alto. El área se agranda sólo
+   para punteros gruesos: en escritorio el pie conserva su interlineado. */
+@media (pointer: coarse) {
+  .footer-links a,
+  .footer-legal-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .footer-legal-links {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+}
+
 [data-theme="light"] .footer-bottom {
   border-top-color: rgba(0, 0, 0, 0.05);
 }
