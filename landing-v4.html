@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BlackPortfolio — un solo estado de cartera para todo lo que tienes</title>
+  <meta name="description" content="Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo en una misma lectura: peso real, riesgo medido y rendimiento comparado contra su índice. Monitoreo y análisis, no asesoría financiera personalizada.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+
+  <script>
+    /* Antes del primer pintado: tema y capacidades. Evita el parpadeo y deja
+       el contenido visible si el JS principal no llega a cargar. */
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado: se queda en claro */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        root.classList.add('motion-ok');
+      }
+    })();
+  </script>
+</head>
+<body>
+<!--
+  THESIS: Un rastreador de portafolios presentado como documento de comité de inversión: la
+  página gana la confianza en los números antes de pedir la del producto. Rechaza el hero
+  fintech (degradado navy, maqueta flotando en perspectiva, tres métricas luminosas).
+  OWN-WORLD: Papel frío (#F1F4F8) y tinta navy (#0B1524); un solo cobalto (#13429B) para
+  acción y para la única serie de datos. Reglas de 1px como estructura, retícula asimétrica
+  5/7, figuras tabulares en todo, radio 2px, láminas de documento en vez de tarjetas.
+  Spectral para títulos, Libre Franklin para datos. Sin resplandor ni degradado de marca.
+  STORY: El visitante ve un estado de cartera real en el primer viewport, entiende que esto
+  convierte su hoja de cálculo en una lectura defendible, y abre cuenta o revisa la vista previa.
+  FIRST VIEWPORT: Regla superior + membrete a la izquierda; abajo, spread 5/7 — titular serif
+  en tres líneas, párrafo a 40ch, acción primaria cobalto y acción secundaria con contorno,
+  procedencia de datos bajo una regla; a la derecha, la lámina "Estado de cartera" con tabla de
+  posiciones y seis métricas al pie, sellada como cifras ilustrativas.
+  FORM: Convención institucional ejecutada a máxima fidelidad — la salida elegida por el
+  usuario sobre el reparto (seed bc0959d2, asignado #7 "mesa de luz"); nivel de acabado:
+  Addepar, BlackRock institucional, Bloomberg Professional.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="top">
+  <div class="shell top__bar">
+    <a class="mark" href="#contenido"><b>Black</b><span>Portfolio</span></a>
+
+    <nav class="top__nav" aria-label="Secciones">
+      <a href="#capacidades">Capacidades</a>
+      <a href="#vista-previa">Vista previa</a>
+      <a href="#seguridad">Seguridad</a>
+      <a href="planes-v4.html">Planes</a>
+    </nav>
+
+    <div class="top__actions">
+      <button class="icon-btn" id="themeBtn" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+      </button>
+      <a class="btn btn--quiet top__login" href="login-v4.html">Iniciar sesión</a>
+      <a class="btn btn--primary top__cta" href="registro-v4.html">Abrir cuenta</a>
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Abrir menú">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="drawer" id="drawer" data-open="false">
+    <div class="shell">
+      <a class="drawer__link" href="#capacidades">Capacidades</a>
+      <a class="drawer__link" href="#vista-previa">Vista previa</a>
+      <a class="drawer__link" href="#seguridad">Seguridad</a>
+      <a class="drawer__link" href="planes-v4.html">Planes</a>
+      <div class="drawer__actions">
+        <a class="btn btn--quiet btn--wide" href="login-v4.html">Iniciar sesión</a>
+        <a class="btn btn--primary btn--wide" href="registro-v4.html">Abrir cuenta</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="quotes" id="quotes" aria-label="Tablero de cotizaciones de referencia">
+  <p class="quotes__label" id="quotesLabel">Mercados</p>
+  <div class="quotes__viewport">
+    <div class="quotes__track" id="quotesTrack" data-state="loading" aria-live="off">
+      <span class="quote"><span class="quote__sym">S&amp;P 500</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">Nasdaq</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">BTC/USD</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">EUR/USD</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">Gold</span><span class="quote__px">—</span></span>
+    </div>
+  </div>
+</section>
+
+<main id="contenido">
+
+  <!-- ───────────────────────────────────────────────── Hero -->
+  <section class="hero">
+    <span class="rosette rosette--hero" aria-hidden="true"></span>
+    <div class="shell spread">
+      <div class="hero__copy">
+        <h1>Un solo estado de cartera para todo lo que tienes.</h1>
+        <p class="lede hero__lede">
+          Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo en una misma lectura:
+          peso real, riesgo medido y rendimiento comparado contra su índice. Y un reporte
+          que puedes enviar sin editarlo.
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="registro-v4.html">Abrir cuenta</a>
+          <a class="btn btn--quiet" href="#vista-previa">Ver la cartera de muestra</a>
+        </div>
+        <p class="hero__source">
+          <span><b>Precios:</b> Yahoo Finance y CoinGecko</span>
+          <span><b>Acceso:</b> beta por invitación</span>
+          <span><b>Reporte:</b> PDF en es · en · fr</span>
+        </p>
+      </div>
+
+      <div class="hero__plate">
+      <div class="plate plate--hero" id="platePosiciones">
+        <div class="plate__rule"></div>
+        <div class="plate__head">
+          <div>
+            <p class="plate__name">Estado de cartera</p>
+            <p class="plate__meta">Patrimonio consolidado · al 30 de junio de 2026</p>
+          </div>
+          <div class="seg" id="segMoneda" role="group" aria-label="Moneda de presentación">
+            <span class="seg__thumb" aria-hidden="true"></span>
+            <button type="button" aria-pressed="true" data-currency="USD">USD</button>
+            <button type="button" aria-pressed="false" data-currency="MXN">MXN</button>
+          </div>
+        </div>
+
+        <div class="scroller">
+          <table class="tbl" id="tablaPosiciones">
+            <caption class="sr">Posiciones de una cartera de muestra con peso, valor, variación del día y contribución a 12 meses.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Posición</th>
+                <th scope="col" class="col-opt">Clase</th>
+                <th scope="col" class="n">Peso</th>
+                <th scope="col" class="n">Valor <span data-currency-label>USD</span></th>
+                <th scope="col" class="n">Día</th>
+                <th scope="col" class="n col-opt">Contrib.<span class="sr"> a 12 meses</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>VTI</span><span class="sym-name">Vanguard Total Market</span></td>
+                <td class="col-opt"><span class="chip">ETF</span></td>
+                <td class="n">22.1 %</td>
+                <td class="n" data-usd="50660">50,660</td>
+                <td class="n pos">+0.31 %</td>
+                <td class="n col-opt pos">+3.8 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><i class="asset-mark asset-mark--logo" aria-hidden="true" style="-webkit-mask-image:url('assets/landing-v4/marks/apple.svg');mask-image:url('assets/landing-v4/marks/apple.svg')"></i>AAPL</span><span class="sym-name">Apple Inc.</span></td>
+                <td class="col-opt"><span class="chip">Acción</span></td>
+                <td class="n">18.4 %</td>
+                <td class="n" data-usd="42180">42,180</td>
+                <td class="n pos">+0.62 %</td>
+                <td class="n col-opt pos">+2.6 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>MSFT</span><span class="sym-name">Microsoft Corp.</span></td>
+                <td class="col-opt"><span class="chip">Acción</span></td>
+                <td class="n">15.8 %</td>
+                <td class="n" data-usd="36220">36,220</td>
+                <td class="n pos">+0.44 %</td>
+                <td class="n col-opt pos">+2.3 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>CETES 28</span><span class="sym-name">Tesorería · 28 días</span></td>
+                <td class="col-opt"><span class="chip">Renta fija</span></td>
+                <td class="n">14.7 %</td>
+                <td class="n" data-usd="33700">33,700</td>
+                <td class="n pos">+0.02 %</td>
+                <td class="n col-opt pos">+1.1 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><i class="asset-mark asset-mark--logo" aria-hidden="true" style="-webkit-mask-image:url('assets/landing-v4/marks/bitcoin.svg');mask-image:url('assets/landing-v4/marks/bitcoin.svg')"></i>BTC</span><span class="sym-name">Bitcoin</span></td>
+                <td class="col-opt"><span class="chip">Cripto</span></td>
+                <td class="n">11.2 %</td>
+                <td class="n" data-usd="25670">25,670</td>
+                <td class="n pos">+1.87 %</td>
+                <td class="n col-opt pos">+2.2 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>FUNO11</span><span class="sym-name">Fibra Uno</span></td>
+                <td class="col-opt"><span class="chip">FIBRA</span></td>
+                <td class="n">9.6 %</td>
+                <td class="n" data-usd="22010">22,010</td>
+                <td class="n neg">−0.44 %</td>
+                <td class="n col-opt neg">−0.6 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--letra" aria-hidden="true">$</span>Efectivo</span><span class="sym-name">Dólar (USD)</span></td>
+                <td class="col-opt"><span class="chip">Efectivo</span></td>
+                <td class="n">8.2 %</td>
+                <td class="n" data-usd="18800">18,800</td>
+                <td class="n">—</td>
+                <td class="n col-opt">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <dl class="plate__foot">
+          <div>
+            <dt>Valor total</dt>
+            <dd><span data-usd="229240">229,240</span> <span data-currency-label>USD</span></dd>
+          </div>
+          <div><dt>XIRR 12 m</dt><dd class="pos">+11.4 %</dd></div>
+          <div><dt>Volatilidad</dt><dd>12.6 %</dd></div>
+          <div><dt>Sharpe</dt><dd>1.08</dd></div>
+          <div><dt>Máx. drawdown</dt><dd class="neg">−14.3 %</dd></div>
+          <div><dt>VaR 95 % · 1 m</dt><dd class="neg">−6.8 %</dd></div>
+        </dl>
+
+      </div>
+
+        <p class="plate__caption">
+          <span class="stamp">Cartera de muestra · cifras ilustrativas</span>
+          <span class="note">Tipo de cambio de referencia: 17.40 MXN/USD.</span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Ficha técnica -->
+  <section class="facts section--tight" aria-labelledby="fichaTitulo">
+    <div class="shell">
+      <h2 id="fichaTitulo" class="sr">Ficha técnica</h2>
+      <dl class="facts__grid">
+        <div class="facts__item">
+          <dt>Segundo factor obligatorio</dt>
+          <dd>TOTP verificado en el servidor. El secreto nunca llega al navegador.</dd>
+        </div>
+        <div class="facts__item">
+          <dt>Cifrado en tránsito</dt>
+          <dd>TLS de extremo a extremo. Tu plan se decide en la base de datos, no en el cliente.</dd>
+        </div>
+        <div class="facts__item">
+          <dt>Seis clases de activo</dt>
+          <dd>Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo por divisa.</dd>
+        </div>
+        <div class="facts__item">
+          <dt>Precios de mercado</dt>
+          <dd>Yahoo Finance para instrumentos listados, CoinGecko para cripto.</dd>
+        </div>
+      </dl>
+      <p class="facts__foot">
+        Lo que no tenemos, no lo publicamos: no hay certificación SOC&nbsp;2 ni ISO, ni una
+        cifra de usuarios que presumir. La plataforma está en beta por invitación y esto es
+        todo lo que se puede afirmar hoy.
+      </p>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Capacidades -->
+  <section class="section" id="capacidades">
+    <div class="shell">
+
+      <article class="cap">
+        <div class="cap__copy" data-reveal>
+          <h2>Seis clases de activo en la misma tabla.</h2>
+          <p>
+            Registras posición, costo y moneda. La plataforma resuelve el precio, el peso real
+            y lo que cada línea aportó al total — sin que tengas que mantener una fórmula ni
+            cuadrar dos hojas que ya no coinciden.
+          </p>
+          <dl class="spec">
+            <div><dt>Acciones y ETFs</dt><dd>Precio de mercado, dividendos y rendimiento ponderado por flujos (XIRR).</dd></div>
+            <div><dt>FIBRAs</dt><dd>Distribuciones y peso sectorial dentro de la cartera.</dd></div>
+            <div><dt>Cripto</dt><dd>Precio spot vía CoinGecko, tratado como una clase más.</dd></div>
+            <div><dt>Renta fija</dt><dd>Tasa, plazo y vencimiento, incluidos instrumentos locales como Cetes.</dd></div>
+            <div><dt>Efectivo</dt><dd>Por divisa, con tipo de cambio de referencia visible.</dd></div>
+          </dl>
+        </div>
+        <figure class="figure figure--screen" data-reveal data-reveal-delay="1" style="margin:0">
+          <img src="assets/landing-v4/pantalla-mercado.jpg"
+               alt="Tablero de datos de mercado en blanco y negro con tasas y variaciones por instrumento."
+               width="1400" height="900" loading="lazy" decoding="async">
+          <figcaption class="figure__cap">
+            Los precios no se capturan a mano: llegan de Yahoo Finance y CoinGecko cada vez que abres la cartera.
+          </figcaption>
+        </figure>
+      </article>
+
+      <article class="cap cap--flip">
+        <div class="cap__copy" data-reveal>
+          <h2>Métricas que se sostienen en una junta.</h2>
+          <p>
+            Rendimiento, volatilidad, caída máxima, Sharpe, VaR y concentración. Cada número
+            trae a la mano la pregunta que contesta, para que puedas explicarlo cuando te lo
+            pregunten en vez de leerlo en voz alta.
+          </p>
+          <p class="note">
+            El motor de análisis también resuelve correlación, Monte Carlo, backtesting y
+            optimización (MVO, Smart Beta, Black-Litterman) sobre las mismas posiciones.
+          </p>
+        </div>
+        <div class="plate" data-reveal data-reveal-delay="1">
+          <div class="plate__head">
+            <p class="plate__name">Lectura de riesgo y rendimiento</p>
+            <span class="stamp">Muestra</span>
+          </div>
+          <div class="scroller">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th scope="col">Métrica y pregunta que contesta</th>
+                  <th scope="col" class="n">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>XIRR 12 m</span><span class="sym-name">¿Cuánto rindió el dinero, considerando cuándo entró?</span></td><td class="n pos">+11.4 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>Volatilidad</span><span class="sym-name">¿Qué tan movida es la cartera en un año?</span></td><td class="n">12.6 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>Máx. drawdown</span><span class="sym-name">¿Cuál fue la peor caída desde un máximo?</span></td><td class="n neg">−14.3 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>Sharpe</span><span class="sym-name">¿El rendimiento pagó el riesgo que corriste?</span></td><td class="n">1.08</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>VaR 95 % · 1 mes</span><span class="sym-name">En un mes malo de cada veinte, ¿cuánto?</span></td><td class="n neg">−6.8 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>HHI</span><span class="sym-name">¿Está concentrada en pocas posiciones?</span></td><td class="n">0.16</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="cap">
+        <div class="cap__copy" data-reveal>
+          <h2>Tus posiciones no son material de nadie más.</h2>
+          <p>
+            Entras con contraseña o con Google, el segundo factor se verifica en el servidor y
+            el dispositivo de confianza evita pedirte el código todos los días. Las carteras
+            viven en una base con respaldos, no en el navegador.
+          </p>
+          <p>
+            Y hay una frontera que no cruzamos: no ejecutamos órdenes, no nos conectamos a tu
+            broker y no damos recomendaciones personalizadas de compra o venta.
+          </p>
+          <a class="btn-text" href="#seguridad">
+            Ver el detalle de protocolos
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div class="plate" data-reveal data-reveal-delay="1">
+          <div class="plate__head">
+            <p class="plate__name">Control de la cuenta</p>
+          </div>
+          <div style="padding: 0 1.125rem 1rem">
+            <dl class="spec">
+              <div><dt>Identidad</dt><dd>Firebase Authentication: correo y contraseña, o Google.</dd></div>
+              <div><dt>Segundo factor</dt><dd>TOTP verificado en servidor, con límite de intentos por cuenta.</dd></div>
+              <div><dt>Sesión</dt><dd>Token revisado contra revocación en cada llamada sensible.</dd></div>
+              <div><dt>Persistencia</dt><dd>PostgreSQL administrado, con respaldos programados.</dd></div>
+              <div><dt>Salida</dt><dd>Exportación a PDF y link público de solo lectura que tú decides compartir.</dd></div>
+            </dl>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Vista previa -->
+  <section class="section section--ruled" id="vista-previa">
+    <div class="shell">
+      <div class="head" data-reveal>
+        <h2>La misma cartera, vista de tres maneras.</h2>
+        <p class="lede">
+          Asignación, riesgo y comparación contra el índice se calculan sobre las mismas
+          posiciones. Cambia la vista y el documento se rehace completo.
+        </p>
+      </div>
+
+      <div class="preview__controls" data-reveal data-reveal-delay="1">
+        <div class="seg" id="segVista" role="tablist" aria-label="Vista de la cartera">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button type="button" role="tab" aria-selected="true"  data-view="asignacion" aria-controls="vistaPanel">Asignación</button>
+          <button type="button" role="tab" aria-selected="false" data-view="riesgo"     aria-controls="vistaPanel">Riesgo</button>
+          <button type="button" role="tab" aria-selected="false" data-view="benchmark"  aria-controls="vistaPanel">Benchmark</button>
+        </div>
+        <span class="seg-lab">
+          Moneda:
+          <span class="num" data-currency-label>USD</span>
+          <span aria-hidden="true">·</span>
+          <button class="btn-text" type="button" id="btnMoneda">cambiar</button>
+        </span>
+      </div>
+
+      <div class="view" id="vistaPanel" role="tabpanel" aria-live="polite" data-reveal data-reveal-delay="2">
+        <div class="view__main">
+          <div class="view__head">
+            <div>
+              <p class="view__title" id="viewTitle">Asignación por clase de activo</p>
+              <p class="view__desc" id="viewDesc">Peso real de cada clase sobre el valor total, recalculado con el precio de mercado del día.</p>
+            </div>
+            <span class="stamp">Muestra</span>
+          </div>
+          <div id="viewGraphic"></div>
+        </div>
+        <div class="view__aside">
+          <div class="scroller" id="viewTable"></div>
+        </div>
+        <div class="view__foot">
+          <span class="note" id="viewNote">Concentración baja: HHI 0.16 sobre siete posiciones.</span>
+          <a class="btn-text" href="registro-v4.html">
+            Construir la mía
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Seguridad -->
+  <section class="band section" id="seguridad">
+    <div class="shell band__grid">
+      <figure class="figure figure--stone" data-reveal style="margin:0">
+        <img src="assets/landing-v4/columnata.jpg"
+             alt="Fuste acanalado y capiteles corintios de una fachada de piedra caliza."
+             width="1000" height="940" loading="lazy" decoding="async">
+      </figure>
+
+      <div data-reveal data-reveal-delay="1">
+        <h2>Los protocolos, sin adjetivos.</h2>
+        <p class="lede" style="margin-top: var(--s4)">
+          Esta es la lista completa de lo que hay hoy. Si algo no aparece aquí, es porque
+          todavía no existe — no porque se nos haya olvidado escribirlo.
+        </p>
+
+        <dl class="spec" style="margin-top: var(--s6)">
+          <div><dt>Autenticación</dt><dd>Firebase Authentication. Token de identidad verificado en cada llamada, con revisión de revocación.</dd></div>
+          <div><dt>Segundo factor</dt><dd>TOTP generado y verificado en el servidor. El secreto no se expone al navegador en ningún momento.</dd></div>
+          <div><dt>Dispositivo de confianza</dt><dd>Token local con caducidad para no pedir el código en cada sesión del mismo equipo.</dd></div>
+          <div><dt>Transporte</dt><dd>TLS. Content Security Policy declarada en el hosting.</dd></div>
+          <div><dt>Almacenamiento</dt><dd>PostgreSQL administrado. Los límites de tu plan se aplican en el servidor.</dd></div>
+          <div><dt>Respaldos</dt><dd>Programados sobre las tablas de cuentas, carteras y operaciones.</dd></div>
+          <div><dt>Cobros</dt><dd>Stripe. El webhook se valida por firma y el plan vigente vive en la base, nunca en el cliente.</dd></div>
+        </dl>
+
+        <div class="boundary">
+          <p><b>BlackPortfolio monitorea y analiza; no asesora.</b></p>
+          <p>
+            No es un broker, no ejecuta órdenes y no emite recomendaciones personalizadas de
+            compra o venta. Las decisiones de inversión y sus resultados son tuyos. Esta
+            frontera es un compromiso del producto, no letra chica.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Cierre -->
+  <section class="close">
+    <div class="close__bg" aria-hidden="true">
+      <img src="assets/landing-v4/torre.jpg" alt="" width="1800" height="1000" loading="lazy" decoding="async">
+    </div>
+    <span class="rosette rosette--close" aria-hidden="true"></span>
+    <div class="shell close__inner">
+      <h2>Empieza por una cartera. La hoja de cálculo puede esperar.</h2>
+      <p>
+        Crea tu cuenta, captura tus posiciones y saca la primera lectura completa en la misma
+        sesión. El plan gratuito no pide tarjeta.
+      </p>
+      <div class="close__actions">
+        <a class="btn btn--primary" href="registro-v4.html">Abrir cuenta</a>
+        <a class="btn btn--onband" href="planes-v4.html">Comparar planes</a>
+      </div>
+      <p class="close__prices">
+        <span><b>Explorer</b> $0</span>
+        <span><b>Investor</b> $19</span>
+        <span><b>Advisor Pro</b> $59</span>
+        <span><b>Wealth Desk</b> $129 USD/mes</span>
+        <span>Anual ≈ 20 % menos</span>
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="shell">
+    <div class="foot__grid">
+      <div class="foot__col foot__brand">
+        <a class="mark" href="#contenido"><b>Black</b><span>Portfolio</span></a>
+        <p>Construye, mide y presenta portafolios multiactivo. Beta por invitación.</p>
+      </div>
+      <div class="foot__col">
+        <h3>Producto</h3>
+        <ul>
+          <li><a href="#capacidades">Capacidades</a></li>
+          <li><a href="#vista-previa">Vista previa</a></li>
+          <li><a href="planes-v4.html">Planes y precios</a></li>
+          <li><a href="index.html#faq">Preguntas frecuentes</a></li>
+        </ul>
+      </div>
+      <div class="foot__col">
+        <h3>Cuenta</h3>
+        <ul>
+          <li><a href="login-v4.html">Iniciar sesión</a></li>
+          <li><a href="registro-v4.html">Abrir cuenta</a></li>
+          <li><a href="main.html">Ir al tablero</a></li>
+        </ul>
+      </div>
+      <div class="foot__col">
+        <h3>Legal</h3>
+        <ul>
+          <li><a href="privacidad-v4.html">Aviso de privacidad</a></li>
+          <li><a href="#seguridad">Seguridad</a></li>
+          <li><a href="terminos-v4.html">Alcance del servicio</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="foot__bottom">
+      <p class="note">
+        © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
+        financiera personalizada. Cifras de muestra en esta página, ilustrativas.
+      </p>
+      <div class="foot__theme">
+        <span class="label" id="temaLabel">Tema</span>
+        <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+          <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="tickers-data.js"></script>
+<script src="landing-v4.js"></script>
+</body>
+</html>

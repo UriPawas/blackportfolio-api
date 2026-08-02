@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlackPortfolio · Prototipo de landing (v2)</title>
+  <meta name="description" content="Prototipo de rediseño de la landing de BlackPortfolio: plataforma para construir, medir y reportar portafolios de inversión.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v2.css?v=1">
+
+  <script>
+    (function () {
+      var s = localStorage.getItem('bp-theme');
+      var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', s || (d ? 'dark' : 'light'));
+    })();
+  </script>
+</head>
+<body>
+  <header class="masthead" id="masthead">
+    <div class="shell masthead-in">
+      <a class="wordmark" href="#top"><i></i><span>BlackPortfolio</span><small>Portafolios</small></a>
+
+      <nav>
+        <a href="#plataforma">Plataforma</a>
+        <a href="#producto">Producto</a>
+        <a href="#metodo">Método</a>
+        <a href="#planes">Planes</a>
+        <a href="#preguntas">Preguntas</a>
+      </nav>
+
+      <button class="burger" id="burger" type="button" aria-label="Abrir menú" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+
+      <div class="masthead-actions">
+        <button class="mode" id="modeToggle" type="button" aria-label="Cambiar tema">
+          <span id="modeLabel">Cierre</span><i></i>
+        </button>
+        <a class="btn btn--ghost" href="login.html">Acceder</a>
+        <a class="btn btn--solid" href="#abrir-cuenta">Abrir cuenta<span class="arrow">→</span></a>
+      </div>
+    </div>
+
+    <div class="shell mobile-menu" id="mobileMenu">
+      <a href="#plataforma">Plataforma</a>
+      <a href="#producto">Producto</a>
+      <a href="#metodo">Método</a>
+      <a href="#planes">Planes</a>
+      <a href="#preguntas">Preguntas</a>
+      <a class="btn btn--solid" href="#abrir-cuenta">Abrir cuenta<span class="arrow">→</span></a>
+    </div>
+  </header>
+
+  <div class="tape" aria-hidden="true">
+    <div class="tape-track" id="tapeTrack"></div>
+  </div>
+
+  <main id="top">
+    <!-- ── Portada ─────────────────────────────────────────────────────── -->
+    <section class="hero">
+      <div class="shell">
+        <div class="hero-grid">
+          <div>
+            <span class="tag tag--brass">Beta abierta · Portafolios multi-activo</span>
+            <h1 class="reveal-type">
+              <span><span style="--d:.05s">Mide tu portafolio</span></span>
+              <span><span style="--d:.14s">como lo mide un</span></span>
+              <span><span style="--d:.23s"><em>comité de inversión.</em></span></span>
+            </h1>
+            <p class="lead" data-reveal style="--d:.42s">
+              Construye estrategias de renta variable, ETFs, cripto y renta fija; cuantifica el riesgo real
+              —caída máxima, volatilidad, concentración— y entrega reportes que resisten preguntas.
+            </p>
+            <div class="hero-actions" data-reveal style="--d:.5s">
+              <a class="btn btn--solid" href="#abrir-cuenta">Crear cuenta gratis<span class="arrow">→</span></a>
+              <a class="btn btn--ghost" href="#planes">Ver planes</a>
+            </div>
+          </div>
+
+          <aside class="hero-side" data-reveal style="--d:.58s">
+            <span class="tag">La cifra que casi nadie enseña</span>
+            <p class="prose">
+              Las plataformas presumen la línea que sube. Aquí también se dibuja la que baja:
+              cuánto llegaste a perder desde tu máximo anterior, cuánto tardaste en recuperarlo
+              y qué posición lo provocó.
+            </p>
+            <figure class="hero-figure">
+              <img src="assets/landing-v2/exchange.jpg" alt="Fachada de la Bolsa de Nueva York al anochecer" width="980" height="1306" loading="eager" decoding="async">
+            </figure>
+          </aside>
+        </div>
+      </div>
+
+      <!-- firma: curva bajo el agua -->
+      <div class="shell">
+        <div class="underwater">
+          <div class="underwater-head">
+            <span class="tag">Curva bajo el agua · caída desde el máximo anterior</span>
+            <span class="tag">Serie ilustrativa · 48 meses</span>
+          </div>
+          <div class="uw-wrap" id="uwWrap">
+            <svg class="uw-chart" id="uwChart" viewBox="0 0 1000 260" role="img"
+                 aria-label="Gráfica ilustrativa de caída desde máximos: caída máxima de 18.4% recuperada en nueve meses."></svg>
+            <div class="uw-callout" id="uwCallout">
+              <b class="num">−18.4%</b>
+              caída máxima<br>recuperada en 9 meses
+            </div>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi" data-reveal>
+            <strong class="num" data-count="142">142</strong>
+            <span>Mercados cubiertos</span>
+          </div>
+          <div class="kpi" data-reveal style="--d:.08s">
+            <strong class="num" data-count="6">6</strong>
+            <span>Clases de activo</span>
+          </div>
+          <div class="kpi" data-reveal style="--d:.16s">
+            <strong class="num">24/7</strong>
+            <span>Seguimiento de mercado</span>
+          </div>
+          <div class="kpi" data-reveal style="--d:.24s">
+            <strong class="num">2FA</strong>
+            <span>En todas las cuentas</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Plataforma ──────────────────────────────────────────────────── -->
+    <section class="band" id="plataforma">
+      <div class="shell">
+        <div class="band-head">
+          <div>
+            <span class="tag">Plataforma</span>
+            <h2 data-reveal>Cuatro preguntas que tu cartera debería poder responder sola.</h2>
+          </div>
+          <p class="prose" data-reveal style="--d:.1s">
+            Pensada para inversionistas particulares, asesores y equipos que sustentan decisiones
+            frente a alguien más.
+          </p>
+        </div>
+
+        <div class="spec">
+          <article class="spec-row" data-reveal>
+            <span class="spec-metric">¿En qué estoy?</span>
+            <h3>Asignación por riesgo, activo y región</h3>
+            <p class="prose">Reparto de capital con pesos, concentración (HHI) y desviación contra tu objetivo. Sabes qué posición pesa demasiado antes de que importe.</p>
+          </article>
+          <article class="spec-row" data-reveal style="--d:.06s">
+            <span class="spec-metric">¿Cuánto puede doler?</span>
+            <h3>Volatilidad, caída máxima y correlación</h3>
+            <p class="prose">Drawdown histórico, Sharpe, Sortino y matriz de correlación en la misma vista. Escenarios de estrés sobre tus posiciones reales, no sobre un índice genérico.</p>
+          </article>
+          <article class="spec-row" data-reveal style="--d:.12s">
+            <span class="spec-metric">¿Qué lo movió?</span>
+            <h3>Atribución posición por posición</h3>
+            <p class="prose">Cada punto porcentual del periodo tiene dueño. El reporte en PDF anota el evento que movió a cada posición y el impacto en tu portafolio, en dinero antes que en porcentaje.</p>
+          </article>
+          <article class="spec-row" data-reveal style="--d:.18s">
+            <span class="spec-metric">¿Y el cobro?</span>
+            <h3>Cuenta, plan y suscripción</h3>
+            <p class="prose">Alta con 2FA, planes con límites claros y cobro por Stripe o transferencia en pesos. Cancelas cuando quieras, sin pasar por soporte.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Producto ────────────────────────────────────────────────────── -->
+    <section class="band band--tight" id="producto">
+      <div class="shell">
+        <div class="band-head">
+          <div>
+            <span class="tag">Producto</span>
+            <h2 data-reveal>Capturas reales. Sin maquetas.</h2>
+          </div>
+          <p class="prose" data-reveal style="--d:.1s">
+            Esto es lo que ves desde el primer día, con datos de mercado en vivo.
+          </p>
+        </div>
+
+        <div class="figures">
+          <figure class="figure figure--wide" data-reveal>
+            <div class="figure-frame">
+              <img src="assets/screenshots/app-topdown.jpg" alt="Análisis Top-Down con indicadores macroeconómicos: tasas del Tesoro, VIX, dólar, petróleo y sectores favorecidos" width="2160" height="1350" loading="lazy" decoding="async">
+            </div>
+            <figcaption><b>Fig. 01</b> Análisis top-down — régimen macro, sectores favorecidos y candidatos alineados al ciclo.</figcaption>
+          </figure>
+          <figure class="figure" data-reveal style="--d:.08s">
+            <div class="figure-frame">
+              <img src="assets/screenshots/app-markets.jpg" alt="Sección de mercados con gráfica de velas, calificación técnica y estadísticas del activo" width="2160" height="1350" loading="lazy" decoding="async">
+            </div>
+            <figcaption><b>Fig. 02</b> Mercados — velas, calificación técnica y estadísticas clave.</figcaption>
+          </figure>
+          <figure class="figure" data-reveal style="--d:.14s">
+            <div class="figure-frame">
+              <img src="assets/screenshots/app-markowitz.jpg" alt="Creación de portafolio con estrategias de optimización MVO, Smart Beta y Black-Litterman" width="2160" height="1350" loading="lazy" decoding="async">
+            </div>
+            <figcaption><b>Fig. 03</b> Optimización — MVO, Smart Beta y Black-Litterman.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Posicionamiento ─────────────────────────────────────────────── -->
+    <section class="plate" id="postura">
+      <img class="plate-bg" id="plateBg" src="assets/landing-v2/city-0.jpg" alt="" aria-hidden="true" width="1920" height="1080" loading="lazy" decoding="async">
+      <div class="shell">
+        <div class="plate-in">
+          <span class="tag tag--brass">Postura</span>
+          <h2 data-reveal>Monitoreamos. No aconsejamos.</h2>
+          <p class="lead" data-reveal style="--d:.08s">
+            BlackPortfolio organiza información, mide riesgo y sustenta decisiones con datos.
+            No ejecuta operaciones por ti ni recomienda comprar o vender un valor específico.
+          </p>
+          <p class="plate-note" data-reveal style="--d:.16s">
+            Acceso con 2FA obligatorio · Datos cifrados en tránsito y en reposo ·
+            Cuando una fuente de mercado falla, la plataforma lo dice en pantalla en lugar de mostrar un número viejo.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Método ──────────────────────────────────────────────────────── -->
+    <section class="band" id="metodo">
+      <div class="shell">
+        <div class="band-head">
+          <div>
+            <span class="tag">Método</span>
+            <h2 data-reveal>De la hoja de cálculo al comité, en una tarde.</h2>
+          </div>
+          <p class="prose" data-reveal style="--d:.1s">
+            Sin conectar tu bróker ni compartir credenciales. La captura manual basta para empezar.
+          </p>
+        </div>
+
+        <div class="method">
+          <article class="method-step" data-reveal>
+            <span class="tag">Día 1 · 4 minutos</span>
+            <h3>Abre la cuenta</h3>
+            <p class="prose">Correo, contraseña y 2FA. El plan Explorer no pide tarjeta y te deja un portafolio activo para probar.</p>
+          </article>
+          <article class="method-step" data-reveal style="--d:.1s">
+            <span class="tag">Día 1 · 20 minutos</span>
+            <h3>Carga tus posiciones</h3>
+            <p class="prose">Ticker, cantidad, precio y fecha. La plataforma resuelve divisa, sector y precios históricos por su cuenta.</p>
+          </article>
+          <article class="method-step" data-reveal style="--d:.2s">
+            <span class="tag">Continuo</span>
+            <h3>Revisa y reporta</h3>
+            <p class="prose">Alertas de precio, señales de rebalanceo y un reporte en PDF listo para enviar cuando alguien pregunte cómo va.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Planes ──────────────────────────────────────────────────────── -->
+    <section class="band" id="planes">
+      <div class="shell">
+        <div class="band-head">
+          <div>
+            <span class="tag">Planes</span>
+            <h2 data-reveal>Desde una cartera personal hasta una mesa de análisis.</h2>
+          </div>
+          <div class="switch" id="billingSwitch" data-period="month">
+            <i></i>
+            <button type="button" class="is-on" data-period="month" aria-pressed="true">Mensual</button>
+            <button type="button" data-period="year" aria-pressed="false">Anual <span class="save">−20%</span></button>
+          </div>
+        </div>
+
+        <div class="plans">
+          <article class="plan" data-reveal>
+            <div class="plan-name">Explorer</div>
+            <span class="tag">Gratis · sin tarjeta</span>
+            <div class="plan-price"><span class="num" data-month="0" data-year="0">$0</span><small>USD/mes</small></div>
+            <p class="plan-sub">Para siempre</p>
+            <ul>
+              <li>1 portafolio activo</li>
+              <li>Hasta 10 posiciones</li>
+              <li>Datos diferidos 15 min</li>
+              <li>Rendimiento básico (XIRR)</li>
+              <li class="off">Sin análisis de riesgo</li>
+              <li class="off">Sin backtesting</li>
+            </ul>
+            <a class="btn btn--ghost" href="#abrir-cuenta">Comenzar</a>
+          </article>
+
+          <article class="plan" data-reveal style="--d:.06s">
+            <div class="plan-name">Investor</div>
+            <span class="tag">Individual</span>
+            <div class="plan-price"><span class="num" data-month="19" data-year="15">$19</span><small>USD/mes</small></div>
+            <p class="plan-sub" data-sub-month="≈ $349 MXN" data-sub-year="Facturado anual">≈ $349 MXN</p>
+            <ul>
+              <li>Hasta 3 portafolios</li>
+              <li>50 posiciones por portafolio</li>
+              <li>Datos en tiempo real</li>
+              <li>Riesgo esencial</li>
+              <li>Reporte PDF mensual</li>
+              <li class="off">Sin backtesting</li>
+            </ul>
+            <a class="btn btn--ghost" href="#abrir-cuenta">Elegir</a>
+          </article>
+
+          <article class="plan plan--pick" data-reveal style="--d:.12s">
+            <div class="plan-name">Advisor Pro</div>
+            <span class="tag tag--brass">Profesional · más elegido</span>
+            <div class="plan-price"><span class="num" data-month="59" data-year="47">$59</span><small>USD/mes</small></div>
+            <p class="plan-sub" data-sub-month="≈ $1,090 MXN" data-sub-year="Facturado anual">≈ $1,090 MXN</p>
+            <ul>
+              <li>Portafolios ilimitados</li>
+              <li>Riesgo avanzado (VaR, drawdown)</li>
+              <li>Backtesting y rebalanceo</li>
+              <li>Reportes con tu marca + IA</li>
+              <li>Hasta 3 usuarios</li>
+            </ul>
+            <a class="btn btn--solid" href="#abrir-cuenta">Elegir<span class="arrow">→</span></a>
+          </article>
+
+          <article class="plan" data-reveal style="--d:.18s">
+            <div class="plan-name">Wealth Desk</div>
+            <span class="tag">Equipos</span>
+            <div class="plan-price"><span class="num" data-month="129" data-year="103">$129</span><small>USD/mes</small></div>
+            <p class="plan-sub" data-sub-month="≈ $2,390 MXN" data-sub-year="Facturado anual">≈ $2,390 MXN</p>
+            <ul>
+              <li>Todo lo de Advisor Pro</li>
+              <li>Usuarios y roles ilimitados</li>
+              <li>API y webhooks</li>
+              <li>Marca blanca completa</li>
+              <li>Soporte dedicado</li>
+            </ul>
+            <a class="btn btn--ghost" href="#abrir-cuenta">Elegir</a>
+          </article>
+        </div>
+
+        <p class="plans-foot">
+          Precios en USD; la referencia en MXN se cobra al tipo de cambio del día. Todos los planes de pago
+          incluyen 14 días de garantía y cancelación en cualquier momento.
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Preguntas ───────────────────────────────────────────────────── -->
+    <section class="band band--tight" id="preguntas">
+      <div class="shell">
+        <div class="band-head">
+          <div>
+            <span class="tag">Preguntas</span>
+            <h2 data-reveal>Lo que conviene saber antes de abrir la cuenta.</h2>
+          </div>
+        </div>
+
+        <div class="faq">
+          <details open>
+            <summary>¿Tengo que conectar mi bróker?<span class="sign"></span></summary>
+            <div class="answer"><div><p>No. Puedes construir y analizar portafolios con captura manual. Cualquier integración futura con brókers será opcional y se anunciará con claridad.</p></div></div>
+          </details>
+          <details>
+            <summary>¿Cómo se protege mi información?<span class="sign"></span></summary>
+            <div class="answer"><div><p>Ciframos los datos en tránsito y en reposo, y el segundo factor (TOTP) se valida en el servidor: el secreto de 2FA nunca llega al navegador.</p></div></div>
+          </details>
+          <details>
+            <summary>¿BlackPortfolio da recomendaciones de inversión?<span class="sign"></span></summary>
+            <div class="answer"><div><p>No. Es una herramienta de monitoreo, organización y análisis. No sustituye a un asesor certificado ni emite recomendaciones personalizadas de compra o venta.</p></div></div>
+          </details>
+          <details>
+            <summary>¿Qué pasa si una fuente de datos falla?<span class="sign"></span></summary>
+            <div class="answer"><div><p>La plataforma muestra el estado —dato diferido, error o sin información— en lugar de presentar una cifra vieja como si fuera actual.</p></div></div>
+          </details>
+          <details>
+            <summary>¿Puedo cambiar o cancelar el plan?<span class="sign"></span></summary>
+            <div class="answer"><div><p>Sí. Sin permanencia: subes, bajas o cancelas desde tu cuenta, y el cobro se ajusta en el siguiente periodo.</p></div></div>
+          </details>
+          <details>
+            <summary>¿Hay una versión gratuita?<span class="sign"></span></summary>
+            <div class="answer"><div><p>Sí. El plan Explorer permite un portafolio con hasta 10 posiciones y datos diferidos 15 minutos, sin tarjeta.</p></div></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Alta ────────────────────────────────────────────────────────── -->
+    <section class="band" id="abrir-cuenta">
+      <div class="shell">
+        <div class="close-grid">
+          <div>
+            <span class="tag tag--brass">Abrir cuenta</span>
+            <h2 data-reveal style="margin:16px 0 20px">Empieza con un portafolio. Sube de plan cuando el portafolio lo pida.</h2>
+            <p class="lead" data-reveal style="--d:.08s">
+              La cuenta gratuita no caduca ni pide tarjeta. Si más adelante necesitas riesgo avanzado,
+              backtesting o reportes con tu marca, el cambio de plan toma un minuto.
+            </p>
+            <ul class="close-list" data-reveal style="--d:.14s">
+              <li><b>Alta</b><span>Correo y contraseña, o cuenta de Google.</span></li>
+              <li><b>Seguridad</b><span>2FA con Google Authenticator en el mismo flujo.</span></li>
+              <li><b>Cobro</b><span>Stripe para tarjeta; transferencia y SPEI en pesos.</span></li>
+              <li><b>Salida</b><span>Exportas y cancelas sin hablar con nadie.</span></li>
+            </ul>
+          </div>
+
+          <form class="close-form" data-reveal style="--d:.1s" onsubmit="return false">
+            <div class="field">
+              <label for="v2Name">Nombre</label>
+              <input id="v2Name" type="text" placeholder="Tu nombre" autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="v2Mail">Correo</label>
+              <input id="v2Mail" type="email" placeholder="tu@firma.com" autocomplete="email">
+            </div>
+            <div class="field">
+              <label for="v2Plan">Plan inicial</label>
+              <select id="v2Plan">
+                <option>Explorer — gratis</option>
+                <option>Investor — $19/mes</option>
+                <option selected>Advisor Pro — $59/mes</option>
+                <option>Wealth Desk — $129/mes</option>
+              </select>
+            </div>
+            <button class="btn btn--solid" type="submit">Crear cuenta<span class="arrow">→</span></button>
+            <p class="form-note">Prototipo de diseño: este formulario no envía datos ni crea cuentas.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="shell">
+      <div class="foot-grid">
+        <div>
+          <a class="wordmark" href="#top"><i></i><span>BlackPortfolio</span></a>
+          <p>Plataforma para construir, medir y reportar portafolios de inversión multi-activo.</p>
+        </div>
+        <div class="foot-col">
+          <h4>Plataforma</h4>
+          <a href="#plataforma">Qué mide</a>
+          <a href="#producto">Producto</a>
+          <a href="#metodo">Método</a>
+        </div>
+        <div class="foot-col">
+          <h4>Cuenta</h4>
+          <a href="#planes">Planes</a>
+          <a href="#abrir-cuenta">Abrir cuenta</a>
+          <a href="login.html">Acceder</a>
+        </div>
+        <div class="foot-col">
+          <h4>Legal</h4>
+          <a href="privacy.html">Privacidad</a>
+          <a href="terms.html">Términos</a>
+          <a href="#postura">Postura</a>
+        </div>
+      </div>
+      <div class="foot-bottom">
+        <span>© 2026 BlackPortfolio · Prototipo de diseño v2</span>
+        <span>Serie de la gráfica: ilustrativa, no corresponde a un portafolio real.</span>
+        <span>Fotografías: <a href="https://www.pexels.com/photo/historic-new-york-stock-exchange-building-at-twilight-34862859/" target="_blank" rel="noopener">Alexey K.</a> y <a href="https://www.pexels.com/photo/modern-cityscape-with-tall-skyscrapers-in-black-and-white-30479464/" target="_blank" rel="noopener">Jeffrey Ligan</a> · Pexels</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="landing-v2.js?v=1"></script>
+</body>
+</html>

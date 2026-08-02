@@ -1,0 +1,42 @@
+{
+  "salon": {
+    "file": "salon.jpg",
+    "why": "El cuarto: nogal profundo, luz baja. Es el salón de la casa de bolsa.",
+    "query": "dark wood paneled room interior",
+    "pexels_id": 38545698,
+    "photographer": "Brett A",
+    "url": "https://www.pexels.com/photo/elegant-vintage-library-with-classic-decor-38545698/",
+    "alt": "Luxurious vintage library with classic furniture and decor, exuding warmth and sophistication.",
+    "avg_color": "#553624"
+  },
+  "columnas": {
+    "file": "columnas.jpg",
+    "why": "Fachada neoclásica en Ciudad de México — la audiencia es mexicana.",
+    "query": "classical stone columns architecture detail",
+    "pexels_id": 37189006,
+    "photographer": "Dainé Zeferino",
+    "url": "https://www.pexels.com/photo/historic-stone-columns-in-ciudad-de-mexico-37189006/",
+    "alt": "Capture of historic stone columns with intricate design in Ciudad de México.",
+    "avg_color": "#6A6663"
+  },
+  "marmol": {
+    "file": "marmol.jpg",
+    "why": "Mármol real, neutro y entintable al verde serpentina.",
+    "query": "green marble stone texture",
+    "pexels_id": 31470816,
+    "photographer": "Landiva  Weber",
+    "url": "https://www.pexels.com/photo/abstract-black-and-white-marble-texture-design-31470816/",
+    "alt": "Artistic black and white marble texture with fluid abstract patterns, perfect for backgrounds and creative designs.",
+    "avg_color": "#778383"
+  },
+  "archivo": {
+    "file": "archivo.jpg",
+    "why": "Libro mayor manuscrito: el ancestro del portafolio.",
+    "query": "old ledger book paper texture",
+    "pexels_id": 164686,
+    "photographer": "Pixabay",
+    "url": "https://www.pexels.com/photo/close-up-photo-of-ledger-s-list-164686/",
+    "alt": "Close-up of a vintage handwritten ledger detailing financial records and accounts.",
+    "avg_color": "#C8B7A8"
+  }
+}

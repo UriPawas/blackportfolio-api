@@ -1,107 +1,337 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Términos de Servicio | BlackPortfolio</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect width='36' height='36' rx='12' fill='%23556eff'/><text x='18' y='25' font-family='Inter,system-ui,sans-serif' font-weight='700' font-size='22' fill='white' text-anchor='middle'>B</text></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alcance del servicio | BlackPortfolio</title>
+  <meta name="description" content="Términos de servicio de BlackPortfolio: qué es y qué no es, el alcance del contenido de IA, planes y pagos, fase beta y límites de responsabilidad.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4">
-  <style>
-    .legal-shell { max-width: 720px; margin: 0 auto; padding: 80px 24px 120px; }
-    .legal-shell h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin-bottom: 8px; }
-    .legal-shell .legal-date { color: var(--muted); font-size: 0.9rem; margin-bottom: 48px; display: block; }
-    .legal-shell h2 { font-size: 1.1rem; margin: 36px 0 10px; color: var(--text); }
-    .legal-shell p, .legal-shell li { color: var(--muted); line-height: 1.75; font-size: 0.95rem; }
-    .legal-shell ul { padding-left: 20px; }
-    .legal-shell a { color: var(--primary); }
-  </style>
-</head>
-<body>
-  <div class="background-orb orb-one"></div>
-  <div class="grid-overlay"></div>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="login-v4.css">
+  <link rel="stylesheet" href="legal-v4.css">
 
-  <header class="site-header">
-    <div class="container nav">
-      <a class="brand" href="index.html"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
-      <div class="nav-actions">
-        <a class="button secondary" href="login.html">Log in</a>
-        <a class="button ghost" href="index.html#register">Abrir cuenta</a>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="legal">
+<!--
+  THESIS: El documento que dice qué NO es el producto, con la misma cara que el que dice qué
+  sí es. La frontera legal —no somos bróker, no somos asesor, la IA no recomienda— se lee
+  antes que cualquier cláusula de responsabilidad.
+  OWN-WORLD: Hereda landing-v4.css y legal-v4.css. Idéntico al aviso de privacidad: columna
+  de 68 ch, índice fijo, secciones numeradas y citables. Cero fotografía.
+  STORY: El usuario entiende el alcance real del servicio, sus obligaciones y sus límites,
+  y sabe a qué se somete al abrir cuenta.
+  FIRST VIEWPORT: Título, versión y el resumen de los tres límites del servicio; el índice
+  queda a la izquierda al desplazar.
+  FORM: Misma convención institucional que landing-v4 (seed bc0959d2, salida canónica
+  elegida por el usuario), en registro de documento. Contenido portado de terms.html sin
+  perder sustancia; §6 corregido porque el 2FA ya no es opcional.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+
+<a class="skip" href="#doc">Saltar al documento</a>
+
+<header class="auth__top">
+  <div class="shell auth__bar">
+    <a class="mark" href="index.html"><b>Black</b><span>Portfolio</span></a>
+    <div class="top__actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+      </button>
+      <a class="btn btn--quiet" href="index.html">Volver</a>
+    </div>
+  </div>
+</header>
+
+<main class="legal__main">
+  <div class="shell">
+
+    <div class="legal__head">
+      <h1>Alcance del servicio</h1>
+      <p class="legal__meta">
+        <span><b>Versión:</b> 2.0</span>
+        <span><b>Vigente desde:</b> pendiente de publicación</span>
+        <span><b>Sustituye a:</b> versión del 9 de julio de 2026</span>
+        <span><b>Ley aplicable:</b> Estados Unidos Mexicanos</span>
+      </p>
+
+      <div class="legal__summary">
+        <h2>Los tres límites</h2>
+        <dl class="spec">
+          <div>
+            <dt>No somos bróker</dt>
+            <dd>No ejecutamos operaciones, no custodiamos valores y no tocamos tu dinero ni tus cuentas de inversión.</dd>
+          </div>
+          <div>
+            <dt>No somos asesor</dt>
+            <dd>No estamos registrados ante la CNBV, la SEC ni ninguna otra autoridad financiera, y no damos recomendaciones personalizadas.</dd>
+          </div>
+          <div>
+            <dt>La IA no recomienda</dt>
+            <dd>Los textos generados son material de lectura producido automáticamente, pueden equivocarse y no los revisamos uno por uno.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="legal__warning">
+        <h2>Pendiente antes de publicar</h2>
+        <p>
+          El contacto de estos términos apunta a <code>legal@blackportfolio.ai</code>, un buzón
+          que todavía hay que crear. Está marcado en §16.
+        </p>
       </div>
     </div>
-  </header>
 
-  <main class="legal-shell">
-    <h1>Términos de Servicio</h1>
-    <span class="legal-date">Última actualización: 9 de julio de 2026</span>
+    <div class="legal__body">
 
-    <h2>1. Aceptación de los términos</h2>
-    <p>Estos Términos de Servicio (los "Términos") regulan el acceso y uso de BlackPortfolio (el "Servicio"), incluidos el sitio web, el panel de análisis, las funciones de inteligencia artificial y cualquier funcionalidad asociada. Al crear una cuenta, canjear un código de invitación o utilizar el Servicio, aceptas estos Términos y nuestra <a href="privacy.html">Política de Privacidad</a>. Si no estás de acuerdo, no utilices el Servicio. Debes ser mayor de 18 años para crear una cuenta.</p>
+      <nav class="legal__toc" aria-labelledby="tocTitulo">
+        <h2 id="tocTitulo">Contenido</h2>
+        <ol>
+          <li><a href="#s1">Aceptación</a></li>
+          <li><a href="#s2">Qué es y qué no es</a></li>
+          <li><a href="#s3">Contenido educativo, no asesoría</a></li>
+          <li><a href="#s4">Contenido generado por IA</a></li>
+          <li><a href="#s5">Datos de mercado</a></li>
+          <li><a href="#s6">Cuentas y seguridad</a></li>
+          <li><a href="#s7">Uso aceptable</a></li>
+          <li><a href="#s8">Planes, pagos y reembolsos</a></li>
+          <li><a href="#s9">Fase beta</a></li>
+          <li><a href="#s10">Propiedad intelectual</a></li>
+          <li><a href="#s11">Limitación de responsabilidad</a></li>
+          <li><a href="#s12">Indemnización</a></li>
+          <li><a href="#s13">Terminación</a></li>
+          <li><a href="#s14">Modificaciones</a></li>
+          <li><a href="#s15">Ley y jurisdicción</a></li>
+          <li><a href="#s16">Contacto</a></li>
+        </ol>
+      </nav>
 
-    <h2>2. Descripción del servicio — qué es y qué NO es</h2>
-    <p>BlackPortfolio es una herramienta de software para el registro, visualización y análisis educativo de portafolios de inversión. El Servicio permite dar seguimiento a posiciones que tú registras manualmente, calcular métricas (rendimiento, riesgo, concentración, correlación, simulaciones), generar reportes y recibir análisis generados por inteligencia artificial.</p>
-    <p>De forma expresa, BlackPortfolio <strong>NO</strong> es:</p>
-    <ul>
-      <li>Un bróker, casa de bolsa, intermediario bursátil ni custodio de valores. No ejecutamos operaciones ni tenemos acceso a tu dinero o a tus cuentas de inversión.</li>
-      <li>Un asesor en inversiones registrado ante la CNBV (México), la SEC (EE. UU.) ni ante ninguna otra autoridad financiera.</li>
-      <li>Una fuente de recomendaciones personalizadas de compra o venta de instrumentos financieros.</li>
-    </ul>
+      <div class="legal__doc" id="doc">
 
-    <h2>3. Aviso sobre contenido educativo y no asesoría financiera</h2>
-    <p><strong>Toda la información, métricas, simulaciones, reportes y textos generados por el Servicio — incluidos los generados por inteligencia artificial — tienen carácter exclusivamente informativo y educativo. No constituyen asesoría financiera, legal, fiscal ni de inversión, ni una recomendación u oferta de compra o venta de ningún instrumento.</strong> Las decisiones de inversión que tomes son de tu exclusiva responsabilidad. Invertir implica riesgo de pérdida, incluida la pérdida total del capital. Los rendimientos pasados y las simulaciones (backtesting, Monte Carlo, optimización de portafolios) no garantizan resultados futuros. Antes de tomar decisiones de inversión, consulta a un asesor financiero autorizado.</p>
+        <section id="s1">
+          <h2>Aceptación</h2>
+          <p>
+            Estos términos regulan el acceso y uso de BlackPortfolio (el "Servicio"), incluidos el
+            sitio, el panel de análisis, las funciones de inteligencia artificial y cualquier
+            funcionalidad asociada. Al crear una cuenta, canjear un código de invitación o usar el
+            Servicio, aceptas estos términos y el
+            <a href="privacy.html">Aviso de privacidad</a>. Si no estás de acuerdo, no uses
+            el Servicio. Debes ser mayor de 18 años para crear una cuenta.
+          </p>
+        </section>
 
-    <h2>4. Contenido generado por inteligencia artificial</h2>
-    <p>Algunas funciones del Servicio generan análisis mediante modelos de lenguaje de terceros (a través de OpenRouter). Este contenido se produce de forma automatizada a partir de los datos de tu portafolio y puede contener errores, imprecisiones u omisiones. No verificamos de manera individual cada salida de la IA y no garantizamos su exactitud. El uso de las funciones de IA está sujeto a cuotas diarias según tu plan, que podemos ajustar para mantener la calidad del Servicio.</p>
+        <section id="s2">
+          <h2>Qué es y qué no es</h2>
+          <p>
+            BlackPortfolio es software para registrar, visualizar y analizar portafolios de
+            inversión. Permite dar seguimiento a las posiciones que tú capturas, calcular métricas
+            —rendimiento, riesgo, concentración, correlación, simulaciones—, generar reportes y
+            recibir análisis producidos por inteligencia artificial.
+          </p>
+          <p>De forma expresa, BlackPortfolio <strong>no</strong> es:</p>
+          <ul>
+            <li>Un bróker, casa de bolsa, intermediario bursátil ni custodio de valores. No ejecutamos operaciones ni tenemos acceso a tu dinero ni a tus cuentas de inversión.</li>
+            <li>Un asesor en inversiones registrado ante la CNBV en México, la SEC en Estados Unidos ni ante ninguna otra autoridad financiera.</li>
+            <li>Una fuente de recomendaciones personalizadas de compra o venta de instrumentos financieros.</li>
+          </ul>
+        </section>
 
-    <h2>5. Datos de mercado</h2>
-    <p>Los precios, cotizaciones y datos de mercado provienen de fuentes públicas de terceros y pueden estar retrasados, incompletos o contener errores. No garantizamos su exactitud, integridad ni disponibilidad continua, y no deben usarse como única base para ejecutar operaciones. Los datos de mercado se proporcionan "tal cual" y su disponibilidad depende de proveedores externos ajenos a nuestro control.</p>
+        <section id="s3">
+          <h2>Contenido educativo, no asesoría</h2>
+          <p>
+            <strong>Toda la información, métricas, simulaciones, reportes y textos que produce el
+            Servicio —incluidos los generados por inteligencia artificial— son informativos y
+            educativos. No constituyen asesoría financiera, legal, fiscal ni de inversión, ni una
+            recomendación, oferta o invitación a comprar o vender ningún instrumento.</strong>
+          </p>
+          <p>
+            Las decisiones de inversión que tomes son de tu exclusiva responsabilidad. Invertir
+            implica riesgo de pérdida, incluida la pérdida total del capital. Los rendimientos
+            pasados y las simulaciones —backtesting, Monte Carlo, optimización de portafolios— no
+            garantizan resultados futuros. Antes de decidir, consulta a un asesor financiero
+            autorizado.
+          </p>
+        </section>
 
-    <h2>6. Cuentas de usuario y seguridad</h2>
-    <ul>
-      <li>Eres responsable de la exactitud de los datos de registro y de mantener la confidencialidad de tus credenciales. Te recomendamos activar la verificación en dos pasos (2FA) disponible en la app.</li>
-      <li>Una cuenta es de uso personal e intransferible. No compartas tu acceso.</li>
-      <li>Debes notificarnos de inmediato cualquier uso no autorizado de tu cuenta.</li>
-      <li>La cuenta de demostración pública es de solo lectura y puede reiniciarse en cualquier momento.</li>
-    </ul>
+        <section id="s4">
+          <h2>Contenido generado por IA</h2>
+          <p>
+            Algunas funciones generan análisis con modelos de lenguaje de terceros, a través de
+            OpenRouter. Ese contenido se produce de forma automatizada a partir de los datos de tu
+            portafolio y puede contener errores, imprecisiones u omisiones. No verificamos una por
+            una las salidas de la IA y no garantizamos su exactitud.
+          </p>
+          <p>
+            El uso de estas funciones está sujeto a cuotas diarias según tu plan, que podemos
+            ajustar para mantener la calidad del Servicio.
+          </p>
+        </section>
 
-    <h2>7. Uso aceptable</h2>
-    <p>Te comprometes a no: (a) usar el Servicio para actividades ilícitas; (b) intentar vulnerar, sobrecargar o eludir las medidas de seguridad, límites de uso o cuotas; (c) hacer scraping, ingeniería inversa o acceso automatizado no autorizado; (d) revender o redistribuir el Servicio o sus datos sin autorización escrita; (e) suplantar a otras personas. Podemos suspender o cancelar cuentas que violen estas reglas.</p>
+        <section id="s5">
+          <h2>Datos de mercado</h2>
+          <p>
+            Los precios y datos de mercado provienen de fuentes públicas de terceros —hoy Yahoo
+            Finance y CoinGecko— y pueden estar retrasados, incompletos o contener errores. No
+            garantizamos su exactitud, integridad ni disponibilidad continua, y no deben usarse
+            como única base para operar. Se proporcionan "tal cual" y su disponibilidad depende de
+            proveedores externos ajenos a nuestro control.
+          </p>
+        </section>
 
-    <h2>8. Planes, pagos y reembolsos</h2>
-    <ul>
-      <li>Los planes de pago se cobran por adelantado, de forma mensual o anual, a través de Stripe. Los precios se muestran antes de confirmar la compra y pueden actualizarse; los cambios de precio se notificarán con al menos 14 días de anticipación y aplicarán en tu siguiente renovación.</li>
-      <li>Puedes cancelar en cualquier momento desde el portal de facturación; conservarás el acceso hasta el final del período ya pagado. No se realizan reembolsos parciales por períodos no utilizados, salvo que la ley aplicable disponga lo contrario.</li>
-      <li>Si un pago falla, podremos degradar tu cuenta al plan gratuito tras un período de gracia.</li>
-      <li>Los códigos de invitación o promocionales otorgan acceso temporal, no son canjeables por dinero y pueden revocarse en caso de abuso.</li>
-    </ul>
+        <section id="s6">
+          <h2>Cuentas y seguridad</h2>
+          <ul>
+            <li>Eres responsable de la exactitud de tus datos de registro y de la confidencialidad de tus credenciales.</li>
+            <li><strong>La verificación en dos pasos es obligatoria:</strong> el Servicio te pide activar un autenticador TOTP en el primer acceso y te entrega códigos de respaldo de un solo uso. Guárdalos: son el único camino de recuperación si pierdes el autenticador.</li>
+            <li>La cuenta es de uso personal e intransferible. No compartas tu acceso.</li>
+            <li>Debes notificarnos de inmediato cualquier uso no autorizado de tu cuenta.</li>
+            <li>La cuenta de demostración pública es de solo lectura y puede reiniciarse en cualquier momento.</li>
+          </ul>
+        </section>
 
-    <h2>9. Fase beta</h2>
-    <p>El Servicio se encuentra en fase beta. Esto significa que pueden existir errores, interrupciones, pérdida de datos o cambios de funcionalidad sin previo aviso. Te recomendamos exportar periódicamente tus datos (disponible en Ajustes). Podemos modificar, limitar o discontinuar funciones durante la beta.</p>
+        <section id="s7">
+          <h2>Uso aceptable</h2>
+          <p>Te comprometes a no:</p>
+          <ul>
+            <li>Usar el Servicio para actividades ilícitas.</li>
+            <li>Vulnerar, sobrecargar o eludir las medidas de seguridad, los límites de uso o las cuotas.</li>
+            <li>Hacer scraping, ingeniería inversa o acceso automatizado no autorizado.</li>
+            <li>Revender o redistribuir el Servicio o sus datos sin autorización escrita.</li>
+            <li>Suplantar a otras personas.</li>
+          </ul>
+          <p>Podemos suspender o cancelar cuentas que incumplan estas reglas.</p>
+        </section>
 
-    <h2>10. Propiedad intelectual</h2>
-    <p>El Servicio, su código, diseño, marca y contenidos son propiedad de BlackPortfolio o de sus licenciantes. Los datos de portafolio que registras te pertenecen; nos otorgas una licencia limitada para procesarlos con el único fin de prestarte el Servicio (incluido su envío a los proveedores de IA cuando usas esas funciones).</p>
+        <section id="s8">
+          <h2>Planes, pagos y reembolsos</h2>
+          <ul>
+            <li>Los planes de pago se cobran por adelantado, mensual o anualmente, a través de Stripe. Los precios se muestran antes de confirmar; los cambios se avisan con al menos 14 días de anticipación y aplican en tu siguiente renovación.</li>
+            <li>Puedes cancelar cuando quieras desde el portal de facturación y conservas el acceso hasta el final del período pagado. No hay reembolsos parciales por períodos no usados, salvo que la ley disponga otra cosa.</li>
+            <li>Si un pago falla, podemos degradar la cuenta al plan gratuito tras un período de gracia.</li>
+            <li>Los códigos de invitación o promocionales otorgan acceso temporal, no son canjeables por dinero y pueden revocarse en caso de abuso.</li>
+          </ul>
+        </section>
 
-    <h2>11. Limitación de responsabilidad</h2>
-    <p>En la máxima medida permitida por la ley: (a) el Servicio se proporciona "tal cual" y "según disponibilidad", sin garantías de ningún tipo; (b) no seremos responsables de pérdidas de inversión, lucro cesante, pérdida de datos ni daños indirectos, incidentales o consecuentes derivados del uso o imposibilidad de uso del Servicio; (c) nuestra responsabilidad total agregada frente a ti no excederá el monto que nos hayas pagado en los 12 meses anteriores al hecho que origine la reclamación, o 50 USD si no has realizado pagos.</p>
+        <section id="s9">
+          <h2>Fase beta</h2>
+          <p>
+            El Servicio está en beta. Puede haber errores, interrupciones, pérdida de datos y
+            cambios de funcionalidad sin previo aviso. Exporta tus datos periódicamente —está en
+            Ajustes → Datos y privacidad—. Podemos modificar, limitar o discontinuar funciones
+            durante la beta.
+          </p>
+        </section>
 
-    <h2>12. Indemnización</h2>
-    <p>Aceptas indemnizarnos frente a reclamaciones de terceros derivadas de tu uso del Servicio en violación de estos Términos o de la ley aplicable.</p>
+        <section id="s10">
+          <h2>Propiedad intelectual</h2>
+          <p>
+            El Servicio, su código, diseño, marca y contenidos son propiedad de BlackPortfolio o
+            de sus licenciantes. <strong>Los datos de portafolio que registras son tuyos</strong>;
+            nos otorgas una licencia limitada para procesarlos con el único fin de prestarte el
+            Servicio, lo que incluye enviarlos a los proveedores de IA cuando usas esas funciones.
+          </p>
+        </section>
 
-    <h2>13. Terminación</h2>
-    <p>Puedes eliminar tu cuenta en cualquier momento desde Ajustes (la eliminación es permanente e incluye tus datos). Podemos suspender o terminar tu acceso por incumplimiento de estos Términos, notificándotelo cuando sea razonablemente posible.</p>
+        <section id="s11">
+          <h2>Limitación de responsabilidad</h2>
+          <p>En la máxima medida que permita la ley:</p>
+          <ul>
+            <li>El Servicio se proporciona "tal cual" y "según disponibilidad", sin garantías de ningún tipo.</li>
+            <li>No respondemos por pérdidas de inversión, lucro cesante, pérdida de datos ni daños indirectos, incidentales o consecuentes derivados del uso o de la imposibilidad de uso del Servicio.</li>
+            <li>Nuestra responsabilidad total agregada frente a ti no excederá lo que nos hayas pagado en los 12 meses anteriores al hecho que origine la reclamación, o 50 USD si no has pagado nada.</li>
+          </ul>
+        </section>
 
-    <h2>14. Modificaciones</h2>
-    <p>Podemos actualizar estos Términos. Ante cambios materiales te notificaremos por correo electrónico o mediante aviso en la app con al menos 14 días de anticipación. El uso continuado del Servicio tras la fecha de entrada en vigor constituye aceptación de los nuevos Términos.</p>
+        <section id="s12">
+          <h2>Indemnización</h2>
+          <p>
+            Aceptas indemnizarnos frente a reclamaciones de terceros derivadas de tu uso del
+            Servicio en violación de estos términos o de la ley aplicable.
+          </p>
+        </section>
 
-    <h2>15. Ley aplicable y jurisdicción</h2>
-    <p>Estos Términos se rigen por las leyes de los Estados Unidos Mexicanos. Cualquier controversia se someterá a los tribunales competentes de México, sin perjuicio de los derechos irrenunciables que te correspondan como consumidor en tu país de residencia.</p>
+        <section id="s13">
+          <h2>Terminación</h2>
+          <p>
+            Puedes eliminar tu cuenta en cualquier momento desde Ajustes; la eliminación es
+            permanente e incluye tus datos, con la salvedad de los respaldos cifrados que rotan y
+            los registros fiscales, como explica el
+            <a href="privacy.html#s9">Aviso de privacidad §9</a>. Podemos suspender o
+            terminar tu acceso por incumplimiento de estos términos, avisándote cuando sea
+            razonablemente posible.
+          </p>
+        </section>
 
-    <h2>16. Contacto</h2>
-    <p>Para consultas sobre estos términos escribe a <a href="mailto:legal@blackportfolio.ai">legal@blackportfolio.ai</a>.</p>
+        <section id="s14">
+          <h2>Modificaciones</h2>
+          <p>
+            Podemos actualizar estos términos. Ante cambios materiales te avisaremos por correo o
+            dentro de la app con al menos <strong>14 días</strong> de anticipación. Seguir usando
+            el Servicio después de la fecha de entrada en vigor equivale a aceptarlos.
+          </p>
+        </section>
 
-    <p style="margin-top:48px"><a href="index.html">← Volver al inicio</a></p>
-  </main>
+        <section id="s15">
+          <h2>Ley y jurisdicción</h2>
+          <p>
+            Estos términos se rigen por las leyes de los Estados Unidos Mexicanos. Cualquier
+            controversia se someterá a los tribunales competentes de México, sin perjuicio de los
+            derechos irrenunciables que te correspondan como consumidor en tu país de residencia.
+          </p>
+        </section>
+
+        <section id="s16">
+          <h2>Contacto</h2>
+          <p>
+            Para consultas sobre estos términos:
+            <a href="mailto:legal@blackportfolio.ai">legal@blackportfolio.ai</a>
+            <span class="gap">[buzón pendiente de crear]</span>.
+          </p>
+          <p>
+            Para asuntos de datos personales, el canal es el del
+            <a href="privacy.html#s10">Aviso de privacidad §10</a>.
+          </p>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="legal__foot">
+  <div class="shell legal__foot-row">
+    <p class="note">
+      © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
+      financiera personalizada. Ver también el <a href="privacy.html">Aviso de privacidad</a>.
+    </p>
+    <div class="foot__theme">
+      <span class="label" id="temaLabel">Tema</span>
+      <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+        <span class="seg__thumb" aria-hidden="true"></span>
+        <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+        <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="legal-v4.js"></script>
 </body>
 </html>

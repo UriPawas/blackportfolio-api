@@ -1,0 +1,36 @@
+{
+  "_nota": "Pexels. Descargadas sin API key (URLs públicas de images.pexels.com con recorte de Imgix). La licencia de Pexels permite uso comercial sin atribución; el crédito se conserva aquí por higiene.",
+  "columnata": {
+    "file": "columnata.jpg",
+    "why": "Capiteles corintios y fuste acanalado: gravedad institucional sin decir que somos un banco. Recortada al tercio inferior para dejar fuera la inscripción «THE BANK OF» — BlackPortfolio no es banco ni casa de bolsa.",
+    "query": "bank building columns",
+    "pexels_id": 35076215,
+    "photographer": "Stephen Leonardi",
+    "url": "https://www.pexels.com/photo/classic-bank-building-with-corinthian-columns-35076215/",
+    "alt": "Fuste acanalado y capiteles corintios de una fachada de piedra caliza.",
+    "crop": "w=1100&h=1500&fit=crop&crop=bottom",
+    "uso": "Sección de confianza y seguridad, columna izquierda, con duotono navy."
+  },
+  "pantalla-mercado": {
+    "file": "pantalla-mercado.jpg",
+    "why": "Tablero de cotizaciones fotografiado en blanco y negro: entinta a navy sin pelearse con la paleta y no trae ni un neón. Recortada al bloque numérico de la derecha para que los nombres de terceros no sean el sujeto.",
+    "query": "stock market screen",
+    "pexels_id": 16594724,
+    "photographer": "Romulo Queiroz",
+    "url": "https://www.pexels.com/photo/stock-program-on-a-screen-in-black-and-white-16594724/",
+    "alt": "Tablero de datos de mercado en blanco y negro con tasas y variaciones.",
+    "crop": "w=1400&h=900&fit=crop&crop=right",
+    "uso": "Capacidad 01 (multiactivo), lámina de apoyo."
+  },
+  "torre": {
+    "file": "torre.jpg",
+    "why": "Muro cortina de cristal reflejando cielo: la geometría ya es azul profundo, así que el cierre no necesita degradado inventado.",
+    "query": "financial district architecture",
+    "pexels_id": 16880588,
+    "photographer": "Fatih Turan",
+    "url": "https://www.pexels.com/photo/geometric-glass-skyscraper-reflecting-the-new-york-city-skyline-16880588/",
+    "alt": "Fachada de cristal en retícula reflejando el cielo.",
+    "crop": "w=1800&h=1000&fit=crop&crop=middle",
+    "uso": "Banda de cierre, a baja opacidad bajo tinta navy."
+  }
+}

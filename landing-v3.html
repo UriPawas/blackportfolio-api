@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlackPortfolio · Propuesta de landing (v3 — "El salón")</title>
+  <meta name="description" content="Propuesta de rediseño de la landing de BlackPortfolio: construye portafolios multi-activo, mide riesgo real y entrega un reporte que aguanta una junta.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..800;1,6..96,400..600&family=Chivo:ital,wght@0,300..800;1,400&family=Chivo+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v3.css?v=1">
+
+  <script>
+    (function () {
+      var s = localStorage.getItem('bp-theme');
+      var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', s || (d ? 'dark' : 'light'));
+    })();
+  </script>
+</head>
+<body>
+<!--
+  THESIS: El portafolio es un título con valor, no un dashboard. Esta página se lee
+    como una lámina grabada de casa de inversión, y rechaza la landing fintech de
+    gradiente + captura en marco de navegador + tres tarjetas con ícono.
+  OWN-WORLD: El salón de la casa de bolsa después del cierre. Nogal en sombra como
+    suelo (#16100C/#201811), marfil como tinta, latón #C08A2E solo en filete grabado
+    —nunca resplandor ni gradiente—, mármol serpentina #4C7F64 para el signo positivo
+    y óxido #8E322A para el negativo. Bodoni Moda grabado, Chivo de texto, Chivo Mono
+    para toda cifra. Componentes: láminas con doble filete, placas de latón, rieles
+    de renglón. Reconocible con todo el contenido quitado.
+  STORY: El visitante entiende que puede medir su cartera con el rigor de un fondo,
+    cree que la herramienta es seria porque le dice de frente lo que NO hace, y abre
+    una cuenta gratis.
+  FIRST VIEWPORT: Una sola lámina a sangre con doble filete grabado. Izquierda: la
+    declaración en Bodoni a 5.5rem, la línea de alcance, el panel de firma con la
+    acción primaria "Abrir cuenta gratis". Derecha: la guilloche —roseta de torno
+    trazada con la serie de rendimiento— girando lento. Pie de lámina: la frontera
+    legal, en el lugar donde un prospecto la pone.
+  FORM: candidato 4 de mi lista ordenada (el salón de la casa de bolsa: nogal, latón,
+    mármol, luz baja); staging nativo de la lámina, no el "stacked commons" repartido;
+    seed key d1223f3d.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+
+  <a class="salto" href="#lamina">Saltar al contenido</a>
+
+  <header class="testera" id="testera">
+    <div class="caja testera-in">
+      <a class="sello" href="#lamina" aria-label="BlackPortfolio, inicio">
+        <svg class="sello-roseta" viewBox="0 0 40 40" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="0.6">
+            <circle cx="20" cy="20" r="18.5"/>
+            <circle cx="20" cy="20" r="15"/>
+            <path class="sello-petalos" d=""/>
+          </g>
+        </svg>
+        <span class="sello-nombre">BlackPortfolio</span>
+      </a>
+
+      <nav class="renglones" aria-label="Secciones">
+        <a href="#preguntas">Qué mide</a>
+        <a href="#mesa">La mesa</a>
+        <a href="#reporte">El reporte</a>
+        <a href="#planes">Planes</a>
+        <a href="#postura">Postura</a>
+      </nav>
+
+      <div class="testera-actos">
+        <button class="conmutador" id="temaBtn" type="button" aria-label="Cambiar entre tema oscuro y claro">
+          <span class="conmutador-txt" data-oscuro="Cierre" data-claro="Apertura">Cierre</span>
+          <span class="conmutador-caja"><i></i></span>
+        </button>
+        <a class="acto acto--hueco" href="login.html">Acceder</a>
+        <a class="acto acto--laton" href="#cuenta">Abrir cuenta</a>
+        <button class="pliegue" id="pliegueBtn" type="button" aria-label="Abrir menú" aria-expanded="false">
+          <span></span><span></span>
+        </button>
+      </div>
+    </div>
+
+    <nav class="cajon" id="cajon" aria-label="Menú" hidden>
+      <a href="#preguntas">Qué mide</a>
+      <a href="#mesa">La mesa</a>
+      <a href="#reporte">El reporte</a>
+      <a href="#planes">Planes</a>
+      <a href="#postura">Postura</a>
+      <div class="cajon-actos">
+        <a class="acto acto--hueco" href="login.html">Acceder</a>
+        <a class="acto acto--laton" href="#cuenta">Abrir cuenta</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- ═══ 1. LA LÁMINA ═══════════════════════════════════════════════════ -->
+    <section class="lamina" id="lamina">
+      <div class="lamina-fondo" aria-hidden="true"></div>
+
+      <div class="filete" aria-hidden="true"></div>
+
+      <div class="caja lamina-in">
+        <div class="lamina-texto">
+          <p class="emision">
+            <span>BlackPortfolio</span><span class="pt">·</span><span>Ciudad de México</span><span class="pt">·</span><span>Beta abierta</span>
+          </p>
+
+          <h1 class="declaracion">
+            <span class="ln">Tu cartera merece</span>
+            <span class="ln">la misma lectura</span>
+            <span class="ln"><em>que un fondo.</em></span>
+          </h1>
+
+          <p class="alcance">
+            Construye portafolios multi-activo, mide el riesgo que de verdad importa
+            —caída máxima, volatilidad, Sharpe, concentración— y entrega un reporte
+            que aguanta una junta.
+          </p>
+
+          <div class="firma">
+            <a class="acto acto--laton acto--grande" href="#cuenta">
+              Abrir cuenta gratis
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+            </a>
+            <a class="acto acto--hueco acto--grande" href="#planes">Ver los planes</a>
+          </div>
+
+          <ul class="riel">
+            <li><b>6</b> clases de activo</li>
+            <li><b>3</b> modelos de optimización</li>
+            <li><b>VaR</b> caída máxima · Sharpe · HHI</li>
+            <li>reporte en <b>3</b> idiomas</li>
+          </ul>
+        </div>
+
+        <figure class="guilloche">
+          <canvas id="rosetaLienzo" width="720" height="720" aria-hidden="true"></canvas>
+          <figcaption>
+            <span class="placa">Anexo I</span>
+            Roseta de torno trazada sobre una serie de rendimiento de 60 meses.
+            <em>Serie ilustrativa.</em>
+          </figcaption>
+        </figure>
+      </div>
+
+      <p class="lamina-pie">
+        <span>
+          BlackPortfolio organiza, mide y presenta información de inversión. No es una casa de bolsa,
+          no ejecuta operaciones y no emite recomendaciones personalizadas de compra o venta.
+        </span>
+      </p>
+    </section>
+
+    <!-- ═══ 2. QUÉ MIDE ════════════════════════════════════════════════════ -->
+    <section class="banda" id="preguntas">
+      <div class="caja">
+        <div class="encabezado">
+          <h2>Cuatro preguntas que tu cartera debería contestar sola.</h2>
+          <p>
+            No son indicadores decorativos: son las cifras que el motor de análisis calcula
+            sobre tus posiciones reales, con el nombre que usan quienes las usan.
+          </p>
+        </div>
+
+        <ol class="conceptos">
+          <li>
+            <p class="pregunta">¿Cuánto puedo perder en el peor tramo?</p>
+            <p class="respuesta">Caída máxima desde el pico anterior, con la fecha en que ocurrió y cuánto tardó en recuperarse.</p>
+            <p class="termino"><span>Caída máxima</span> · <span>VaR</span></p>
+          </li>
+          <li>
+            <p class="pregunta">¿Estoy cobrando por el riesgo que cargo?</p>
+            <p class="respuesta">Volatilidad anualizada contra retorno, y el Sharpe que resulta de dividir uno por el otro.</p>
+            <p class="termino"><span>Volatilidad</span> · <span>Sharpe</span></p>
+          </li>
+          <li>
+            <p class="pregunta">¿Está mi dinero donde creo que está?</p>
+            <p class="respuesta">Concentración por posición, sector y clase de activo, medida con el índice HHI en lugar de a ojo.</p>
+            <p class="termino"><span>HHI</span> · <span>Correlación</span></p>
+          </li>
+          <li>
+            <p class="pregunta">¿Cuánto he ganado, de verdad?</p>
+            <p class="respuesta">Rendimiento ponderado por dinero y por tiempo, con las aportaciones y retiros contados donde ocurrieron.</p>
+            <p class="termino"><span>XIRR</span> · <span>TWR</span></p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ═══ 3. LA MESA ═════════════════════════════════════════════════════ -->
+    <section class="banda banda--nogal" id="mesa">
+      <div class="caja">
+        <div class="encabezado encabezado--ancho">
+          <h2>La mesa, tal como está hoy.</h2>
+          <p>Capturas del producto en uso. Sin maquetas, sin pantallas inventadas.</p>
+        </div>
+
+        <div class="placas">
+          <figure class="placa-marco placa-marco--ancha" data-alza>
+            <div class="placa-vidrio">
+              <img src="assets/screenshots/app-topdown.jpg"
+                   alt="Análisis top-down: tasas del Tesoro, VIX, dólar y petróleo con los sectores que el ciclo favorece"
+                   width="2160" height="1350" loading="lazy" decoding="async">
+            </div>
+            <figcaption><span class="placa">Anexo II</span> Régimen macro y sectores alineados al ciclo.</figcaption>
+          </figure>
+
+          <figure class="placa-marco" data-alza>
+            <div class="placa-vidrio">
+              <img src="assets/screenshots/app-markets.jpg"
+                   alt="Sección de mercados con gráfica de velas, calificación técnica y estadísticas del activo"
+                   width="2160" height="1350" loading="lazy" decoding="async">
+            </div>
+            <figcaption><span class="placa">Anexo III</span> Mercados: velas, calificación técnica y estadística del activo.</figcaption>
+          </figure>
+
+          <figure class="placa-marco" data-alza>
+            <div class="placa-vidrio">
+              <img src="assets/screenshots/app-markowitz.jpg"
+                   alt="Construcción de portafolio con optimización MVO, Smart Beta y Black-Litterman"
+                   width="2160" height="1350" loading="lazy" decoding="async">
+            </div>
+            <figcaption><span class="placa">Anexo IV</span> Construcción: MVO, Smart Beta y Black-Litterman.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 4. EL REPORTE ══════════════════════════════════════════════════ -->
+    <section class="banda banda--archivo" id="reporte">
+      <div class="caja reporte-in">
+        <div class="reporte-texto">
+          <h2>Lo que sale de aquí y viaja solo.</h2>
+          <p>
+            El reporte es la pieza que le mandas a alguien más: composición, atribución de
+            rendimiento, riesgo y una narrativa escrita sobre las noticias de cada posición
+            —no sobre generalidades del mercado—. Sale en español, inglés o francés, en PDF
+            o como presentación interactiva.
+          </p>
+
+          <dl class="partidas">
+            <div>
+              <dt>Atribución</dt>
+              <dd>Qué posición aportó cuánto al resultado, y qué lo restó.</dd>
+            </div>
+            <div>
+              <dt>Contra referencia</dt>
+              <dd>Tu cartera medida contra un índice, no contra sí misma.</dd>
+            </div>
+            <div>
+              <dt>Narrativa anclada</dt>
+              <dd>Cada afirmación amarrada a un hecho de mercado de ese periodo.</dd>
+            </div>
+            <div>
+              <dt>Con tu marca</dt>
+              <dd>Desde Advisor&nbsp;Pro el reporte sale con tu logo y tus colores.</dd>
+            </div>
+          </dl>
+        </div>
+
+        <figure class="cuadernillo" data-alza>
+          <div class="cuadernillo-hoja">
+            <p class="cuadernillo-tapa">Reporte de portafolio</p>
+            <p class="cuadernillo-periodo">Enero – Junio 2026</p>
+            <svg class="cuadernillo-curva" viewBox="0 0 300 90" preserveAspectRatio="none" aria-hidden="true">
+              <path class="cc-area" d="M0,74 L30,68 L60,76 L90,54 L120,60 L150,38 L180,46 L210,26 L240,32 L270,18 L300,12 L300,90 L0,90 Z"/>
+              <path class="cc-linea" d="M0,74 L30,68 L60,76 L90,54 L120,60 L150,38 L180,46 L210,26 L240,32 L270,18 L300,12"/>
+            </svg>
+            <table class="cuadernillo-tabla">
+              <tbody>
+                <tr><th scope="row">Rendimiento</th><td class="alza">+12.4%</td></tr>
+                <tr><th scope="row">Caída máxima</th><td class="baja">−8.1%</td></tr>
+                <tr><th scope="row">Volatilidad</th><td>11.8%</td></tr>
+                <tr><th scope="row">Sharpe</th><td>1.42</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <figcaption><span class="placa">Anexo V</span> Portada del reporte. <em>Cifras ilustrativas.</em></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ═══ 5. EL MÉTODO ═══════════════════════════════════════════════════ -->
+    <section class="banda" id="metodo">
+      <div class="caja">
+        <div class="encabezado">
+          <h2>De la hoja de cálculo al reporte, en una tarde.</h2>
+        </div>
+
+        <ol class="pasos">
+          <li>
+            <span class="paso-cifra">1</span>
+            <h3>Abre la cuenta</h3>
+            <p>Correo o Google, y 2FA si quieres cerrarla bien desde el primer día. El plan Explorer no pide tarjeta.</p>
+          </li>
+          <li>
+            <span class="paso-cifra">2</span>
+            <h3>Carga las posiciones</h3>
+            <p>A mano o importadas. Acciones, ETFs, cripto y renta fija, con su precio y su fecha. Sin credenciales de tu broker.</p>
+          </li>
+          <li>
+            <span class="paso-cifra">3</span>
+            <h3>Lee y decide</h3>
+            <p>Riesgo, concentración y señales de rebalanceo en el tablero. Cuando lo necesites, el reporte sale de ahí.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ═══ 6. POSTURA ═════════════════════════════════════════════════════ -->
+    <section class="postura" id="postura">
+      <div class="postura-fondo" aria-hidden="true"></div>
+      <div class="caja postura-in">
+        <h2>Medimos. No aconsejamos.</h2>
+        <p class="postura-tesis">
+          Es la línea que no cruzamos, y conviene que la sepas antes de abrir la cuenta:
+          BlackPortfolio ordena tu información, la mide y la presenta. No ejecuta operaciones,
+          no toca tu dinero y no te dice qué comprar.
+        </p>
+
+        <ul class="postura-lista">
+          <li>
+            <h3>Acceso cerrado por diseño</h3>
+            <p>2FA con app autenticadora, sesiones revocables y dispositivo de confianza. La clave del segundo factor nunca llega al navegador.</p>
+          </li>
+          <li>
+            <h3>Sin credenciales de broker</h3>
+            <p>Las posiciones se capturan o se importan. No pedimos las llaves de tu cuenta de inversión para funcionar.</p>
+          </li>
+          <li>
+            <h3>El dato dice lo que es</h3>
+            <p>Cuando un precio viene diferido o una fuente falla, la pantalla lo dice. Un número sin contexto es peor que ningún número.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═══ 7. PLANES ══════════════════════════════════════════════════════ -->
+    <section class="banda banda--nogal" id="planes">
+      <div class="caja">
+        <div class="encabezado encabezado--partido">
+          <h2>Desde una cartera personal hasta una mesa de análisis.</h2>
+          <div class="periodo">
+            <span class="periodo-etq" data-activo="true">Mensual</span>
+            <button class="periodo-sw" id="periodoSw" type="button" role="switch" aria-checked="false" aria-label="Cobro anual">
+              <i></i>
+            </button>
+            <span class="periodo-etq">Anual</span>
+            <span class="periodo-nota">−20%</span>
+          </div>
+        </div>
+
+        <div class="columnas">
+          <article class="columna">
+            <h3>Explorer</h3>
+            <p class="columna-para">Para poner en orden una cartera personal.</p>
+            <p class="columna-precio"><span class="moneda">$</span><b data-mes="0" data-ano="0">0</b><span class="unidad">USD/mes</span></p>
+            <p class="columna-mxn" data-mxn-mes="Sin tarjeta" data-mxn-ano="Sin tarjeta">Sin tarjeta</p>
+            <ul class="columna-lista">
+              <li>1 portafolio</li>
+              <li>Hasta 10 posiciones</li>
+              <li>Mercado diferido 15 min</li>
+              <li>Rendimiento XIRR</li>
+              <li class="no">Análisis de riesgo</li>
+              <li class="no">Backtesting</li>
+            </ul>
+            <a class="acto acto--hueco acto--bloque" href="#cuenta">Empezar gratis</a>
+          </article>
+
+          <article class="columna">
+            <h3>Investor</h3>
+            <p class="columna-para">Para medir riesgo sin depender de nadie.</p>
+            <p class="columna-precio"><span class="moneda">$</span><b data-mes="19" data-ano="15">19</b><span class="unidad">USD/mes</span></p>
+            <p class="columna-mxn" data-mxn-mes="≈ $349 MXN" data-mxn-ano="≈ $276 MXN">≈ $349 MXN</p>
+            <ul class="columna-lista">
+              <li>3 portafolios</li>
+              <li>50 posiciones cada uno</li>
+              <li>Mercado en tiempo real</li>
+              <li>Riesgo esencial</li>
+              <li>Reporte PDF mensual</li>
+              <li class="no">Backtesting</li>
+            </ul>
+            <a class="acto acto--hueco acto--bloque" href="#cuenta">Elegir Investor</a>
+          </article>
+
+          <article class="columna columna--sello">
+            <span class="columna-cinta">Más elegido</span>
+            <h3>Advisor Pro</h3>
+            <p class="columna-para">Para quien le explica la cartera a alguien más.</p>
+            <p class="columna-precio"><span class="moneda">$</span><b data-mes="59" data-ano="47">59</b><span class="unidad">USD/mes</span></p>
+            <p class="columna-mxn" data-mxn-mes="≈ $1,090 MXN" data-mxn-ano="≈ $868 MXN">≈ $1,090 MXN</p>
+            <ul class="columna-lista">
+              <li>Portafolios ilimitados</li>
+              <li>Riesgo avanzado con VaR</li>
+              <li>Backtesting y rebalanceo</li>
+              <li>Reporte con tu marca + IA</li>
+              <li>3 usuarios</li>
+            </ul>
+            <a class="acto acto--laton acto--bloque" href="#cuenta">Elegir Advisor Pro</a>
+          </article>
+
+          <article class="columna">
+            <h3>Wealth Desk</h3>
+            <p class="columna-para">Para una mesa con varios analistas.</p>
+            <p class="columna-precio"><span class="moneda">$</span><b data-mes="129" data-ano="103">129</b><span class="unidad">USD/mes</span></p>
+            <p class="columna-mxn" data-mxn-mes="≈ $2,390 MXN" data-mxn-ano="≈ $1,909 MXN">≈ $2,390 MXN</p>
+            <ul class="columna-lista">
+              <li>Todo lo de Advisor Pro</li>
+              <li>Usuarios y roles ilimitados</li>
+              <li>API y webhooks</li>
+              <li>Marca blanca completa</li>
+              <li>Soporte dedicado</li>
+            </ul>
+            <a class="acto acto--hueco acto--bloque" href="#cuenta">Elegir Wealth Desk</a>
+          </article>
+        </div>
+
+        <p class="planes-pie">
+          Precios en USD; la referencia en MXN se cobra al tipo de cambio del día. Tarjeta vía Stripe
+          o transferencia SPEI, con factura CFDI. Sin permanencia, 14 días de garantía.
+        </p>
+
+        <details class="cotejo">
+          <summary>
+            <span>Cotejar los cuatro planes renglón por renglón</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <div class="cotejo-scroll">
+            <table class="cotejo-tabla">
+              <caption class="vo">Comparación detallada de los cuatro planes</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Concepto</th>
+                  <th scope="col">Explorer</th>
+                  <th scope="col">Investor</th>
+                  <th scope="col" class="destaca">Advisor Pro</th>
+                  <th scope="col">Wealth Desk</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="grupo"><td colspan="5">Portafolios y datos</td></tr>
+                <tr><th scope="row">Portafolios activos</th><td>1</td><td>3</td><td class="destaca">Ilimitados</td><td>Ilimitados</td></tr>
+                <tr><th scope="row">Posiciones por portafolio</th><td>10</td><td>50</td><td class="destaca">Ilimitadas</td><td>Ilimitadas</td></tr>
+                <tr><th scope="row">Datos de mercado</th><td>Diferidos 15 min</td><td>Tiempo real</td><td class="destaca">Tiempo real</td><td>Tiempo real</td></tr>
+
+                <tr class="grupo"><td colspan="5">Análisis</td></tr>
+                <tr><th scope="row">Rendimiento XIRR / TWR</th><td>Básico</td><td class="si"></td><td class="si destaca"></td><td class="si"></td></tr>
+                <tr><th scope="row">Riesgo: volatilidad, caída máxima, Sharpe</th><td class="nulo"></td><td>Esencial</td><td class="destaca">Avanzado con VaR</td><td>Avanzado con VaR</td></tr>
+                <tr><th scope="row">Backtesting y escenarios</th><td class="nulo"></td><td class="nulo"></td><td class="si destaca"></td><td class="si"></td></tr>
+                <tr><th scope="row">Rebalanceo asistido</th><td class="nulo"></td><td class="nulo"></td><td class="si destaca"></td><td class="si"></td></tr>
+                <tr><th scope="row">Optimización MVO / Smart Beta / Black-Litterman</th><td class="nulo"></td><td>Esencial</td><td class="si destaca"></td><td class="si"></td></tr>
+
+                <tr class="grupo"><td colspan="5">Reporte y equipo</td></tr>
+                <tr><th scope="row">Reporte para cliente</th><td class="nulo"></td><td>Mensual</td><td class="destaca">Ilimitado, con tu marca</td><td>Marca blanca</td></tr>
+                <tr><th scope="row">Narrativa de IA anclada a noticias</th><td class="nulo"></td><td class="nulo"></td><td class="si destaca"></td><td class="si"></td></tr>
+                <tr><th scope="row">Usuarios y roles</th><td>1</td><td>1</td><td class="destaca">3 usuarios</td><td>Ilimitados con permisos</td></tr>
+                <tr><th scope="row">Alertas de precio</th><td>Limitadas</td><td>Básicas</td><td class="destaca">Avanzadas</td><td>Avanzadas y webhooks</td></tr>
+
+                <tr class="grupo"><td colspan="5">Integración y soporte</td></tr>
+                <tr><th scope="row">API y webhooks</th><td class="nulo"></td><td class="nulo"></td><td class="nulo destaca"></td><td class="si"></td></tr>
+                <tr><th scope="row">2FA con app autenticadora</th><td class="si"></td><td class="si"></td><td class="si destaca"></td><td class="si"></td></tr>
+                <tr><th scope="row">Soporte</th><td>Comunidad</td><td>Correo</td><td class="destaca">Prioritario</td><td>Dedicado con onboarding</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ═══ 8. ABRIR CUENTA ════════════════════════════════════════════════ -->
+    <section class="cierre" id="cuenta">
+      <div class="caja cierre-in">
+        <div class="filete filete--cierre" aria-hidden="true"></div>
+
+        <h2>Empieza con un portafolio. Sube de plan cuando el portafolio lo pida.</h2>
+        <p>
+          Explorer es gratis y no pide tarjeta. Si la cartera crece, el resto de los planes
+          están ahí; si no crece, te quedas donde estás.
+        </p>
+        <div class="firma firma--centro">
+          <a class="acto acto--laton acto--grande" href="#cuenta">
+            Abrir cuenta gratis
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="acto acto--hueco acto--grande" href="login.html">Ya tengo cuenta</a>
+        </div>
+        <p class="cierre-nota">Acceso por invitación durante la beta. Si no tienes código, la lista de espera queda registrada al crear la cuenta.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <div class="caja pie-in">
+      <div class="pie-sello">
+        <a class="sello" href="#lamina">
+          <svg class="sello-roseta" viewBox="0 0 40 40" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-width="0.6">
+              <circle cx="20" cy="20" r="18.5"/>
+              <circle cx="20" cy="20" r="15"/>
+              <path class="sello-petalos" d=""/>
+            </g>
+          </svg>
+          <span class="sello-nombre">BlackPortfolio</span>
+        </a>
+        <p>Construye, mide y presenta portafolios de inversión multi-activo.</p>
+      </div>
+
+      <nav class="pie-cols" aria-label="Pie de página">
+        <div>
+          <h2>Producto</h2>
+          <a href="#preguntas">Qué mide</a>
+          <a href="#mesa">La mesa</a>
+          <a href="#reporte">El reporte</a>
+        </div>
+        <div>
+          <h2>Cuenta</h2>
+          <a href="#planes">Planes</a>
+          <a href="#cuenta">Abrir cuenta</a>
+          <a href="login.html">Acceder</a>
+        </div>
+        <div>
+          <h2>Legal</h2>
+          <a href="privacy.html">Privacidad</a>
+          <a href="terms.html">Términos</a>
+          <a href="#postura">Postura</a>
+        </div>
+      </nav>
+    </div>
+
+    <div class="caja pie-renglon">
+      <span>© 2026 BlackPortfolio · Propuesta de diseño v3, sin publicar</span>
+      <span>Serie de la roseta y cifras del reporte: ilustrativas</span>
+      <span>Fotografía: Brett A · Dainé Zeferino · Pixabay — Pexels</span>
+    </div>
+  </footer>
+
+  <script src="landing-v3.js?v=1"></script>
+</body>
+</html>

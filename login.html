@@ -1,121 +1,222 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Log in | BlackPortfolio</title>
   <meta name="description" content="Acceso a BlackPortfolio para iniciar sesión en la plataforma de portafolios de inversión.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <script src="theme-init.js"></script>
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="login-v4.css">
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
 </head>
-<body class="auth-page">
-  <div class="background-orb orb-one"></div>
-  <div class="background-orb orb-two"></div>
-  <div class="background-orb orb-three"></div>
-  <div class="grid-overlay"></div>
+<body class="auth">
 
-  <button class="theme-toggle auth-theme-toggle" id="themeToggle" type="button" aria-label="Cambiar tema">
-    <svg class="tt-icon tt-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-    <span class="tt-pill"><span class="tt-thumb"></span></span>
-    <svg class="tt-icon tt-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
-  </button>
+<a class="skip" href="#loginForm">Saltar al formulario</a>
 
-  <main class="auth-main">
-    <div class="auth-shell">
-      <div class="auth-intro">
-        <a class="brand" href="index.html"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
-        <span class="eyebrow">Acceso seguro</span>
-        <h1>Inicia sesión para continuar con tus portafolios de inversión.</h1>
-        <p>
-          Inicia sesión con tu cuenta registrada o crea una nueva desde la landing principal.
-        </p>
-        <ul class="auth-features">
-          <li>
-            <span class="auth-feature-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-            <span>Protección con verificación en dos pasos</span>
-          </li>
-          <li>
-            <span class="auth-feature-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
-            <span>Seguimiento de portafolios en tiempo real</span>
-          </li>
-          <li>
-            <span class="auth-feature-icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-            <span>Tus datos cifrados y privados</span>
-          </li>
-        </ul>
+<header class="auth__top">
+  <div class="shell auth__bar">
+    <a class="mark" href="index.html"><b>Black</b><span>Portfolio</span></a>
+    <div class="top__actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+      </button>
+      <a class="btn btn--quiet" href="index.html">Volver</a>
+    </div>
+  </div>
+</header>
+
+<main class="auth__main">
+  <div class="shell auth__spread">
+
+    <div class="auth__intro">
+      <span class="rosette rosette--auth" aria-hidden="true"></span>
+      <h1>Entra a tus carteras.</h1>
+      <p class="lede">
+        Tu cuenta abre el mismo estado de cartera que dejaste: posiciones, riesgo medido y
+        los reportes que ya generaste.
+      </p>
+      <dl class="spec">
+        <div><dt>Segundo factor</dt><dd>TOTP verificado en el servidor. El secreto nunca llega a este navegador.</dd></div>
+        <div><dt>Dispositivo de confianza</dt><dd>Si ya validaste este equipo, no volvemos a pedirte el código por unos días.</dd></div>
+        <div><dt>Sesión</dt><dd>El token se revisa contra revocación en cada llamada sensible.</dd></div>
+      </dl>
+      <p class="note">
+        El acceso está en beta por invitación. Si tienes un código, puedes canjearlo al entrar.
+      </p>
+    </div>
+
+    <div class="plate plate--auth">
+      <div class="plate__rule"></div>
+      <div class="plate__head">
+        <div>
+          <p class="plate__name">Iniciar sesión</p>
+          <p class="plate__meta">Cuenta registrada de BlackPortfolio</p>
+        </div>
       </div>
 
-      <div class="auth-card">
+      <div class="plate__body">
         <div id="googleOneTap"></div>
         <div class="social-buttons">
           <button id="googleLoginBtn" class="button-google" type="button">
-            <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
             <span>Continuar con Google</span>
           </button>
         </div>
 
-        <div class="auth-divider" id="authDivider"><span>o inicia con correo</span></div>
+        <div class="auth-divider" id="authDivider"><span>o con tu correo</span></div>
 
-        <form id="loginForm" class="signup-form">
+        <form id="loginForm" class="signup-form" novalidate>
           <div class="form-row">
-            <label for="loginEmail">Correo electronico</label>
-            <input id="loginEmail" name="email" type="email" autocomplete="username" inputmode="email" placeholder="demo@blackportfolio.ai" required>
+            <label for="loginEmail">Correo electrónico</label>
+            <input id="loginEmail" name="email" type="email" autocomplete="username" inputmode="email"
+                   placeholder="demo@blackportfolio.ai" required>
           </div>
+
           <div class="form-row">
             <div class="login-pw-label-row">
               <label for="loginPassword">Contraseña</label>
               <button type="button" class="forgot-pw-btn" id="forgotPwBtn">¿Olvidaste tu contraseña?</button>
             </div>
             <div class="pw-input-wrap">
-              <input id="loginPassword" name="password" type="password" placeholder="Tu contraseña" required autocomplete="current-password">
+              <input id="loginPassword" name="password" type="password" placeholder="Tu contraseña"
+                     required autocomplete="current-password">
               <button type="button" class="pw-toggle" id="loginPwToggle" aria-label="Mostrar contraseña">
-                <svg id="loginEyeIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg id="loginEyeOffIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <svg id="loginEyeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="loginEyeOffIcon" class="hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
               </button>
             </div>
           </div>
-          <button type="button" class="forgot-pw-btn" id="loginBetaToggle" style="align-self:flex-start;margin-top:-4px">¿Tienes un código de invitación?</button>
+
+          <button type="button" class="forgot-pw-btn" id="loginBetaToggle" style="margin-top:var(--s4)">
+            ¿Tienes un código de invitación?
+          </button>
+
           <div class="form-row hidden" id="loginBetaRow">
             <label for="loginBetaCode">Código de invitación o promocional</label>
-            <input id="loginBetaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40" autocomplete="off" style="text-transform:uppercase">
-            <p class="pw-strength-label" style="margin-top:4px"><span id="loginBetaHint" style="opacity:.7">Se canjeará al entrar y desbloqueará tu acceso a la beta.</span></p>
+            <input id="loginBetaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40"
+                   autocomplete="off" style="text-transform:uppercase">
+            <p class="pw-strength-label"><span id="loginBetaHint">Se canjea al entrar y desbloquea tu acceso a la beta.</span></p>
           </div>
-          <button class="button primary submit-button" type="submit">Entrar</button>
+
+          <button class="button primary submit-button btn btn--primary" type="submit">Entrar</button>
           <p id="loginMessage" class="form-message" aria-live="polite"></p>
         </form>
+      </div>
 
-        <div class="auth-links">
-          <a class="button secondary" href="index.html">Volver a la landing</a>
-          <a class="button ghost" href="index.html#register">Crear una cuenta nueva</a>
-        </div>
+      <div class="auth-links">
+        <a class="button secondary btn btn--quiet" href="registro.html">Crear una cuenta</a>
+        <a class="button ghost btn btn--quiet" href="index.html">Ver la plataforma</a>
       </div>
     </div>
-  </main>
 
-  <!-- OTP Verification Overlay (shown when 2FA is enabled) -->
-  <div id="otpOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-label="Verificación en dos pasos">
-    <div class="otp-card">
-      <div class="otp-shield-icon" aria-hidden="true">
-        <svg viewBox="0 0 48 48" width="56" height="56" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="otpShieldGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#8ea0ff"/>
-              <stop offset="1" stop-color="#5b6bff"/>
-            </linearGradient>
-          </defs>
-          <path d="M24 3.5l15 5.4v9.7c0 9.9-6.4 19.2-15 21.9-8.6-2.7-15-12-15-21.9V8.9l15-5.4z" fill="url(#otpShieldGrad)" fill-opacity="0.14" stroke="url(#otpShieldGrad)" stroke-width="1.6"/>
-          <rect x="16.5" y="22" width="15" height="12" rx="2.4" stroke="url(#otpShieldGrad)" stroke-width="1.8"/>
-          <path d="M19.5 22v-3.2a4.5 4.5 0 019 0V22" stroke="url(#otpShieldGrad)" stroke-width="1.8" stroke-linecap="round"/>
-          <circle cx="24" cy="28" r="1.9" fill="url(#otpShieldGrad)"/>
-        </svg>
+  </div>
+</main>
+
+<footer class="auth__foot">
+  <div class="shell auth__foot-row">
+    <p class="note">
+      © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
+      financiera personalizada.
+    </p>
+    <div class="foot__theme">
+      <span class="label" id="temaLabel">Tema</span>
+      <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+        <span class="seg__thumb" aria-hidden="true"></span>
+        <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+        <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
       </div>
-      <h2 class="otp-title" id="otpTitle">Verificación en dos pasos</h2>
-      <p class="otp-subtitle" id="otpSubtitle">Ingresa el código de 6 dígitos de Google Authenticator</p>
+    </div>
+  </div>
+</footer>
 
-      <div class="otp-grid" id="otpGrid">
+<!-- ── Verificación en dos pasos (cuando la cuenta ya tiene 2FA) ─────────── -->
+<div id="otpOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="otpTitle">
+  <div class="otp-card">
+    <h2 class="otp-title" id="otpTitle">Verificación en dos pasos</h2>
+    <p class="otp-subtitle" id="otpSubtitle">Ingresa el código de 6 dígitos de tu autenticador.</p>
+
+    <div class="otp-grid" id="otpGrid">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Dígito 1">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 2">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 3">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 4">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 5">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 6">
+    </div>
+
+    <p id="otpError" class="otp-error-msg hidden"></p>
+    <p id="otpStatus" class="otp-status-msg hidden" role="status" aria-live="polite"></p>
+
+    <p class="otp-help">
+      El código se verifica solo al ingresar el sexto dígito. Si lo rechaza, revisa que la hora
+      de tu teléfono esté sincronizada.
+    </p>
+
+    <div class="otp-fallback">
+      <button id="otpBackupToggle" class="otp-fallback-link" type="button">Perdí mi autenticador: usar un código de respaldo</button>
+      <div id="otpBackupWrap" class="otp-backup-wrap hidden">
+        <input id="otpBackupInput" class="dashboard-input otp-backup-input" type="text"
+               inputmode="text" autocomplete="one-time-code" maxlength="12"
+               placeholder="xxxx-xxxx" aria-label="Código de respaldo">
+        <button id="otpBackupVerifyBtn" class="button primary btn btn--primary" type="button">Entrar con código de respaldo</button>
+      </div>
+      <button id="otpEmailFallbackBtn" class="otp-fallback-link" type="button">Tampoco lo tengo: enviar un enlace de acceso por correo</button>
+      <p id="otpFallbackMsg" class="otp-fallback-msg hidden"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Alta obligatoria de 2FA (cuando la cuenta aún no lo tiene) ────────── -->
+<div id="totpSetupOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="totpSetupTitle">
+  <div class="totp-setup-card">
+    <h2 id="totpSetupTitle">Activa la verificación en dos pasos</h2>
+    <p class="totp-sub">Tu cuenta requiere un autenticador. Escanea el código para agregar BlackPortfolio y continuar.</p>
+
+    <div id="totpSetupLoading" style="text-align:center">
+      <div class="totp-loading-spinner" id="totpSetupSpinner"></div>
+      <p id="totpSetupLoadingMsg" class="note">Generando el código QR…</p>
+      <div id="totpSetupRetry" class="totp-setup-retry hidden">
+        <button id="totpSetupRetryBtn" class="button primary btn btn--primary" type="button">Reintentar</button>
+        <button id="totpSetupErrLogoutBtn" class="button ghost btn btn--quiet" type="button">Cancelar y salir</button>
+      </div>
+    </div>
+
+    <div id="totpSetupContent" class="hidden">
+      <div class="totp-qr-wrap"><img id="totpSetupQrImg" src="" alt="Código QR para el autenticador"></div>
+
+      <ol class="totp-steps">
+        <li><span class="step-num">1</span><span>Abre <strong>Google Authenticator</strong> en tu teléfono.</span></li>
+        <li><span class="step-num">2</span><span>Toca <strong>+</strong> y luego <strong>Escanear código QR</strong>.</span></li>
+        <li><span class="step-num">3</span><span>Aparecerá <strong>BlackPortfolio</strong> con un código de 6 dígitos.</span></li>
+        <li><span class="step-num">4</span><span>Escribe ese código aquí abajo para activar la protección.</span></li>
+      </ol>
+
+      <p class="totp-manual-key-label">Clave manual, si no puedes escanear</p>
+      <div class="totp-manual-key-row">
+        <div class="totp-manual-key" id="totpSetupManualKey">JBSW Y3DP EHPK 3PXP</div>
+        <button id="totpSetupManualCopy" class="button secondary totp-manual-copy btn btn--quiet" type="button">Copiar</button>
+      </div>
+
+      <div class="totp-setup-otp-grid" id="totpSetupOtpGrid">
         <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 1">
         <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 2">
         <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 3">
@@ -123,108 +224,44 @@
         <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 5">
         <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 6">
       </div>
+      <p class="totp-setup-msg" id="totpSetupMsg"></p>
 
-      <p id="otpError" class="otp-error-msg hidden"></p>
-      <p id="otpStatus" class="otp-status-msg hidden" role="status" aria-live="polite"></p>
-
-      <p class="otp-help">El código se verifica automáticamente al ingresar el sexto dígito. ¿Problemas? Asegúrate de que la hora de tu dispositivo esté sincronizada.</p>
-
-      <div class="otp-fallback">
-        <button id="otpBackupToggle" class="otp-fallback-link" type="button">¿Perdiste tu autenticador? Usa un código de respaldo</button>
-        <div id="otpBackupWrap" class="otp-backup-wrap hidden">
-          <input id="otpBackupInput" class="dashboard-input otp-backup-input" type="text"
-                 inputmode="text" autocomplete="one-time-code" maxlength="12"
-                 placeholder="xxxx-xxxx" aria-label="Código de respaldo">
-          <button id="otpBackupVerifyBtn" class="button primary" type="button">Entrar con código de respaldo</button>
-        </div>
-        <button id="otpEmailFallbackBtn" class="otp-fallback-link" type="button">¿Tampoco lo tienes? Recibe un enlace de acceso por correo</button>
-        <p id="otpFallbackMsg" class="otp-fallback-msg hidden"></p>
+      <div class="totp-setup-actions">
+        <button id="totpSetupVerifyBtn" class="button primary btn btn--primary" type="button" disabled>Activar y continuar</button>
+        <button id="totpSetupLogoutBtn" class="button ghost btn btn--quiet" type="button">Cancelar y salir</button>
       </div>
     </div>
-  </div>
 
-  <!-- Mandatory 2FA Setup Overlay (shown when 2FA is NOT yet enabled) -->
-  <div id="totpSetupOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-label="Configurar verificación en dos pasos">
-    <div class="totp-setup-card">
-      <h2>🔐 Activa la verificación en dos pasos</h2>
-      <p class="totp-sub">Tu cuenta requiere Google Authenticator. Escanea el código QR para agregar BlackPortfolio y continuar.</p>
-
-      <div id="totpSetupLoading" style="text-align:center">
-        <div class="totp-loading-spinner" id="totpSetupSpinner"></div>
-        <p id="totpSetupLoadingMsg" style="font-size:0.83rem;color:var(--muted)">Generando código QR…</p>
-        <div id="totpSetupRetry" class="totp-setup-retry hidden">
-          <button id="totpSetupRetryBtn" class="button primary" type="button">Reintentar</button>
-          <button id="totpSetupErrLogoutBtn" class="button ghost" type="button">Cancelar y salir</button>
-        </div>
+    <div id="totpSetupBackupView" class="hidden">
+      <h2>Verificación activada</h2>
+      <p class="totp-sub">
+        Guarda estos <strong>códigos de respaldo</strong>. Cada uno sirve una sola vez para entrar
+        si pierdes el autenticador, y no se vuelven a mostrar.
+      </p>
+      <div id="totpSetupBackupCodes" class="backup-codes-grid"></div>
+      <div class="backup-codes-actions">
+        <button id="totpSetupBackupCopy" class="button secondary btn btn--quiet" type="button">Copiar</button>
+        <button id="totpSetupBackupDownload" class="button secondary btn btn--quiet" type="button">Descargar .txt</button>
       </div>
-
-      <div id="totpSetupContent" class="hidden">
-        <div class="totp-qr-wrap"><img id="totpSetupQrImg" src="" alt="Código QR"></div>
-
-        <ol class="totp-steps">
-          <li><span class="step-num">1</span>Abre <strong>Google Authenticator</strong> en tu teléfono.</li>
-          <li><span class="step-num">2</span>Toca <strong>+</strong> → <strong>"Escanear código QR"</strong>.</li>
-          <li><span class="step-num">3</span>Aparecerá <strong>BlackPortfolio</strong> con un código de 6 dígitos.</li>
-          <li><span class="step-num">4</span>Ingresa ese código abajo para activar la protección.</li>
-        </ol>
-
-        <p class="totp-manual-key-label">Clave manual (si no puedes escanear):</p>
-        <div class="totp-manual-key-row">
-          <div class="totp-manual-key" id="totpSetupManualKey">—</div>
-          <button id="totpSetupManualCopy" class="button secondary totp-manual-copy" type="button">Copiar</button>
-        </div>
-
-        <div class="totp-setup-otp-grid" id="totpSetupOtpGrid">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 1">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 2">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 3">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 4">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 5">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 6">
-        </div>
-        <p class="totp-setup-msg" id="totpSetupMsg"></p>
-
-        <div class="totp-setup-actions">
-          <button id="totpSetupVerifyBtn" class="button primary" type="button" disabled>Activar y continuar</button>
-          <button id="totpSetupLogoutBtn" class="button ghost" type="button">Cancelar y salir</button>
-        </div>
-      </div>
-
-      <div id="totpSetupBackupView" class="hidden">
-        <h2>✅ 2FA activado</h2>
-        <p class="totp-sub">Guarda estos <strong>códigos de respaldo</strong> en un lugar seguro. Cada uno sirve una sola vez para entrar si pierdes tu autenticador. <strong>No se volverán a mostrar.</strong></p>
-        <div id="totpSetupBackupCodes" class="backup-codes-grid"></div>
-        <div class="backup-codes-actions">
-          <button id="totpSetupBackupCopy" class="button secondary" type="button">Copiar</button>
-          <button id="totpSetupBackupDownload" class="button secondary" type="button">Descargar .txt</button>
-        </div>
-        <label class="backup-codes-ack">
-          <input id="totpSetupBackupAck" type="checkbox"> Guardé mis códigos en un lugar seguro
-        </label>
-        <button id="totpSetupBackupContinue" class="button primary" type="button" disabled style="width:100%;margin-top:10px">Continuar</button>
-      </div>
+      <label class="backup-codes-ack">
+        <input id="totpSetupBackupAck" type="checkbox">
+        <span>Guardé mis códigos en un lugar seguro</span>
+      </label>
+      <button id="totpSetupBackupContinue" class="button primary btn btn--primary" type="button" disabled
+              style="width:100%;margin-top:var(--s4)">Continuar</button>
     </div>
   </div>
+</div>
 
-  <script src="monitoring.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="assets/qrcode.min.js"></script>
-  <script src="assets/qr-shim.js"></script>
-  <script src="auth.js?v=11"></script>
-  <script src="plan-picker.js?v=2"></script>
-  <script src="login.js?v=11"></script>
-  <script>
-    (function () {
-      var btn = document.getElementById("themeToggle");
-      if (!btn) return;
-      btn.addEventListener("click", function () {
-        var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", next);
-        localStorage.setItem("bp-theme", next);
-      });
-    })();
-  </script>
+<script src="monitoring.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="assets/qrcode.min.js"></script>
+<script src="assets/qr-shim.js"></script>
+<script src="theme-v4.js"></script>
+<script src="auth.js?v=11"></script>
+<script src="plan-picker.js?v=2"></script>
+<script src="login.js?v=11"></script>
 </body>
 </html>

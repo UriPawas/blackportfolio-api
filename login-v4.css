@@ -1,0 +1,553 @@
+/* ==========================================================================
+   BlackPortfolio — login v4
+   Se monta sobre landing-v4.css: aquí sólo viven los componentes de acceso
+   (campos, divisor, mensajes, rejilla de OTP, alta de 2FA, códigos de
+   respaldo). Los nombres de clase e IDs son los mismos que usa `login.js` en
+   producción, así que este archivo puede sustituir al actual sin tocar el JS.
+   ========================================================================== */
+
+/* En styles.css no hay una regla global de `.hidden` — se declara por ID.
+   Aquí sí la hay, porque login.js alterna esa clase en varios nodos. */
+.hidden { display: none !important; }
+
+/* --------------------------------------------------------- 1. Estructura  */
+
+.auth {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth__top {
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+.auth__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  min-height: 64px;
+}
+.auth__bar .top__actions { margin-inline-start: auto; }
+
+/* El acceso es la única superficie sin fotografía en el contenido, así que
+   aquí la imagen es el suelo: el muro cortina de `torre.jpg` en escala de
+   grises, enmascarado en diagonal para que la presencia quede en el canto
+   superior derecho y se disuelva antes de llegar al texto de la izquierda.
+   Va en z-index -2, debajo del grano. */
+.auth::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: url("assets/landing-v4/torre.jpg") center / cover no-repeat;
+  filter: grayscale(1) contrast(1.04);
+  opacity: .10;
+  -webkit-mask-image: linear-gradient(to bottom left, #000, transparent 62%);
+          mask-image: linear-gradient(to bottom left, #000, transparent 62%);
+}
+[data-theme="dark"] .auth::after { opacity: .16; }
+
+.auth__main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  /* La roseta sangra fuera de la columna: se recorta aquí para que no genere
+     desplazamiento horizontal. */
+  overflow: hidden;
+  padding-block: clamp(2rem, 5vw, 4.5rem);
+}
+
+.auth__spread {
+  display: grid;
+  gap: clamp(2rem, 4vw, 4rem);
+  align-items: center;
+  width: 100%;
+}
+
+.auth__intro { position: relative; }
+/* La roseta va primero en el marcado y no cuenta para el ritmo vertical. */
+.auth__intro > *:not(.rosette) + * { margin-top: var(--s5); }
+.auth__intro > :not(.rosette) { position: relative; z-index: 1; }
+.auth__intro h1 {
+  font-size: clamp(1.9rem, 1.3rem + 1.9vw, 2.9rem);
+  max-width: 20ch;
+}
+.auth__intro p { max-width: 42ch; color: var(--ink-2); }
+
+.auth__foot {
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  padding-block: var(--s5);
+}
+.auth__foot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s4);
+}
+.auth__foot-row .note { max-width: 54ch; }
+.auth__foot-row .foot__theme { margin-inline-start: auto; }
+
+.plate--auth { width: 100%; max-width: 31rem; margin-inline: auto; }
+.plate__body { padding: clamp(1.15rem, 2.5vw, 1.6rem); }
+
+/* ------------------------------------------------------------ 2. Campos  */
+
+.form-row { display: grid; gap: .4rem; }
+.form-row + .form-row { margin-top: var(--s4); }
+
+.form-row label,
+.login-pw-label-row label {
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.login-pw-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.auth input[type="email"],
+.auth input[type="password"],
+.auth input[type="text"] {
+  width: 100%;
+  min-height: 46px;
+  padding: .7rem .85rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  font: 400 1rem/1.4 var(--sans);
+  transition: border-color .18s var(--ease), box-shadow .18s var(--ease);
+}
+.auth input::placeholder { color: var(--ink-3); }
+.auth input:focus {
+  outline: none;
+  border-color: var(--cobalt-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cobalt-line) 20%, transparent);
+}
+.auth input[aria-invalid="true"] { border-color: var(--neg); }
+
+.pw-input-wrap { position: relative; }
+.pw-input-wrap input { padding-right: 3rem; }
+.pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 40px; height: 40px;
+  background: transparent;
+  border: 0;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color .18s var(--ease);
+}
+.pw-toggle:hover { color: var(--ink); }
+.pw-toggle svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+
+.forgot-pw-btn {
+  align-self: baseline;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: 500 var(--t-mini)/1.2 var(--sans);
+  color: var(--cobalt-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--cobalt-line) 45%, transparent);
+  cursor: pointer;
+  transition: border-color .18s var(--ease);
+}
+.forgot-pw-btn:hover { border-bottom-color: var(--cobalt-line); }
+
+.pw-strength-label { margin: .25rem 0 0; font-size: var(--t-mini); color: var(--ink-3); }
+
+.submit-button { width: 100%; margin-top: var(--s5); }
+
+/* ------------------------------------------- 3. Google y divisor         */
+
+.social-buttons { display: grid; }
+
+.button-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+  width: 100%;
+  min-height: 46px;
+  padding: .7rem 1rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  font: 500 .9375rem/1.1 var(--sans);
+  cursor: pointer;
+  transition: border-color .18s var(--ease), background-color .18s var(--ease), transform .18s var(--ease);
+}
+.button-google:hover { border-color: var(--ink-2); transform: translateY(-1px); }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-block: var(--s5);
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--rule);
+}
+
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  padding: var(--s4) clamp(1.15rem, 2.5vw, 1.6rem);
+  border-top: 1px solid var(--rule);
+  background: var(--sunken);
+}
+
+/* --------------------------------------------------------- 4. Mensajes   */
+
+.form-message {
+  margin: var(--s4) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
+.form-message:empty { display: none; }
+.form-message.error,
+.form-message.success,
+.form-message.info {
+  padding: .7rem .85rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+.form-message.error {
+  color: var(--neg);
+  border-color: color-mix(in srgb, var(--neg) 45%, transparent);
+  background: color-mix(in srgb, var(--neg) 8%, transparent);
+}
+.form-message.success {
+  color: var(--pos);
+  border-color: color-mix(in srgb, var(--pos) 45%, transparent);
+  background: color-mix(in srgb, var(--pos) 8%, transparent);
+}
+.form-message.info {
+  color: var(--ink-2);
+  background: var(--cobalt-tint);
+  border-color: color-mix(in srgb, var(--cobalt-line) 30%, transparent);
+}
+
+/* login.js inserta este bloque después del mensaje */
+#forgotHint {
+  margin-top: var(--s3);
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+}
+
+/* ------------------------------------------------- 5. Sobreponer (OTP)   */
+
+.otp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: var(--s4);
+  background: color-mix(in srgb, var(--band-deep) 72%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.otp-card,
+.totp-setup-card {
+  width: 100%;
+  max-width: 31rem;
+  max-height: 92dvh;
+  overflow: auto;
+  padding: clamp(1.35rem, 3vw, 2rem);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--cobalt-line);
+  border-radius: 2px;
+  box-shadow: var(--shadow-plate);
+}
+.totp-setup-card { max-width: 34rem; }
+
+.otp-shield-icon { display: none; }
+
+.otp-title,
+.totp-setup-card h2 {
+  font-family: var(--serif);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -.015em;
+  margin: 0;
+}
+.otp-subtitle,
+.totp-sub {
+  margin: var(--s3) 0 0;
+  font-size: var(--t-small);
+  color: var(--ink-2);
+  max-width: 46ch;
+}
+
+.otp-grid,
+.totp-setup-otp-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: .45rem;
+  margin-top: var(--s5);
+}
+.otp-box {
+  min-height: 56px;
+  padding: 0;
+  text-align: center;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  font: 500 1.3rem/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+  transition: border-color .18s var(--ease), box-shadow .18s var(--ease);
+}
+.otp-box:focus {
+  outline: none;
+  border-color: var(--cobalt-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cobalt-line) 20%, transparent);
+}
+
+.otp-error-msg,
+.otp-status-msg,
+.otp-fallback-msg,
+.totp-setup-msg {
+  margin: var(--s4) 0 0;
+  font-size: var(--t-small);
+}
+.otp-error-msg { color: var(--neg); }
+.otp-status-msg { color: var(--pos); }
+.otp-fallback-msg, .totp-setup-msg { color: var(--ink-2); }
+
+.otp-help {
+  margin: var(--s4) 0 0;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule-soft);
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+}
+
+.otp-fallback { margin-top: var(--s4); display: grid; gap: var(--s3); justify-items: start; }
+.otp-fallback-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: 500 var(--t-mini)/1.4 var(--sans);
+  color: var(--cobalt-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--cobalt-line) 40%, transparent);
+  cursor: pointer;
+}
+.otp-fallback-link:hover { border-bottom-color: var(--cobalt-line); }
+
+.otp-backup-wrap { display: grid; gap: var(--s3); width: 100%; }
+.otp-backup-input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
+
+/* --------------------------------------------- 6. Alta de 2FA (TOTP)     */
+
+.totp-loading-spinner {
+  width: 26px; height: 26px;
+  margin: var(--s5) auto var(--s3);
+  border: 2px solid var(--rule);
+  border-top-color: var(--cobalt-line);
+  border-radius: 50%;
+  animation: spin .9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.totp-setup-retry { display: flex; gap: var(--s3); justify-content: center; margin-top: var(--s4); }
+
+.totp-qr-wrap {
+  display: grid;
+  place-items: center;
+  margin-top: var(--s5);
+  padding: var(--s4);
+  background: #fff;
+  border: 1px solid var(--rule);
+}
+.totp-qr-wrap img { width: 176px; height: 176px; }
+
+.totp-steps {
+  margin: var(--s5) 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+  border-top: 1px solid var(--rule-soft);
+}
+.totp-steps li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: .65rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-small);
+  color: var(--ink-2);
+}
+/* Aquí la numeración sí lleva información: es una secuencia que el usuario
+   ejecuta en orden, en otra pantalla. */
+.step-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px; height: 20px;
+  border: 1px solid var(--rule-strong);
+  font: 600 .6875rem/1 var(--sans);
+  color: var(--ink-3);
+  transform: translateY(2px);
+}
+.totp-steps strong { color: var(--ink); font-weight: 600; }
+
+.totp-manual-key-label {
+  margin: var(--s5) 0 var(--s2);
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.totp-manual-key-row { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: stretch; }
+.totp-manual-key {
+  flex: 1 1 12rem;
+  padding: .6rem .75rem;
+  background: var(--sunken);
+  border: 1px solid var(--rule);
+  font: 400 .875rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .1em;
+  word-break: break-all;
+  color: var(--ink);
+}
+
+.totp-setup-actions { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s5); }
+.totp-setup-actions .btn { flex: 1 1 12rem; }
+
+.backup-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4rem;
+  margin-top: var(--s5);
+}
+.backup-codes-grid span {
+  padding: .55rem .6rem;
+  background: var(--sunken);
+  border: 1px solid var(--rule);
+  font: 400 .875rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .06em;
+  text-align: center;
+  color: var(--ink);
+}
+.backup-codes-actions { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s4); }
+.backup-codes-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  margin-top: var(--s5);
+  font-size: var(--t-small);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.backup-codes-ack input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--cobalt); }
+
+/* ------------------------------------------ 7. Barra de prototipo        */
+
+/* No es parte del producto: sirve para revisar cada estado sin backend.
+   Va con borde punteado justamente para que no se confunda con la interfaz. */
+.proto {
+  position: fixed;
+  z-index: 90;
+  left: var(--s4);
+  bottom: var(--s4);
+  max-width: calc(100vw - 2 * var(--s4));
+  padding: .6rem .75rem;
+  background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-lift);
+}
+.proto__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.proto__toggle {
+  margin-inline-start: auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: 500 var(--t-mini)/1 var(--sans);
+  color: var(--cobalt-ink);
+  cursor: pointer;
+}
+.proto__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .6rem;
+}
+.proto__list button {
+  min-height: 34px;
+  padding: .3rem .6rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font: 500 var(--t-mini)/1 var(--sans);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color .16s var(--ease), color .16s var(--ease);
+}
+.proto__list button:hover { border-color: var(--ink-2); color: var(--ink); }
+.proto__list button[aria-pressed="true"] { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+.proto[data-open="false"] .proto__list { display: none; }
+
+/* --------------------------------------------------- 8. Breakpoints      */
+
+@media (min-width: 62rem) {
+  .auth__spread { grid-template-columns: minmax(0, 4.5fr) minmax(0, 5.5fr); }
+  .plate--auth { margin-inline: 0 auto; }
+}
+
+@media (max-width: 61.99rem) {
+  /* La barra de prototipo es fija: el pie reserva espacio para que no tape
+     el conmutador de tema. */
+  .auth__foot { padding-bottom: 4.75rem; }
+}
+
+@media (max-width: 48rem) {
+  /* En una columna el grabado ocupa el canto superior derecho, así que la
+     fotografía se va al inferior: dos texturas en la misma esquina se leen
+     como suciedad, no como profundidad. */
+  .auth::after {
+    -webkit-mask-image: linear-gradient(to top left, #000, transparent 58%);
+            mask-image: linear-gradient(to top left, #000, transparent 58%);
+  }
+}
+
+@media (max-width: 30rem) {
+  .otp-grid, .totp-setup-otp-grid { gap: .3rem; }
+  .otp-box { min-height: 48px; font-size: 1.1rem; }
+  .backup-codes-grid { grid-template-columns: minmax(0, 1fr); }
+  .auth-links .btn { width: 100%; }
+}

@@ -1,20 +1,21 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BlackPortfolio | Plataforma para portafolios de inversión</title>
-  <meta name="description" content="Landing moderna para una plataforma de creación y gestión de portafolios de inversión con registro de cuenta, planes y base lista para integración de pagos.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BlackPortfolio — un solo estado de cartera para todo lo que tienes</title>
+  <meta name="description" content="Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo en una misma lectura: peso real, riesgo medido y rendimiento comparado contra su índice. Monitoreo y análisis, no asesoría financiera personalizada.">
+  <meta name="color-scheme" content="light dark">
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="apple-touch-icon" href="favicon.svg">
-  <meta name="theme-color" content="#010101">
+  <meta name="theme-color" content="#0B1524">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="BlackPortfolio">
   <meta property="og:title" content="BlackPortfolio | Portafolios de inversión con experiencia premium">
-  <meta property="og:description" content="Construye estrategias multi-activo, mide riesgo, simula escenarios y comparte reportes con una interfaz oscura y elegante.">
+  <meta property="og:description" content="Un solo estado de cartera para todo lo que tienes: seis clases de activo, riesgo medido y rendimiento comparado contra su índice.">
   <meta property="og:url" content="https://portify-6467f.web.app/">
   <meta property="og:image" content="https://portify-6467f.web.app/assets/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -23,884 +24,528 @@
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="BlackPortfolio | Portafolios de inversión con experiencia premium">
-  <meta name="twitter:description" content="Construye estrategias multi-activo, mide riesgo, simula escenarios y comparte reportes con una interfaz oscura y elegante.">
+  <meta name="twitter:description" content="Un solo estado de cartera para todo lo que tienes: seis clases de activo, riesgo medido y rendimiento comparado contra su índice.">
   <meta name="twitter:image" content="https://portify-6467f.web.app/assets/og-image.png">
 
   <link rel="canonical" href="https://portify-6467f.web.app/">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20">
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
 
-  <!-- Structured data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "BlackPortfolio",
-    "url": "https://portify-6467f.web.app/",
-    "logo": "https://portify-6467f.web.app/favicon.svg",
-    "description": "Plataforma para crear, analizar y presentar portafolios de inversión multi-activo con análisis de riesgo, backtesting y suscripciones.",
-    "sameAs": [
-      "https://www.youtube.com/@blackportfolio",
-      "https://github.com/blackportfolio",
-      "https://linkedin.com/company/blackportfolio"
-    ]
-  }
-  </script>
   <script>
-    (function(){
-      var s=localStorage.getItem('bp-theme');
-      var d=window.matchMedia('(prefers-color-scheme:dark)').matches;
-      document.documentElement.setAttribute('data-theme', s || (d ? 'dark' : 'light'));
+    /* Antes del primer pintado: tema y capacidades. Evita el parpadeo y deja
+       el contenido visible si el JS principal no llega a cargar. */
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado: se queda en claro */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        root.classList.add('motion-ok');
+      }
     })();
   </script>
 </head>
-<body class="landing-page">
-  <div class="scroll-progress"><span id="scrollProgressBar"></span></div>
-  <div class="aurora"></div>
-  <div class="background-orb orb-one"></div>
-  <div class="background-orb orb-two"></div>
-  <div class="background-orb orb-three"></div>
-  <div class="grid-overlay"></div>
-  <div class="noise-overlay"></div>
-  <div class="vignette"></div>
+<body>
 
-  <header class="site-header">
-    <div class="container nav">
-      <a class="brand" href="#hero"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
-      <nav class="nav-links">
-        <a href="#features">Plataforma</a>
-        <a href="#plans">Planes</a>
-        <a href="#register">Cuenta</a>
-        <a href="#payments">Suscripción</a>
-        <a href="#faq">FAQ</a>
-        <a href="#contact">Contacto</a>
-      </nav>
-      <div class="nav-actions">
-        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Cambiar tema">
-          <svg class="tt-icon tt-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          <span class="tt-pill"><span class="tt-thumb"></span></span>
-          <svg class="tt-icon tt-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
-        </button>
-        <span class="nav-sep"></span>
-        <a class="button secondary" href="login.html">Log in</a>
-        <a class="button primary" href="#register">Abrir cuenta</a>
-        <button class="nav-hamburger" id="navHamburger" type="button" aria-label="Menú" aria-expanded="false">
-          <span class="bar"></span>
-          <span class="bar"></span>
-          <span class="bar"></span>
-        </button>
-      </div>
-    </div>
-    <nav class="mobile-nav hidden" id="mobileNav" aria-hidden="true">
-      <div class="container mobile-nav-inner">
-        <a class="mobile-nav-link" href="#features">Plataforma</a>
-        <a class="mobile-nav-link" href="#plans">Planes</a>
-        <a class="mobile-nav-link" href="#register">Cuenta</a>
-        <a class="mobile-nav-link" href="#payments">Suscripción</a>
-        <a class="mobile-nav-link" href="#faq">FAQ</a>
-        <a class="mobile-nav-link" href="#contact">Contacto</a>
-        <div class="mobile-nav-actions">
-          <a class="button secondary" href="login.html">Log in</a>
-          <a class="button primary" href="#register">Abrir cuenta</a>
-        </div>
-      </div>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="top">
+  <div class="shell top__bar">
+    <a class="mark" href="#contenido"><b>Black</b><span>Portfolio</span></a>
+
+    <nav class="top__nav" aria-label="Secciones">
+      <a href="#capacidades">Capacidades</a>
+      <a href="#vista-previa">Vista previa</a>
+      <a href="#seguridad">Seguridad</a>
+      <a href="planes.html">Planes</a>
     </nav>
-  </header>
 
-  <div class="ticker-bar" id="tickerBar">
-    <div class="ticker-track" id="tickerTrack">
-      <span class="ticker-item ticker-skeleton">
-        <span class="ticker-label">S&P 500</span><span class="ticker-price">—</span>
-      </span>
+    <div class="top__actions">
+      <button class="icon-btn" id="themeBtn" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+      </button>
+      <a class="btn btn--quiet top__login" href="login.html">Iniciar sesión</a>
+      <a class="btn btn--primary top__cta" href="registro.html">Abrir cuenta</a>
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Abrir menú">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
     </div>
   </div>
 
-  <main>
-    <section id="hero" class="hero">
-      <div class="container hero-layout">
-        <div class="hero-copy">
-          <span class="eyebrow">Portfolio builder para inversionistas</span>
-          <h1>Crea, analiza y presenta portafolios de inversión con una <em>experiencia premium.</em></h1>
-          <p class="hero-text">
-            Construye estrategias multi-activo, mide riesgo, simula escenarios y comparte reportes con una interfaz
-            oscura, elegante y enfocada en decisiones financieras.
-          </p>
-          <div class="hero-actions">
-            <a class="button primary" href="#register">Crear cuenta</a>
-            <a class="button secondary" href="#plans">Conocer planes</a>
-          </div>
-          <div class="hero-metrics">
-            <div class="metric-card"><strong data-count="18" data-prefix="+" data-suffix="K">+18K</strong><span>portafolios monitoreados</span></div>
-            <div class="metric-card"><strong data-count="32" data-prefix="-" data-suffix="%">-32%</strong><span>menos tiempo en rebalanceos</span></div>
-            <div class="metric-card"><strong>24/7</strong><span>seguimiento de mercado</span></div>
-          </div>
-        </div>
-
-        <div class="hero-panel">
-          <div class="panel-window">
-            <div class="panel-topbar"><span></span><span></span><span></span></div>
-            <div class="dashboard-preview">
-              <div class="dashboard-sidebar">
-                <div class="sidebar-card active">Asignación</div>
-                <div class="sidebar-card">Riesgo</div>
-                <div class="sidebar-card">Backtesting</div>
-                <div class="sidebar-card">Suscripción</div>
-              </div>
-              <div class="dashboard-content">
-                <div class="mini-chart">
-                  <div class="mini-chart-head">
-                    <span class="mini-chart-label">Rendimiento</span>
-                    <span class="mini-chart-delta">+12.4%</span>
-                  </div>
-                  <svg class="hero-chart" viewBox="0 0 320 120" preserveAspectRatio="none" aria-hidden="true">
-                    <defs>
-                      <linearGradient id="hcArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop class="hc-stop-top" offset="0%"/>
-                        <stop class="hc-stop-bottom" offset="100%"/>
-                      </linearGradient>
-                      <linearGradient id="hcLine" x1="0" y1="0" x2="1" y2="0">
-                        <stop class="hc-stop-a" offset="0%"/>
-                        <stop class="hc-stop-b" offset="100%"/>
-                      </linearGradient>
-                    </defs>
-                    <path class="hc-area" d="M0,92 L24,84 L60,96 L96,70 L132,78 L168,48 L204,60 L240,34 L276,44 L320,18 L320,120 L0,120 Z"/>
-                    <path class="hc-line" d="M0,92 L24,84 L60,96 L96,70 L132,78 L168,48 L204,60 L240,34 L276,44 L320,18"/>
-                    <circle class="hc-dot" cx="320" cy="18" r="3.5"/>
-                  </svg>
-                  <div class="hero-alloc">
-                    <span class="hero-alloc-bar" style="--w:46%"><i></i></span>
-                    <span class="hero-alloc-bar" style="--w:28%"><i></i></span>
-                    <span class="hero-alloc-bar" style="--w:16%"><i></i></span>
-                    <span class="hero-alloc-bar" style="--w:10%"><i></i></span>
-                  </div>
-                </div>
-                <div class="stat-grid">
-                  <article class="preview-card"><span>Volatilidad</span><strong>11.8%</strong></article>
-                  <article class="preview-card"><span>Sharpe ratio</span><strong>1.42</strong></article>
-                  <article class="preview-card"><span>Rebalanceo</span><strong>Mensual</strong></article>
-                  <article class="preview-card accent"><span>Broker sync</span><strong>Stripe ready</strong></article>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+  <div class="drawer" id="drawer" data-open="false">
+    <div class="shell">
+      <a class="drawer__link" href="#capacidades">Capacidades</a>
+      <a class="drawer__link" href="#vista-previa">Vista previa</a>
+      <a class="drawer__link" href="#seguridad">Seguridad</a>
+      <a class="drawer__link" href="planes.html">Planes</a>
+      <div class="drawer__actions">
+        <a class="btn btn--quiet btn--wide" href="login.html">Iniciar sesión</a>
+        <a class="btn btn--primary btn--wide" href="registro.html">Abrir cuenta</a>
       </div>
-    </section>
+    </div>
+  </div>
+</header>
 
-    <section id="features" class="section">
-      <div class="container">
-        <div class="section-heading" data-animate="up">
-          <span class="eyebrow">Plataforma</span>
-          <h2>Todo lo que necesitas para crear portafolios de inversión claros, medibles y escalables.</h2>
-          <p>
-            Diseñado para inversionistas, asesores y equipos que gestionan estrategias
-            con renta variable, ETFs, cripto, renta fija y más.
-          </p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature-card" data-animate="up" data-delay="1">
-            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9h-9V3z"/><path d="M12 3a9 9 0 0 1 9 9"/></svg></div>
-            <h3>Asignación inteligente</h3>
-            <p>Distribuye capital por perfil de riesgo, clase de activo, sector o región con paneles fáciles de leer.</p>
-          </article>
-          <article class="feature-card" data-animate="up" data-delay="2">
-            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></div>
-            <h3>Análisis de riesgo</h3>
-            <p>Consulta drawdown, volatilidad, correlación y escenarios de estrés en una sola vista ejecutiva.</p>
-          </article>
-          <article class="feature-card" data-animate="up" data-delay="3">
-            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6z"/><path d="M14 3v6h6"/><path d="M8 16v-2m4 2v-4m4 4v-6"/></svg></div>
-            <h3>Reportes para clientes</h3>
-            <p>Comparte avances, composición y rendimiento de cada portafolio con una presentación profesional.</p>
-          </article>
-          <article class="feature-card" data-animate="up" data-delay="4">
-            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></div>
-            <h3>Cuentas y suscripciones</h3>
-            <p>Incluye registro de usuarios y flujo listo para activar suscripciones con Stripe u otro gateway.</p>
-          </article>
-        </div>
-      </div>
-    </section>
+<section class="quotes" id="quotes" aria-label="Tablero de cotizaciones de referencia">
+  <p class="quotes__label" id="quotesLabel">Mercados</p>
+  <div class="quotes__viewport">
+    <div class="quotes__track" id="quotesTrack" data-state="loading" aria-live="off">
+      <span class="quote"><span class="quote__sym">S&amp;P 500</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">Nasdaq</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">BTC/USD</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">EUR/USD</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">Gold</span><span class="quote__px">—</span></span>
+    </div>
+  </div>
+</section>
 
-    <section id="product" class="section product-shots-section">
-      <div class="container">
-        <div class="section-heading" data-animate="up">
-          <span class="eyebrow">Producto real</span>
-          <h2>Así se ve BlackPortfolio por dentro.</h2>
-          <p>Capturas reales de la plataforma — sin maquetas ni promesas: esto es lo que usas desde el primer día.</p>
-        </div>
-        <div class="product-shots-grid">
-          <figure class="product-shot product-shot--wide" data-animate="up" data-delay="1">
-            <div class="browser-frame">
-              <div class="browser-frame-bar"><span></span><span></span><span></span></div>
-              <img src="assets/screenshots/app-topdown.jpg" alt="Análisis Top-Down con indicadores macroeconómicos en tiempo real: tasas del Tesoro, VIX, dólar, petróleo y sectores favorecidos por el ciclo" width="2160" height="1350" loading="lazy" decoding="async">
-            </div>
-            <figcaption>Análisis Top-Down — régimen macro, sectores favorecidos y candidatos alineados al ciclo.</figcaption>
-          </figure>
-          <figure class="product-shot" data-animate="up" data-delay="2">
-            <div class="browser-frame">
-              <div class="browser-frame-bar"><span></span><span></span><span></span></div>
-              <img src="assets/screenshots/app-markets.jpg" alt="Sección de Mercados con gráfica avanzada de velas, calificación técnica y estadísticas clave del activo" width="2160" height="1350" loading="lazy" decoding="async">
-            </div>
-            <figcaption>Mercados — gráficas avanzadas, calificación técnica y estadísticas clave.</figcaption>
-          </figure>
-          <figure class="product-shot" data-animate="up" data-delay="3">
-            <div class="browser-frame">
-              <div class="browser-frame-bar"><span></span><span></span><span></span></div>
-              <img src="assets/screenshots/app-markowitz.jpg" alt="Creación de portafolio con presets de activos y estrategias de optimización MVO, Smart Beta y Black-Litterman" width="2160" height="1350" loading="lazy" decoding="async">
-            </div>
-            <figcaption>Creación de portafolio — optimización MVO, Smart Beta y Black-Litterman.</figcaption>
-          </figure>
-        </div>
-      </div>
-    </section>
+<main id="contenido">
 
-    <section id="security" class="section credibility-section">
-      <div class="container">
-        <div class="section-heading section-heading-inline" data-animate="up">
-          <div>
-            <span class="eyebrow">Seguridad y privacidad</span>
-            <h2>Dise&ntilde;ado para tratar tus datos financieros con seriedad.</h2>
-          </div>
-          <p>
-            BlackPortfolio separa el monitoreo de inversiones de cualquier promesa de asesor&iacute;a.
-            Tu informaci&oacute;n debe estar protegida, clara y bajo tu control.
-          </p>
-        </div>
-
-        <div class="credibility-grid">
-          <article class="credibility-card" data-animate="up" data-delay="1">
-            <span class="credibility-kicker">01</span>
-            <h3>Acceso protegido</h3>
-            <p>Autenticaci&oacute;n con 2FA, sesiones controladas y protecci&oacute;n progresiva para cuentas beta.</p>
-          </article>
-          <article class="credibility-card" data-animate="up" data-delay="2">
-            <span class="credibility-kicker">02</span>
-            <h3>Datos privados</h3>
-            <p>El objetivo es que cada usuario administre sus portafolios sin exponer informaci&oacute;n sensible innecesaria.</p>
-          </article>
-          <article class="credibility-card" data-animate="up" data-delay="3">
-            <span class="credibility-kicker">03</span>
-            <h3>Control del usuario</h3>
-            <p>Portafolios manuales, exportaci&oacute;n futura y trazabilidad para que el inversionista conserve el control.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section id="workflow" class="section workflow-section">
-      <div class="container workflow-shell">
-        <div class="section-heading" data-animate="up">
-          <span class="eyebrow">As&iacute; funciona</span>
-          <h2>Del registro al monitoreo en un flujo simple.</h2>
-          <p>La experiencia beta est&aacute; pensada para que un inversionista pueda ordenar su cartera sin depender de hojas de c&aacute;lculo.</p>
-        </div>
-
-        <div class="workflow-steps">
-          <article class="workflow-step" data-animate="up" data-delay="1">
-            <span class="step-number">1</span>
-            <h3>Crea tu cuenta</h3>
-            <p>Configura tu acceso, elige un plan inicial y prepara tu espacio de trabajo financiero.</p>
-          </article>
-          <article class="workflow-step" data-animate="up" data-delay="2">
-            <span class="step-number">2</span>
-            <h3>Agrega posiciones</h3>
-            <p>Registra activos, precios, cantidades y clases de activo para construir una vista ordenada.</p>
-          </article>
-          <article class="workflow-step" data-animate="up" data-delay="3">
-            <span class="step-number">3</span>
-            <h3>Monitorea riesgo</h3>
-            <p>Consulta rendimiento, distribuci&oacute;n, volatilidad y se&ntilde;ales de rebalanceo desde el dashboard.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section id="audience" class="section audience-section">
-      <div class="container">
-        <div class="section-heading" data-animate="up">
-          <span class="eyebrow">Para qui&eacute;n es</span>
-          <h2>Una base flexible para distintos perfiles de inversionista.</h2>
-        </div>
-        <div class="audience-grid">
-          <article class="audience-card" data-animate="up" data-delay="1">
-            <h3>Inversionistas individuales</h3>
-            <p>Para ordenar acciones, ETFs, cripto o renta fija y entender mejor la composici&oacute;n del patrimonio.</p>
-          </article>
-          <article class="audience-card" data-animate="up" data-delay="2">
-            <h3>Asesores y analistas</h3>
-            <p>Para preparar reportes, explicar riesgos y revisar estrategias con una vista m&aacute;s profesional.</p>
-          </article>
-          <article class="audience-card" data-animate="up" data-delay="3">
-            <h3>Equipos beta</h3>
-            <p>Para validar flujos, importar posiciones y probar funciones de monitoreo antes de una versi&oacute;n p&uacute;blica.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section id="gallery" class="section gallery-section">
-      <div class="container">
-        <div class="section-heading gallery-heading" data-animate="up">
-          <span class="eyebrow">Mercados</span>
-          <h2>Decisiones respaldadas por datos, visualizadas con precisión.</h2>
-        </div>
-      </div>
-      <div class="gallery-mosaic" id="galleryBento">
-        <div class="gallery-skeleton gs1"></div>
-        <div class="gallery-skeleton gs2"></div>
-        <div class="gallery-skeleton gs3"></div>
-        <div class="gallery-skeleton gs4"></div>
-        <div class="gallery-skeleton gs5"></div>
-        <div class="gallery-skeleton gs6"></div>
-      </div>
-      <div class="gallery-kpi" data-animate="up">
-        <div class="gallery-kpi-item">
-          <span class="gallery-kpi-value">142</span>
-          <span class="gallery-kpi-label">Mercados cubiertos</span>
-        </div>
-        <div class="gallery-kpi-item">
-          <span class="gallery-kpi-value">6</span>
-          <span class="gallery-kpi-label">Clases de activo</span>
-        </div>
-        <div class="gallery-kpi-item">
-          <span class="gallery-kpi-value">99.9%</span>
-          <span class="gallery-kpi-label">Uptime garantizado</span>
-        </div>
-      </div>
-    </section>
-
-    <section id="plans" class="section">
-      <div class="container">
-        <div class="section-heading section-heading-inline" data-animate="up">
-          <div>
-            <span class="eyebrow">Planes</span>
-            <h2>Escala desde un inversionista individual hasta una mesa de análisis completa.</h2>
-          </div>
-          <label class="billing-toggle">
-            <span>Mensual</span>
-            <input id="billingSwitch" type="checkbox" aria-label="Cambiar entre cobro mensual y anual">
-            <span class="toggle-slider"></span>
-            <span>Anual</span>
-            <span class="billing-save">Ahorra ~20%</span>
-          </label>
-        </div>
-
-        <div class="pricing-grid">
-          <article class="pricing-card" data-animate="scale" data-delay="1">
-            <span class="plan-tag">Gratis</span>
-            <h3>Explorer</h3>
-            <p>Empieza a ordenar tu patrimonio con un portafolio personal y seguimiento esencial.</p>
-            <div class="price" data-monthly="0" data-yearly="0">$0</div>
-            <span class="price-label">Sin costo, para siempre</span>
-            <span class="price-mxn">No requiere tarjeta</span>
-            <ul class="plan-list">
-              <li>1 portafolio activo</li>
-              <li>Hasta 10 posiciones</li>
-              <li>Datos de mercado diferidos (15 min)</li>
-              <li>Rendimiento básico (XIRR)</li>
-              <li class="plan-na">Análisis de riesgo</li>
-              <li class="plan-na">Backtesting</li>
-            </ul>
-            <button class="button ghost select-plan" data-plan="Explorer">Comenzar gratis</button>
-          </article>
-
-          <article class="pricing-card" data-animate="scale" data-delay="2">
-            <span class="plan-tag">Individual</span>
-            <h3>Investor</h3>
-            <p>Para inversionistas particulares que quieren medir riesgo y rendimiento como un profesional.</p>
-            <div class="price" data-monthly="19" data-yearly="15">$19</div>
-            <span class="price-label">USD / mes</span>
-            <span class="price-mxn">≈ $349 MXN / mes</span>
-            <ul class="plan-list">
-              <li>Hasta 3 portafolios</li>
-              <li>Hasta 50 posiciones por portafolio</li>
-              <li>Datos de mercado en tiempo real</li>
-              <li>Análisis de riesgo esencial</li>
-              <li>Reportes PDF mensuales</li>
-              <li class="plan-na">Backtesting</li>
-            </ul>
-            <button class="button secondary select-plan" data-plan="Investor">Elegir Investor</button>
-          </article>
-
-          <article class="pricing-card featured" data-animate="scale" data-delay="3">
-            <span class="card-spin" aria-hidden="true"></span>
-            <span class="popular-ribbon">Más popular</span>
-            <span class="plan-tag">Profesional</span>
-            <h3>Advisor Pro</h3>
-            <p>Para asesores, family offices y equipos que gestionan varias estrategias a la vez.</p>
-            <div class="price" data-monthly="59" data-yearly="47">$59</div>
-            <span class="price-label">USD / mes</span>
-            <span class="price-mxn">≈ $1,090 MXN / mes</span>
-            <ul class="plan-list">
-              <li>Portafolios ilimitados</li>
-              <li>Riesgo avanzado (VaR, drawdown, Sharpe)</li>
-              <li>Backtesting y rebalanceo asistido</li>
-              <li>Reportes con tu marca + insights de IA</li>
-              <li>Hasta 3 usuarios en el equipo</li>
-            </ul>
-            <button class="button primary select-plan" data-plan="Advisor Pro">Elegir Advisor Pro</button>
-          </article>
-
-          <article class="pricing-card" data-animate="scale" data-delay="4">
-            <span class="plan-tag">Equipos</span>
-            <h3>Wealth Desk</h3>
-            <p>Para mesas de análisis y firmas que necesitan marca blanca, roles e integraciones profundas.</p>
-            <div class="price" data-monthly="129" data-yearly="103">$129</div>
-            <span class="price-label">USD / mes</span>
-            <span class="price-mxn">≈ $2,390 MXN / mes</span>
-            <ul class="plan-list">
-              <li>Todo lo de Advisor Pro</li>
-              <li>Usuarios y roles ilimitados</li>
-              <li>API y webhooks</li>
-              <li>Marca blanca completa</li>
-              <li>Soporte dedicado + onboarding</li>
-            </ul>
-            <button class="button secondary select-plan" data-plan="Wealth Desk">Elegir Wealth Desk</button>
-          </article>
-        </div>
-
-        <p class="pricing-foot">
-          Precios en USD. La referencia en MXN es aproximada y se cobra al tipo de cambio del día.
-          Todos los planes de pago incluyen 14 días de garantía y cancelación en cualquier momento.
+  <!-- ───────────────────────────────────────────────── Hero -->
+  <section class="hero">
+    <span class="rosette rosette--hero" aria-hidden="true"></span>
+    <div class="shell spread">
+      <div class="hero__copy">
+        <h1>Un solo estado de cartera para todo lo que tienes.</h1>
+        <p class="lede hero__lede">
+          Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo en una misma lectura:
+          peso real, riesgo medido y rendimiento comparado contra su índice. Y un reporte
+          que puedes enviar sin editarlo.
         </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="registro.html">Abrir cuenta</a>
+          <a class="btn btn--quiet" href="#vista-previa">Ver la cartera de muestra</a>
+        </div>
+        <p class="hero__source">
+          <span><b>Precios:</b> Yahoo Finance y CoinGecko</span>
+          <span><b>Acceso:</b> beta por invitación</span>
+          <span><b>Reporte:</b> PDF en es · en · fr</span>
+        </p>
+      </div>
 
-        <div class="compare-block" data-animate="up">
-          <div class="compare-head">
-            <h3>Compara todos los planes a detalle</h3>
-            <p>Revisa exactamente qué incluye cada plan antes de decidir.</p>
+      <div class="hero__plate">
+      <div class="plate plate--hero" id="platePosiciones">
+        <div class="plate__rule"></div>
+        <div class="plate__head">
+          <div>
+            <p class="plate__name">Estado de cartera</p>
+            <p class="plate__meta">Patrimonio consolidado · al 30 de junio de 2026</p>
           </div>
+          <div class="seg" id="segMoneda" role="group" aria-label="Moneda de presentación">
+            <span class="seg__thumb" aria-hidden="true"></span>
+            <button type="button" aria-pressed="true" data-currency="USD">USD</button>
+            <button type="button" aria-pressed="false" data-currency="MXN">MXN</button>
+          </div>
+        </div>
 
-          <div class="compare-scroll">
-            <table class="compare-table">
+        <div class="scroller">
+          <table class="tbl" id="tablaPosiciones">
+            <caption class="sr">Posiciones de una cartera de muestra con peso, valor, variación del día y contribución a 12 meses.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Posición</th>
+                <th scope="col" class="col-opt">Clase</th>
+                <th scope="col" class="n">Peso</th>
+                <th scope="col" class="n">Valor <span data-currency-label>USD</span></th>
+                <th scope="col" class="n">Día</th>
+                <th scope="col" class="n col-opt">Contrib.<span class="sr"> a 12 meses</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>VTI</span><span class="sym-name">Vanguard Total Market</span></td>
+                <td class="col-opt"><span class="chip">ETF</span></td>
+                <td class="n">22.1 %</td>
+                <td class="n" data-usd="50660">50,660</td>
+                <td class="n pos">+0.31 %</td>
+                <td class="n col-opt pos">+3.8 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><i class="asset-mark asset-mark--logo" aria-hidden="true" style="-webkit-mask-image:url('assets/landing-v4/marks/apple.svg');mask-image:url('assets/landing-v4/marks/apple.svg')"></i>AAPL</span><span class="sym-name">Apple Inc.</span></td>
+                <td class="col-opt"><span class="chip">Acción</span></td>
+                <td class="n">18.4 %</td>
+                <td class="n" data-usd="42180">42,180</td>
+                <td class="n pos">+0.62 %</td>
+                <td class="n col-opt pos">+2.6 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>MSFT</span><span class="sym-name">Microsoft Corp.</span></td>
+                <td class="col-opt"><span class="chip">Acción</span></td>
+                <td class="n">15.8 %</td>
+                <td class="n" data-usd="36220">36,220</td>
+                <td class="n pos">+0.44 %</td>
+                <td class="n col-opt pos">+2.3 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>CETES 28</span><span class="sym-name">Tesorería · 28 días</span></td>
+                <td class="col-opt"><span class="chip">Renta fija</span></td>
+                <td class="n">14.7 %</td>
+                <td class="n" data-usd="33700">33,700</td>
+                <td class="n pos">+0.02 %</td>
+                <td class="n col-opt pos">+1.1 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><i class="asset-mark asset-mark--logo" aria-hidden="true" style="-webkit-mask-image:url('assets/landing-v4/marks/bitcoin.svg');mask-image:url('assets/landing-v4/marks/bitcoin.svg')"></i>BTC</span><span class="sym-name">Bitcoin</span></td>
+                <td class="col-opt"><span class="chip">Cripto</span></td>
+                <td class="n">11.2 %</td>
+                <td class="n" data-usd="25670">25,670</td>
+                <td class="n pos">+1.87 %</td>
+                <td class="n col-opt pos">+2.2 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>FUNO11</span><span class="sym-name">Fibra Uno</span></td>
+                <td class="col-opt"><span class="chip">FIBRA</span></td>
+                <td class="n">9.6 %</td>
+                <td class="n" data-usd="22010">22,010</td>
+                <td class="n neg">−0.44 %</td>
+                <td class="n col-opt neg">−0.6 pp</td>
+              </tr>
+              <tr>
+                <td><span class="sym"><span class="asset-mark asset-mark--letra" aria-hidden="true">$</span>Efectivo</span><span class="sym-name">Dólar (USD)</span></td>
+                <td class="col-opt"><span class="chip">Efectivo</span></td>
+                <td class="n">8.2 %</td>
+                <td class="n" data-usd="18800">18,800</td>
+                <td class="n">—</td>
+                <td class="n col-opt">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <dl class="plate__foot">
+          <div>
+            <dt>Valor total</dt>
+            <dd><span data-usd="229240">229,240</span> <span data-currency-label>USD</span></dd>
+          </div>
+          <div><dt>XIRR 12 m</dt><dd class="pos">+11.4 %</dd></div>
+          <div><dt>Volatilidad</dt><dd>12.6 %</dd></div>
+          <div><dt>Sharpe</dt><dd>1.08</dd></div>
+          <div><dt>Máx. drawdown</dt><dd class="neg">−14.3 %</dd></div>
+          <div><dt>VaR 95 % · 1 m</dt><dd class="neg">−6.8 %</dd></div>
+        </dl>
+
+      </div>
+
+        <p class="plate__caption">
+          <span class="stamp">Cartera de muestra · cifras ilustrativas</span>
+          <span class="note">Tipo de cambio de referencia: 17.40 MXN/USD.</span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Ficha técnica -->
+  <section class="facts section--tight" aria-labelledby="fichaTitulo">
+    <div class="shell">
+      <h2 id="fichaTitulo" class="sr">Ficha técnica</h2>
+      <dl class="facts__grid">
+        <div class="facts__item">
+          <dt>Segundo factor obligatorio</dt>
+          <dd>TOTP verificado en el servidor. El secreto nunca llega al navegador.</dd>
+        </div>
+        <div class="facts__item">
+          <dt>Cifrado en tránsito</dt>
+          <dd>TLS de extremo a extremo. Tu plan se decide en la base de datos, no en el cliente.</dd>
+        </div>
+        <div class="facts__item">
+          <dt>Seis clases de activo</dt>
+          <dd>Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo por divisa.</dd>
+        </div>
+        <div class="facts__item">
+          <dt>Precios de mercado</dt>
+          <dd>Yahoo Finance para instrumentos listados, CoinGecko para cripto.</dd>
+        </div>
+      </dl>
+      <p class="facts__foot">
+        Lo que no tenemos, no lo publicamos: no hay certificación SOC&nbsp;2 ni ISO, ni una
+        cifra de usuarios que presumir. La plataforma está en beta por invitación y esto es
+        todo lo que se puede afirmar hoy.
+      </p>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Capacidades -->
+  <section class="section" id="capacidades">
+    <div class="shell">
+
+      <article class="cap">
+        <div class="cap__copy" data-reveal>
+          <h2>Seis clases de activo en la misma tabla.</h2>
+          <p>
+            Registras posición, costo y moneda. La plataforma resuelve el precio, el peso real
+            y lo que cada línea aportó al total — sin que tengas que mantener una fórmula ni
+            cuadrar dos hojas que ya no coinciden.
+          </p>
+          <dl class="spec">
+            <div><dt>Acciones y ETFs</dt><dd>Precio de mercado, dividendos y rendimiento ponderado por flujos (XIRR).</dd></div>
+            <div><dt>FIBRAs</dt><dd>Distribuciones y peso sectorial dentro de la cartera.</dd></div>
+            <div><dt>Cripto</dt><dd>Precio spot vía CoinGecko, tratado como una clase más.</dd></div>
+            <div><dt>Renta fija</dt><dd>Tasa, plazo y vencimiento, incluidos instrumentos locales como Cetes.</dd></div>
+            <div><dt>Efectivo</dt><dd>Por divisa, con tipo de cambio de referencia visible.</dd></div>
+          </dl>
+        </div>
+        <figure class="figure figure--screen" data-reveal data-reveal-delay="1" style="margin:0">
+          <img src="assets/landing-v4/pantalla-mercado.jpg"
+               alt="Tablero de datos de mercado en blanco y negro con tasas y variaciones por instrumento."
+               width="1400" height="900" loading="lazy" decoding="async">
+          <figcaption class="figure__cap">
+            Los precios no se capturan a mano: llegan de Yahoo Finance y CoinGecko cada vez que abres la cartera.
+          </figcaption>
+        </figure>
+      </article>
+
+      <article class="cap cap--flip">
+        <div class="cap__copy" data-reveal>
+          <h2>Métricas que se sostienen en una junta.</h2>
+          <p>
+            Rendimiento, volatilidad, caída máxima, Sharpe, VaR y concentración. Cada número
+            trae a la mano la pregunta que contesta, para que puedas explicarlo cuando te lo
+            pregunten en vez de leerlo en voz alta.
+          </p>
+          <p class="note">
+            El motor de análisis también resuelve correlación, Monte Carlo, backtesting y
+            optimización (MVO, Smart Beta, Black-Litterman) sobre las mismas posiciones.
+          </p>
+        </div>
+        <div class="plate" data-reveal data-reveal-delay="1">
+          <div class="plate__head">
+            <p class="plate__name">Lectura de riesgo y rendimiento</p>
+            <span class="stamp">Muestra</span>
+          </div>
+          <div class="scroller">
+            <table class="tbl">
               <thead>
                 <tr>
-                  <th scope="col">Característica</th>
-                  <th scope="col">Explorer</th>
-                  <th scope="col">Investor</th>
-                  <th scope="col" class="col-featured">Advisor Pro</th>
-                  <th scope="col">Wealth Desk</th>
+                  <th scope="col">Métrica y pregunta que contesta</th>
+                  <th scope="col" class="n">Valor</th>
                 </tr>
               </thead>
               <tbody>
-                <tr class="compare-group"><td colspan="5">Portafolios y datos</td></tr>
-                <tr>
-                  <th scope="row">Portafolios activos</th>
-                  <td>1</td><td>3</td><td class="col-featured">Ilimitados</td><td>Ilimitados</td>
-                </tr>
-                <tr>
-                  <th scope="row">Posiciones por portafolio</th>
-                  <td>10</td><td>50</td><td class="col-featured">Ilimitadas</td><td>Ilimitadas</td>
-                </tr>
-                <tr>
-                  <th scope="row">Clases de activo (acciones, ETFs, cripto, renta fija)</th>
-                  <td>Básico</td><td class="yes"></td><td class="yes col-featured"></td><td class="yes"></td>
-                </tr>
-                <tr>
-                  <th scope="row">Datos de mercado</th>
-                  <td>Diferidos 15 min</td><td>Tiempo real</td><td class="col-featured">Tiempo real</td><td>Tiempo real</td>
-                </tr>
-
-                <tr class="compare-group"><td colspan="5">Análisis</td></tr>
-                <tr>
-                  <th scope="row">Rendimiento (XIRR / TWR)</th>
-                  <td>Básico</td><td class="yes"></td><td class="yes col-featured"></td><td class="yes"></td>
-                </tr>
-                <tr>
-                  <th scope="row">Análisis de riesgo (volatilidad, drawdown, Sharpe)</th>
-                  <td class="no"></td><td>Esencial</td><td class="col-featured">Avanzado (VaR)</td><td>Avanzado (VaR)</td>
-                </tr>
-                <tr>
-                  <th scope="row">Backtesting y escenarios</th>
-                  <td class="no"></td><td class="no"></td><td class="yes col-featured"></td><td class="yes"></td>
-                </tr>
-                <tr>
-                  <th scope="row">Rebalanceo asistido</th>
-                  <td class="no"></td><td class="no"></td><td class="yes col-featured"></td><td class="yes"></td>
-                </tr>
-                <tr>
-                  <th scope="row">Insights con IA</th>
-                  <td class="no"></td><td class="no"></td><td class="yes col-featured"></td><td class="yes"></td>
-                </tr>
-
-                <tr class="compare-group"><td colspan="5">Reportes y colaboración</td></tr>
-                <tr>
-                  <th scope="row">Reportes PDF para clientes</th>
-                  <td class="no"></td><td>Mensuales</td><td class="col-featured">Ilimitados con tu marca</td><td>Marca blanca</td>
-                </tr>
-                <tr>
-                  <th scope="row">Usuarios y roles</th>
-                  <td>1</td><td>1</td><td class="col-featured">3 usuarios</td><td>Ilimitados + permisos</td>
-                </tr>
-                <tr>
-                  <th scope="row">Alertas de mercado</th>
-                  <td>Limitadas</td><td>Básicas</td><td class="col-featured">Avanzadas</td><td>Avanzadas + webhooks</td>
-                </tr>
-
-                <tr class="compare-group"><td colspan="5">Integración y soporte</td></tr>
-                <tr>
-                  <th scope="row">API y webhooks</th>
-                  <td class="no"></td><td class="no"></td><td class="no col-featured"></td><td class="yes"></td>
-                </tr>
-                <tr>
-                  <th scope="row">Marca blanca</th>
-                  <td class="no"></td><td class="no"></td><td class="no col-featured"></td><td class="yes"></td>
-                </tr>
-                <tr>
-                  <th scope="row">Autenticación 2FA</th>
-                  <td class="yes"></td><td class="yes"></td><td class="yes col-featured"></td><td class="yes"></td>
-                </tr>
-                <tr>
-                  <th scope="row">Soporte</th>
-                  <td>Comunidad</td><td>Email</td><td class="col-featured">Prioritario</td><td>Dedicado + onboarding</td>
-                </tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>XIRR 12 m</span><span class="sym-name">¿Cuánto rindió el dinero, considerando cuándo entró?</span></td><td class="n pos">+11.4 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>Volatilidad</span><span class="sym-name">¿Qué tan movida es la cartera en un año?</span></td><td class="n">12.6 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>Máx. drawdown</span><span class="sym-name">¿Cuál fue la peor caída desde un máximo?</span></td><td class="n neg">−14.3 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>Sharpe</span><span class="sym-name">¿El rendimiento pagó el riesgo que corriste?</span></td><td class="n">1.08</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>VaR 95 % · 1 mes</span><span class="sym-name">En un mes malo de cada veinte, ¿cuánto?</span></td><td class="n neg">−6.8 %</td></tr>
+                <tr><td><span class="sym"><span class="asset-mark asset-mark--none" aria-hidden="true"></span>HHI</span><span class="sym-name">¿Está concentrada en pocas posiciones?</span></td><td class="n">0.16</td></tr>
               </tbody>
-              <tfoot>
-                <tr>
-                  <td></td>
-                  <td><button class="button ghost select-plan" data-plan="Explorer">Empezar</button></td>
-                  <td><button class="button secondary select-plan" data-plan="Investor">Elegir</button></td>
-                  <td class="col-featured"><button class="button primary select-plan" data-plan="Advisor Pro">Elegir</button></td>
-                  <td><button class="button secondary select-plan" data-plan="Wealth Desk">Elegir</button></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>
-      </div>
-    </section>
+      </article>
 
-    <section id="register" class="section register-section">
-      <div class="container register-layout">
-        <div class="register-copy" data-animate="left">
-          <span class="eyebrow">Cuenta</span>
-          <h2>Abre tu cuenta y deja lista tu operación para gestionar portafolios y activar suscripciones.</h2>
+      <article class="cap">
+        <div class="cap__copy" data-reveal>
+          <h2>Tus posiciones no son material de nadie más.</h2>
           <p>
-            Este demo registra cuentas en el navegador para completar el flujo desde front-end.
-            Después podemos enlazar autenticación, base de datos y brokers reales.
+            Entras con contraseña o con Google, el segundo factor se verifica en el servidor y
+            el dispositivo de confianza evita pedirte el código todos los días. Las carteras
+            viven en una base con respaldos, no en el navegador.
           </p>
-          <div class="stack-cards">
-            <article class="stack-card"><strong>Perfil de inversión</strong><span>Selecciona el plan que mejor se adapta a tu operación.</span></article>
-            <article class="stack-card"><strong>Flujo listo para onboarding</strong><span>El usuario llega al checkout con contexto y plan elegido.</span></article>
-            <article class="stack-card"><strong>Preparado para crecer</strong><span>Base clara para sumar KYC, webhooks y dashboards reales.</span></article>
-          </div>
-        </div>
-
-        <div class="register-card" data-animate="right">
-          <form id="signupForm" class="signup-form">
-            <div class="social-buttons">
-              <button id="googleSignupBtn" class="button-google" type="button">
-                <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
-                <span>Registrarse con Google</span>
-              </button>
-            </div>
-            <div class="auth-divider" id="signupDivider"><span>o registrate con correo</span></div>
-
-            <div class="form-row"><label for="fullName">Nombre completo</label><input id="fullName" name="fullName" type="text" placeholder="Tu nombre" required></div>
-            <div class="form-row"><label for="email">Correo electrónico</label><input id="email" name="email" type="email" placeholder="tu@firma.com" required></div>
-            <div class="form-row" id="passwordRow">
-              <label for="password">Contraseña</label>
-              <div class="pw-input-wrap">
-                <input id="password" name="password" type="password" placeholder="Mínimo 8 caracteres" minlength="8" required autocomplete="new-password">
-                <button type="button" class="pw-toggle" id="pwToggle" aria-label="Mostrar contraseña">
-                  <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg id="eyeOffIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                </button>
-              </div>
-              <div class="pw-strength-bars" id="pwBars">
-                <span class="pw-bar" data-idx="1"></span>
-                <span class="pw-bar" data-idx="2"></span>
-                <span class="pw-bar" data-idx="3"></span>
-                <span class="pw-bar" data-idx="4"></span>
-                <span class="pw-bar" data-idx="5"></span>
-              </div>
-              <p class="pw-strength-label" id="pwStrengthLabel">
-                <span>Debe contener:</span>
-                <span id="pwStrengthText"></span>
-              </p>
-              <ul class="pw-requirements" id="pwReqs" aria-label="Requisitos de contraseña">
-                <li data-req="length"><span class="pw-req-icon"></span><span>Al menos 8 caracteres</span></li>
-                <li data-req="number"><span class="pw-req-icon"></span><span>Al menos 1 número</span></li>
-                <li data-req="lower"><span class="pw-req-icon"></span><span>Al menos 1 letra minúscula</span></li>
-                <li data-req="upper"><span class="pw-req-icon"></span><span>Al menos 1 letra mayúscula</span></li>
-                <li data-req="special"><span class="pw-req-icon"></span><span>Al menos 1 caracter especial</span></li>
-              </ul>
-            </div>
-            <div class="form-row">
-              <label for="selectedPlan">Plan inicial</label>
-              <select id="selectedPlan" name="selectedPlan">
-                <option value="Explorer" selected>Explorer (gratis)</option>
-                <option value="Investor">Investor — $19/mes</option>
-                <option value="Advisor Pro">Advisor Pro — $59/mes</option>
-                <option value="Wealth Desk">Wealth Desk — $129/mes</option>
-              </select>
-            </div>
-            <div class="form-row" id="betaCodeRow">
-              <label for="betaCode">Código de invitación o promocional <span style="font-weight:400;opacity:.7">(opcional)</span></label>
-              <input id="betaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40" autocomplete="off" style="text-transform:uppercase">
-              <p class="pw-strength-label" style="margin-top:4px"><span id="betaCodeHint" style="opacity:.7">Pégalo aquí y se aplicará solo al crear tu cuenta — sin pasos extra.</span></p>
-            </div>
-            <button class="button primary submit-button" type="submit">Crear cuenta</button>
-            <p id="formMessage" class="form-message" aria-live="polite"></p>
-          </form>
-
-          <aside class="account-preview">
-            <div class="account-header"><span class="status-dot"></span><span id="accountStatus">Aún no hay cuenta creada</span></div>
-            <div class="account-body">
-              <div><span>Plan activo</span><strong id="accountPlan">Advisor Pro</strong></div>
-              <div><span>Usuarios</span><strong id="accountCount">0</strong></div>
-              <div><span>Suscripción</span><strong id="checkoutState">Pendiente</strong></div>
-            </div>
-          </aside>
-        </div>
-      </div>
-    </section>
-
-    <section id="payments" class="section">
-      <div class="container">
-        <div class="payment-shell" data-animate="up">
-          <div class="section-heading">
-            <span class="eyebrow">Suscripción</span>
-            <h2>Paga de forma segura con tarjeta o transferencia.</h2>
-            <p>
-              Activa tu plan con tarjeta de crédito/débito vía Stripe, o paga en pesos por
-              transferencia y SPEI. Sin permanencia y con factura disponible.
-            </p>
-          </div>
-
-          <div class="payment-grid">
-            <article class="payment-card">
-              <span class="pay-badge">Recomendado</span>
-              <h3>Tarjeta · Stripe</h3>
-              <p>Crédito o débito (Visa, Mastercard, Amex). Cobro recurrente automático, recibos por correo y cancelación en un clic.</p>
-              <button class="button primary pay-button" data-gateway="stripe">Pagar con tarjeta</button>
-            </article>
-            <article class="payment-card">
-              <span class="pay-badge pay-badge-alt">Pago en MXN</span>
-              <h3>Transferencia · SPEI</h3>
-              <p>Paga en pesos por transferencia bancaria o SPEI. Te enviamos los datos de pago (CLABE) y activamos tu plan al confirmar.</p>
-              <button class="button ghost pay-button" data-gateway="custom">Pagar por transferencia</button>
-            </article>
-          </div>
-
-          <div class="payment-trust">
-            <span class="trust-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><path d="M12 15v2"/></svg>
-              Cifrado de extremo a extremo
-            </span>
-            <span class="trust-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 9h6M8 13h8M8 17h5"/></svg>
-              Factura disponible (CFDI)
-            </span>
-            <span class="trust-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg>
-              14 días de garantía
-            </span>
-            <span class="trust-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>
-              Sin permanencia
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
-    <section id="disclaimer" class="section disclaimer-section">
-      <div class="container">
-        <div class="disclaimer-panel" data-animate="up">
-          <div>
-            <span class="eyebrow">Nota importante</span>
-            <h2>BlackPortfolio ayuda a monitorear, no sustituye asesor&iacute;a financiera personalizada.</h2>
-          </div>
           <p>
-            La plataforma est&aacute; dise&ntilde;ada para organizar informaci&oacute;n, visualizar riesgo y apoyar decisiones con datos.
-            No ejecuta operaciones por el usuario ni recomienda comprar o vender valores espec&iacute;ficos.
+            Y hay una frontera que no cruzamos: no ejecutamos órdenes, no nos conectamos a tu
+            broker y no damos recomendaciones personalizadas de compra o venta.
+          </p>
+          <a class="btn-text" href="#seguridad">
+            Ver el detalle de protocolos
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div class="plate" data-reveal data-reveal-delay="1">
+          <div class="plate__head">
+            <p class="plate__name">Control de la cuenta</p>
+          </div>
+          <div style="padding: 0 1.125rem 1rem">
+            <dl class="spec">
+              <div><dt>Identidad</dt><dd>Firebase Authentication: correo y contraseña, o Google.</dd></div>
+              <div><dt>Segundo factor</dt><dd>TOTP verificado en servidor, con límite de intentos por cuenta.</dd></div>
+              <div><dt>Sesión</dt><dd>Token revisado contra revocación en cada llamada sensible.</dd></div>
+              <div><dt>Persistencia</dt><dd>PostgreSQL administrado, con respaldos programados.</dd></div>
+              <div><dt>Salida</dt><dd>Exportación a PDF y link público de solo lectura que tú decides compartir.</dd></div>
+            </dl>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Vista previa -->
+  <section class="section section--ruled" id="vista-previa">
+    <div class="shell">
+      <div class="head" data-reveal>
+        <h2>La misma cartera, vista de tres maneras.</h2>
+        <p class="lede">
+          Asignación, riesgo y comparación contra el índice se calculan sobre las mismas
+          posiciones. Cambia la vista y el documento se rehace completo.
+        </p>
+      </div>
+
+      <div class="preview__controls" data-reveal data-reveal-delay="1">
+        <div class="seg" id="segVista" role="tablist" aria-label="Vista de la cartera">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button type="button" role="tab" aria-selected="true"  data-view="asignacion" aria-controls="vistaPanel">Asignación</button>
+          <button type="button" role="tab" aria-selected="false" data-view="riesgo"     aria-controls="vistaPanel">Riesgo</button>
+          <button type="button" role="tab" aria-selected="false" data-view="benchmark"  aria-controls="vistaPanel">Benchmark</button>
+        </div>
+        <span class="seg-lab">
+          Moneda:
+          <span class="num" data-currency-label>USD</span>
+          <span aria-hidden="true">·</span>
+          <button class="btn-text" type="button" id="btnMoneda">cambiar</button>
+        </span>
+      </div>
+
+      <div class="view" id="vistaPanel" role="tabpanel" aria-live="polite" data-reveal data-reveal-delay="2">
+        <div class="view__main">
+          <div class="view__head">
+            <div>
+              <p class="view__title" id="viewTitle">Asignación por clase de activo</p>
+              <p class="view__desc" id="viewDesc">Peso real de cada clase sobre el valor total, recalculado con el precio de mercado del día.</p>
+            </div>
+            <span class="stamp">Muestra</span>
+          </div>
+          <div id="viewGraphic"></div>
+        </div>
+        <div class="view__aside">
+          <div class="scroller" id="viewTable"></div>
+        </div>
+        <div class="view__foot">
+          <span class="note" id="viewNote">Concentración baja: HHI 0.16 sobre siete posiciones.</span>
+          <a class="btn-text" href="registro.html">
+            Construir la mía
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Seguridad -->
+  <section class="band section" id="seguridad">
+    <div class="shell band__grid">
+      <figure class="figure figure--stone" data-reveal style="margin:0">
+        <img src="assets/landing-v4/columnata.jpg"
+             alt="Fuste acanalado y capiteles corintios de una fachada de piedra caliza."
+             width="1000" height="940" loading="lazy" decoding="async">
+      </figure>
+
+      <div data-reveal data-reveal-delay="1">
+        <h2>Los protocolos, sin adjetivos.</h2>
+        <p class="lede" style="margin-top: var(--s4)">
+          Esta es la lista completa de lo que hay hoy. Si algo no aparece aquí, es porque
+          todavía no existe — no porque se nos haya olvidado escribirlo.
+        </p>
+
+        <dl class="spec" style="margin-top: var(--s6)">
+          <div><dt>Autenticación</dt><dd>Firebase Authentication. Token de identidad verificado en cada llamada, con revisión de revocación.</dd></div>
+          <div><dt>Segundo factor</dt><dd>TOTP generado y verificado en el servidor. El secreto no se expone al navegador en ningún momento.</dd></div>
+          <div><dt>Dispositivo de confianza</dt><dd>Token local con caducidad para no pedir el código en cada sesión del mismo equipo.</dd></div>
+          <div><dt>Transporte</dt><dd>TLS. Content Security Policy declarada en el hosting.</dd></div>
+          <div><dt>Almacenamiento</dt><dd>PostgreSQL administrado. Los límites de tu plan se aplican en el servidor.</dd></div>
+          <div><dt>Respaldos</dt><dd>Programados sobre las tablas de cuentas, carteras y operaciones.</dd></div>
+          <div><dt>Cobros</dt><dd>Stripe. El webhook se valida por firma y el plan vigente vive en la base, nunca en el cliente.</dd></div>
+        </dl>
+
+        <div class="boundary">
+          <p><b>BlackPortfolio monitorea y analiza; no asesora.</b></p>
+          <p>
+            No es un broker, no ejecuta órdenes y no emite recomendaciones personalizadas de
+            compra o venta. Las decisiones de inversión y sus resultados son tuyos. Esta
+            frontera es un compromiso del producto, no letra chica.
           </p>
         </div>
       </div>
-    </section>
-    <section id="faq" class="section faq-section">
-      <div class="container">
-        <div class="section-heading" data-animate="up">
-          <span class="eyebrow">Preguntas frecuentes</span>
-          <h2>Todo lo que necesitas saber antes de empezar.</h2>
-          <p>Resolvemos las dudas más comunes sobre seguridad, planes e integraciones.</p>
-        </div>
-        <div class="faq-list">
-          <details class="faq-item" data-animate="up" data-delay="1" open>
-            <summary><span>¿Mis datos financieros están seguros?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>Sí. Ciframos la información en tránsito y en reposo, y ofrecemos autenticación de dos factores (2FA) con Google Authenticator para proteger cada cuenta.</p></div>
-          </details>
-          <details class="faq-item" data-animate="up" data-delay="2">
-            <summary><span>¿Necesito conectar un broker para usar la plataforma?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>No es obligatorio. Puedes construir y analizar portafolios de forma manual, y más adelante enlazar brokers o fuentes de datos según tu plan.</p></div>
-          </details>
-          <details class="faq-item" data-animate="up" data-delay="3">
-            <summary><span>¿Puedo cambiar o cancelar mi plan cuando quiera?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>Claro. Los planes son mensuales o anuales sin permanencia. Puedes subir, bajar o cancelar tu suscripción en cualquier momento desde tu cuenta.</p></div>
-          </details>
-          <details class="faq-item" data-animate="up" data-delay="4">
-            <summary><span>¿Qué métodos de pago aceptan?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>Procesamos suscripciones con Stripe (tarjetas de crédito y débito) y dejamos lista la integración para conectar otros gateways de pago.</p></div>
-          </details>
-          <details class="faq-item" data-animate="up" data-delay="5">
-            <summary><span>¿Hay un plan gratuito para probar?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>Sí. El plan Explorer te permite explorar la plataforma con un portafolio personal y seguimiento básico, sin tarjeta de crédito.</p></div>
-          </details>
-          <details class="faq-item" data-animate="up" data-delay="6">
-            <summary><span>&iquest;BlackPortfolio da recomendaciones de inversi&oacute;n?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>No. BlackPortfolio es una herramienta de monitoreo, organizaci&oacute;n y an&aacute;lisis. No sustituye a un asesor financiero certificado ni emite recomendaciones personalizadas de compra o venta.</p></div>
-          </details>
-          <details class="faq-item" data-animate="up" data-delay="7">
-            <summary><span>&iquest;Qu&eacute; pasa si una fuente de datos de mercado falla?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>La plataforma debe mostrar estados claros de error, datos diferidos o ausencia de informaci&oacute;n para evitar lecturas confusas. En beta, este punto se monitorea especialmente.</p></div>
-          </details>
-          <details class="faq-item" data-animate="up" data-delay="8">
-            <summary><span>&iquest;Tengo que compartir credenciales de mi broker?</span><span class="faq-chevron" aria-hidden="true"></span></summary>
-            <div class="faq-answer"><p>No. La experiencia puede iniciar con captura manual o importaci&oacute;n de datos. Cualquier integraci&oacute;n futura con brokers deber&iacute;a ser opcional y comunicarse con claridad.</p></div>
-          </details>
-        </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────── Cierre -->
+  <section class="close">
+    <div class="close__bg" aria-hidden="true">
+      <img src="assets/landing-v4/torre.jpg" alt="" width="1800" height="1000" loading="lazy" decoding="async">
+    </div>
+    <span class="rosette rosette--close" aria-hidden="true"></span>
+    <div class="shell close__inner">
+      <h2>Empieza por una cartera. La hoja de cálculo puede esperar.</h2>
+      <p>
+        Crea tu cuenta, captura tus posiciones y saca la primera lectura completa en la misma
+        sesión. El plan gratuito no pide tarjeta.
+      </p>
+      <div class="close__actions">
+        <a class="btn btn--primary" href="registro.html">Abrir cuenta</a>
+        <a class="btn btn--onband" href="planes.html">Comparar planes</a>
       </div>
-    </section>
+      <p class="close__prices">
+        <span><b>Explorer</b> $0</span>
+        <span><b>Investor</b> $19</span>
+        <span><b>Advisor Pro</b> $59</span>
+        <span><b>Wealth Desk</b> $129 USD/mes</span>
+        <span>Anual ≈ 20 % menos</span>
+      </p>
+    </div>
+  </section>
 
-    <section id="contact" class="section contact-section">
-      <div class="container contact-container">
-        <div class="contact-heading" data-animate="up">
-          <h2 class="contact-title">Conecta <span class="contact-title-white">con nosotros</span></h2>
-          <p class="contact-subtitle">Únete a nuestra comunidad y mantente actualizado con las últimas novedades, lanzamientos y contenido exclusivo.</p>
-        </div>
+</main>
 
-        <div class="contact-card-wrap" data-animate="up">
-          <div class="contact-card">
-            <div class="social-icons-row">
-
-              <a href="https://www.youtube.com/@blackportfolio" target="_blank" rel="noopener" class="social-icon si-youtube">
-                <div class="si-circle">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                </div>
-                <span class="si-label">YouTube</span>
-              </a>
-
-              <a href="https://discord.gg/blackportfolio" target="_blank" rel="noopener" class="social-icon si-discord">
-                <div class="si-circle">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419-.0189 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1568 2.4189Z"/></svg>
-                </div>
-                <span class="si-label">Discord</span>
-              </a>
-
-              <a href="https://github.com/blackportfolio" target="_blank" rel="noopener" class="social-icon si-github">
-                <div class="si-circle">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                </div>
-                <span class="si-label">GitHub</span>
-              </a>
-
-              <a href="https://linkedin.com/company/blackportfolio" target="_blank" rel="noopener" class="social-icon si-linkedin">
-                <div class="si-circle">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                </div>
-                <span class="si-label">LinkedIn</span>
-              </a>
-
-            </div>
-          </div>
-        </div>
+<footer class="foot">
+  <div class="shell">
+    <div class="foot__grid">
+      <div class="foot__col foot__brand">
+        <a class="mark" href="#contenido"><b>Black</b><span>Portfolio</span></a>
+        <p>Construye, mide y presenta portafolios multiactivo. Beta por invitación.</p>
       </div>
-    </section>
-  </main>
-
-  <a class="mobile-cta" id="mobileCta" href="#register">
-    <span>Crea tu cuenta gratis</span>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
-  </a>
-
-  <footer class="site-footer">
-    <div class="container footer-layout">
-      <div>
-        <a class="brand" href="#hero"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
-        <p>Plataforma de creación y gestión de portafolios de inversión con registro y checkout listo para integrar.</p>
+      <div class="foot__col">
+        <h3>Producto</h3>
+        <ul>
+          <li><a href="#capacidades">Capacidades</a></li>
+          <li><a href="#vista-previa">Vista previa</a></li>
+          <li><a href="planes.html">Planes y precios</a></li>
+          <li><a href="planes.html#faqTitulo">Preguntas frecuentes</a></li>
+        </ul>
       </div>
-      <div class="footer-links">
-        <a href="#features">Plataforma</a>
-        <a href="#plans">Planes</a>
-        <a href="#register">Cuenta</a>
-        <a href="#payments">Suscripción</a>
+      <div class="foot__col">
+        <h3>Cuenta</h3>
+        <ul>
+          <li><a href="login.html">Iniciar sesión</a></li>
+          <li><a href="registro.html">Abrir cuenta</a></li>
+          <li><a href="main.html">Ir al tablero</a></li>
+        </ul>
+      </div>
+      <div class="foot__col">
+        <h3>Legal</h3>
+        <ul>
+          <li><a href="privacy.html">Aviso de privacidad</a></li>
+          <li><a href="#seguridad">Seguridad</a></li>
+          <li><a href="terms.html">Alcance del servicio</a></li>
+        </ul>
       </div>
     </div>
-    <div class="container footer-bottom">
-      <span>&copy; 2026 BlackPortfolio</span>
-      <div class="footer-legal-links">
-        <a href="privacy.html">Política de privacidad</a>
-        <a href="terms.html">Términos de servicio</a>
-      </div>
-    </div>
-  </footer>
 
-  <!-- 2FA Setup Modal (shown after account creation) -->
-  <div id="totpSetupModal" class="totp-setup-modal hidden" role="dialog" aria-modal="true" aria-label="Configurar Google Authenticator">
-    <div class="totp-setup-card">
-      <h2>Protege tu cuenta</h2>
-      <p class="totp-sub">Configura Google Authenticator para agregar una capa extra de seguridad.</p>
-
-      <div id="totpSetupLoading" style="text-align:center">
-        <div class="totp-loading-spinner"></div>
-        <p style="font-size:0.83rem;color:var(--muted)">Generando código QR…</p>
-      </div>
-
-      <div id="totpSetupContent" class="hidden">
-        <div class="totp-qr-wrap">
-          <img id="totpQrImg" src="" alt="Código QR para Google Authenticator">
-        </div>
-
-        <ol class="totp-steps">
-          <li><span class="step-num">1</span>Instala <strong>Google Authenticator</strong> en tu teléfono (iOS o Android).</li>
-          <li><span class="step-num">2</span>Toca el icono <strong>+</strong> y elige <strong>"Escanear código QR"</strong>.</li>
-          <li><span class="step-num">3</span>Apunta la cámara al código de arriba. Aparecerá una entrada <strong>BlackPortfolio</strong>.</li>
-          <li><span class="step-num">4</span>Ingresa el código de 6 dígitos que muestra la app para activar 2FA.</li>
-        </ol>
-
-        <p class="totp-manual-key-label">¿No puedes escanear? Ingresa esta clave manualmente:</p>
-        <div class="totp-manual-key" id="totpManualKey">—</div>
-
-        <div class="totp-setup-otp-grid" id="totpSetupOtpGrid">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 1">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 2">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 3">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 4">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 5">
-          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Dígito 6">
-        </div>
-        <p class="totp-setup-msg" id="totpSetupMsg"></p>
-
-        <div class="totp-setup-actions">
-          <button id="totpSetupVerifyBtn" class="button primary" type="button" disabled>Activar 2FA y acceder al dashboard</button>
-          <button id="totpSetupSkipBtn" class="button ghost" type="button">Omitir por ahora</button>
+    <div class="foot__bottom">
+      <p class="note">
+        © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
+        financiera personalizada. Cifras de muestra en esta página, ilustrativas.
+      </p>
+      <div class="foot__theme">
+        <span class="label" id="temaLabel">Tema</span>
+        <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+          <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
         </div>
       </div>
     </div>
   </div>
+</footer>
 
-  <div id="paymentModal" class="payment-modal hidden" role="dialog" aria-modal="true" aria-labelledby="paymentTitle">
-    <div class="payment-modal-card">
-      <h3 id="paymentTitle">Checkout preparado</h3>
-      <p id="paymentDescription"></p>
-      <div class="payment-code"><pre id="paymentPayload"></pre></div>
-      <button id="closePaymentModal" class="button primary" type="button">Cerrar</button>
-    </div>
-  </div>
-
-  <script src="monitoring.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
-  <script src="tickers-data.js"></script>
-  <script src="assets/qrcode.min.js"></script>
-  <script src="assets/qr-shim.js"></script>
-  <script src="auth.js?v=10"></script>
-  <script src="plan-picker.js?v=2"></script>
-  <script src="app.js?v=19"></script>
+<script src="monitoring.js"></script>
+<script src="tickers-data.js"></script>
+<script src="landing-v4.js"></script>
 </body>
 </html>

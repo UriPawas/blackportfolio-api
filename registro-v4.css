@@ -1,0 +1,265 @@
+/* ==========================================================================
+   BlackPortfolio — registro v4
+   Se monta sobre landing-v4.css + login-v4.css. Aquí sólo vive lo propio del
+   alta de cuenta: selector de plan, medidor de contraseña, consentimientos y
+   el panel de verificación de correo.
+   Los IDs y clases son los de `#register` en index.html, así que `app.js`
+   puede tomar esta página sin cambios (ver nota sobre pwStrengthText).
+   ========================================================================== */
+
+/* --------------------------------------------------- 0. La página alta   */
+
+/* El formulario de alta es mucho más alto que el de acceso: centrar la columna
+   izquierda contra esa altura la deja flotando en medio de la nada. Arranca
+   arriba, junto a la cabecera de la lámina.
+
+   Nada de `position: sticky` aquí: el `overflow: hidden` que recorta la roseta
+   convierte a `.auth__main` en contenedor de scroll y el pegado se calcula
+   contra esa caja, no contra el viewport — la columna terminaba 88 px más
+   abajo que la lámina. */
+.auth--tall .auth__spread { align-items: start; }
+
+/* ------------------------------------------------- 1. Selector de plan   */
+
+.plans {
+  margin: var(--s5) 0 0;
+  padding: 0;
+  border: 0;
+}
+.plans legend {
+  padding: 0;
+  margin-bottom: var(--s3);
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.plan {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: .1rem .7rem;
+  padding: .7rem .8rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .16s var(--ease), background-color .16s var(--ease);
+}
+.plan + .plan { margin-top: -1px; }
+.plan:hover { border-color: var(--rule-strong); z-index: 1; position: relative; }
+
+.plan input {
+  grid-row: span 2;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cobalt);
+}
+
+.plan__name { font-weight: 600; color: var(--ink); }
+.plan__price {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.plan__price small { font-weight: 400; color: var(--ink-3); }
+.plan__desc {
+  grid-column: 2 / 4;
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+  line-height: 1.45;
+}
+
+/* El plan elegido se marca con la regla y el fondo, no sólo con el radio. */
+.plan:has(input:checked) {
+  border-color: var(--cobalt-line);
+  background: var(--cobalt-tint);
+  position: relative;
+  z-index: 2;
+}
+.plan:has(input:focus-visible) { outline: 2px solid var(--cobalt-line); outline-offset: 2px; }
+
+.plans__foot {
+  margin: var(--s3) 0 0;
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+}
+
+/* --------------------------------------------- 2. Fuerza de contraseña   */
+
+.pw-strength-bars {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  margin-top: .45rem;
+}
+.pw-bar {
+  height: 3px;
+  background: var(--rule);
+  border-radius: 1px;
+  transition: background-color .2s var(--ease);
+}
+/* `app.js` pone active-1…active-5 según el puntaje. Dos colores semánticos,
+   no cinco: rojo mientras es insuficiente, cobalto cuando ya sirve. */
+.pw-bar.active-1, .pw-bar.active-2 { background: var(--neg); }
+.pw-bar.active-3 { background: var(--ink-3); }
+.pw-bar.active-4, .pw-bar.active-5 { background: var(--cobalt-line); }
+
+.pw-strength-label {
+  display: flex;
+  gap: .35rem;
+  margin: .4rem 0 0;
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+}
+#pwStrengthText { font-weight: 600; }
+#pwStrengthText[data-level="1"], #pwStrengthText[data-level="2"] { color: var(--neg); }
+#pwStrengthText[data-level="3"] { color: var(--ink-2); }
+#pwStrengthText[data-level="4"], #pwStrengthText[data-level="5"] { color: var(--pos); }
+
+.pw-requirements {
+  margin: .5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: .2rem;
+}
+/* `display: grid` le gana al `[hidden]` de la hoja del navegador, así que la
+   lista hay que ocultarla a mano. */
+.pw-requirements[hidden] { display: none; }
+.pw-requirements li {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+}
+.pw-req-icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 1px;
+  position: relative;
+}
+/* Cumplido: marca + color. Nunca sólo color. */
+.pw-requirements li.met { color: var(--ink-2); }
+.pw-requirements li.met .pw-req-icon {
+  border-color: var(--pos);
+  background: var(--pos);
+}
+.pw-requirements li.met .pw-req-icon::after {
+  content: "";
+  position: absolute;
+  inset: 2px 2px 3px 2px;
+  border: 1.5px solid var(--surface);
+  border-top: 0;
+  border-right: 0;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+/* -------------------------------------------------- 3. Consentimientos   */
+
+.consents {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule-soft);
+  display: grid;
+  gap: var(--s3);
+}
+
+.consent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .6rem;
+  font-size: var(--t-mini);
+  line-height: 1.55;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.consent input {
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+  accent-color: var(--cobalt);
+}
+.consent a { color: var(--cobalt-ink); }
+.consent[data-required="true"] .consent__opt { display: none; }
+.consent__opt { color: var(--ink-3); }
+.consent.is-missing { color: var(--neg); }
+.consent.is-missing input { outline: 2px solid var(--neg); outline-offset: 2px; }
+
+/* ------------------------------------------- 4. Verificación de correo   */
+
+.verify { padding: clamp(1.35rem, 3vw, 2rem); }
+.verify__mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cobalt-line);
+  border-radius: 2px;
+  color: var(--cobalt-ink);
+}
+.verify__mark svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.verify h2 {
+  margin: var(--s4) 0 0;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  font-weight: 500;
+  letter-spacing: -.015em;
+}
+.verify p { margin: var(--s3) 0 0; font-size: var(--t-small); color: var(--ink-2); max-width: 46ch; }
+.verify strong { color: var(--ink); font-weight: 600; }
+.verify__next {
+  margin: var(--s5) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule-soft);
+}
+.verify__next li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: .65rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-small);
+  color: var(--ink-2);
+}
+.verify__actions { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s5); }
+
+/* ------------------------------------------------------ 5. Secuencia     */
+
+/* La columna izquierda sí es una secuencia: tres pasos que el usuario ejecuta
+   en orden, y el orden es información. Por eso lleva números. */
+.steps { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
+.steps li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .2rem .8rem;
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+.steps .step__n {
+  grid-row: span 2;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--rule-strong);
+  font: 600 .6875rem/1 var(--sans);
+  color: var(--ink-3);
+  transform: translateY(2px);
+}
+.steps b { font-weight: 600; color: var(--ink); }
+.steps span { font-size: var(--t-small); color: var(--ink-2); }
+
+@media (max-width: 30rem) {
+  .plan { grid-template-columns: auto minmax(0, 1fr); }
+  .plan__price { grid-column: 2; justify-self: start; }
+  .plan__desc { grid-column: 2 / 3; }
+}

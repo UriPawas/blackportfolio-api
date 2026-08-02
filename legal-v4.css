@@ -1,0 +1,231 @@
+/* ==========================================================================
+   BlackPortfolio — documentos legales v4
+   Se monta sobre landing-v4.css. Modo lectura: la superficie sirve a la
+   comprensión y a la orientación, no a la persuasión. Columna de medida
+   controlada, índice fijo, secciones numeradas (aquí la numeración sí es
+   información: se cita por número) y una tabla para los encargados.
+   ========================================================================== */
+
+.legal { min-height: 100dvh; display: flex; flex-direction: column; }
+
+.legal__main { flex: 1 1 auto; padding-block: clamp(2rem, 5vw, 4rem) clamp(3rem, 7vw, 6rem); }
+
+/* ------------------------------------------------------- 1. Encabezado   */
+
+.legal__head {
+  padding-bottom: var(--s6);
+  border-bottom: 1px solid var(--rule);
+}
+.legal__head h1 {
+  font-size: clamp(1.9rem, 1.3rem + 1.9vw, 2.9rem);
+  max-width: 24ch;
+}
+.legal__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem 1.25rem;
+  margin-top: var(--s4);
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+}
+.legal__meta b { font-weight: 500; color: var(--ink-2); }
+
+/* El aviso simplificado: lo esencial antes del documento completo. */
+.legal__summary {
+  margin-top: var(--s5);
+  padding: var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--cobalt-line);
+  border-radius: 2px;
+  box-shadow: var(--shadow-plate);
+}
+.legal__summary h2 {
+  font-size: var(--t-h3);
+  margin: 0 0 var(--s4);
+}
+.legal__summary dl { margin: 0; }
+.legal__summary .spec { border-top: 0; }
+
+/* ------------------------------------------------------- 2. Estructura   */
+
+.legal__body { display: grid; gap: clamp(2rem, 4vw, 3.5rem); margin-top: var(--s7); }
+/* Los ítems de rejilla no encogen por debajo de su contenido sin esto, y el
+   contenedor con scroll de la tabla no llega a activarse nunca. */
+.legal__body > * { min-width: 0; }
+
+@media (min-width: 62rem) {
+  .legal__body { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); align-items: start; }
+  .legal__toc { position: sticky; top: calc(64px + var(--s5)); }
+}
+
+.legal__toc h2 {
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 var(--s3);
+}
+.legal__toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+  counter-reset: toc;
+}
+.legal__toc li { border-bottom: 1px solid var(--rule-soft); counter-increment: toc; }
+.legal__toc a {
+  display: flex;
+  gap: .6rem;
+  padding: .45rem 0;
+  font-size: var(--t-mini);
+  color: var(--ink-2);
+  text-decoration: none;
+  line-height: 1.4;
+}
+.legal__toc a::before {
+  content: counter(toc);
+  flex: none;
+  width: 1.4em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.legal__toc a:hover { color: var(--cobalt-ink); }
+.legal__toc a:hover::before { color: var(--cobalt-ink); }
+
+/* La sección que se está leyendo: peso, color y una regla a la izquierda.
+   Nunca sólo color. */
+.legal__toc a[aria-current="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--cobalt-line);
+  padding-left: .5rem;
+  background: var(--cobalt-tint);
+}
+
+/* ------------------------------------------------------- 3. Secciones    */
+
+.legal__doc { counter-reset: sec; }
+
+.legal__doc section {
+  padding-top: var(--s6);
+  counter-increment: sec;
+}
+.legal__doc section + section { border-top: 1px solid var(--rule-soft); }
+.legal__doc section:first-child { padding-top: 0; }
+
+.legal__doc h2 {
+  display: flex;
+  gap: .7rem;
+  align-items: baseline;
+  font-size: var(--t-h3);
+  margin: 0 0 var(--s4);
+  scroll-margin-top: 6rem;
+}
+.legal__doc h2::before {
+  content: counter(sec);
+  flex: none;
+  font: 600 var(--t-label)/1.9 var(--sans);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.legal__doc h3 {
+  font-family: var(--sans);
+  font-size: .9375rem;
+  font-weight: 600;
+  margin: var(--s5) 0 var(--s2);
+  color: var(--ink);
+}
+
+.legal__doc p,
+.legal__doc li { max-width: 68ch; }
+.legal__doc p + p { margin-top: var(--s4); }
+.legal__doc strong { font-weight: 600; color: var(--ink); }
+
+.legal__doc ul,
+.legal__doc ol.legal-steps {
+  margin: var(--s4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.legal__doc ul > li,
+.legal__doc ol.legal-steps > li {
+  position: relative;
+  padding: 0 0 0 1.15rem;
+  color: var(--ink-2);
+}
+.legal__doc ul > li + li,
+.legal__doc ol.legal-steps > li + li { margin-top: var(--s3); }
+/* Viñeta de 1px: una regla corta, no un punto grueso. */
+.legal__doc ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .78em;
+  width: 7px;
+  height: 1px;
+  background: var(--rule-strong);
+}
+.legal__doc ol.legal-steps { counter-reset: step; }
+.legal__doc ol.legal-steps > li { counter-increment: step; padding-left: 1.7rem; }
+.legal__doc ol.legal-steps > li::before {
+  content: counter(step) ".";
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.legal__doc .scroller { margin-top: var(--s5); }
+.legal__doc .tbl { margin-top: 0; }
+.legal__doc .tbl td:first-child { font-weight: 600; color: var(--ink); white-space: nowrap; }
+/* Tres columnas de prosa no caben en un teléfono: la tabla se desplaza dentro
+   de su propio contenedor en vez de empujar la página. */
+.tbl--encargados { min-width: 34rem; }
+
+/* ------------------------------------------------------------ 4. Huecos  */
+
+/* Un dato que sólo el responsable puede aportar se marca para que no pueda
+   publicarse por descuido. No se inventa un domicilio ni una razón social. */
+.gap {
+  display: inline;
+  padding: 0 .25em;
+  background: color-mix(in srgb, var(--neg) 10%, transparent);
+  border-bottom: 1px dashed var(--neg);
+  color: var(--neg);
+  font-weight: 600;
+  font-size: .9375em;
+}
+
+.legal__warning {
+  margin-top: var(--s5);
+  padding: var(--s4) var(--s5);
+  border: 1px dashed var(--neg);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--neg) 6%, transparent);
+}
+.legal__warning h2 { font-size: var(--t-h3); margin: 0 0 var(--s3); color: var(--ink); }
+.legal__warning p, .legal__warning li { font-size: var(--t-small); color: var(--ink-2); }
+.legal__warning ul { margin-top: var(--s3); }
+
+/* ------------------------------------------------------------- 5. Cierre */
+
+.legal__foot {
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  padding-block: var(--s6);
+}
+.legal__foot-row { display: flex; flex-wrap: wrap; gap: var(--s5); align-items: flex-start; }
+.legal__foot-row .note { max-width: 46ch; }
+.legal__foot-row .foot__theme { margin-inline-start: auto; }
+
+@media (max-width: 61.99rem) {
+  .legal__toc { padding-bottom: var(--s5); border-bottom: 1px solid var(--rule); }
+  .legal__toc ol { columns: 2; column-gap: var(--s5); }
+  .legal__toc li { break-inside: avoid; }
+}
+@media (max-width: 30rem) {
+  .legal__toc ol { columns: 1; }
+}

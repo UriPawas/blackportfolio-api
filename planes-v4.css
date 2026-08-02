@@ -1,0 +1,221 @@
+/* ==========================================================================
+   BlackPortfolio — planes v4
+   Un cuadro de tarifas, no cuatro tarjetas de precio. La comparación es el
+   producto de esta página: la columna de características se queda fija y los
+   planes se leen en paralelo.
+   ========================================================================== */
+
+.planes__main { padding-block: clamp(2rem, 5vw, 4rem) clamp(3rem, 7vw, 6rem); }
+
+.planes__head { padding-bottom: var(--s5); border-bottom: 1px solid var(--rule); }
+.planes__head h1 { font-size: clamp(1.9rem, 1.3rem + 1.9vw, 2.9rem); max-width: 20ch; }
+.planes__head .lede { margin-top: var(--s4); max-width: 52ch; }
+
+.planes__ciclo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3) var(--s4);
+  margin-top: var(--s5);
+}
+.planes__ciclo .label { color: var(--ink-3); }
+.planes__ahorro {
+  font-size: var(--t-mini);
+  color: var(--pos);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------- 1. El cuadro    */
+
+.tarifas-wrap {
+  margin-top: var(--s6);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--surface);
+  box-shadow: var(--shadow-plate);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.tarifas {
+  width: 100%;
+  min-width: 46rem;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.tarifas th,
+.tarifas td {
+  padding: .7rem .9rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+/* La primera columna se queda fija al desplazar en horizontal: sin eso, en
+   móvil no se sabe qué se está comparando. */
+.tarifas th[scope="row"],
+.tarifas thead th:first-child,
+.tarifas tfoot td:first-child,
+.tarifas .grupo th {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  font-weight: 400;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  min-width: 15rem;
+  box-shadow: 1px 0 0 var(--rule-soft);
+}
+
+.tarifas thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: bottom;
+}
+.tarifas thead th:first-child { z-index: 4; background: var(--sunken); }
+
+.plan-col { min-width: 11rem; }
+.plan-col .tag {
+  display: block;
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.plan-col .nombre {
+  display: block;
+  margin-top: .35rem;
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -.015em;
+  color: var(--ink);
+}
+.plan-col .precio {
+  display: block;
+  margin-top: .5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -.02em;
+}
+.plan-col .unidad,
+.plan-col .mxn {
+  display: block;
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.plan-col .unidad { margin-top: .1rem; }
+.plan-col .mxn { margin-top: .2rem; }
+
+/* La columna destacada no grita: cambia el fondo y suma la regla de emisión. */
+.tarifas .col-dest { background: var(--cobalt-tint); }
+.tarifas thead .col-dest { box-shadow: inset 0 2px 0 var(--cobalt-line); }
+
+.tarifas .grupo th {
+  padding-top: var(--s5);
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--rule);
+}
+.tarifas .grupo td { padding-top: var(--s5); border-bottom: 1px solid var(--rule); }
+
+.tarifas tbody td { font-size: var(--t-small); color: var(--ink); }
+
+/* Sí/no nunca dependen del color: llevan glifo y texto para lector de
+   pantalla. */
+.si, .no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.si svg { width: 13px; height: 13px; fill: none; stroke: var(--pos); stroke-width: 2.2; }
+.no::before {
+  content: "";
+  width: 9px;
+  height: 1px;
+  background: var(--rule-strong);
+}
+
+.tarifas tfoot td { padding-block: var(--s4); border-bottom: 0; }
+.tarifas tfoot .btn { width: 100%; }
+
+.planes__notas {
+  margin-top: var(--s5);
+  display: grid;
+  gap: var(--s3);
+}
+.planes__notas p { margin: 0; font-size: var(--t-mini); color: var(--ink-3); max-width: 78ch; }
+
+/* --------------------------------------------------- 2. Preguntas        */
+
+.planes__faq { margin-top: var(--s7); }
+.planes__faq h2 { font-size: var(--t-h3); }
+.faq-list {
+  margin-top: var(--s5);
+  border-top: 1px solid var(--rule);
+}
+.faq-list details {
+  border-bottom: 1px solid var(--rule-soft);
+}
+.faq-list summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: .85rem 0;
+  cursor: pointer;
+  font-size: .9375rem;
+  font-weight: 600;
+  color: var(--ink);
+  list-style: none;
+}
+.faq-list summary::-webkit-details-marker { display: none; }
+.faq-list summary::after {
+  content: "+";
+  flex: none;
+  font-weight: 400;
+  color: var(--ink-3);
+  transition: transform .2s var(--ease);
+}
+.faq-list details[open] summary::after { content: "–"; }
+.faq-list p {
+  margin: 0;
+  padding: 0 0 .9rem;
+  font-size: var(--t-small);
+  color: var(--ink-2);
+  max-width: 70ch;
+}
+
+/* ------------------------------------------------------- 3. Móvil        */
+
+/* Esta barra lleva dos acciones y a 390 px no caben las dos con el tema: la
+   secundaria se retira y queda la primaria. El acceso sigue estando en el pie. */
+@media (max-width: 30rem) {
+  .top__actions--dual .btn--quiet { display: none; }
+}
+
+.tarifas-hint {
+  display: none;
+  margin-top: var(--s3);
+  font-size: var(--t-mini);
+  color: var(--ink-3);
+}
+@media (max-width: 62rem) {
+  .tarifas-hint { display: block; }
+  .tarifas th[scope="row"],
+  .tarifas thead th:first-child,
+  .tarifas tfoot td:first-child,
+  .tarifas .grupo th { min-width: 11rem; }
+  .plan-col { min-width: 9.5rem; }
+}

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aviso de privacidad | BlackPortfolio</title>
+  <meta name="description" content="Qué datos trata BlackPortfolio, con qué fines, con quién los comparte y cómo ejercer tus derechos ARCO.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="login-v4.css">
+  <link rel="stylesheet" href="legal-v4.css">
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="legal">
+<!--
+  THESIS: Un aviso de privacidad que se puede auditar, no un texto para aceptar sin leer.
+  Modo lectura: índice fijo, secciones numeradas y citables, y cada afirmación técnica
+  comprobable contra el código. Lo que no se puede comprobar se marca como hueco, no se
+  redacta bonito.
+  OWN-WORLD: Hereda landing-v4.css. Columna de 68 ch, reglas de 1px, cifras tabulares,
+  tabla de encargados con el mismo componente que la cartera. Cero fotografía: aquí la
+  imagen no aporta nada.
+  STORY: El titular entiende qué se recoge, para qué, quién lo toca, cuánto dura y cómo
+  ejercer sus derechos — con los plazos legales reales.
+  FIRST VIEWPORT: Título, fecha de versión y el aviso simplificado con los seis hechos
+  esenciales; el índice queda a la izquierda al desplazar.
+  FORM: Misma convención institucional que landing-v4 (seed bc0959d2, salida canónica
+  elegida por el usuario), en registro de documento.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+
+<a class="skip" href="#doc">Saltar al documento</a>
+
+<header class="auth__top">
+  <div class="shell auth__bar">
+    <a class="mark" href="landing-v4.html"><b>Black</b><span>Portfolio</span></a>
+    <div class="top__actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+      </button>
+      <a class="btn btn--quiet" href="landing-v4.html">Volver</a>
+    </div>
+  </div>
+</header>
+
+<main class="legal__main">
+  <div class="shell">
+
+    <div class="legal__head">
+      <h1>Aviso de privacidad</h1>
+      <p class="legal__meta">
+        <span><b>Versión:</b> 2.0</span>
+        <span><b>Vigente desde:</b> pendiente de publicación</span>
+        <span><b>Sustituye a:</b> versión del 9 de julio de 2026</span>
+        <span><b>Ámbito:</b> landing, aplicación web, reportes y enlaces públicos de solo lectura</span>
+      </p>
+
+      <div class="legal__summary">
+        <h2>Lo esencial</h2>
+        <dl class="spec">
+          <div>
+            <dt>Qué guardamos</dt>
+            <dd>Tu identidad de acceso y lo que capturas: posiciones, transacciones, metas y notas. Son <strong>datos financieros y patrimoniales</strong>, así que su tratamiento requiere tu consentimiento expreso (§4).</dd>
+          </div>
+          <div>
+            <dt>Qué no tocamos</dt>
+            <dd>No nos conectamos a tu banco ni a tu casa de bolsa, no guardamos credenciales de terceros ni números de tarjeta, y no ejecutamos órdenes.</dd>
+          </div>
+          <div>
+            <dt>Quién más los ve</dt>
+            <dd>Sólo proveedores que trabajan por nuestra cuenta (§7). No vendemos datos ni los cedemos a anunciantes.</dd>
+          </div>
+          <div>
+            <dt>La IA</dt>
+            <dd>Cuando pides un análisis, las cifras de tu cartera salen hacia un modelo de lenguaje de terceros. Sin tu correo ni tu identificador (§6).</dd>
+          </div>
+          <div>
+            <dt>Control</dt>
+            <dd>Exportas todo en JSON y borras la cuenta desde Ajustes, sin pedirnos permiso (§10).</dd>
+          </div>
+          <div>
+            <dt>Dónde viven</dt>
+            <dd>Estados Unidos (Railway y Google). Usar el servicio implica esa transferencia internacional (§8).</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="legal__warning">
+        <h2>Este documento todavía no se puede publicar</h2>
+        <p>
+          Faltan tres datos que sólo el responsable puede aportar y que la Ley Federal de
+          Protección de Datos Personales en Posesión de los Particulares exige de forma expresa
+          (art. 16, fracciones I y II). Están marcados en rojo a lo largo del texto:
+        </p>
+        <ul>
+          <li>Nombre o razón social del responsable del tratamiento.</li>
+          <li>Domicilio del responsable.</li>
+          <li><strong>Los dos buzones de contacto todavía no existen.</strong> <code>privacy@blackportfolio.ai</code> y <code>legal@blackportfolio.ai</code> están publicados en el sitio actual pero hay que crearlos —basta un alias con reenvío— antes de que este aviso salga. La ley obliga a responder una solicitud ARCO en 20 días hábiles: un buzón que nadie lee es un incumplimiento.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legal__body">
+
+      <nav class="legal__toc" aria-labelledby="tocTitulo">
+        <h2 id="tocTitulo">Contenido</h2>
+        <ol>
+          <li><a href="#s1">Responsable</a></li>
+          <li><a href="#s2">Alcance y definiciones</a></li>
+          <li><a href="#s3">Datos que tratamos</a></li>
+          <li><a href="#s4">Consentimiento expreso</a></li>
+          <li><a href="#s5">Finalidades</a></li>
+          <li><a href="#s6">Inteligencia artificial</a></li>
+          <li><a href="#s7">Encargados y transferencias</a></li>
+          <li><a href="#s8">Dónde se almacenan</a></li>
+          <li><a href="#s9">Conservación y borrado</a></li>
+          <li><a href="#s10">Tus derechos y cómo ejercerlos</a></li>
+          <li><a href="#s11">Revocar el consentimiento</a></li>
+          <li><a href="#s12">Seguridad</a></li>
+          <li><a href="#s13">Cookies y almacenamiento local</a></li>
+          <li><a href="#s14">Decisiones automatizadas</a></li>
+          <li><a href="#s15">Menores de edad</a></li>
+          <li><a href="#s16">Cambios</a></li>
+          <li><a href="#s17">Autoridad y contacto</a></li>
+        </ol>
+      </nav>
+
+      <div class="legal__doc" id="doc">
+
+        <section id="s1">
+          <h2>Responsable</h2>
+          <p>
+            El responsable del tratamiento de tus datos personales es
+            <span class="gap">[razón social del responsable]</span>, con domicilio en
+            <span class="gap">[domicilio fiscal completo]</span>, que opera el servicio
+            <strong>BlackPortfolio</strong> en <code>portify-6467f.web.app</code>.
+          </p>
+          <p>
+            Para cualquier asunto relacionado con este aviso, incluidas las solicitudes de
+            acceso, rectificación, cancelación u oposición, el canal es
+            <a href="mailto:privacy@blackportfolio.ai">privacy@blackportfolio.ai</a>
+            <span class="gap">[buzón pendiente de crear y de asignar a alguien]</span>.
+          </p>
+        </section>
+
+        <section id="s2">
+          <h2>Alcance y definiciones</h2>
+          <p>
+            Este aviso aplica a la página pública, a la aplicación web, a los reportes que
+            genera el producto y a los enlaces públicos de solo lectura que tú decidas crear.
+            No aplica a los sitios de terceros a los que enlazamos.
+          </p>
+          <ul>
+            <li><strong>Titular:</strong> tú, la persona a la que pertenecen los datos.</li>
+            <li><strong>Responsable:</strong> quien decide sobre el tratamiento (§1).</li>
+            <li><strong>Encargado:</strong> proveedor que trata datos por cuenta del responsable y siguiendo sus instrucciones — no puede usarlos para fines propios.</li>
+            <li><strong>Datos financieros o patrimoniales:</strong> los que revelan tu situación económica. Los tuyos son las posiciones, montos y transacciones que capturas.</li>
+            <li><strong>Remisión:</strong> envío de datos a un encargado; no requiere tu consentimiento adicional.</li>
+            <li><strong>Transferencia:</strong> envío a un tercero que los usa para fines propios; requiere tu consentimiento salvo las excepciones de ley. <strong>Hoy no realizamos ninguna.</strong></li>
+          </ul>
+        </section>
+
+        <section id="s3">
+          <h2>Datos que tratamos</h2>
+
+          <h3>Que tú nos das</h3>
+          <ul>
+            <li><strong>Identidad y cuenta:</strong> nombre, correo electrónico, contraseña, plan contratado, idioma y moneda base. La contraseña la gestiona Firebase Authentication (Google): nunca la vemos ni la almacenamos.</li>
+            <li><strong>Cartera:</strong> posiciones, clases de activo, cantidades, precios de compra, fechas, comisiones, transacciones, dividendos, metas, alertas de precio y notas. Todo lo capturas tú o lo importas tú.</li>
+            <li><strong>Código de invitación</strong> cuando canjeas uno para entrar a la beta.</li>
+            <li><strong>Mensajes</strong> que envías por el formulario de comentarios, junto con tu plan y la pantalla desde la que escribes.</li>
+          </ul>
+
+          <h3>Que se generan al usar el servicio</h3>
+          <ul>
+            <li><strong>Segundo factor:</strong> si activas la verificación en dos pasos, el secreto TOTP y el hash de tus códigos de respaldo. El secreto vive sólo en el servidor y nunca se envía al navegador.</li>
+            <li><strong>Actividad de seguridad:</strong> inicios de sesión, activaciones y bajas de 2FA, cambios de cartera, dispositivos marcados como de confianza, y la dirección IP asociada a esos eventos.</li>
+            <li><strong>Uso del producto:</strong> qué módulos abres y desde qué pantalla, en una tabla propia de este servicio. No usamos Google Analytics ni rastreadores publicitarios.</li>
+            <li><strong>Consumo de IA:</strong> cuántas peticiones haces y con qué plan, para aplicar cuotas.</li>
+            <li><strong>Errores técnicos:</strong> traza del fallo y tu identificador de usuario, a través de Sentry.</li>
+            <li><strong>Facturación:</strong> identificador de cliente de Stripe, plan, estado de la suscripción y eventos de cobro. Los datos completos de tu tarjeta nunca pasan por nuestros servidores.</li>
+          </ul>
+
+          <h3>Que no recogemos</h3>
+          <ul>
+            <li>Credenciales de tu banco o de tu casa de bolsa. No hay conexión con instituciones financieras.</li>
+            <li>Número de tarjeta, CVV o cuenta bancaria.</li>
+            <li>Datos sensibles en el sentido del artículo 3 de la ley: origen racial o étnico, estado de salud, información genética, creencias, afiliación sindical, opiniones políticas o preferencia sexual. Si los escribes en un campo de notas, lo haces por tu cuenta y te pedimos que no lo hagas.</li>
+            <li>Datos de terceros. Si registras información de otra persona en tus notas, tú respondes por haber informado a esa persona.</li>
+          </ul>
+        </section>
+
+        <section id="s4">
+          <h2>Consentimiento expreso</h2>
+          <p>
+            Las posiciones y los montos de tu cartera son <strong>datos financieros y
+            patrimoniales</strong>. La ley exige para ellos tu <strong>consentimiento
+            expreso</strong>, no basta que no te opongas (art. 8).
+          </p>
+          <p>
+            Por eso el alta de cuenta incluye una casilla que debes marcar de forma
+            deliberada, con un enlace a este aviso; sin ella no se crea la cuenta. Esa casilla
+            cubre únicamente las finalidades necesarias para operar el servicio (§5, primarias).
+            Las finalidades secundarias tienen su propia casilla, separada y opcional: no
+            marcarla no te quita ninguna función.
+          </p>
+          <p>
+            Si entras con Google, el consentimiento se pide igual antes de crear la cuenta.
+          </p>
+        </section>
+
+        <section id="s5">
+          <h2>Finalidades</h2>
+
+          <h3>Primarias — sin ellas el servicio no existe</h3>
+          <ul>
+            <li>Autenticarte y mantener tu sesión.</li>
+            <li>Guardar y sincronizar tus carteras entre tus dispositivos.</li>
+            <li>Calcular métricas de rendimiento y riesgo, y generar los reportes que pides.</li>
+            <li>Cobrar tu suscripción y aplicar los límites de tu plan.</li>
+            <li>Prevenir fraude y abuso: límites de intentos, control de acceso a la beta, cuotas de IA.</li>
+            <li>Enviarte correos indispensables: verificación de la cuenta, alertas de precio que tú configuraste, avisos de seguridad y cambios en el servicio.</li>
+            <li>Atender tus solicitudes de soporte y de derechos ARCO.</li>
+            <li>Cumplir obligaciones legales, fiscales y contables.</li>
+          </ul>
+
+          <h3>Secundarias — puedes decir no</h3>
+          <ul>
+            <li>Avisos de producto y novedades de la beta.</li>
+            <li>Analítica de uso para decidir qué construir después.</li>
+          </ul>
+          <p>
+            Para negarlas basta no marcar la casilla al registrarte. Si ya la marcaste, puedes
+            retirarla en Ajustes o escribiendo a
+            <a href="mailto:privacy@blackportfolio.ai">privacy@blackportfolio.ai</a>; tienes
+            cinco días hábiles desde que recibes este aviso para manifestar tu negativa, y
+            también puedes hacerlo después en cualquier momento.
+          </p>
+        </section>
+
+        <section id="s6">
+          <h2>Inteligencia artificial</h2>
+          <p>
+            Cuando pides un análisis con IA —narrativa del reporte, lectura de una posición,
+            comentario de tu cartera— enviamos los datos de ese análisis a un modelo de lenguaje
+            de terceros a través de <strong>OpenRouter</strong>, que enruta la petición al
+            proveedor del modelo. El modelo concreto depende de tu plan.
+          </p>
+          <p>
+            Va lo necesario para responder: claves de los activos, pesos, métricas y, cuando
+            aplica, titulares de noticias públicas de esas posiciones. <strong>No</strong> va tu
+            nombre, tu correo ni tu identificador de usuario. La respuesta puede quedar en caché
+            en nuestros servidores para no reprocesar el mismo análisis.
+          </p>
+          <p>
+            El resultado es material de lectura, no una recomendación de compra o venta, y no
+            sustituye asesoría profesional. Ver el <a href="terminos-v4.html">Alcance del servicio</a>.
+          </p>
+        </section>
+
+        <section id="s7">
+          <h2>Encargados y transferencias</h2>
+          <p>
+            Todos los terceros de la tabla actúan como <strong>encargados</strong>: tratan datos
+            por nuestra cuenta y bajo nuestras instrucciones. No hay transferencias que requieran
+            tu consentimiento. Sólo revelaríamos datos a una autoridad cuando exista una
+            obligación legal, y sólo lo estrictamente requerido.
+          </p>
+          <div class="scroller" tabindex="0" role="region" aria-label="Tabla de proveedores">
+          <table class="tbl tbl--encargados">
+            <caption class="sr-only">Proveedores que tratan datos por cuenta de BlackPortfolio</caption>
+            <thead>
+              <tr><th scope="col">Proveedor</th><th scope="col">Para qué</th><th scope="col">Qué recibe</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Google / Firebase</td><td>Autenticación y hosting del frontend</td><td>Correo, contraseña, identificador, IP</td></tr>
+              <tr><td>Railway</td><td>Backend y base de datos</td><td>Todo lo de §3 salvo la contraseña</td></tr>
+              <tr><td>Stripe</td><td>Cobros y portal de facturación</td><td>Correo, plan, datos de pago que tú capturas en su formulario</td></tr>
+              <tr><td>OpenRouter</td><td>Enrutamiento a modelos de IA</td><td>Cifras del análisis, sin identificadores</td></tr>
+              <tr><td>Sentry</td><td>Monitoreo de errores</td><td>Traza del fallo e identificador de usuario</td></tr>
+              <tr><td>Proveedor de correo saliente</td><td>Verificación, alertas y avisos</td><td>Correo y el contenido del mensaje</td></tr>
+            </tbody>
+          </table>
+          </div>
+          <p>
+            La página carga tipografías desde el CDN de Google (<code>fonts.googleapis.com</code>,
+            <code>fonts.gstatic.com</code>) y el SDK de Firebase desde <code>gstatic.com</code>.
+            Al hacerlo, tu navegador revela su dirección IP a Google, aunque no le enviamos
+            ningún otro dato.
+          </p>
+          <p>
+            Las imágenes de mercado y las fotografías del sitio se descargan desde nuestro
+            servidor, no desde el proveedor original: tu navegador nunca contacta a esos
+            terceros.
+          </p>
+        </section>
+
+        <section id="s8">
+          <h2>Dónde se almacenan</h2>
+          <p>
+            La autenticación corre en Google Firebase. Tus carteras y datos de cuenta viven en
+            una base PostgreSQL alojada en Railway, con infraestructura en Estados Unidos. Las
+            copias de seguridad se guardan en un volumen de la misma plataforma.
+          </p>
+          <p>
+            Usar el servicio implica aceptar esa transferencia internacional de datos. Si
+            resides en la Unión Europea o en el Reino Unido, esto ocurre bajo las cláusulas
+            contractuales tipo de cada proveedor
+            <span class="gap">[confirmar si se requiere una evaluación de transferencia propia]</span>.
+          </p>
+        </section>
+
+        <section id="s9">
+          <h2>Conservación y borrado</h2>
+          <ul>
+            <li><strong>Mientras la cuenta esté activa</strong> conservamos todo lo de §3.</li>
+            <li><strong>Al eliminar la cuenta</strong> se borran de inmediato el perfil, las carteras, la actividad, el segundo factor y la identidad de acceso en Firebase.</li>
+            <li><strong>Copias de seguridad:</strong> se generan cada 24 horas y se conservan las últimas 30, así que un dato borrado puede sobrevivir en respaldos cifrados hasta unos 30 días antes de rotar y desaparecer.</li>
+            <li><strong>Registros de facturación:</strong> se conservan el tiempo que exige la normativa fiscal, aunque borres la cuenta.</li>
+            <li><strong>Eventos de analítica de uso:</strong> se conservan <strong>12 meses</strong> y después se eliminan. <span class="gap">[la purga automática todavía no está implementada en el backend — no publicar este plazo hasta que exista]</span></li>
+          </ul>
+        </section>
+
+        <section id="s10">
+          <h2>Tus derechos y cómo ejercerlos</h2>
+          <p>
+            Tienes derecho a <strong>acceder</strong> a tus datos, <strong>rectificarlos</strong>
+            si son inexactos, <strong>cancelarlos</strong> cuando consideres que no se requieren,
+            y <strong>oponerte</strong> a un uso específico. En la Unión Europea y el Reino Unido
+            tienes además portabilidad y limitación del tratamiento.
+          </p>
+
+          <h3>Desde la app, sin pedir permiso</h3>
+          <ul>
+            <li><strong>Acceso y portabilidad:</strong> Ajustes → Datos y privacidad → <em>Exportar mis datos</em> descarga un JSON con perfil, carteras, actividad y comentarios.</li>
+            <li><strong>Cancelación:</strong> Ajustes → Datos y privacidad → <em>Eliminar mi cuenta</em>.</li>
+            <li><strong>Rectificación:</strong> edita cualquier dato de tu perfil y de tus carteras directamente.</li>
+            <li><strong>Seguridad:</strong> Ajustes → Sesiones activas cierra sesiones abiertas; ahí mismo activas o desactivas el segundo factor.</li>
+          </ul>
+
+          <h3>Por escrito</h3>
+          <p>
+            Escribe a <a href="mailto:privacy@blackportfolio.ai">privacy@blackportfolio.ai</a>
+            con: tu nombre y un medio para responderte, copia de una identificación oficial que
+            acredite que eres el titular, la descripción clara del dato y del derecho que ejerces,
+            y cualquier documento que sustente tu petición.
+          </p>
+          <ol class="legal-steps">
+            <li>Te responderemos si procede en un máximo de <strong>20 días hábiles</strong>.</li>
+            <li>Si procede, lo ejecutaremos dentro de los <strong>15 días hábiles</strong> siguientes.</li>
+            <li>El trámite es gratuito; sólo podríamos cobrar gastos de envío o de reproducción.</li>
+          </ol>
+        </section>
+
+        <section id="s11">
+          <h2>Revocar el consentimiento</h2>
+          <p>
+            Puedes revocar en cualquier momento el consentimiento que diste para tratar tus datos
+            patrimoniales, por el mismo canal de §10. Revocarlo significa que no podemos seguir
+            operando tu cuenta: la revocación equivale a cerrarla, y te confirmaremos el borrado.
+            Retirar sólo las finalidades secundarias no afecta tu cuenta en nada.
+          </p>
+        </section>
+
+        <section id="s12">
+          <h2>Seguridad</h2>
+          <p>Medidas que están implementadas hoy:</p>
+          <ul>
+            <li>Cifrado en tránsito (TLS) en todo el servicio y Content Security Policy declarada en el hosting.</li>
+            <li>Verificación del token de identidad en cada llamada sensible, con revisión de revocación.</li>
+            <li>Segundo factor TOTP verificado en el servidor: el secreto no se expone al navegador en ningún momento. Los códigos de respaldo se guardan sólo como hash SHA-256.</li>
+            <li>Límites de intentos por cuenta y por IP en autenticación y en 2FA.</li>
+            <li>Copias de seguridad cifradas con clave simétrica y verificadas por suma de comprobación.</li>
+            <li>Acceso administrativo restringido y registrado.</li>
+            <li>El plan y los límites se resuelven en el servidor: el navegador no puede elevarlos.</li>
+          </ul>
+          <p>
+            Lo que <strong>no</strong> podemos afirmar: no tenemos certificación SOC 2 ni ISO
+            27001, y no hemos pasado una auditoría de seguridad externa. Tampoco ciframos el
+            secreto TOTP en reposo dentro de la base de datos
+            <span class="gap">[pendiente de endurecer — no publicar como cifrado]</span>.
+          </p>
+          <p>
+            Ningún sistema es infalible. Si ocurre una vulneración que afecte de forma
+            significativa tus datos, te lo notificaremos sin demora por correo y explicaremos
+            qué pasó, qué datos se vieron y qué hacer.
+          </p>
+        </section>
+
+        <section id="s13">
+          <h2>Cookies y almacenamiento local</h2>
+          <p>
+            No usamos cookies publicitarias ni de seguimiento de terceros. Usamos el
+            almacenamiento local del navegador para tu sesión, tu preferencia de tema
+            (<code>bp-theme</code>), tu idioma, el token de dispositivo de confianza del segundo
+            factor y una caché de tus carteras para que la app abra rápido. Firebase instala
+            cookies técnicas necesarias para la autenticación.
+          </p>
+          <p>
+            Puedes borrarlo todo desde la configuración de tu navegador. Si lo haces, se cierra
+            la sesión, se olvida el tema y este dispositivo volverá a pedir el código de 2FA.
+          </p>
+        </section>
+
+        <section id="s14">
+          <h2>Decisiones automatizadas</h2>
+          <p>
+            No tomamos decisiones automatizadas que produzcan efectos jurídicos sobre ti ni
+            elaboramos perfiles para eso. Los cálculos de riesgo, las optimizaciones y los textos
+            de IA son herramientas de análisis: ninguno ejecuta una operación, aprueba un
+            producto ni te asigna una calificación que afecte tus derechos. Las únicas
+            automatizaciones que te afectan son operativas y reversibles: límites de plan, cuotas
+            de IA y bloqueos temporales por intentos fallidos.
+          </p>
+        </section>
+
+        <section id="s15">
+          <h2>Menores de edad</h2>
+          <p>
+            El servicio no está dirigido a menores de 18 años y no recabamos deliberadamente sus
+            datos. Si detectamos una cuenta de una persona menor de edad, la eliminaremos. Si
+            crees que un menor a tu cargo creó una cuenta, escríbenos y la borraremos.
+          </p>
+        </section>
+
+        <section id="s16">
+          <h2>Cambios</h2>
+          <p>
+            Podemos actualizar este aviso. Ante cambios materiales —nuevas finalidades, nuevos
+            encargados, cambios en las transferencias— te avisaremos por correo o dentro de la
+            app con al menos <strong>14 días</strong> de anticipación, y la versión y la fecha del
+            encabezado siempre reflejarán lo vigente. Las versiones anteriores quedan disponibles
+            si las pides.
+          </p>
+        </section>
+
+        <section id="s17">
+          <h2>Autoridad y contacto</h2>
+          <p>
+            Este aviso se rige por la legislación de los Estados Unidos Mexicanos, en congruencia
+            con el <a href="terminos-v4.html">Alcance del servicio</a>. Si consideras que tu derecho a
+            la protección de datos fue vulnerado, puedes acudir al Instituto Nacional de
+            Transparencia, Acceso a la Información y Protección de Datos Personales (INAI) en
+            <a href="https://home.inai.org.mx" target="_blank" rel="noopener">home.inai.org.mx</a>.
+          </p>
+          <p>
+            Privacidad: <a href="mailto:privacy@blackportfolio.ai">privacy@blackportfolio.ai</a> ·
+            Asuntos legales: <a href="mailto:legal@blackportfolio.ai">legal@blackportfolio.ai</a>
+          </p>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="legal__foot">
+  <div class="shell legal__foot-row">
+    <p class="note">
+      © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
+      financiera personalizada. Ver también el <a href="terminos-v4.html">Alcance del servicio</a>.
+    </p>
+    <div class="foot__theme">
+      <span class="label" id="temaLabel">Tema</span>
+      <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+        <span class="seg__thumb" aria-hidden="true"></span>
+        <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+        <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="legal-v4.js"></script>
+</body>
+</html>

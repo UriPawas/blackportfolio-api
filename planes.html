@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planes y precios | BlackPortfolio</title>
+  <meta name="description" content="Compara los cuatro planes de BlackPortfolio: Explorer gratis, Investor $19, Advisor Pro $59 y Wealth Desk $129 USD al mes. Anual con ~20% de descuento.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="login-v4.css">
+  <link rel="stylesheet" href="planes-v4.css">
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="legal">
+
+<a class="skip" href="#cuadro">Saltar al cuadro de tarifas</a>
+
+<header class="auth__top">
+  <div class="shell auth__bar">
+    <a class="mark" href="index.html"><b>Black</b><span>Portfolio</span></a>
+    <div class="top__actions top__actions--dual">
+      <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+      </button>
+      <a class="btn btn--quiet" href="login.html">Iniciar sesión</a>
+      <a class="btn btn--primary" href="registro.html">Abrir cuenta</a>
+    </div>
+  </div>
+</header>
+
+<main class="planes__main">
+  <div class="shell">
+
+    <div class="planes__head">
+      <h1>Cuatro planes, un mismo motor.</h1>
+      <p class="lede">
+        Lo que cambia entre uno y otro es cuánto puedes cargar y qué análisis se desbloquea.
+        El cálculo de riesgo, los datos de mercado y el segundo factor son los mismos en todos.
+      </p>
+
+      <div class="planes__ciclo">
+        <span class="label" id="cicloLabel">Ciclo de cobro</span>
+        <div class="seg" id="segCiclo" role="group" aria-labelledby="cicloLabel">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button type="button" aria-pressed="true"  data-ciclo="mensual">Mensual</button>
+          <button type="button" aria-pressed="false" data-ciclo="anual">Anual</button>
+        </div>
+        <span class="planes__ahorro" id="ahorroNota" hidden>Anual: ~20 % menos, cobrado una vez al año.</span>
+      </div>
+    </div>
+
+    <p class="tarifas-hint">El cuadro se desplaza en horizontal; la columna de características se queda fija.</p>
+
+    <div class="tarifas-wrap" id="cuadro" tabindex="0" role="region" aria-label="Cuadro comparativo de planes">
+      <table class="tarifas">
+        <caption class="sr-only">Comparación de características entre los planes Explorer, Investor, Advisor Pro y Wealth Desk</caption>
+        <thead>
+          <tr>
+            <th scope="col">Característica</th>
+            <th scope="col" class="plan-col">
+              <span class="tag">Gratis</span>
+              <span class="nombre">Explorer</span>
+              <span class="precio" data-mensual="$0" data-anual="$0">$0</span>
+              <span class="unidad">Sin costo, para siempre</span>
+              <span class="mxn">No pide tarjeta</span>
+            </th>
+            <th scope="col" class="plan-col">
+              <span class="tag">Individual</span>
+              <span class="nombre">Investor</span>
+              <span class="precio" data-mensual="$19" data-anual="$15">$19</span>
+              <span class="unidad">USD / mes</span>
+              <span class="mxn" data-mensual="≈ $349 MXN" data-anual="≈ $276 MXN">≈ $349 MXN</span>
+            </th>
+            <th scope="col" class="plan-col col-dest">
+              <span class="tag">Profesional</span>
+              <span class="nombre">Advisor Pro</span>
+              <span class="precio" data-mensual="$59" data-anual="$47">$59</span>
+              <span class="unidad">USD / mes</span>
+              <span class="mxn" data-mensual="≈ $1,090 MXN" data-anual="≈ $868 MXN">≈ $1,090 MXN</span>
+            </th>
+            <th scope="col" class="plan-col">
+              <span class="tag">Equipos</span>
+              <span class="nombre">Wealth Desk</span>
+              <span class="precio" data-mensual="$129" data-anual="$103">$129</span>
+              <span class="unidad">USD / mes</span>
+              <span class="mxn" data-mensual="≈ $2,390 MXN" data-anual="≈ $1,900 MXN">≈ $2,390 MXN</span>
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr class="grupo"><th scope="colgroup" colspan="5">Portafolios y datos</th></tr>
+          <tr>
+            <th scope="row">Portafolios activos</th>
+            <td>1</td><td>3</td><td class="col-dest">Ilimitados</td><td>Ilimitados</td>
+          </tr>
+          <tr>
+            <th scope="row">Posiciones por portafolio</th>
+            <td>10</td><td>50</td><td class="col-dest">Ilimitadas</td><td>Ilimitadas</td>
+          </tr>
+          <tr>
+            <th scope="row">Clases de activo: acciones, ETFs, FIBRAs, cripto, renta fija, efectivo</th>
+            <td>Básico</td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td class="col-dest"><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Datos de mercado</th>
+            <td>Diferidos 15 min</td><td>En vivo</td><td class="col-dest">En vivo</td><td>En vivo</td>
+          </tr>
+
+          <tr class="grupo"><th scope="colgroup" colspan="5">Análisis</th></tr>
+          <tr>
+            <th scope="row">Rendimiento (XIRR y TWR)</th>
+            <td>Básico</td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td class="col-dest"><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Riesgo: volatilidad, drawdown, Sharpe</th>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td>Esencial</td>
+            <td class="col-dest">Avanzado, con VaR</td>
+            <td>Avanzado, con VaR</td>
+          </tr>
+          <tr>
+            <th scope="row">Backtesting y escenarios</th>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td class="col-dest"><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Optimización y rebalanceo asistido</th>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td class="col-dest"><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Narrativa con IA anclada a noticias</th>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td class="col-dest"><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+
+          <tr class="grupo"><th scope="colgroup" colspan="5">Reportes y equipo</th></tr>
+          <tr>
+            <th scope="row">Reporte PDF para clientes</th>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td>Mensual</td>
+            <td class="col-dest">Ilimitados con tu marca</td>
+            <td>Marca blanca</td>
+          </tr>
+          <tr>
+            <th scope="row">Usuarios y roles</th>
+            <td>1</td><td>1</td><td class="col-dest">3 usuarios</td><td>Ilimitados con permisos</td>
+          </tr>
+          <tr>
+            <th scope="row">Alertas de precio</th>
+            <td>Limitadas</td><td>Básicas</td><td class="col-dest">Avanzadas</td><td>Avanzadas con webhooks</td>
+          </tr>
+
+          <tr class="grupo"><th scope="colgroup" colspan="5">Integración y soporte</th></tr>
+          <tr>
+            <th scope="row">API y webhooks</th>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td class="col-dest"><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Marca blanca completa</th>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td class="col-dest"><span class="no"><span class="sr-only">No incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Segundo factor obligatorio</th>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td class="col-dest"><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+            <td><span class="si"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg><span class="sr-only">Incluido</span></span></td>
+          </tr>
+          <tr>
+            <th scope="row">Soporte</th>
+            <td>Comunidad</td><td>Correo</td><td class="col-dest">Prioritario</td><td>Dedicado con onboarding</td>
+          </tr>
+        </tbody>
+
+        <tfoot>
+          <tr>
+            <td></td>
+            <td><a class="btn btn--quiet" href="registro.html?plan=Explorer">Empezar gratis</a></td>
+            <td><a class="btn btn--quiet" href="registro.html?plan=Investor">Elegir Investor</a></td>
+            <td class="col-dest"><a class="btn btn--primary" href="registro.html?plan=Advisor%20Pro">Elegir Advisor Pro</a></td>
+            <td><a class="btn btn--quiet" href="registro.html?plan=Wealth%20Desk">Elegir Wealth Desk</a></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="planes__notas">
+      <p>
+        Precios en dólares. La referencia en pesos es aproximada y se cobra al tipo de cambio
+        del día; el cargo lo hace Stripe en USD.
+      </p>
+      <p>
+        Todos los planes de pago incluyen 14 días de garantía y cancelación desde el portal de
+        facturación, conservando el acceso hasta el final del período ya pagado.
+      </p>
+      <p>
+        API, webhooks y marca blanca son parte de la oferta de Wealth Desk y todavía no son
+        capacidades probadas en la beta.
+      </p>
+    </div>
+
+    <section class="planes__faq" aria-labelledby="faqTitulo">
+      <h2 id="faqTitulo">Antes de elegir</h2>
+      <div class="faq-list">
+        <details>
+          <summary>¿Puedo cambiar de plan después?</summary>
+          <p>
+            Sí, en cualquier momento desde el portal de facturación. Al subir de plan se cobra
+            la diferencia prorrateada; al bajar, el cambio aplica en la siguiente renovación y
+            conservas el acceso hasta entonces.
+          </p>
+        </details>
+        <details>
+          <summary>¿Qué pasa con mis carteras si bajo a Explorer?</summary>
+          <p>
+            No se borra nada. Los límites del plan gratuito aplican a lo que puedes crear y
+            editar, no a lo que ya tienes: tus carteras siguen ahí y las puedes exportar
+            completas cuando quieras.
+          </p>
+        </details>
+        <details>
+          <summary>¿Necesito tarjeta para empezar?</summary>
+          <p>
+            No. Explorer no pide método de pago. El acceso a la beta sí requiere invitación:
+            si no tienes código, la cuenta queda creada y en lista de espera.
+          </p>
+        </details>
+        <details>
+          <summary>¿El plan me da recomendaciones de inversión?</summary>
+          <p>
+            No, en ninguno. BlackPortfolio monitorea y analiza; no es bróker, no ejecuta
+            órdenes y no da recomendaciones personalizadas. Está en el
+            <a href="terms.html#s2">Alcance del servicio §2</a>.
+          </p>
+        </details>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="legal__foot">
+  <div class="shell legal__foot-row">
+    <p class="note">
+      © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
+      financiera personalizada. <a href="login.html">Iniciar sesión</a> ·
+      <a href="privacy.html">Aviso de privacidad</a> ·
+      <a href="terms.html">Alcance del servicio</a>.
+    </p>
+    <div class="foot__theme">
+      <span class="label" id="temaLabel">Tema</span>
+      <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+        <span class="seg__thumb" aria-hidden="true"></span>
+        <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+        <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="monitoring.js"></script>
+<script src="planes-v4.js"></script>
+</body>
+</html>
