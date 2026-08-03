@@ -7693,7 +7693,11 @@ function confirmDeleteTx(txId) {
 function formatCurrency(n, currency) {
   const sym = CURRENCY_SYMBOLS[currency] || "$";
   if (!Number.isFinite(n)) return sym + "0.00";
-  return sym + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  // El signo va ANTES del símbolo: `-$17.01`, no `$-17.01`. Con la forma
+  // anterior el positivo salía `+$17.01` (quien llama antepone el `+`) y el
+  // negativo `$-17.01`, dos convenciones distintas en la misma fila.
+  const sign = n < 0 ? "-" : "";
+  return sign + sym + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function getPriceCache() {

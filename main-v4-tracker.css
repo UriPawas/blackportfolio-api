@@ -1480,3 +1480,195 @@
   }
   #section-tracker .corr-scale { gap: .5rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   16. EL ASIENTO DE APERTURA — la cifra de récord y sus dos lecturas
+
+   Dos problemas, uno de ellos grave:
+
+   a) EL SIGNO NO LLEGABA. `renderTrackerDashboard` sí pone `.return-pos` /
+      `.return-neg` en cada cifra firmada, pero §4 de este archivo escribe
+      `#section-tracker .summary-item strong { color: var(--v4-ink) }`, que con
+      (1,2,1) le gana a `.return-pos` (0,1,0). Resultado: un día de +2.56 % y
+      uno de −2.56 % se veían EXACTAMENTE IGUAL, en tinta neutra — y lo mismo
+      las seis cifras de la banda de abajo. La tabla de posiciones sí conservó
+      su color, así que la app se contradecía a sí misma en la misma pantalla.
+      Aquí se restituye el color, con los tokens de V4 y con la especificidad
+      que hace falta para ganar.
+
+      De paso, `#section-tracker .return-pos/.return-neg` normaliza TODA la
+      sección: la tabla usaba `--gain` (#16A34A) y el registro habría usado
+      `--v4-pos` (#0A6B4A), dos verdes distintos a 200 px de distancia.
+
+   b) MEDIA CELDA VACÍA. Medido a 1430 px: la caja de contenido de cada celda
+      son 312 px y la cifra ocupa 156 px en la primera y 63–71 px en las otras
+      dos; además `justify-content: space-between` en la fila de etiqueta abría
+      un hueco de 74 px entre «Valor actual» y el selector de moneda.
+      La celda pasa a ser una rejilla de dos columnas: la cifra a la izquierda,
+      sus lecturas alineadas al margen derecho y compartiendo línea de base.
+      El bloque baja de 107/91/91 px a una sola línea de datos por celda, y las
+      lecturas de las tres celdas quedan alineadas entre sí — que es la razón
+      de ser de un registro.
+
+   El porcentaje se compone como ficha tintada (mismo vocabulario que
+   `.rc-badge` de §15): es la lectura que hay que captar de un vistazo, y una
+   ficha aguanta la mirada periférica que un texto de color no aguanta. El
+   signo `+`/`−` sigue en el texto, así que la dirección no depende del color.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ------------------------------------------- 16.1 El signo, en toda la sección */
+
+#section-tracker .return-pos { color: var(--v4-pos); }
+#section-tracker .return-neg { color: var(--v4-neg); }
+
+/* (1,3,1) para ganarle a `#section-tracker .summary-item strong|em` de §4. */
+#section-tracker .summary-item strong.return-pos,
+#section-tracker .summary-item em.return-pos { color: var(--v4-pos); }
+#section-tracker .summary-item strong.return-neg,
+#section-tracker .summary-item em.return-neg { color: var(--v4-neg); }
+
+/* El destello de actualización llevaba radio de 18 px y verdes/rojos que no
+   son tokens: en un registro de esquinas rectas se veía como una pastilla
+   ajena cada vez que cambiaba el precio. */
+#section-tracker .kpi-flash-pos,
+#section-tracker .kpi-flash-neg { border-radius: 2px; }
+#section-tracker .kpi-flash-pos { animation: kpiFlashPosV4 .75s ease-out; }
+#section-tracker .kpi-flash-neg { animation: kpiFlashNegV4 .75s ease-out; }
+@keyframes kpiFlashPosV4 {
+  0%   { background-color: transparent; }
+  25%  { background-color: color-mix(in srgb, var(--v4-pos) 16%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes kpiFlashNegV4 {
+  0%   { background-color: transparent; }
+  25%  { background-color: color-mix(in srgb, var(--v4-neg) 16%, transparent); }
+  100% { background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #section-tracker .kpi-flash-pos,
+  #section-tracker .kpi-flash-neg { animation: none; }
+}
+
+/* --------------------------------------- 16.2 La celda como rejilla de dos */
+
+#section-tracker .tracker-kpi-hero {
+  display: grid;
+  /* La primera columna tiene MEDIDA, no `1fr`. Con `1fr` la lectura se pega al
+     borde derecho de la celda y a 1910 px quedaban 316 px entre la cifra y su
+     porcentaje: se llena el ancho pero se rompe el par. Tope de 18rem: a
+     partir de ahí el sobrante es margen, que es lo que un registro hace con el
+     papel que le sobra. */
+  grid-template-columns: fit-content(18rem) auto;
+  justify-content: start;
+  align-items: baseline;
+  align-content: start;
+  column-gap: .9rem;
+  row-gap: .2rem;
+}
+/* `>` obligatorio: `.kpi-tooltip` también es un <span> y vive dentro de
+   `.kpi-info-wrap` (la misma trampa anotada en main.css:4573). */
+#section-tracker .tracker-kpi-hero > span { grid-column: 1 / -1; }
+#section-tracker .tracker-kpi-hero > strong { grid-column: 1; }
+#section-tracker .tracker-kpi-hero > em {
+  grid-column: 2;
+  justify-self: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Un <em> vacío seguiría ocupando fila —y con ficha, pintaría un recuadro de
+   color sin contenido. */
+#section-tracker .tracker-kpi-hero > em:empty { display: none; }
+
+/* El hueco de 74 px: la etiqueta y el selector son una unidad, no dos extremos. */
+#section-tracker .kpi-hero-label-row {
+  justify-content: flex-start;
+  gap: .5rem;
+}
+#section-tracker .kpi-alt-currency-select {
+  padding: .1rem 1.4rem .1rem .45rem;
+  background: var(--v4-surface) var(--chev) no-repeat right .35rem center;
+  background-size: 10px;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  font: 600 var(--v4-t-mini)/1.5 var(--v4-sans);
+  letter-spacing: .04em;
+  color: var(--v4-ink-2);
+  opacity: 1;
+  appearance: none;
+}
+/* `.main-page select { min-height: 40px }` es la regla de área táctil, y con
+   ella el selector se veía como una caja vacía al lado de una etiqueta de
+   11 px. Sólo se compacta donde el puntero es preciso; en táctil conserva su
+   altura. */
+@media (hover: hover) and (pointer: fine) {
+  #section-tracker .kpi-alt-currency-select { min-height: 0; height: 1.55rem; }
+}
+#section-tracker .kpi-alt-currency-select:hover,
+#section-tracker .kpi-alt-currency-select:focus {
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+
+/* ------------------------------------------------ 16.3 La ficha de variación */
+
+#section-tracker .tracker-kpi-hero > em.return-pos,
+#section-tracker .tracker-kpi-hero > em.return-neg {
+  padding: .1rem .35rem;
+  border-radius: 2px;
+  font: 600 var(--v4-t-mini)/1.45 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+}
+#section-tracker .tracker-kpi-hero > em.return-pos {
+  background: color-mix(in srgb, var(--v4-pos) 13%, transparent);
+}
+#section-tracker .tracker-kpi-hero > em.return-neg {
+  background: color-mix(in srgb, var(--v4-neg) 13%, transparent);
+}
+/* La equivalencia en otra moneda es nota al margen, no lectura: nunca ficha. */
+#section-tracker .tracker-kpi-hero > em.kpi-alt-value,
+#section-tracker .tracker-kpi-hero > em.kpi-fx-rate {
+  padding: 0;
+  background: none;
+  font: 400 var(--v4-t-label)/1.5 var(--v4-sans);
+  color: var(--v4-ink-3);
+  opacity: 1;
+}
+
+/* --------------------------------------------------------- 16.4 Móvil */
+
+/* P0 heredado de la migración V4. A ≤720 px main.css convierte esta rejilla en
+   un carrusel: `display: flex; overflow-x: auto; scroll-snap-type: x mandatory`.
+   §4 de este archivo le puso `overflow: visible` (para que los globos de ayuda
+   no se recorten) SIN condición de ancho, y eso anula el `overflow-x: auto`:
+   el carrusel se quedó sin scroller. Resultado en un teléfono de 390 px: las
+   tres celdas se colocaban en fila hasta x=816 y «Cambio de hoy» y «Retorno
+   total» quedaban fuera de pantalla, sin ningún ancestro por el que llegar a
+   ellas. Medido a 390 px: 13 elementos desbordados.
+
+   No se restaura el carrusel: un registro se lee en vertical, y un carrusel
+   esconde dos tercios de la cabecera detrás de un gesto que nada anuncia.
+   45rem = 720px, el mismo punto de corte que usa main.css. */
+@media (max-width: 45rem) {
+  #section-tracker .tracker-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    scroll-snap-type: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  /* A una columna la alineación a la derecha separaría la lectura de su cifra. */
+  #section-tracker .tracker-kpi-hero {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  #section-tracker .tracker-kpi-hero > strong,
+  #section-tracker .tracker-kpi-hero > em {
+    grid-column: 1;
+    justify-self: start;
+    text-align: left;
+  }
+  /* La nota de tipo de cambio es la única línea larga; que envuelva antes de
+     empujar la celda. */
+  #section-tracker .tracker-kpi-hero > em.kpi-fx-rate { white-space: normal; }
+}
