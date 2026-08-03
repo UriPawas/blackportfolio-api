@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ajustes | BlackPortfolio</title>
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="app-v4.css">
+  <link rel="stylesheet" href="app-ui-v4.css">
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        root.setAttribute('data-theme', saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="app" data-section="ajustes">
+<!--
+  THESIS: Ajustes completo, no sólo datos y privacidad. Cuatro grupos con el mismo contrato de
+  pestañas que el Tracker, para que la app se sienta una sola.
+  STORY: El usuario ve su cuenta, endurece su acceso, ajusta idioma y moneda, entiende qué paga y
+  —si quiere— se lleva sus datos o borra la cuenta sabiendo qué desaparece y qué sobrevive.
+  FORM: La acción destructiva nunca comparte fila con una normal. El diálogo de borrado lleva
+  libro mayor de consecuencias, salida útil y confirmación escrita.
+-->
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="app__top">
+  <a class="mark" href="landing-v4.html"><b>Black</b><span>Portfolio</span></a>
+  <div class="app__top-actions">
+    <span class="app__plan">Plan <b>Advisor Pro</b></span>
+    <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+    </button>
+    <span class="app__avatar" aria-hidden="true">FP</span>
+  </div>
+</header>
+
+<div class="app__body">
+  <nav class="app__nav" aria-label="Secciones de la aplicación">
+    <ul>
+      <li><a href="app-home-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>Resumen</a></li>
+      <li><a href="app-tracker-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M4 19V5m0 14 5-6 4 3 5-8"/></svg>Tracker</a></li>
+      <li><a href="app-analizador-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 3"/></svg>Analizador</a></li>
+      <li><a href="app-optimizacion-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c4-14 12-14 16 0"/><circle cx="14" cy="10" r="1.6"/></svg>Optimización</a></li>
+      <li><a href="app-mercados-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Mercados</a></li>
+      <li><a href="app-topdown-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 8h18M3 16h18"/></svg>Top-down</a></li>
+      <li><a href="app-ajustes-v4.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2m0 13v2M4.2 8l1.7 1m12.2 6 1.7 1M4.2 16l1.7-1m12.2-6 1.7-1"/></svg>Ajustes</a></li>
+    </ul>
+  </nav>
+
+  <main class="app__main" id="contenido">
+    <p class="preview-note">
+      <b>Vista previa del rediseño.</b> Datos de muestra. Los identificadores de los controles son
+      los que ya usa <code>main.js</code>.
+    </p>
+
+    <div class="app__head">
+      <h1>Ajustes</h1>
+      <p>Tu cuenta, tu acceso y tus datos. Lo que hagas aquí no necesita nuestra aprobación.</p>
+    </div>
+
+    <div class="tabs">
+      <div class="tabs__strip" role="tablist" aria-label="Grupos de ajustes" id="setTabs">
+        <span class="tabs__ink" aria-hidden="true"></span>
+        <button class="tabs__btn" role="tab" id="tab-cuenta" aria-controls="panelCuenta" aria-selected="true" type="button">Cuenta</button>
+        <button class="tabs__btn" role="tab" id="tab-seguridad" aria-controls="panelSeguridad" aria-selected="false" tabindex="-1" type="button">Seguridad</button>
+        <button class="tabs__btn" role="tab" id="tab-prefs" aria-controls="panelPrefs" aria-selected="false" tabindex="-1" type="button">Preferencias</button>
+        <button class="tabs__btn" role="tab" id="tab-avisos" aria-controls="panelAvisos" aria-selected="false" tabindex="-1" type="button">Avisos</button>
+        <button class="tabs__btn" role="tab" id="tab-datos" aria-controls="panelDatos" aria-selected="false" tabindex="-1" type="button">Datos</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════ Cuenta ══════════════════════════════ -->
+    <div class="tab-panel" id="panelCuenta" role="tabpanel" aria-labelledby="tab-cuenta" tabindex="0">
+
+      <section class="ledger" aria-label="Resumen de la cuenta">
+        <div class="ledger__main">
+          <div class="ledger__record">
+            <span class="ledger__lab">Cuenta</span>
+            <strong class="ledger__fig ledger__fig--sm" id="settingsOverviewEmail">furielpacheco@gmail.com</strong>
+            <em class="ledger__alt"><span class="state-dot state-dot--ok"></span><span id="settingsOverviewEmailStatus">Correo verificado</span> · alta el 14 de mayo de 2026</em>
+          </div>
+        </div>
+        <dl class="ledger__row">
+          <div class="ledger__cell"><dt>Plan</dt><dd><b id="settingsOverviewPlan">Advisor Pro</b><em>renueva el 14 de agosto</em></dd></div>
+          <div class="ledger__cell"><dt>Acceso</dt><dd><b id="settingsOverviewType">Correo y contraseña</b><em>sin proveedor externo</em></dd></div>
+          <div class="ledger__cell"><dt>Dispositivo</dt><dd><b id="settingsOverviewDevice">Windows · Chrome</b><em>de confianza hasta el 2 ago</em></dd></div>
+          <div class="ledger__cell"><dt>Seguridad</dt><dd><b id="settingsSecurityScore" class="pos">3 de 3</b><em id="settingsSecurityBadge">Todo en orden</em></dd></div>
+        </dl>
+      </section>
+
+      <div class="panels panels--2">
+        <section class="panel" aria-labelledby="tituloPerfil">
+          <div class="panel__head">
+            <h2 id="tituloPerfil">Perfil</h2>
+            <p class="panel__meta">Cómo te vemos</p>
+          </div>
+          <div class="panel__body">
+            <div class="row">
+              <span class="row__label">
+                <b id="settingsUserDisplay">Furiel Pacheco</b>
+                <span>El nombre que aparece en tus reportes exportados.</span>
+              </span>
+              <button id="editNameBtn" class="btn btn--quiet btn--sm" type="button">Cambiar</button>
+            </div>
+            <form id="editNameForm" class="form-grid form-grid--tight" hidden>
+              <div class="field field--wide">
+                <label for="newNameInput">Nuevo nombre</label>
+                <input id="newNameInput" type="text" value="Furiel Pacheco" autocomplete="name">
+              </div>
+              <div class="form-grid__actions">
+                <button id="cancelNameBtn" class="btn btn--quiet btn--sm" type="button">Cancelar</button>
+                <button class="btn btn--primary btn--sm" type="submit">Guardar nombre</button>
+              </div>
+            </form>
+            <p id="nameChangeMessage" class="msg"></p>
+
+            <div class="row">
+              <span class="row__label">
+                <b>Avatar</b>
+                <span id="settingsAvatarHint">Iniciales o una figura de la biblioteca; nunca se sube un archivo.</span>
+              </span>
+              <span class="avatar-row">
+                <span class="app__avatar" id="settingsAvatarPreview" aria-hidden="true">FP</span>
+                <button id="editAvatarBtn" class="btn btn--quiet btn--sm" type="button">Elegir</button>
+              </span>
+            </div>
+            <div id="avatarPickerPanel" class="picker" hidden>
+              <div class="picker__grid" id="avatarPickerGrid"></div>
+              <button id="closeAvatarPickerBtn" class="btn btn--quiet btn--sm" type="button">Listo</button>
+            </div>
+
+            <div class="row">
+              <span class="row__label">
+                <b>Contraseña</b>
+                <span id="settingsUser">Se cambió por última vez hace 77 días.</span>
+              </span>
+              <button id="changePasswordBtn" class="btn btn--quiet btn--sm" type="button">Cambiar</button>
+            </div>
+            <form id="changePasswordForm" class="form-grid form-grid--tight" hidden>
+              <div class="field"><label for="currentPasswordInput">Contraseña actual</label><input id="currentPasswordInput" type="password" autocomplete="current-password"></div>
+              <div class="field"><label for="newPasswordInput">Nueva contraseña</label><input id="newPasswordInput" type="password" autocomplete="new-password"></div>
+              <div class="field"><label for="confirmPasswordInput">Confirmar</label><input id="confirmPasswordInput" type="password" autocomplete="new-password"></div>
+              <div class="form-grid__actions">
+                <button id="cancelPasswordBtn" class="btn btn--quiet btn--sm" type="button">Cancelar</button>
+                <button class="btn btn--primary btn--sm" type="submit">Actualizar contraseña</button>
+              </div>
+            </form>
+            <p id="passwordChangeMessage" class="msg"></p>
+          </div>
+        </section>
+
+        <section class="panel" id="planBillingCard" aria-labelledby="tituloPlan">
+          <div class="panel__head">
+            <h2 id="tituloPlan">Plan y facturación</h2>
+            <p class="panel__meta">Qué pagas y hasta cuándo</p>
+          </div>
+          <div class="panel__body">
+            <dl class="pairs">
+              <div><dt>Plan</dt><dd id="billingPlanName">Advisor Pro · $29 USD / mes</dd></div>
+              <div><dt>Renovación</dt><dd id="billingRenewalDate">14 de agosto de 2026</dd></div>
+              <div><dt>Estado</dt><dd id="billingStatus" class="pos">Activo</dd></div>
+              <div><dt>Método</dt><dd id="billingPaymentMethod">Visa ···· 6411</dd></div>
+            </dl>
+            <div class="row">
+              <span class="row__label">
+                <b>Lo que incluye tu plan</b>
+                <span>Carteras ilimitadas, reporte PDF, presentación, optimización y asistente IA.</span>
+              </span>
+              <a class="btn btn--quiet btn--sm" href="planes-v4.html">Ver planes</a>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Facturas</b>
+                <span>Comprobantes de los últimos 12 meses, en PDF.</span>
+              </span>
+              <button id="invoiceHistoryBtn" class="btn btn--quiet btn--sm" type="button">Ver historial</button>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Método de pago y cancelación</b>
+                <span>Se administran en el portal de Stripe. Cancelar mantiene el acceso hasta el fin del periodo pagado.</span>
+              </span>
+              <button id="upgradePlanBtn" class="btn btn--quiet btn--sm" type="button">Abrir portal</button>
+            </div>
+          </div>
+          <p class="panel__foot">El plan es autoritativo en el servidor: lo que veas aquí es lo que la app aplica.</p>
+        </section>
+      </div>
+
+      <section class="panel panel--wide" aria-labelledby="tituloPerfilInv">
+        <div class="panel__head">
+          <h2 id="tituloPerfilInv">Perfil de inversionista</h2>
+          <p class="panel__meta" id="investorProfileStatus">Definido el 20 de mayo de 2026</p>
+        </div>
+        <div class="panel__body" id="investorProfileSummary">
+          <div class="row">
+            <span class="row__label">
+              <b id="investorProfileName">Moderado-agresivo <span class="tag" id="investorProfileScore">68 / 100</span></b>
+              <span id="investorProfileDescription">Aceptas caídas temporales de hasta 25% a cambio de más retorno esperado, con un horizonte mayor a siete años.</span>
+            </span>
+            <button id="retakeInvestorProfileBtn" class="btn btn--quiet btn--sm" type="button" data-open-dlg="investorProfileModal">Volver a responder</button>
+          </div>
+          <p class="panel__meta" style="margin-top:var(--s4)">Asignación de referencia sugerida</p>
+          <div class="bars" id="investorAllocationGrid"></div>
+          <p class="note-line" id="investorProfileUpdated">Sirve de referencia para contrastar tu cartera real; la decisión de compra sigue siendo tuya.</p>
+        </div>
+        <div class="panel__body" id="investorProfileEmpty" hidden>
+          <div class="empty">
+            <b>Define una referencia para tus decisiones</b>
+            <p>Ocho preguntas sobre horizonte, tolerancia a caídas y liquidez, para poder contrastar tu cartera contra un objetivo definido por ti.</p>
+            <button id="startInvestorProfileBtn" class="btn btn--primary btn--sm" type="button">Responder</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══════════════════════════ Seguridad ═══════════════════════════ -->
+    <div class="tab-panel" id="panelSeguridad" role="tabpanel" aria-labelledby="tab-seguridad" tabindex="0" hidden>
+
+      <section class="panel panel--wide" aria-labelledby="tituloCentro">
+        <div class="panel__head">
+          <h2 id="tituloCentro">Centro de seguridad</h2>
+          <p class="panel__meta" id="settingsSecurityLevel">Nivel alto</p>
+        </div>
+        <div class="panel__body">
+          <ul class="checks">
+            <li id="securityEmailCheck" class="checks__item checks__item--ok">
+              <span class="checks__mark" aria-hidden="true"></span>
+              <b>Correo verificado</b>
+              <span>Podemos avisarte de accesos nuevos y recuperar tu cuenta.</span>
+            </li>
+            <li id="securityTwoFaCheck" class="checks__item checks__item--ok">
+              <span class="checks__mark" aria-hidden="true"></span>
+              <b>Segundo factor activo</b>
+              <span>Autenticador TOTP verificado en el servidor.</span>
+            </li>
+            <li id="securitySessionCheck" class="checks__item checks__item--ok">
+              <span class="checks__mark" aria-hidden="true"></span>
+              <b>Sin sesiones desconocidas</b>
+              <span>Dos dispositivos con acceso, ambos tuyos.</span>
+            </li>
+          </ul>
+          <p class="note-line" id="settingsSecurityScoreMain">Tres de tres. La puntuación se recalcula cada vez que entras.</p>
+        </div>
+      </section>
+
+      <div class="panels panels--2">
+        <section class="panel" id="twoFaCard" aria-labelledby="tituloFactor">
+          <div class="panel__head">
+            <h2 id="tituloFactor">Segundo factor</h2>
+            <p class="panel__meta">Obligatorio</p>
+          </div>
+          <div class="panel__body" id="twoFaActions">
+            <div class="row">
+              <span class="row__label">
+                <b class="state-line" id="twoFaStatus">Activo <span class="state-line__since">desde el 14 de mayo de 2026</span></b>
+                <span>Autenticador TOTP verificado en el servidor. El secreto no sale de ahí.</span>
+              </span>
+              <button class="btn btn--quiet btn--sm" type="button" data-open-dlg="mainTotpSetupModal">Cambiar autenticador</button>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Códigos de respaldo: <span class="codes-left">6 de 8</span> sin usar</b>
+                <span>Cada uno sirve una vez. Al generar nuevos, los anteriores se invalidan.</span>
+              </span>
+              <button class="btn btn--quiet btn--sm" type="button" data-open-dlg="mainBackupRegenModal">Generar nuevos</button>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Dispositivo de confianza</b>
+                <span>Este equipo no pedirá el código hasta el 2 de agosto de 2026.</span>
+              </span>
+              <button class="btn btn--quiet btn--sm" type="button">Olvidar este equipo</button>
+            </div>
+            <div class="danger-zone">
+              <div class="row">
+                <span class="row__label">
+                  <b>Desactivar el segundo factor</b>
+                  <span>Tu cuenta queda protegida sólo por la contraseña.</span>
+                </span>
+                <button class="btn btn--danger btn--sm" type="button" data-open-dlg="mainTotpDisableModal">Desactivar…</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="activeSessionsCard" aria-labelledby="tituloSesiones">
+          <div class="panel__head">
+            <h2 id="tituloSesiones">Sesiones activas</h2>
+            <p class="panel__meta">Dispositivos con acceso</p>
+          </div>
+          <div class="panel__body">
+            <div class="sessions" id="activeSessionsList">
+              <div class="session">
+                <span class="session__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/></svg>
+                </span>
+                <b id="sessionDeviceName">Este dispositivo</b>
+                <span class="session__state">Activa</span>
+                <span class="session__when" id="sessionBrowser">Windows · Chrome 141 · <span id="sessionLoginTime">desde hoy, 09:14</span></span>
+              </div>
+              <div class="session session--other">
+                <span class="session__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg>
+                </span>
+                <b>iPhone</b>
+                <span class="session__state">Inactiva</span>
+                <span class="session__when">iOS · Safari · hace 3 días</span>
+              </div>
+            </div>
+            <div class="danger-zone">
+              <div class="row">
+                <span class="row__label">
+                  <b>Cerrar todas las sesiones</b>
+                  <span>Incluye esta. Vuelves a entrar con contraseña y segundo factor.</span>
+                </span>
+                <button id="closeAllSessionsBtn" class="btn btn--danger btn--sm" type="button">Cerrar todas</button>
+              </div>
+            </div>
+            <p id="sessionsMessage" class="msg" aria-live="polite"></p>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel panel--wide panel--flush" aria-labelledby="tituloActividad">
+        <div class="panel__head">
+          <h2 id="tituloActividad">Registro de actividad</h2>
+          <p class="panel__meta">Últimos 30 días</p>
+        </div>
+        <div class="grid-scroll grid-scroll--sticky">
+          <table class="tbl tbl--grid" id="activityLogContent">
+            <thead>
+              <tr>
+                <th scope="col" class="th-freeze">Cuándo</th>
+                <th scope="col">Qué pasó</th>
+                <th scope="col">Dispositivo</th>
+                <th scope="col">Origen</th>
+              </tr>
+            </thead>
+            <tbody><!-- app-sections-v4.js --></tbody>
+          </table>
+        </div>
+        <p class="panel__foot">Si algo aquí no fuiste tú, cierra todas las sesiones y cambia la contraseña.</p>
+      </section>
+    </div>
+
+    <!-- ══════════════════════════ Preferencias ════════════════════════ -->
+    <div class="tab-panel" id="panelPrefs" role="tabpanel" aria-labelledby="tab-prefs" tabindex="0" hidden>
+      <div class="panels panels--2">
+
+        <section class="panel" aria-labelledby="tituloIdioma">
+          <div class="panel__head">
+            <h2 id="tituloIdioma">Idioma y región</h2>
+            <p class="panel__meta">Interfaz, reportes y formatos</p>
+          </div>
+          <div class="panel__body">
+            <div class="row">
+              <span class="row__label">
+                <b>Idioma de la aplicación</b>
+                <span>También decide el idioma del reporte PDF y de la presentación.</span>
+              </span>
+              <div class="seg seg--sm" id="langGroup" role="group" aria-label="Idioma">
+                <span class="seg__thumb" aria-hidden="true"></span>
+                <button type="button" aria-pressed="true" data-lang="es">Español</button>
+                <button type="button" aria-pressed="false" data-lang="en">English</button>
+                <button type="button" aria-pressed="false" data-lang="fr">Français</button>
+              </div>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Formato de fecha y número</b>
+                <span>Se toma de tu región. Las cifras siempre van en figuras tabulares.</span>
+              </span>
+              <select class="select" id="regionSelect" aria-label="Región">
+                <option value="es-MX" selected>México · 30/07/2026 · 1,234.56</option>
+                <option value="es-ES">España · 30/07/2026 · 1.234,56</option>
+                <option value="en-US">Estados Unidos · 07/30/2026 · 1,234.56</option>
+              </select>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Zona horaria</b>
+                <span>Marca la hora de cierre de los mercados y de tus alertas.</span>
+              </span>
+              <select class="select" id="tzSelect" aria-label="Zona horaria">
+                <option selected>América / Ciudad de México (GMT−6)</option>
+                <option>América / Nueva York (GMT−4)</option>
+                <option>Europa / Madrid (GMT+2)</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="currencyCard" aria-labelledby="tituloMoneda">
+          <div class="panel__head">
+            <h2 id="tituloMoneda">Moneda base</h2>
+            <p class="panel__meta">La unidad de cuenta de la app</p>
+          </div>
+          <div class="panel__body">
+            <div class="row">
+              <span class="row__label">
+                <b>Moneda de referencia</b>
+                <span>Todo se convierte a esta moneda para sumar carteras en divisas distintas.</span>
+              </span>
+            </div>
+            <div class="seg seg--sm seg--wrap" id="currencyBtnGroup" role="group" aria-label="Moneda base">
+              <span class="seg__thumb" aria-hidden="true"></span>
+              <button type="button" aria-pressed="true" data-cur="USD">USD</button>
+              <button type="button" aria-pressed="false" data-cur="MXN">MXN</button>
+              <button type="button" aria-pressed="false" data-cur="EUR">EUR</button>
+              <button type="button" aria-pressed="false" data-cur="GBP">GBP</button>
+              <button type="button" aria-pressed="false" data-cur="CAD">CAD</button>
+              <button type="button" aria-pressed="false" data-cur="BRL">BRL</button>
+            </div>
+            <p class="note-line" id="currencyNote">
+              Cambiar la moneda base no reescribe tus transacciones: cada una conserva la divisa en
+              que se hizo. Sólo cambia la unidad en que se presentan los totales.
+            </p>
+            <div class="row">
+              <span class="row__label">
+                <b>Tipo de cambio</b>
+                <span>Se actualiza al abrir la app y al pedir precios.</span>
+              </span>
+              <span class="tag">1 USD = 18.42 MXN · 30 jul</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="tituloApariencia">
+          <div class="panel__head">
+            <h2 id="tituloApariencia">Apariencia</h2>
+            <p class="panel__meta">Cómo se ve la app</p>
+          </div>
+          <div class="panel__body">
+            <div class="row">
+              <span class="row__label">
+                <b>Tema</b>
+                <span>«Del sistema» sigue la preferencia de tu equipo y cambia al anochecer si así lo tiene configurado.</span>
+              </span>
+              <div class="seg seg--sm" id="themeToggleButton" role="group" aria-label="Tema">
+                <span class="seg__thumb" aria-hidden="true"></span>
+                <button type="button" aria-pressed="true" data-theme-pref="light">Claro</button>
+                <button type="button" aria-pressed="false" data-theme-pref="dark">Oscuro</button>
+                <button type="button" aria-pressed="false" data-theme-pref="system">Del sistema</button>
+              </div>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Densidad de las tablas</b>
+                <span>Compacta cabe más renglones sin scroll; cómoda es más fácil de apuntar con el dedo.</span>
+              </span>
+              <div class="seg seg--sm" id="densityGroup" role="group" aria-label="Densidad">
+                <span class="seg__thumb" aria-hidden="true"></span>
+                <button type="button" aria-pressed="true" data-density="comfy">Cómoda</button>
+                <button type="button" aria-pressed="false" data-density="dense">Compacta</button>
+              </div>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Movimiento reducido</b>
+                <span>Ya está activo porque tu sistema lo pide. Las transiciones se quedan quietas.</span>
+              </span>
+              <span class="tag" id="motionTag">Según el sistema</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="tituloEscritorio">
+          <div class="panel__head">
+            <h2 id="tituloEscritorio">Escritorio</h2>
+            <p class="panel__meta">La pantalla de inicio</p>
+          </div>
+          <div class="panel__body">
+            <div class="row">
+              <span class="row__label">
+                <b>Sección de arranque</b>
+                <span>A dónde te lleva la app al entrar.</span>
+              </span>
+              <select class="select" id="startSection" aria-label="Sección de arranque">
+                <option selected>Resumen</option><option>Tracker</option><option>Mercados</option>
+              </select>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Restablecer el escritorio</b>
+                <span>Borra las tarjetas y los espacios que armaste. No toca tus carteras.</span>
+              </span>
+              <button id="resetHomeButton" class="btn btn--quiet btn--sm" type="button">Restablecer</button>
+            </div>
+            <div class="row">
+              <span class="row__label">
+                <b>Volver a ver el recorrido</b>
+                <span>La guía de la primera vez, cuando quieras.</span>
+              </span>
+              <button id="replayTourButton" class="btn btn--quiet btn--sm" type="button">Reproducir</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════ Avisos ══════════════════════════════ -->
+    <div class="tab-panel" id="panelAvisos" role="tabpanel" aria-labelledby="tab-avisos" tabindex="0" hidden>
+
+      <section class="panel panel--wide" aria-labelledby="tituloNotif">
+        <div class="panel__head">
+          <h2 id="tituloNotif">Qué te avisamos</h2>
+          <p class="panel__meta">Y por dónde</p>
+        </div>
+        <div class="panel__body panel__body--tight">
+          <div class="grid-scroll">
+            <table class="tbl tbl--grid" id="notifMatrix">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze">Aviso</th>
+                  <th scope="col" class="n">En la app</th>
+                  <th scope="col" class="n">Correo</th>
+                  <th scope="col">Nota</th>
+                </tr>
+              </thead>
+              <tbody><!-- app-sections-v4.js --></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="panel__foot">
+          Los avisos de seguridad no se pueden apagar: si alguien entra a tu cuenta, te enteras.
+        </p>
+      </section>
+
+      <section class="panel panel--wide" aria-labelledby="tituloAlertas">
+        <div class="panel__head">
+          <h2 id="tituloAlertas">Alertas de precio</h2>
+          <p class="panel__meta">Se revisan cada 15 minutos en horario de mercado</p>
+        </div>
+        <div class="panel__body">
+          <form id="alertForm" class="form-grid form-grid--tight">
+            <div class="field">
+              <label for="alertSymbol">Activo</label>
+              <input id="alertSymbol" type="text" placeholder="AAPL, BTC-USD…" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="alertKind">Condición</label>
+              <select id="alertKind" class="select">
+                <option value="above">Sube por encima de</option>
+                <option value="below">Baja por debajo de</option>
+                <option value="pct_up">Sube más de (%)</option>
+                <option value="pct_down">Cae más de (%)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="alertThreshold">Valor</label>
+              <input id="alertThreshold" type="number" step="any" min="0" placeholder="0.00">
+            </div>
+            <div class="form-grid__actions">
+              <button class="btn btn--primary btn--sm" type="submit">Crear alerta</button>
+            </div>
+          </form>
+          <p id="alertFormStatus" class="msg"></p>
+        </div>
+        <div class="grid-scroll" id="alertsList"></div>
+        <div class="empty" id="alertsEmpty" hidden>
+          <b>Sin alertas</b>
+          <p>Crea una para que te avisemos cuando un precio cruce el umbral que te importa.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══════════════════════════ Datos ═══════════════════════════════ -->
+    <div class="tab-panel" id="panelDatos" role="tabpanel" aria-labelledby="tab-datos" tabindex="0" hidden>
+      <div class="panels panels--2">
+
+        <section class="panel" id="dataPrivacyCard" aria-labelledby="tituloDatos">
+          <div class="panel__head">
+            <h2 id="tituloDatos">Tus datos</h2>
+            <p class="panel__meta">Portabilidad y borrado</p>
+          </div>
+          <div class="panel__body">
+            <div class="row">
+              <span class="row__label">
+                <b>Exportar mis datos</b>
+                <span>Perfil, carteras, transacciones, actividad y comentarios, en un archivo JSON.</span>
+              </span>
+              <button id="exportAccountDataBtn" class="btn btn--quiet btn--sm" type="button">Descargar JSON</button>
+            </div>
+
+            <div class="row">
+              <span class="row__label">
+                <b>Qué se envía a la IA</b>
+                <span>Claves, pesos y métricas de la cartera. Nunca tu nombre, tu correo ni tu identificador.</span>
+              </span>
+              <a class="btn btn--quiet btn--sm" href="privacidad-v4.html#s6">Ver el detalle</a>
+            </div>
+
+            <div class="row">
+              <span class="row__label">
+                <b>Avisos de producto</b>
+                <span>Finalidad secundaria: puedes retirarla sin perder ninguna función.</span>
+              </span>
+              <div class="seg seg--sm" id="segAvisos" role="group" aria-label="Avisos de producto">
+                <span class="seg__thumb" aria-hidden="true"></span>
+                <button type="button" aria-pressed="true" data-avisos="on">Sí</button>
+                <button type="button" aria-pressed="false" data-avisos="off">No</button>
+              </div>
+            </div>
+
+            <div class="danger-zone">
+              <div class="row">
+                <span class="row__label">
+                  <b>Eliminar mi cuenta</b>
+                  <span>Permanente. Borra el perfil, las carteras, la actividad y el acceso.</span>
+                </span>
+                <button id="deleteAccountBtn" class="btn btn--danger btn--sm" type="button" data-open-dlg="deleteDialog">Eliminar…</button>
+              </div>
+            </div>
+
+            <p id="dataPrivacyMessage" class="msg" aria-live="polite"></p>
+          </div>
+          <p class="panel__foot">
+            El borrado no alcanza los respaldos cifrados, que rotan en unos 30 días, ni los
+            registros fiscales. <a href="privacidad-v4.html#s9">Aviso de privacidad §9</a>.
+          </p>
+        </section>
+
+        <section class="panel" aria-labelledby="tituloFuentes">
+          <div class="panel__head">
+            <h2 id="tituloFuentes">Fuentes y conexiones</h2>
+            <p class="panel__meta">De dónde salen los precios</p>
+          </div>
+          <div class="panel__body">
+            <div class="row">
+              <span class="row__label"><b>Yahoo Finance</b><span>Acciones, ETFs, índices y tipos de cambio.</span></span>
+              <span class="tag tag--ok">Conectado</span>
+            </div>
+            <div class="row">
+              <span class="row__label"><b>CoinGecko</b><span>Criptoactivos y el índice de miedo y codicia.</span></span>
+              <span class="tag tag--ok">Conectado</span>
+            </div>
+            <div class="row">
+              <span class="row__label"><b>FRED</b><span>Indicadores macro para la sección Top-down.</span></span>
+              <span class="tag tag--ok">Conectado</span>
+            </div>
+            <div class="row">
+              <span class="row__label"><b>Importar desde tu casa de bolsa</b><span>CSV de GBM, IBKR, Binance, eToro y otros.</span></span>
+              <a class="btn btn--quiet btn--sm" href="app-tracker-v4.html">Importar CSV</a>
+            </div>
+          </div>
+          <p class="panel__foot">Precios con retraso de hasta 15 minutos según el mercado, y sin conexión directa con tu casa de bolsa.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Diálogo: eliminar la cuenta ───────────────────────────────────── -->
+<div class="dlg" id="deleteDialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitulo" hidden>
+  <div class="dlg__card">
+    <h2 id="dlgTitulo">Eliminar la cuenta</h2>
+    <p>Esto no se puede deshacer y no hay periodo de gracia. Antes de continuar, esto es exactamente lo que pasa:</p>
+
+    <div class="dlg__ledger">
+      <div><span class="mark-x">Se borra</span><span>Tu perfil, tus carteras, transacciones, metas, alertas y comentarios.</span></div>
+      <div><span class="mark-x">Se borra</span><span>Tu identidad de acceso, el segundo factor y los códigos de respaldo.</span></div>
+      <div><span class="mark-x">Se borra</span><span>Los enlaces públicos que hayas creado dejan de funcionar de inmediato.</span></div>
+      <div><span class="mark-keep">Sobrevive</span><span>Los respaldos cifrados, hasta que roten: unos 30 días.</span></div>
+      <div><span class="mark-keep">Sobrevive</span><span>Los registros de facturación, por obligación fiscal.</span></div>
+    </div>
+
+    <p style="margin-top:var(--s5)">
+      Si sólo quieres una copia, <button type="button" class="btn-text" id="dlgExportFirst">exporta tus datos primero</button>.
+    </p>
+
+    <div class="dlg__confirm">
+      <label for="dlgConfirmInput">Escribe ELIMINAR para confirmar</label>
+      <input id="dlgConfirmInput" type="text" autocomplete="off" spellcheck="false" placeholder="ELIMINAR">
+    </div>
+
+    <div class="dlg__actions">
+      <button class="btn btn--quiet" type="button" id="dlgCancel" data-close-dlg>Conservar mi cuenta</button>
+      <button class="btn btn--danger-solid" type="button" id="dlgConfirmBtn" disabled>Eliminar definitivamente</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Diálogo: alta del segundo factor ──────────────────────────────── -->
+<div class="dlg" id="mainTotpSetupModal" role="dialog" aria-modal="true" aria-labelledby="totpTitle" hidden>
+  <div class="dlg__card dlg__card--plain">
+    <div class="dlg__head">
+      <h2 id="totpTitle">Nuevo autenticador</h2>
+      <button class="icon-btn icon-btn--xs" type="button" aria-label="Cerrar" data-close-dlg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="mainTotpContent">
+      <p>Escanea el código con tu aplicación de autenticación y escribe los seis dígitos que aparezcan.</p>
+      <div class="totp">
+        <div class="totp__qr" id="mainTotpQrImg" aria-label="Código QR de configuración"></div>
+        <div>
+          <p class="panel__meta">Si no puedes escanear</p>
+          <code class="totp__key" id="mainTotpManualKey">JBSW Y3DP EHPK 3PXP</code>
+          <p class="note-line">El secreto se genera y se guarda en el servidor. Nunca llega al navegador en claro.</p>
+        </div>
+      </div>
+      <div class="otp" id="mainTotpOtpGrid">
+        <label class="sr" for="otp1">Código de seis dígitos</label>
+        <input id="otp1" inputmode="numeric" maxlength="1" autocomplete="one-time-code">
+        <input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">
+        <input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">
+      </div>
+      <p id="mainTotpMsg" class="msg"></p>
+      <div class="dlg__actions">
+        <button class="btn btn--quiet" type="button" id="mainTotpCancelBtn" data-close-dlg>Cancelar</button>
+        <button class="btn btn--primary" type="button" id="mainTotpVerifyBtn">Verificar y activar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Diálogo: nuevos códigos de respaldo ───────────────────────────── -->
+<div class="dlg" id="mainBackupRegenModal" role="dialog" aria-modal="true" aria-labelledby="regenTitle" hidden>
+  <div class="dlg__card dlg__card--plain">
+    <div class="dlg__head">
+      <h2 id="regenTitle">Nuevos códigos de respaldo</h2>
+      <button class="icon-btn icon-btn--xs" type="button" aria-label="Cerrar" data-close-dlg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <p>Al generarlos, los ocho anteriores dejan de servir de inmediato. Confirma con tu autenticador.</p>
+    <form id="mainBackupRegenForm">
+      <div class="otp" id="mainBackupRegenOtpGrid">
+        <label class="sr" for="regen1">Código de seis dígitos</label>
+        <input id="regen1" inputmode="numeric" maxlength="1" autocomplete="one-time-code">
+        <input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">
+        <input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">
+      </div>
+      <p id="mainBackupRegenMsg" class="msg"></p>
+      <div class="dlg__actions">
+        <button class="btn btn--quiet" type="button" id="mainBackupRegenCancel" data-close-dlg>Cancelar</button>
+        <button class="btn btn--primary" type="submit" id="mainBackupRegenConfirm">Generar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Diálogo: desactivar el segundo factor ─────────────────────────── -->
+<div class="dlg" id="mainTotpDisableModal" role="dialog" aria-modal="true" aria-labelledby="disableTitle" hidden>
+  <div class="dlg__card">
+    <h2 id="disableTitle">Desactivar el segundo factor</h2>
+    <p>Tu cuenta quedará protegida sólo por la contraseña. Es la vía más común de robo de cuenta.</p>
+    <div class="dlg__ledger">
+      <div><span class="mark-x">Se pierde</span><span>La verificación en dos pasos al entrar.</span></div>
+      <div><span class="mark-x">Se pierde</span><span>Los ocho códigos de respaldo, aunque no los hayas usado.</span></div>
+      <div><span class="mark-keep">Sobrevive</span><span>Tus carteras, transacciones y reportes. Esto sólo toca el acceso.</span></div>
+    </div>
+    <div class="otp" id="mainDisableOtpGrid">
+      <label class="sr" for="dis1">Código de seis dígitos</label>
+      <input id="dis1" inputmode="numeric" maxlength="1" autocomplete="one-time-code">
+      <input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">
+      <input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1">
+    </div>
+    <p id="mainDisableMsg" class="msg"></p>
+    <div class="dlg__actions">
+      <button class="btn btn--quiet" type="button" id="mainDisableCancelBtn" data-close-dlg>Conservarlo activo</button>
+      <button class="btn btn--danger-solid" type="button" id="mainDisableConfirmBtn">Desactivar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Diálogo: perfil de inversionista ──────────────────────────────── -->
+<div class="dlg" id="investorProfileModal" role="dialog" aria-modal="true" aria-labelledby="investorProfileModalTitle" hidden>
+  <div class="dlg__card dlg__card--plain">
+    <div class="dlg__head">
+      <h2 id="investorProfileModalTitle">Si tu cartera cayera 25% en tres meses, ¿qué harías?</h2>
+      <button id="closeInvestorProfileBtn" class="icon-btn icon-btn--xs" type="button" aria-label="Cerrar" data-close-dlg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="progress">
+      <span class="progress__lab" id="investorProfileProgressLabel">Pregunta 3 de 8</span>
+      <span class="progress__track"><span class="progress__fill" id="investorProfileProgressBar" style="--w:37.5%"></span></span>
+    </div>
+    <p id="investorProfileQuestionHelp">No hay respuesta correcta. Contesta lo que harías de verdad, no lo que suena disciplinado.</p>
+    <div id="investorProfileQuestionStage">
+      <ul class="options" id="investorProfileOptions">
+        <li><button type="button"><b>Vendería todo</b><span>Prefiero cortar la pérdida y volver cuando se calme.</span></button></li>
+        <li><button type="button"><b>Vendería una parte</b><span>Reduciría el riesgo sin salirme del mercado.</span></button></li>
+        <li><button type="button" aria-pressed="true"><b>No haría nada</b><span>El plan contempla caídas de ese tamaño.</span></button></li>
+        <li><button type="button"><b>Compraría más</b><span>Una caída así es una oportunidad de entrada.</span></button></li>
+      </ul>
+    </div>
+    <div id="investorProfileResultStage" hidden></div>
+    <div class="dlg__actions">
+      <button class="btn btn--quiet" type="button" id="investorProfileBackBtn">Atrás</button>
+      <button class="btn btn--quiet" type="button" id="investorProfileLaterBtn" data-close-dlg>Seguir después</button>
+      <button class="btn btn--primary" type="button" id="investorProfileNextBtn">Siguiente</button>
+    </div>
+  </div>
+</div>
+
+<script src="app-ui-v4.js"></script>
+<script src="app-sections-v4.js"></script>
+</body>
+</html>

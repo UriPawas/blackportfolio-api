@@ -1,0 +1,837 @@
+/* ==========================================================================
+   BlackPortfolio — #section-settings (Ajustes) en V4.
+
+   Requiere `main-v4-shell.css` cargado antes (reusa sus tokens `--v4-*`).
+
+   ── Por qué este archivo NO lleva bloque de refuerzo `body.light-mode` ──
+   Los dos archivos anteriores (`main-v4-shell.css`, `main-v4-home.css`)
+   tuvieron que duplicar cada regla bajo `body.light-mode` porque sus
+   selectores eran de una sola clase (0,1,0) y perdían contra los de
+   main.css (`body.light-mode .x` = 0,2,1).
+
+   Aquí todo cuelga de `#section-settings`, que es (1,1,0): un ID gana
+   contra cualquier cantidad de clases. Como los tokens `--v4-*` ya
+   cambian solos de valor por tema, UNA regla cubre claro y oscuro.
+   Sólo hace falta `!important` donde main.css ya lo usa
+   (`.settings-danger-btn`).
+
+   ── Alcance ──
+   SOLO REESTILIZA. Los modales viven FUERA de la sección (son hermanos
+   de `</section>`), así que se atacan por su ID propio al final.
+
+   ── Trampa crítica: NO tocar el orden ni el número de tarjetas ──
+   main.css:11089-11099 filtra las pestañas con
+   `.settings-grid.settings-view-X > .dashboard-card:nth-of-type(N)`.
+   Agregar, quitar o reordenar un `.dashboard-card` dentro de
+   `.settings-grid` rompe silenciosamente qué tarjeta ve cada pestaña.
+   Este archivo no añade ni mueve ninguna.
+   ========================================================================== */
+
+/* ------------------------------------- 0. `.hidden` que no ocultaba nada */
+
+/* BUG PREEXISTENTE, no cosmético. main.css no tiene regla global de `.hidden`
+   (lo advierte DESIGN.md §8): oculta por una lista de IDs en main.css:~2829.
+   Estos cinco paneles nunca se agregaron a esa lista, y main.js sólo hace
+   `classList.toggle("hidden")` — así que se renderizaban SIEMPRE:
+
+     #credentialsPanel     usuario y contraseña enmascarada, siempre abiertos
+     #changePasswordForm   los tres campos de contraseña, siempre expuestos
+     #editNameForm         el formulario de nombre, siempre abierto
+     #avatarPickerPanel    la rejilla de avatares, siempre abierta
+     #investorProfileSummary  se pintaba a la vez que su estado vacío
+
+   Además era la causa raíz del desborde móvil: los campos de contraseña
+   forzaban un min-content de 457 px dentro de una columna de 341 px, y
+   `overflow-x: hidden` (main.css:14520) recortaba el resto en silencio.
+
+   Se arregla escopado a la sección, no global, para no alterar el
+   comportamiento de `.hidden` en superficies todavía sin migrar. Sin
+   `!important`: así un `style="display:…"` puesto por JS sigue mandando. */
+#section-settings .hidden {
+  display: none;
+}
+
+/* ------------------------------------------------- 1. Lámina de portada */
+
+/* El resplandor radial de marca está prohibido por contrato (DESIGN.md §1).
+   Es un pseudo-elemento decorativo, no lo lee ningún JS: se apaga. */
+#section-settings .settings-overview-card::before,
+#section-settings .settings-security-center::before {
+  display: none;
+}
+
+/* La portada deja de ser dos columnas (copia | muro de 4 tarjetas) y pasa a
+   ser EL REGISTRO de app-ui-v4.css: cabecera hundida + un renglón de celdas
+   separadas por reglas de 1px. Sustituye el anti-patrón de "métrica gigante
+   en tarjeta" que craft-floor y DESIGN.md §1 rechazan. */
+#section-settings .settings-overview-card {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+
+#section-settings .settings-overview-copy {
+  padding: 1.1rem 1.25rem;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+}
+
+#section-settings .settings-overview-copy h2 {
+  margin: 0 0 .4rem;
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem);
+  letter-spacing: -.015em;
+  color: var(--v4-ink);
+}
+
+#section-settings .settings-overview-copy p {
+  margin: 0;
+  max-width: 60ch;
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-small);
+  line-height: 1.6;
+  color: var(--v4-ink-2);
+}
+
+/* El renglón de anotaciones: reglas, no cajas. */
+#section-settings .settings-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0;
+}
+
+#section-settings .settings-overview-metric,
+#section-settings .settings-overview-metric--accent {
+  min-width: 0;
+  padding: .8rem 1.25rem;
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+}
+#section-settings .settings-overview-grid > .settings-overview-metric:first-child {
+  border-inline-start: 0;
+}
+
+#section-settings .settings-overview-metric span {
+  margin-bottom: .35rem;
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-settings .settings-overview-metric strong {
+  font: 600 1.0625rem/1.2 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink);
+}
+#section-settings .settings-overview-metric small {
+  margin-top: .2rem;
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-3);
+}
+
+/* El rótulo de dato conserva la clase (main.js:18356 la genera), pero deja de
+   ser una píldora de marca: es una etiqueta de registro como las demás.
+   Los dos usos como ANTETÍTULO sobre un encabezado se borraron del HTML —
+   DESIGN.md §1 los prohíbe y el encabezado se sostiene solo. */
+#section-settings .settings-kicker,
+.investor-profile-modal .settings-kicker,
+.investor-result-stage .settings-kicker {
+  display: block;
+  width: auto;
+  margin-bottom: .3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------------ 2. Pestañas     */
+
+/* Mismo idioma de pestaña que el hub de Resumen: tira con regla inferior y
+   marca de 2px, no píldoras dentro de una cápsula. La consistencia entre
+   pantallas es virtud en modo Operate. */
+/* La tira desbordaba a 390 px (541 px de ancho real con el estilo anterior,
+   recortados en silencio por el `overflow-x: hidden` de main.css:14520 — la
+   cuarta pestaña quedaba fuera de alcance). Se resuelve como `.tabs__strip`
+   de app-ui-v4.css: la tira scrollea, la pestaña no se encoge.
+   `min-width: 0` va aquí por la trampa recurrente de DESIGN.md §6: un hijo
+   de rejilla no baja de su contenido y sin esto el `overflow-x` no dispara. */
+#section-settings .settings-tabs {
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--v4-rule);
+  border-radius: 0;
+  background: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+#section-settings .settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+#section-settings .settings-tab {
+  flex: none;
+  min-height: 40px;
+  padding: .55rem .8rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  font: 500 var(--v4-t-small)/1.2 var(--v4-sans);
+  color: var(--v4-ink-3);
+  white-space: nowrap;
+  transition: color .16s ease, border-color .16s ease;
+}
+#section-settings .settings-tab:hover {
+  background: none;
+  color: var(--v4-ink-2);
+}
+#section-settings .settings-tab.active {
+  background: none;
+  box-shadow: none;
+  border-bottom-color: var(--v4-cobalt-line);
+  color: var(--v4-ink);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------- 3. Tarjetas y cabeceras */
+
+/* `.dashboard-card` es global y lo usan secciones aún NO migradas
+   (markowitz, top-down, tracker). Por eso todo va escopado a la sección. */
+#section-settings .dashboard-card {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-settings .settings-grid .dashboard-card:hover {
+  border-color: var(--v4-rule-strong);
+  box-shadow: var(--v4-shadow-lift);
+}
+
+#section-settings .card-header {
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-settings .card-header h3 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  font-size: 1.0625rem;
+  letter-spacing: -.01em;
+  color: var(--v4-ink);
+}
+#section-settings .card-header span {
+  font: 500 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------ 4. Centro de seguridad */
+
+#section-settings .settings-security-center {
+  border-color: var(--v4-rule);
+}
+
+#section-settings .security-score-row strong {
+  font-family: var(--v4-sans);
+  font-weight: 500;
+  font-size: clamp(1.9rem, 1.4rem + 1.6vw, 2.6rem);
+  letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink);
+}
+
+#section-settings .security-level-pill {
+  padding: .2rem .45rem;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: none;
+  font: 600 var(--v4-t-label)/1 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* Las verificaciones dejan de ser tres cajas redondeadas: son renglones
+   separados por regla, como el registro. */
+#section-settings .security-checklist {
+  gap: 0;
+}
+#section-settings .security-check-item {
+  padding: .7rem 0;
+  border: 0;
+  border-top: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+  background: none;
+}
+#section-settings .security-checklist > .security-check-item:first-child {
+  border-top: 0;
+}
+#section-settings .security-check-item strong {
+  font: 600 var(--v4-t-small)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-settings .security-check-item small {
+  color: var(--v4-ink-3);
+}
+
+/* El punto conserva su color semántico (es dato: cumple / no cumple) pero
+   pierde el halo de 5px — eso era decoración. El estado no lo carga sólo el
+   color: cada renglón lleva su rótulo escrito al lado. */
+#section-settings .security-check-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: .4rem;
+  background: var(--v4-ink-3);
+  box-shadow: none;
+}
+#section-settings .security-check-item.is-ok .security-check-dot {
+  background: var(--v4-pos);
+  box-shadow: none;
+}
+
+/* ------------------------------------------------- 5. Datos y formularios */
+
+#section-settings .summary-grid {
+  gap: 0;
+}
+#section-settings .summary-item {
+  padding: .7rem 0;
+  border: 0;
+  border-top: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+  background: none;
+}
+#section-settings .summary-item span:not(.settings-verified-badge) {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-settings .summary-item strong {
+  font: 600 1.0625rem/1.2 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink);
+}
+
+#section-settings .settings-name-row {
+  border-top-color: var(--v4-rule-soft);
+}
+#section-settings .settings-name-label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-settings .settings-name-display strong,
+#section-settings .settings-avatar-display strong {
+  font: 600 1.0625rem/1.2 var(--v4-sans);
+  color: var(--v4-ink);
+}
+
+#section-settings .settings-avatar-row {
+  border-top: 1px solid var(--v4-rule-soft);
+  padding-top: .9rem;
+}
+#section-settings .user-avatar {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+  border: 1px solid var(--v4-rule);
+}
+#section-settings .avatar-picker-panel {
+  padding: .8rem;
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+#section-settings .avatar-picker-option {
+  border-radius: 2px;
+}
+#section-settings .avatar-picker-option:hover {
+  transform: none;
+  border-color: var(--v4-rule-strong);
+}
+#section-settings .avatar-picker-option.is-selected {
+  border-color: var(--v4-cobalt-line);
+}
+
+#section-settings .credentials-panel {
+  margin-top: .8rem;
+  padding-top: .8rem;
+  border-top: 1px solid var(--v4-rule-soft);
+}
+
+#section-settings .form-row label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-settings input[type="text"],
+#section-settings input[type="password"],
+#section-settings input[type="number"],
+#section-settings select {
+  min-height: 40px;
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+}
+#section-settings input:focus-visible,
+#section-settings select:focus-visible {
+  outline: 2px solid var(--v4-cobalt-line);
+  outline-offset: 2px;
+  border-color: var(--v4-cobalt-line);
+}
+#section-settings .form-message {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+}
+#section-settings .settings-note,
+#section-settings .settings-lang-note,
+#section-settings .settings-status-copy {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  line-height: 1.55;
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------------- 6. Botones     */
+
+#section-settings .button {
+  min-height: 40px;
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  font-weight: 500;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+#section-settings .button:hover {
+  transform: none;
+  box-shadow: none;
+}
+#section-settings .button.primary {
+  background: var(--v4-cobalt);
+  border: 1px solid var(--v4-cobalt);
+  color: #fff;
+}
+#section-settings .button.primary:hover {
+  background: var(--v4-cobalt-line);
+  border-color: var(--v4-cobalt-line);
+}
+#section-settings .button.secondary {
+  background: transparent;
+  border: 1px solid var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+#section-settings .button.secondary:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-ink-2);
+}
+#section-settings .button.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--v4-ink-2);
+}
+#section-settings .button.ghost:hover {
+  background: var(--v4-sunken);
+  color: var(--v4-ink);
+}
+
+/* main.css usa !important en esta regla, así que hay que igualarlo. */
+#section-settings .settings-danger-btn {
+  color: var(--v4-neg) !important;
+  border-color: color-mix(in srgb, var(--v4-neg) 35%, transparent) !important;
+}
+#section-settings .settings-danger-btn:hover {
+  background: color-mix(in srgb, var(--v4-neg) 8%, transparent);
+  border-color: var(--v4-neg) !important;
+}
+
+/* Idioma y moneda: un grupo segmentado, no cuatro botones sueltos. */
+#section-settings .button.lang-btn {
+  background: transparent;
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink-2);
+}
+#section-settings .button.lang-btn:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+#section-settings .button.lang-btn.active,
+#section-settings .button.lang-btn[data-currency].active {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+  font-weight: 600;
+}
+
+#section-settings .theme-toggle {
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink-2);
+}
+
+/* -------------------------------------------- 7. Insignias y sesiones   */
+
+#section-settings .settings-verified-badge {
+  padding: .15rem .4rem;
+  border-radius: 2px;
+  font: 600 var(--v4-t-label)/1.4 var(--v4-sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+#section-settings .settings-verified-badge--ok {
+  background: color-mix(in srgb, var(--v4-pos) 12%, transparent);
+  color: var(--v4-pos);
+  border: 1px solid color-mix(in srgb, var(--v4-pos) 40%, transparent);
+}
+#section-settings .settings-verified-badge--warn {
+  background: var(--v4-sunken);
+  color: var(--v4-ink-2);
+  border: 1px solid var(--v4-rule-strong);
+}
+#section-settings .settings-resend-verify {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-cobalt-ink);
+  font-family: var(--v4-sans);
+}
+#section-settings .settings-resend-verify:hover {
+  background: var(--v4-cobalt-tint);
+}
+
+#section-settings .session-item {
+  padding: .75rem 0;
+  border: 0;
+  border-top: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+  background: none;
+}
+#section-settings .active-sessions-list > .session-item:first-child {
+  border-top: 0;
+}
+#section-settings .session-item--current {
+  background: none;
+  border-color: var(--v4-rule-soft);
+}
+#section-settings .session-item-icon {
+  color: var(--v4-ink-3);
+}
+#section-settings .session-item-info strong {
+  font: 600 var(--v4-t-small)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-settings .session-item-info span {
+  color: var(--v4-ink-3);
+}
+#section-settings .session-active-dot {
+  font: 600 var(--v4-t-label)/1 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-pos);
+}
+
+/* ---------------------------------------------- 8. Registro de actividad */
+
+#section-settings .activity-log-table {
+  font-family: var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+}
+#section-settings .activity-log-table th {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-settings .activity-log-table td {
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-settings .activity-status-ok {
+  color: var(--v4-pos);
+}
+#section-settings .activity-log-empty {
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------ 9. Perfil inversionista */
+
+#section-settings .investor-profile-status,
+#section-settings .investor-score-pill {
+  padding: .2rem .45rem;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: none;
+  font: 600 var(--v4-t-label)/1 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-settings .investor-profile-empty {
+  padding: 1.1rem;
+  border: 1px dashed var(--v4-rule-strong);
+  border-radius: 2px;
+  background: none;
+}
+#section-settings .investor-profile-empty h4 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  color: var(--v4-ink);
+}
+#section-settings .investor-profile-empty p,
+#section-settings .investor-profile-description {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-small);
+  line-height: 1.6;
+  color: var(--v4-ink-2);
+}
+#section-settings .investor-allocation-item {
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+#section-settings .investor-profile-meta {
+  border-top: 1px solid var(--v4-rule-soft);
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+#section-settings .investor-profile-disclaimer {
+  font-size: var(--v4-t-mini);
+  line-height: 1.55;
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------- 10. Alertas de precio */
+
+#section-settings .alert-field > label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-settings .alert-field input,
+#section-settings .alert-field select {
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  color: var(--v4-ink);
+}
+#section-settings .alert-item {
+  padding: .75rem 0;
+  border: 0;
+  border-top: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+  background: none;
+}
+#section-settings .alerts-list > .alert-item:first-child {
+  border-top: 0;
+}
+#section-settings .alert-item-label {
+  font: 600 var(--v4-t-small)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-settings .alert-item-status {
+  color: var(--v4-ink-3);
+}
+#section-settings .alert-del-btn {
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-settings .alert-del-btn:hover {
+  color: var(--v4-neg);
+  background: color-mix(in srgb, var(--v4-neg) 10%, transparent);
+}
+#section-settings .perf-chart-status {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-3);
+}
+
+/* ================================================ 11. Modales de Ajustes ==
+   Viven FUERA de `#section-settings` (son hermanos de `</section>`), así que
+   no heredan el escopado de arriba y hay que nombrarlos por ID. Ese ID les
+   da la misma especificidad (1,1,0) que gana contra `body.light-mode`. */
+
+#mainTotpSetupModal .totp-setup-card,
+#mainBackupRegenModal .totp-setup-card,
+#mainTotpDisableModal .totp-setup-card,
+#investorProfileModal .investor-profile-modal {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+
+#mainTotpSetupModal .totp-setup-card h2,
+#mainBackupRegenModal .totp-setup-card h2,
+#mainTotpDisableModal .totp-setup-card h2,
+#investorProfileModal .investor-question-stage h2 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  letter-spacing: -.01em;
+  color: var(--v4-ink);
+}
+
+#mainTotpSetupModal .totp-sub,
+#mainBackupRegenModal .totp-sub,
+#mainTotpDisableModal .totp-sub,
+#investorProfileModal .investor-question-stage p {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-small);
+  line-height: 1.6;
+  color: var(--v4-ink-2);
+}
+
+#mainTotpSetupModal .otp-box,
+#mainBackupRegenModal .otp-box,
+#mainTotpDisableModal .otp-box {
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+}
+#mainTotpSetupModal .otp-box:focus,
+#mainBackupRegenModal .otp-box:focus,
+#mainTotpDisableModal .otp-box:focus {
+  outline: 2px solid var(--v4-cobalt-line);
+  outline-offset: 2px;
+  border-color: var(--v4-cobalt-line);
+}
+
+/* La clave manual y los códigos de respaldo SÍ son monoespaciados por razón
+   real: son cadenas que el usuario transcribe carácter por carácter. */
+#mainTotpSetupModal .totp-manual-key,
+#mainTotpSetupModal .backup-codes-grid,
+#mainBackupRegenModal .backup-codes-grid {
+  border-radius: 2px;
+  background: var(--v4-sunken);
+  color: var(--v4-ink);
+}
+#mainTotpSetupModal .totp-manual-key-label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+#mainTotpSetupModal .totp-steps li {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-small);
+  color: var(--v4-ink-2);
+}
+#mainTotpSetupModal .step-num {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+  border-radius: 2px;
+}
+#mainTotpSetupModal .totp-qr-wrap {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: #fff;
+}
+
+#mainTotpSetupModal .button,
+#mainBackupRegenModal .button,
+#mainTotpDisableModal .button,
+#investorProfileModal .button {
+  min-height: 40px;
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  font-weight: 500;
+}
+#mainTotpSetupModal .button.primary,
+#mainBackupRegenModal .button.primary,
+#investorProfileModal .button.primary {
+  background: var(--v4-cobalt);
+  border: 1px solid var(--v4-cobalt);
+  color: #fff;
+}
+#mainTotpSetupModal .button.secondary,
+#mainBackupRegenModal .button.secondary {
+  background: transparent;
+  border: 1px solid var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+#mainTotpSetupModal .button.ghost,
+#mainBackupRegenModal .button.ghost,
+#mainTotpDisableModal .button.ghost,
+#investorProfileModal .button.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--v4-ink-2);
+}
+
+/* main.html pone el color de peligro con style="" inline en este botón. */
+#mainTotpDisableModal #mainDisableConfirmBtn {
+  color: var(--v4-neg) !important;
+  border-color: color-mix(in srgb, var(--v4-neg) 40%, transparent) !important;
+}
+
+#investorProfileModal .investor-profile-overlay,
+#investorProfileModal.investor-profile-overlay {
+  background: color-mix(in srgb, var(--v4-ink) 55%, transparent);
+}
+#investorProfileModal .investor-progress-track {
+  background: var(--v4-rule-soft);
+  border-radius: 0;
+}
+#investorProfileModal .investor-progress-track > span {
+  background: var(--v4-cobalt-line);
+}
+#investorProfileModal .investor-progress-label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#investorProfileModal .investor-option {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: var(--v4-surface);
+}
+#investorProfileModal .investor-option:hover {
+  border-color: var(--v4-rule-strong);
+  background: var(--v4-sunken);
+}
+#investorProfileModal .investor-option.is-selected {
+  border-color: var(--v4-cobalt-line);
+  background: var(--v4-cobalt-tint);
+}
+#investorProfileModal .investor-option-marker {
+  border-color: var(--v4-rule-strong);
+}
+#investorProfileModal .investor-modal-close {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: none;
+  color: var(--v4-ink-3);
+}
+#investorProfileModal .investor-modal-close:hover {
+  background: var(--v4-sunken);
+  color: var(--v4-ink);
+}
+#investorProfileModal .investor-modal-footer,
+#investorProfileModal .investor-modal-topbar {
+  border-color: var(--v4-rule-soft);
+}

@@ -1,0 +1,655 @@
+/* ==========================================================================
+   BlackPortfolio — #section-home ("Resumen" / Centro de inversión) en V4.
+
+   Reestiliza el escritorio de widgets de arrastre libre: cascarón del hub
+   (barra de espacios, menú de agregar tarjeta, lienzo), el marco común de
+   cada tarjeta (`.hub-widget`) y el contenido propio de cada tipo
+   (`.hw-*`). SOLO REESTILIZA — ningún selector de main.js se renombra ni se
+   mueve; sólo hay lectura de clases ya existentes.
+
+   Requiere `main-v4-shell.css` cargado antes (reusa sus tokens `--v4-*`,
+   no los redeclara).
+
+   Dos particularidades de este archivo frente a `main-v4-shell.css`:
+
+   1. INLINE STYLES. Varios widgets (gráfica, mapa de calor, y las listas de
+      sugerencias de ticker) main.js les pone su `style.cssText` completo en
+      cada render — no hay clase que capturar. Esas reglas usan `!important`
+      a propósito, escopadas por tipo de widget (`.hub-widget-chart input`,
+      etc.); es la única forma de tocarlas sin editar main.js. El color de
+      los segmentos de datos (barras de riesgo, barra de cartera, celdas del
+      mapa de calor) SÍ es color real de datos asignado por JS y no se toca.
+
+   2. REFUERZO EN MODO CLARO (sección final). Igual que en
+      main-v4-shell.css: main.css trae su propio `body.light-mode .hub-X` /
+      `body.light-mode .hw-X` con más especificidad (elemento `body` + 2
+      clases) que estos selectores de una sola clase, así que en claro gana
+      main.css salvo que se duplique la regla bajo un selector `body.light-mode`.
+   ========================================================================== */
+
+/* ---------------------------------------------------------- 1. Cascarón del hub */
+
+.hub-shell {
+  background: var(--v4-paper);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+}
+
+.hub-toolbar {
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+}
+
+.hub-tab {
+  border-radius: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+.hub-tab:hover {
+  background: transparent;
+  color: var(--v4-ink-2);
+}
+.hub-tab.active {
+  background: transparent;
+  color: var(--v4-ink);
+  border-bottom-color: var(--v4-cobalt-line);
+  font-weight: 600;
+}
+.hub-tab-close:hover {
+  background: var(--v4-rule-soft);
+}
+.hub-tab-add {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+.hub-tab-add:hover {
+  background: var(--v4-sunken);
+  color: var(--v4-ink);
+}
+
+.hub-icon-btn {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  color: var(--v4-ink-2);
+}
+.hub-icon-btn:hover {
+  background: var(--v4-sunken);
+  color: var(--v4-ink);
+}
+.hub-icon-btn.primary {
+  background: var(--v4-cobalt);
+  border-color: var(--v4-cobalt);
+  color: #fff;
+}
+.hub-icon-btn.primary:hover {
+  background: var(--v4-cobalt-line);
+  border-color: var(--v4-cobalt-line);
+  color: #fff;
+}
+
+.hub-add-widget-menu {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+}
+.hub-add-widget-menu button {
+  border-radius: 2px;
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+}
+.hub-add-widget-menu button:hover {
+  background: var(--v4-cobalt-tint);
+}
+.hub-menu-icon {
+  color: var(--v4-ink-3);
+}
+
+.hub-canvas {
+  background-color: var(--v4-paper);
+  background-image: radial-gradient(circle, var(--v4-rule) 1px, transparent 1px);
+}
+
+.hub-empty .hub-empty-icon {
+  color: var(--v4-cobalt-ink);
+  background: var(--v4-cobalt-tint);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+}
+.hub-empty h4 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  color: var(--v4-ink);
+}
+.hub-empty p {
+  color: var(--v4-ink-2);
+}
+.hub-empty-cta {
+  border-radius: 2px;
+  border: 1px solid var(--v4-cobalt);
+  background: var(--v4-cobalt);
+  color: #fff;
+}
+.hub-empty-cta:hover {
+  background: var(--v4-cobalt-line);
+  border-color: var(--v4-cobalt-line);
+  box-shadow: none;
+  transform: none;
+}
+
+[data-tooltip]::after {
+  color: var(--v4-ink);
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  box-shadow: var(--v4-shadow-lift);
+}
+
+.hub-suggest-popup {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+}
+.hub-suggest-popup div {
+  color: var(--v4-ink);
+}
+.hub-suggest-popup div:hover {
+  background: var(--v4-cobalt-tint);
+}
+
+/* ----------------------------------------------------- 2. Marco de tarjeta */
+
+.hub-widget {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+}
+.hub-widget:hover {
+  border-color: var(--v4-rule-strong);
+}
+
+.hub-widget-header {
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+}
+.hub-widget-title {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  color: var(--v4-ink);
+}
+.hub-widget-title:focus {
+  background: var(--v4-cobalt-tint);
+}
+.hub-widget-btn {
+  color: var(--v4-ink-3);
+}
+.hub-widget-btn:hover {
+  background: var(--v4-rule-soft);
+  color: var(--v4-ink);
+}
+.hub-widget-btn.danger:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  color: var(--v4-neg);
+}
+
+.hub-widget-body {
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+
+.hub-resize-handle {
+  background: linear-gradient(135deg, transparent 50%, var(--v4-rule-strong) 50%);
+}
+.hub-widget:hover .hub-resize-handle {
+  background: linear-gradient(135deg, transparent 50%, var(--v4-cobalt-line) 50%);
+}
+
+/* ------------------------------------------------------ 3. Gráfica de precio */
+
+.hw-chart-meta {
+  color: var(--v4-ink-3);
+}
+.hw-chart-price {
+  color: var(--v4-ink);
+  font-variant-numeric: tabular-nums;
+}
+.hw-chart-change.up { color: var(--v4-pos); }
+.hw-chart-change.down { color: var(--v4-neg); }
+
+/* main.js pone el input de ticker, el selector de rango y el desplegable de
+   sugerencias con style.cssText inline en cada render (ver nota superior). */
+.hub-widget-chart .hub-widget-body input[type="text"] {
+  background: var(--v4-surface) !important;
+  border-color: var(--v4-rule) !important;
+  color: var(--v4-ink) !important;
+}
+.hub-widget-chart .hub-widget-body select {
+  background: var(--v4-surface) !important;
+  border-color: var(--v4-rule) !important;
+  color: var(--v4-ink) !important;
+}
+.hw-ticker-suggestions {
+  background: var(--v4-surface) !important;
+  border-color: var(--v4-rule-strong) !important;
+  box-shadow: var(--v4-shadow-lift) !important;
+}
+.hw-ticker-suggestions button:hover {
+  background: var(--v4-cobalt-tint) !important;
+}
+
+/* ------------------------------------------------------ 4. Lista de seguimiento */
+
+.hw-watchlist-toolbar input {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink);
+}
+.hw-watchlist-toolbar input:focus {
+  border-color: var(--v4-cobalt-line);
+}
+.hw-wl-add-btn {
+  background: var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+}
+.hw-wl-add-btn:hover {
+  background: var(--v4-cobalt-line);
+  opacity: 1;
+}
+.hw-wl-cfg-btn {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink-3);
+}
+.hw-wl-cfg-btn:hover {
+  background: var(--v4-sunken);
+  color: var(--v4-ink);
+}
+.hw-wl-cfg-section {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+}
+.hw-wl-cfg-title {
+  color: var(--v4-ink-3);
+}
+.hw-wl-cfg-row {
+  color: var(--v4-ink);
+  border-bottom-color: var(--v4-rule-soft);
+}
+.hw-wl-cfg-lock {
+  color: var(--v4-ink-3);
+  background: var(--v4-rule-soft);
+}
+
+.hw-watchlist-row {
+  background: var(--v4-sunken);
+  border: 1px solid transparent;
+}
+.hw-watchlist-row:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule);
+}
+.hw-wl-logo {
+  border-color: var(--v4-rule);
+}
+.hw-wl-name {
+  color: var(--v4-ink-3);
+}
+.hw-wl-col-label {
+  color: var(--v4-ink-3);
+}
+.hw-wl-price-val,
+.hw-wl-mktcap-val {
+  color: var(--v4-ink);
+}
+.hw-wl-badge.positive {
+  background: color-mix(in srgb, var(--v4-pos) 12%, transparent);
+  color: var(--v4-pos);
+  border-color: color-mix(in srgb, var(--v4-pos) 40%, transparent);
+}
+.hw-wl-badge.negative {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  color: var(--v4-neg);
+  border-color: color-mix(in srgb, var(--v4-neg) 40%, transparent);
+}
+.hw-wl-badge.neutral {
+  background: var(--v4-rule-soft);
+  color: var(--v4-ink-3);
+  border-color: var(--v4-rule);
+}
+.hw-wl-del {
+  color: var(--v4-ink-3);
+}
+.hw-wl-del:hover {
+  color: var(--v4-neg);
+  background: color-mix(in srgb, var(--v4-neg) 10%, transparent);
+}
+
+/* La lista de seguimiento tiene su propio desplegable de sugerencias
+   (agregar ticker), también inline por main.js. */
+.hub-widget-watchlist .hw-ticker-suggestions {
+  background: var(--v4-surface) !important;
+  border-color: var(--v4-rule-strong) !important;
+}
+
+/* ------------------------------------------------------ 5. Calendario     */
+
+.hw-calendar-row {
+  background: var(--v4-sunken);
+}
+.hw-cal-date {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+}
+.hw-cal-title {
+  color: var(--v4-ink);
+}
+/* main.css tiene un bloque `body.light-mode .hw-cal-title/.hw-cal-date`
+   suelto y lejano (~L10805), fuera del bloque principal del hub (~L6538-7390)
+   — fácil de perder al auditar; confirmado con getComputedStyle. */
+.hw-cal-cat {
+  color: var(--v4-ink-3);
+}
+.hw-cal-badge.high {
+  background: color-mix(in srgb, var(--v4-neg) 14%, transparent);
+  color: var(--v4-neg);
+}
+.hw-cal-badge.medium {
+  background: var(--v4-rule-soft);
+  color: var(--v4-ink-2);
+}
+.hw-cal-badge.low {
+  background: transparent;
+  color: var(--v4-ink-3);
+}
+.hw-cal-tab-bar {
+  border-bottom-color: var(--v4-rule-soft);
+}
+.hw-cal-tab {
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+.hw-cal-tab.active {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+  border-color: var(--v4-cobalt-line);
+}
+
+/* ------------------------------------------------------ 6. Nota          */
+
+.hw-note-textarea {
+  color: var(--v4-ink-2);
+  font-family: var(--v4-serif);
+}
+
+/* ------------------------------------------------------ 7. Mapa de calor */
+
+/* Todo el cascarón (barra de índice/sector, lienzo, tooltip) va inline por
+   main.js; las celdas del treemap se pintan en <canvas> con color real de
+   datos (variación %) y no se tocan. */
+.hub-widget-heatmap .hub-widget-body {
+  background: var(--v4-paper) !important;
+}
+.hub-widget-heatmap .hub-widget-body > div:first-child {
+  border-bottom-color: var(--v4-rule) !important;
+}
+.hub-widget-heatmap select {
+  background: var(--v4-surface) !important;
+  border-color: var(--v4-rule) !important;
+  color: var(--v4-ink) !important;
+}
+.hub-widget-heatmap .hub-widget-body > div:first-child > span {
+  color: var(--v4-ink-3) !important;
+}
+.hub-widget-heatmap .hub-widget-body div[style*="pointer-events:none"] {
+  background: var(--v4-surface) !important;
+  border-color: var(--v4-rule-strong) !important;
+  color: var(--v4-ink) !important;
+}
+
+/* ------------------------------------------------ 8. Riesgo / Sentimiento */
+
+.hw-insight-select {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink);
+}
+.hw-insight-select:focus {
+  border-color: var(--v4-cobalt-line);
+}
+.hw-insight-empty {
+  color: var(--v4-ink-3);
+  border: 1px dashed var(--v4-rule-strong);
+}
+.hw-insight-note {
+  color: var(--v4-ink-3);
+}
+
+.hw-risk-score,
+.hw-sentiment-head {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+.hw-risk-score span,
+.hw-sentiment-head span,
+.hw-dividend-hero span {
+  color: var(--v4-ink-3);
+}
+.hw-risk-score strong,
+.hw-sentiment-head strong {
+  color: var(--v4-ink);
+  font-family: var(--v4-serif);
+}
+.hw-risk-score em,
+.hw-sentiment-head em {
+  background: var(--v4-rule-soft);
+  color: var(--v4-ink-2);
+}
+.hw-risk-score em.ok,
+.hw-sentiment-head em.ok { color: var(--v4-pos); background: color-mix(in srgb, var(--v4-pos) 12%, transparent); }
+.hw-risk-score em.warn { color: var(--v4-ink); background: var(--v4-rule-strong); }
+.hw-risk-score em.bad,
+.hw-sentiment-head em.bad { color: var(--v4-neg); background: color-mix(in srgb, var(--v4-neg) 12%, transparent); }
+
+.hw-risk-grid div {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+}
+.hw-risk-grid span,
+.hw-risk-grid small {
+  color: var(--v4-ink-3);
+}
+.hw-risk-grid strong {
+  color: var(--v4-ink);
+}
+.hw-risk-bar-row span {
+  color: var(--v4-ink-2);
+}
+.hw-risk-bar-row div {
+  background: var(--v4-rule-soft);
+}
+.hw-risk-bar-row strong {
+  color: var(--v4-ink);
+}
+
+/* ------------------------------------------------------ 9. Dividendos    */
+
+.hw-dividend-hero {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+.hw-dividend-hero strong {
+  color: var(--v4-ink);
+  font-family: var(--v4-serif);
+}
+.hw-dividend-hero small {
+  color: var(--v4-pos);
+}
+.hw-dividend-row,
+.hw-sentiment-row {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+}
+.hw-dividend-row strong,
+.hw-sentiment-row strong {
+  color: var(--v4-ink);
+}
+.hw-dividend-row span,
+.hw-sentiment-row span {
+  color: var(--v4-ink-3);
+}
+.hw-dividend-row b {
+  color: var(--v4-pos);
+}
+.hw-sentiment-row em.positive { color: var(--v4-pos); }
+.hw-sentiment-row em.negative { color: var(--v4-neg); }
+
+/* ------------------------------------------------------ 10. Macro        */
+
+.hw-macro-card {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+}
+.hw-macro-card span,
+.hw-macro-card small {
+  color: var(--v4-ink-3);
+}
+.hw-macro-card strong {
+  color: var(--v4-ink);
+}
+.hw-macro-card em.positive { color: var(--v4-pos); }
+.hw-macro-card em.negative { color: var(--v4-neg); }
+.hw-macro-card em.neutral { color: var(--v4-ink-3); }
+
+/* ------------------------------------------------------ 11. Resumen de cartera */
+
+.hw-pb-label {
+  color: var(--v4-ink-3);
+}
+.hw-pb-sel {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink);
+}
+.hw-pb-sel:focus {
+  border-color: var(--v4-cobalt-line);
+}
+.hw-pb-amount {
+  color: var(--v4-ink);
+  font-family: var(--v4-serif);
+}
+.hw-pb-return.pos { color: var(--v4-pos); }
+.hw-pb-return.neg { color: var(--v4-neg); }
+.hw-pb-grid-ticker {
+  color: var(--v4-ink-3);
+}
+.hw-pb-grid-pct {
+  color: var(--v4-ink);
+}
+.hw-pb-tip {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+.hw-pb-empty {
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------- 12. Refuerzo en modo claro  */
+
+/* Ver nota superior — main.css tiene su propio `body.light-mode .X` para
+   casi cada selector de este archivo, con más especificidad (elemento
+   `body` + 2 clases) que las reglas de arriba (sólo clases). Sin este
+   refuerzo, en tema claro el hub vuelve a caer en el look viejo. */
+
+body.light-mode .hub-shell,
+body.light-mode .hub-add-widget-menu,
+body.light-mode .hub-widget,
+body.light-mode .hub-suggest-popup {
+  background: var(--v4-surface);
+  border-color: var(--v4-rule);
+}
+body.light-mode .hub-toolbar {
+  background: var(--v4-sunken);
+  border-bottom-color: var(--v4-rule);
+}
+body.light-mode .hub-tab { color: var(--v4-ink-3); }
+body.light-mode .hub-tab:hover { background: transparent; color: var(--v4-ink-2); }
+body.light-mode .hub-tab.active { background: transparent; color: var(--v4-ink); border-color: var(--v4-cobalt-line); }
+body.light-mode .hub-tab-add { color: var(--v4-ink-3); border-color: var(--v4-rule); }
+body.light-mode .hub-icon-btn { color: var(--v4-ink-2); border-color: var(--v4-rule); background: var(--v4-surface); }
+body.light-mode .hub-icon-btn:hover { background: var(--v4-sunken); color: var(--v4-ink); }
+body.light-mode .hub-add-widget-menu button { color: var(--v4-ink); }
+body.light-mode [data-tooltip]::after { color: var(--v4-ink); background: var(--v4-surface); border-color: var(--v4-rule-strong); }
+body.light-mode .hub-canvas { background-image: radial-gradient(circle, var(--v4-rule) 1px, transparent 1px); }
+body.light-mode .hub-empty h4 { color: var(--v4-ink); }
+body.light-mode .hub-empty p { color: var(--v4-ink-2); }
+
+body.light-mode .hub-widget-header { background: var(--v4-sunken); border-bottom-color: var(--v4-rule); }
+body.light-mode .hub-widget-title { color: var(--v4-ink); }
+body.light-mode .hub-widget-btn { color: var(--v4-ink-3); }
+body.light-mode .hub-widget-btn:hover { background: var(--v4-rule-soft); color: var(--v4-ink); }
+body.light-mode .hub-widget-body { color: var(--v4-ink-2); }
+
+body.light-mode .hw-chart-meta { color: var(--v4-ink-3); }
+body.light-mode .hw-chart-price { color: var(--v4-ink); }
+
+body.light-mode .hw-wl-cfg-btn { background: var(--v4-surface); border-color: var(--v4-rule); color: var(--v4-ink-3); }
+body.light-mode .hw-wl-cfg-section { background: var(--v4-sunken); border-color: var(--v4-rule-soft); }
+body.light-mode .hw-wl-cfg-title { color: var(--v4-ink-3); }
+body.light-mode .hw-wl-cfg-row { color: var(--v4-ink); border-bottom-color: var(--v4-rule-soft); }
+body.light-mode .hw-wl-cfg-lock { color: var(--v4-ink-3); background: var(--v4-rule-soft); }
+body.light-mode .hw-watchlist-row { background: var(--v4-sunken); }
+body.light-mode .hw-watchlist-row:hover { background: var(--v4-cobalt-tint); border-color: var(--v4-rule); }
+body.light-mode .hw-wl-name { color: var(--v4-ink-3); }
+body.light-mode .hw-wl-col-label { color: var(--v4-ink-3); }
+body.light-mode .hw-wl-badge.positive { background: color-mix(in srgb, var(--v4-pos) 12%, transparent); color: var(--v4-pos); border-color: color-mix(in srgb, var(--v4-pos) 40%, transparent); }
+body.light-mode .hw-wl-badge.negative { background: color-mix(in srgb, var(--v4-neg) 12%, transparent); color: var(--v4-neg); border-color: color-mix(in srgb, var(--v4-neg) 40%, transparent); }
+body.light-mode .hw-wl-badge.neutral { background: var(--v4-rule-soft); color: var(--v4-ink-3); border-color: var(--v4-rule); }
+body.light-mode .hw-wl-del { color: var(--v4-ink-3); }
+body.light-mode .hw-wl-del:hover { color: var(--v4-neg); background: color-mix(in srgb, var(--v4-neg) 10%, transparent); }
+
+body.light-mode .hw-calendar-row { background: var(--v4-sunken); }
+body.light-mode .hw-cal-title { color: var(--v4-ink); }
+body.light-mode .hw-cal-date { background: var(--v4-cobalt-tint); color: var(--v4-cobalt-ink); }
+body.light-mode .hw-cal-cat { color: var(--v4-ink-3); }
+body.light-mode .hw-cal-tab { color: var(--v4-ink-3); border-color: var(--v4-rule); }
+
+body.light-mode .hw-watchlist-toolbar input { background: var(--v4-surface); border-color: var(--v4-rule); color: var(--v4-ink); }
+body.light-mode .hw-watchlist-toolbar input:focus { border-color: var(--v4-cobalt-line); }
+body.light-mode .hub-suggest-popup div { color: var(--v4-ink); }
+
+body.light-mode .hw-insight-select { background: var(--v4-surface); border-color: var(--v4-rule); color: var(--v4-ink); }
+body.light-mode .hw-insight-empty { color: var(--v4-ink-3); border-color: var(--v4-rule-strong); }
+body.light-mode .hw-insight-note { color: var(--v4-ink-3); }
+
+body.light-mode .hw-risk-score span,
+body.light-mode .hw-sentiment-head span,
+body.light-mode .hw-dividend-hero span { color: var(--v4-ink-3); }
+body.light-mode .hw-risk-grid div { background: var(--v4-sunken); border-color: var(--v4-rule-soft); }
+body.light-mode .hw-risk-grid span,
+body.light-mode .hw-risk-grid small { color: var(--v4-ink-3); }
+body.light-mode .hw-risk-bar-row span { color: var(--v4-ink-2); }
+body.light-mode .hw-risk-bar-row div { background: var(--v4-rule-soft); }
+
+body.light-mode .hw-dividend-row,
+body.light-mode .hw-sentiment-row { background: var(--v4-sunken); border-color: var(--v4-rule-soft); }
+body.light-mode .hw-dividend-row span,
+body.light-mode .hw-sentiment-row span { color: var(--v4-ink-3); }
+
+body.light-mode .hw-macro-card { background: var(--v4-sunken); border-color: var(--v4-rule-soft); }
+body.light-mode .hw-macro-card span,
+body.light-mode .hw-macro-card small { color: var(--v4-ink-3); }
+
+body.light-mode .hw-pb-label { color: var(--v4-ink-3); }
+body.light-mode .hw-pb-sel { background: var(--v4-surface); border-color: var(--v4-rule); color: var(--v4-ink); }
+body.light-mode .hw-pb-amount { color: var(--v4-ink); }
+body.light-mode .hw-pb-grid-ticker { color: var(--v4-ink-3); }
+body.light-mode .hw-pb-tip { background: var(--v4-surface); border-color: var(--v4-rule-strong); }
+body.light-mode .hw-pb-empty { color: var(--v4-ink-3); }

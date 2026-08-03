@@ -1,0 +1,674 @@
+/* ==========================================================================
+   BlackPortfolio — #section-analyzer (Analizador) en V4.
+
+   Requiere `main-v4-shell.css` cargado antes (reusa sus tokens `--v4-*`).
+
+   Igual que `main-v4-settings.css`, todo cuelga de `#section-analyzer`
+   (1,1,0), que gana contra los `body.light-mode .x` de main.css (0,2,1).
+   Como los tokens `--v4-*` ya cambian de valor por tema, una sola regla
+   cubre claro y oscuro — no hay bloque de refuerzo duplicado.
+
+   ── Qué NO se toca ──
+   `--ac` es el color del activo, asignado por analyzer.js por ticker: es
+   dato, no decoración, y se conserva. Lo mismo el relleno de las celdas de
+   sensibilidad y correlación (color = upside / coeficiente) y el color de
+   las series de las gráficas.
+
+   ── Lo que CSS no alcanzó ──
+   Los ejes, la rejilla y la leyenda de los dos <canvas> (`dcfWaterfallChart`,
+   `monteCarloChart`) estaban escritos a mano en analyzer.js sin lectura de
+   tema. Eso se arregló en el JS con `getAnalyzerChartColors()`, siguiendo el
+   patrón que main.js ya usaba (`getPerfChartColors`).
+   ========================================================================== */
+
+/* ------------------------------------- 0. `.hidden` que no ocultaba nada */
+
+/* Mismo bug preexistente que en Ajustes (ver cabecera de
+   `main-v4-settings.css`): main.css no tiene regla global de `.hidden`, y
+   estos tres nunca entraron a su lista por ID, así que se renderizaban
+   siempre:
+
+     #asmPanel            el panel de supuestos DCF nacía desplegado, con lo
+                          que el botón «⚙ Supuestos» no producía efecto visible
+     #correlationSection  se mostraba aunque hubiera un solo activo
+     #analyzerNewsSection se mostraba sin noticias cargadas
+
+   Los otros tres (`#analyzerSuggestions`, `#analyzerLoading`,
+   `#analyzerResults`) sí tenían su propia regla y ya funcionaban. */
+#section-analyzer .hidden {
+  display: none;
+}
+
+/* ------------------------------------------------------- 1. Buscador    */
+
+#section-analyzer .anlz-search-wrap {
+  padding: .4rem .6rem;
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: var(--v4-surface);
+}
+#section-analyzer .anlz-search-wrap:focus-within {
+  border-color: var(--v4-cobalt-line);
+  outline: 2px solid var(--v4-cobalt-line);
+  outline-offset: 2px;
+}
+#section-analyzer .anlz-search-icon {
+  color: var(--v4-ink-3);
+}
+#section-analyzer #analyzerInput {
+  min-height: 36px;
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-small);
+}
+#section-analyzer #analyzerInput::placeholder {
+  color: var(--v4-ink-3);
+}
+
+#section-analyzer .anlz-add-btn {
+  min-height: 34px;
+  padding: .35rem .7rem;
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  background: var(--v4-cobalt);
+  color: #fff;
+  font-family: var(--v4-sans);
+  font-weight: 500;
+}
+#section-analyzer .anlz-add-btn:hover {
+  background: var(--v4-cobalt-line);
+  border-color: var(--v4-cobalt-line);
+}
+
+#section-analyzer .anlz-suggestions {
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-analyzer .anlz-sugg-item {
+  border-radius: 0;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-analyzer .anlz-sugg-item:hover {
+  background: var(--v4-cobalt-tint);
+}
+#section-analyzer .anlz-sugg-sym {
+  color: var(--v4-cobalt-ink);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-sugg-name {
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-sugg-type {
+  padding: .1rem .35rem;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: none;
+  font: 600 var(--v4-t-label)/1.4 var(--v4-sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------ 2. Fichas de activo   */
+
+#section-analyzer .anlz-asset-card {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-analyzer .anlz-asset-card:hover {
+  transform: none;
+  border-color: var(--v4-rule-strong);
+}
+#section-analyzer .anlz-asset-sym {
+  font-family: var(--v4-sans);
+  font-weight: 600;
+}
+#section-analyzer .anlz-asset-name {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-asset-price {
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .anlz-asset-chg {
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .anlz-asset-chg.pos { color: var(--v4-pos); }
+#section-analyzer .anlz-asset-chg.neg { color: var(--v4-neg); }
+#section-analyzer .anlz-asset-meta {
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-asset-rm {
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-asset-rm:hover {
+  color: var(--v4-neg);
+}
+
+/* ------------------------------------------- 3. Fila de cálculo y supuestos */
+
+#section-analyzer .anlz-run-btn {
+  min-height: 40px;
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  background: var(--v4-cobalt);
+  color: #fff;
+  font-family: var(--v4-sans);
+  font-weight: 500;
+}
+#section-analyzer .anlz-run-btn:hover:not(:disabled) {
+  background: var(--v4-cobalt-line);
+  border-color: var(--v4-cobalt-line);
+  opacity: 1;
+  transform: none;
+}
+#section-analyzer .anlz-run-btn:disabled {
+  background: transparent;
+  border-color: var(--v4-rule);
+  color: var(--v4-ink-3);
+  opacity: 1;
+}
+#section-analyzer .anlz-run-hint {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+
+#section-analyzer .anlz-asm-toggle {
+  min-height: 34px;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-asm-toggle:hover,
+#section-analyzer .anlz-asm-toggle.open {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+
+#section-analyzer .anlz-asm-panel {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+#section-analyzer .anlz-asm-head {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+}
+#section-analyzer .anlz-asm-field {
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+}
+#section-analyzer .anlz-asm-field span {
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-asm-field input {
+  min-height: 36px;
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  color: var(--v4-ink);
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .anlz-asm-field input:focus {
+  outline: 2px solid var(--v4-cobalt-line);
+  outline-offset: 2px;
+  border-color: var(--v4-cobalt-line);
+}
+#section-analyzer .anlz-asm-apply {
+  min-height: 36px;
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  background: var(--v4-cobalt);
+  color: #fff;
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-asm-apply:hover {
+  filter: none;
+  background: var(--v4-cobalt-line);
+}
+#section-analyzer .anlz-asm-reset {
+  min-height: 36px;
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-asm-reset:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-ink-2);
+  color: var(--v4-ink);
+}
+
+/* --------------------------------------------------------- 4. Carga     */
+
+#section-analyzer .anlz-loading {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: var(--v4-surface);
+}
+#section-analyzer .anlz-loading strong {
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-loading span {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-spinner {
+  border-color: var(--v4-rule);
+  border-top-color: var(--v4-cobalt-line);
+}
+
+/* ------------------------------------------------- 5. Lámina de resultado */
+
+#section-analyzer .anlz-card {
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  background: var(--v4-surface);
+  box-shadow: var(--v4-shadow-lift);
+}
+
+#section-analyzer .anlz-card-header {
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-analyzer .anlz-card-header h3,
+#section-analyzer .anlz-card-title {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  font-size: 1.0625rem;
+  letter-spacing: -.01em;
+  color: var(--v4-ink);
+}
+#section-analyzer .anlz-card-sub {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  line-height: 1.5;
+  color: var(--v4-ink-3);
+}
+
+#section-analyzer .anlz-badge {
+  padding: .2rem .45rem;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: none;
+  font: 600 var(--v4-t-label)/1 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* Los tres escenarios son modos excluyentes: pulgar lleno, como `.seg`. */
+#section-analyzer .anlz-scen-tabs {
+  padding: 2px;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+#section-analyzer .anlz-scen-tab {
+  min-height: 30px;
+  padding: .3rem .6rem;
+  border: 0;
+  border-radius: 1px;
+  background: none;
+  font: 500 var(--v4-t-mini)/1 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-scen-tab:hover {
+  color: var(--v4-ink-2);
+}
+#section-analyzer .anlz-scen-tab.active {
+  background: var(--v4-surface);
+  color: var(--v4-ink);
+  font-weight: 600;
+  box-shadow: var(--v4-shadow-lift);
+}
+
+/* ---------------------------------------------- 6. Tarjetas por activo  */
+
+/* Una tarjeta por activo comparado SÍ es estructura con información: cada
+   una es un sujeto distinto, no un contenedor decorativo repetido. */
+#section-analyzer .anlz-dcf-card,
+#section-analyzer .anlz-mc-card,
+#section-analyzer .anlz-at-card,
+#section-analyzer .anlz-sens-card,
+#section-analyzer .anlz-port-stat {
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+
+#section-analyzer .anlz-dcf-sym,
+#section-analyzer .anlz-mc-sym,
+#section-analyzer .anlz-at-sym,
+#section-analyzer .anlz-sens-sym,
+#section-analyzer .anlz-dec-sym {
+  font-family: var(--v4-sans);
+  font-weight: 600;
+}
+#section-analyzer .anlz-sens-sym {
+  color: var(--v4-ink);
+}
+#section-analyzer .anlz-sens-cur,
+#section-analyzer .anlz-dcf-err,
+#section-analyzer .anlz-at-empty,
+#section-analyzer .anlz-dec-name,
+#section-analyzer .anlz-score-num,
+#section-analyzer .anlz-corr-hint {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+
+#section-analyzer .anlz-dcf-block span,
+#section-analyzer .anlz-mc-pct span,
+#section-analyzer .anlz-at-ti span,
+#section-analyzer .anlz-port-stat span {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-dcf-block strong,
+#section-analyzer .anlz-mc-pct strong,
+#section-analyzer .anlz-at-ti strong,
+#section-analyzer .anlz-port-stat strong {
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#section-analyzer .anlz-dcf-upside.pos,
+#section-analyzer .anlz-mc-prob.pos,
+#section-analyzer .anlz-at-upside.pos,
+#section-analyzer .anlz-at-ti strong.pos,
+#section-analyzer .anlz-dec-target-main em.pos,
+#section-analyzer .anlz-tag .pos { color: var(--v4-pos); }
+
+#section-analyzer .anlz-dcf-upside.neg,
+#section-analyzer .anlz-mc-prob.neg,
+#section-analyzer .anlz-at-upside.neg,
+#section-analyzer .anlz-at-ti strong.neg,
+#section-analyzer .anlz-dec-target-main em.neg,
+#section-analyzer .anlz-tag .neg { color: var(--v4-neg); }
+
+#section-analyzer .anlz-mc-prob,
+#section-analyzer .anlz-dcf-upside,
+#section-analyzer .anlz-at-upside {
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .anlz-mc-prob span {
+  color: var(--v4-ink-3);
+}
+
+#section-analyzer .anlz-tag {
+  padding: .15rem .4rem;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: none;
+  font: 600 var(--v4-t-label)/1.4 var(--v4-sans);
+  letter-spacing: .06em;
+  color: var(--v4-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barras: la pista es regla, el relleno es dato (color por JS). */
+#section-analyzer .anlz-tv-bar-wrap,
+#section-analyzer .anlz-score-track,
+#section-analyzer .anlz-at-52-track,
+#section-analyzer .anlz-at-bar {
+  border-radius: 0;
+  background: var(--v4-rule-soft);
+}
+#section-analyzer .anlz-score-fill,
+#section-analyzer .anlz-at-52-fill,
+#section-analyzer .anlz-tv-bar-proj {
+  border-radius: 0;
+}
+#section-analyzer .anlz-tv-labels,
+#section-analyzer .anlz-at-bar-labels,
+#section-analyzer .anlz-at-52-labels,
+#section-analyzer .anlz-mc-meta-row,
+#section-analyzer .anlz-dec-target-srcs span {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .anlz-at-bar-labels .anlz-at-bar-mid,
+#section-analyzer .anlz-at-52-labels .anlz-at-52-pos {
+  color: var(--v4-ink);
+}
+#section-analyzer .anlz-at-label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* --------------------------------------------- 7. Sensibilidad y correlación */
+
+#section-analyzer .anlz-sens-table,
+#section-analyzer .anlz-corr-table {
+  font-family: var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .anlz-sens-table th,
+#section-analyzer .anlz-corr-table th {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .06em;
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-sens-table th.sens-corner,
+#section-analyzer .anlz-sens-table th.sens-wacc {
+  color: var(--v4-ink-3);
+}
+/* El relleno de la celda lo pone analyzer.js: es el upside, o sea dato. */
+#section-analyzer .anlz-sens-table td strong {
+  color: var(--v4-ink);
+}
+#section-analyzer .anlz-sens-table td span {
+  color: var(--v4-ink-2);
+}
+#section-analyzer .anlz-sens-table td.sens-na {
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-corr-table td.corr-diag {
+  color: var(--v4-ink-3);
+  background: var(--v4-sunken);
+}
+
+/* --------------------------------------------------- 8. Comparación     */
+
+#section-analyzer .cmp-row {
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-analyzer .cmp-row:hover:not(.cmp-header) {
+  background: var(--v4-sunken);
+}
+#section-analyzer .cmp-header {
+  border-radius: 0;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-analyzer .cmp-cell {
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .cmp-metric-cell {
+  color: var(--v4-ink-3);
+}
+#section-analyzer .cmp-header .cmp-cell {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+/* main.css marca el mejor valor con !important. */
+#section-analyzer .cmp-best {
+  color: var(--v4-pos) !important;
+  background: color-mix(in srgb, var(--v4-pos) 8%, transparent);
+  border-radius: 0;
+}
+
+/* --------------------------------------------------- 9. Veredicto       */
+
+/* `--ac` (color del activo) se conserva porque identifica el sujeto, pero la
+   regla lateral baja de 3px a 1px: craft-floor prohíbe el borde de color
+   grueso como decoración de tarjeta. */
+#section-analyzer .anlz-decision-item {
+  padding: .9rem 1rem;
+  border: 1px solid var(--v4-rule);
+  border-left: 1px solid var(--ac, var(--v4-rule-strong));
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+
+#section-analyzer .anlz-rec-badge {
+  padding: .2rem .45rem;
+  border-radius: 2px;
+  font: 600 var(--v4-t-label)/1.4 var(--v4-sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+/* La señal no la carga sólo el punto de color: cada renglón lleva su texto.
+   El texto se lee en tinta normal para no depender del matiz. */
+#section-analyzer .anlz-signal {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+}
+#section-analyzer .anlz-signal-positive,
+#section-analyzer .anlz-signal-negative,
+#section-analyzer .anlz-signal-neutral {
+  color: var(--v4-ink-2);
+}
+#section-analyzer .anlz-signal-positive .anlz-sig-dot { background: var(--v4-pos); }
+#section-analyzer .anlz-signal-negative .anlz-sig-dot { background: var(--v4-neg); }
+#section-analyzer .anlz-signal-neutral  .anlz-sig-dot { background: var(--v4-ink-3); }
+
+#section-analyzer .anlz-dec-target {
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-analyzer .anlz-dec-target-main span {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-dec-target-main strong {
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+#section-analyzer .anlz-dec-target-srcs span {
+  padding: .1rem .35rem;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: none;
+}
+
+/* --------------------------------------------- 10. Veredicto de IA      */
+
+#section-analyzer .anlz-ai-btn {
+  min-height: 36px;
+  padding: .35rem .7rem;
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--v4-cobalt-ink);
+  font-family: var(--v4-sans);
+  font-weight: 500;
+}
+#section-analyzer .anlz-ai-btn:hover:not(:disabled) {
+  filter: none;
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+}
+#section-analyzer .anlz-ai-empty {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-ai-h {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  color: var(--v4-ink);
+}
+#section-analyzer .anlz-ai-p,
+#section-analyzer .anlz-ai-ul li {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-analyzer .anlz-ai-body strong {
+  color: var(--v4-ink);
+}
+
+/* ------------------------------------------------- 11. Noticias y aviso */
+
+#section-analyzer .anlz-news-ticker-label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--v4-cobalt-ink);
+}
+#section-analyzer .anlz-news-loading {
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+#section-analyzer .anlz-news-list .news-card {
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+#section-analyzer .anlz-news-list .news-card:hover {
+  border-color: var(--v4-rule-strong);
+  background: var(--v4-sunken);
+}
+
+/* El aviso legal es la frontera del producto (PRODUCT.md): se lee como nota
+   de documento, no como alerta de color. */
+#section-analyzer .anlz-disclaimer {
+  padding: .8rem 1rem;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  background: var(--v4-sunken);
+}
+#section-analyzer .anlz-disclaimer-icon {
+  color: var(--v4-ink-3);
+}
+#section-analyzer .anlz-disclaimer p {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  line-height: 1.6;
+  color: var(--v4-ink-2);
+}
+#section-analyzer .anlz-disclaimer strong {
+  color: var(--v4-ink);
+}
+
+/* ------------------------------------------------------- 12. Aviso flotante */
+
+#section-analyzer .anlz-toast {
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  background: var(--v4-surface);
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+  box-shadow: var(--v4-shadow-lift);
+}

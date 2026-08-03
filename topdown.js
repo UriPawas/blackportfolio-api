@@ -82,7 +82,28 @@
 
   function pct(x) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(2) + "%"; }
 
-  function sparkline(series, color) {
+  /* Los neutros replican los tokens `--v4-*` de main-v4-shell.css. Hacen falta
+     aquí porque el SVG del cuadrante lleva `stroke` como ATRIBUTO y el trazo de
+     los sparklines es un valor, no una clase: el CSS no los alcanza.
+     Se lee `html[data-theme]` —la misma fuente que main-v4-*.css— y no
+     `body.light-mode`: son mecanismos distintos y pueden divergir. */
+  function tdColors() {
+    const light = document.documentElement.dataset.theme === "light";
+    return {
+      light,
+      rule:  light ? "#D6DDE6" : "#22314A",
+      ink3:  light ? "#5A6980" : "#8C9BB3",
+      pos:   light ? "#0A6B4A" : "#45B98A",
+      neg:   light ? "#A11E20" : "#E4787A",
+      mark:  light ? "#13429B" : "#7CA0FF",
+    };
+  }
+
+
+  /* Recibe una CLASE, no un color: así el trazo hereda `currentColor` y se
+     repinta solo al cambiar de tema, sin volver a renderizar la sección
+     (topdown.js no tiene gancho de redibujado). */
+  function sparkline(series, cls) {
     if (!series || series.length < 2) return "";
     // Downsample a ~40 puntos para mantener el SVG ligero
     let s = series;
@@ -98,7 +119,7 @@
       const y = h - ((v - min) / range) * h;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
-    return `<svg class="td-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+    return `<svg class="td-spark ${cls || ""}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
   }
 
   // ── Macro panel (datos live) ─────────────────────────────────────────────────
@@ -145,8 +166,7 @@
       }
       const trend = d.chgPct > 0.3 ? "up" : d.chgPct < -0.3 ? "down" : "flat";
       const noteTxt = `${(d.chgPct >= 0 ? "+" : "") + d.chgPct.toFixed(1)}% · 30d`;
-      const color = trend === "up" ? "#00c894" : trend === "down" ? "#ff6b8a" : "rgba(255,255,255,0.4)";
-      cards.push(macroCard(m.label, fmtValue(d.last, m.unit), trend, noteTxt, sparkline(d.spark, color), m.note));
+      cards.push(macroCard(m.label, fmtValue(d.last, m.unit), trend, noteTxt, sparkline(d.spark, TREND_CLASS[trend]), m.note));
     });
 
     // Curva como tarjeta derivada
@@ -352,9 +372,10 @@
     const maxSharpe = Math.max(...sharpes.map(Math.abs), 0.5);
 
     // Grid y ejes
+    const TC = tdColors();
     let svg = `<svg viewBox="0 0 ${W} ${H}" class="td-scatter-svg" role="img" aria-label="Cuadrante riesgo retorno sectorial">`;
-    svg += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="rgba(255,255,255,0.18)"/>`;
-    svg += `<line x1="${padL}" y1="${y0}" x2="${W - padR}" y2="${y0}" stroke="rgba(255,255,255,0.18)" stroke-dasharray="3 3"/>`;
+    svg += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="${TC.rule}"/>`;
+    svg += `<line x1="${padL}" y1="${y0}" x2="${W - padR}" y2="${y0}" stroke="${TC.rule}" stroke-dasharray="3 3"/>`;
     // ticks Y
     [yMax, yMax / 2, 0, yMin / 2, yMin].forEach(t => {
       const yy = Y(t);
@@ -377,7 +398,7 @@
       const r = 7 + inten * 5;
       svg += `<g class="td-scatter-pt" data-symbol="${s.symbol}" data-name="${s.name}" style="cursor:pointer">`;
       svg += `<title>${s.name} (${s.symbol}) · Ret ${pct(s.ret)} · Vol ${(s.vol * 100).toFixed(1)}% · Sharpe ${sh.toFixed(2)}${fav ? " · ★ favorecido por el régimen" : ""}</title>`;
-      svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}" stroke="${fav ? "#f5b84c" : "rgba(255,255,255,0.4)"}" stroke-width="${fav ? 2 : 1}"/>`;
+      svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}" stroke="${fav ? TC.mark : TC.ink3}" stroke-width="${fav ? 2 : 1}"/>`;
       if (fav) svg += `<text x="${cx}" y="${cy - r - 3}" text-anchor="middle" class="td-scatter-star">★</text>`;
       svg += `<text x="${cx}" y="${cy + r + 11}" text-anchor="middle" class="td-scatter-lbl">${s.symbol}</text>`;
       svg += `</g>`;
@@ -412,30 +433,33 @@
         <div class="td-pick-meta"><span class="${rsCls}">vs S&P ${rsTxt}</span><span>Sharpe ${sharpe}</span></div>
       </div>`;
     }).join("");
-    host.innerHTML = `<div class="td-picks-head">⭐ Mejores candidatos — alineados al régimen y con momentum</div><div class="td-picks-grid">${cards}</div>`;
+    host.innerHTML = `<div class="td-picks-head">Mejores candidatos — alineados al régimen y con momentum</div><div class="td-picks-grid">${cards}</div>`;
     host.querySelectorAll(".td-pick-card").forEach(c => {
       c.addEventListener("click", () => navigateToMarkets(c.dataset.symbol, c.dataset.name));
     });
   }
 
-  // Color de TEXTO del retorno (verde/rojo según signo del retorno absoluto)
-  function retTextColor(ret) {
-    if (ret === null) return "rgba(255,255,255,0.3)";
-    return ret >= 0 ? "#00c894" : "#ff6b8a";
+  // Clase (no color) del retorno. `pct()` ya escribe el signo, así que el
+  // color sólo refuerza (DESIGN.md §2); dejarlo en CSS lo hace además
+  // reactivo al tema sin volver a renderizar.
+  function retTextClass(ret) {
+    if (ret === null) return "td-trend-flat";
+    return ret >= 0 ? "td-trend-up" : "td-trend-down";
   }
 
   // Color de FONDO según fuerza relativa (RS) vs S&P — desacopla color (liderazgo) de orden (retorno).
   // Si no hay RS disponible, cae a intensidad por retorno absoluto.
   function rsColor(rs, ret) {
-    if (rs == null && ret === null) return "rgba(255,255,255,0.06)";
+    if (rs == null && ret === null) return "transparent";
     const metric = rs != null ? rs : ret;
     const intensity = Math.min(Math.abs(metric) / 0.08, 1); // satura a ±8% de diferencial
-    if (metric >= 0) {
-      const alpha = 0.12 + intensity * 0.5;
-      return `rgba(0,200,148,${alpha})`;
-    }
-    const alpha = 0.12 + intensity * 0.5;
-    return `rgba(255,107,138,${alpha})`;
+    /* Tope de tinte 0.32. No es estético: el fondo va como estilo en línea y
+       NO se repinta al cambiar de tema, así que el mismo valor tiene que
+       servir en claro y en oscuro. Medido sobre la celda más saturada, con
+       `--v4-ink-2` (el texto más chico de la celda, 10 px): 7.76:1 en claro y
+       4.87:1 en oscuro. Con el 0.42 anterior, en oscuro caía a 3.88:1. */
+    const alpha = 0.06 + intensity * 0.26;
+    return metric >= 0 ? `rgba(0,200,148,${alpha})` : `rgba(255,107,138,${alpha})`;
   }
 
   function renderHeatmap(grid, results) {
@@ -443,7 +467,6 @@
     const maxAbsRet = Math.max(...results.map(r => Math.abs(r.ret ?? 0)), 0.01);
 
     grid.innerHTML = sorted.map(s => {
-      const text = retTextColor(s.ret);
       const bg = rsColor(s.rs, s.ret);
       const retTxt = s.ret !== null ? pct(s.ret) : "—";
       const volTxt = s.vol !== null ? (s.vol * 100).toFixed(1) + "% vol" : "";
@@ -452,18 +475,18 @@
       const rsTxt = s.rs != null
         ? `<div class="td-heatmap-rs ${s.rs >= 0 ? "td-trend-up" : "td-trend-down"}">vs S&P ${pct(s.rs)}</div>`
         : "";
-      const spark = s.spark ? sparkline(s.spark, text) : "";
+      const spark = s.spark ? sparkline(s.spark, retTextClass(s.ret)) : "";
       return `
         <div class="td-heatmap-cell${fav ? " td-heatmap-fav" : ""}" style="background:${bg}" data-symbol="${s.symbol}" data-name="${s.name}" title="${fav ? "Favorecido por el régimen — " : ""}Ir a Mercados: ${s.symbol}">
           ${fav ? '<span class="td-fav-badge" title="Favorecido por el régimen macro">★</span>' : ""}
           <div class="td-heatmap-sector">${s.name}</div>
           <div class="td-heatmap-etf">${s.symbol}</div>
-          <div class="td-heatmap-ret" style="color:${text}">${retTxt}</div>
+          <div class="td-heatmap-ret">${retTxt}</div>
           ${rsTxt}
           <div class="td-heatmap-vol">${volTxt}</div>
           ${spark}
           <div class="td-heatmap-bar-bg">
-            <div class="td-heatmap-bar-fill" style="width:${barW}%;background:${text};opacity:0.55"></div>
+            <div class="td-heatmap-bar-fill ${retTextClass(s.ret)}" style="width:${barW}%"></div>
           </div>
         </div>`;
     }).join("");

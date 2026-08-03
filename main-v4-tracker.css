@@ -1,0 +1,1173 @@
+/* ==========================================================================
+   BlackPortfolio — #section-tracker (Portafolio Tracker) en V4.
+
+   Requiere `main-v4-shell.css` cargado antes (reusa sus tokens `--v4-*`).
+
+   Es la sección más grande de la app: vista de lista, tablero con 9 pestañas
+   y 11 diálogos, todos dentro de `#section-tracker`.
+
+   ── Tesis (DESIGN.md §8 · #2 + app-tracker-v4.html) ──
+   1. **Rejilla de datos, no lámina-documento.** La tabla de posiciones tiene
+      13 columnas: cabecera fija, columna de ticker congelada, fila de 36 px
+      (30 px en modo compacto) y cifras tabulares a `--t-mini`. Libre Franklin
+      aguanta esa densidad; no hizo falta una tercera fuente condensada.
+   2. **El registro sustituye el muro de KPIs.** Nueve tarjetas con borde y
+      radio de 18 px pasan a ser UNA cifra de récord y ocho anotaciones
+      separadas por reglas de 1 px — el anti-patrón de «métrica gigante en
+      tarjeta» que DESIGN.md §1 rechaza por contrato.
+   3. **Dos idiomas de control, deliberadamente distintos.** Marca de regla
+      (`.perf-period-nav`, `.pos-return-period-toggle`, `.mc-year-nav`…) =
+      posición en una escala de tiempo. Pulgar relleno
+      (`.value-series-toggle`, `.composition-toggle`, `.donut-base-toggle`) =
+      modos excluyentes. Es la misma distinción que ya usan Mercados y
+      Creación de portafolio.
+
+   ── Especificidad ──
+   Todo cuelga de `#section-tracker` (1,1,0). main.css tiene ~90 reglas
+   `body.light-mode .x` que tocan esta zona, pero todas son de clases (0,2,1)
+   y **ninguna** lleva `#section-tracker` ni el id de un elemento suyo
+   (comprobado con grep): un ID gana contra cualquier cantidad de clases, así
+   que **este archivo no necesita bloque de refuerzo para modo claro** —
+   una sola regla cubre los dos temas, como en Ajustes.
+
+   ── Alcance ──
+   SOLO REESTILIZA. Ningún id/clase de main.js se renombra. Los colores de
+   los lienzos (`<canvas>`) no los alcanza el CSS: viven en
+   `getPerfChartColors()` y compañía, en main.js.
+   ========================================================================== */
+
+/* -------------------------------------------- 0. `.hidden` de la sección */
+
+/* main.css no tiene regla global de `.hidden` (DESIGN.md §8): oculta por una
+   lista de ids en ~2829. Casi todos los del tracker están, pero escoparlo
+   aquí cubre los que se añadan después sin tocar esa lista. Sin `!important`
+   para que un `style="display:…"` de main.js siga mandando. */
+#section-tracker .hidden {
+  display: none;
+}
+/* main.css lo declara aparte porque la vista de lista es `display:block`. */
+#section-tracker #trackerListView:not(.hidden) {
+  display: block;
+}
+
+/* ------------------------------------------------ 1. Láminas compartidas */
+
+#section-tracker .dashboard-card {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-tracker .dashboard-card:hover {
+  border-color: var(--v4-rule);
+  box-shadow: var(--v4-shadow-lift);
+  transform: none;
+}
+#section-tracker .card-header {
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .card-header h2,
+#section-tracker .card-header h3 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  font-size: 1.0625rem;
+  letter-spacing: -.01em;
+  color: var(--v4-ink);
+}
+#section-tracker .card-header > span,
+#section-tracker .comp-panel-sub,
+#section-tracker .perf-chart-status,
+#section-tracker .tracker-list-sub {
+  font: 500 var(--v4-t-mini)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .eyebrow {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* --------------------------------------------------- 2. Vista de lista  */
+
+#section-tracker .tracker-list-header {
+  padding-bottom: .85rem;
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-tracker .portfolio-cards-grid {
+  gap: 0;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--v4-surface);
+}
+#section-tracker .portfolio-cards-grid > * { min-width: 0; }
+
+/* Las carteras dejan de ser tarjetas con degradado y pasan a ser celdas de
+   un mismo registro, separadas por reglas. */
+#section-tracker .portfolio-card,
+#section-tracker .portfolio-card-skeleton {
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--v4-rule-soft);
+  border-block-start: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+  box-shadow: none;
+  padding: .9rem 1rem;
+}
+#section-tracker .portfolio-card::before,
+#section-tracker .portfolio-card::after { display: none; }
+#section-tracker .portfolio-card:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule-soft);
+  transform: none;
+  box-shadow: none;
+}
+#section-tracker .portfolio-card-header {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .portfolio-card-value {
+  font: 600 1.25rem/1.2 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .portfolio-card-date,
+#section-tracker .portfolio-card-stats,
+#section-tracker .portfolio-card-cta {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .portfolio-card-footer {
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .portfolio-card-delete {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-tracker .portfolio-card-delete:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  border-color: var(--v4-neg);
+  color: var(--v4-neg);
+}
+
+#section-tracker .tracker-empty-state {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .tracker-empty-state svg { fill: var(--v4-ink-3); opacity: .5; }
+
+#section-tracker .consolidated-bar,
+#section-tracker .consolidated-badge {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+
+/* ---------------------------------------------- 3. Cabecera del tablero */
+
+#section-tracker .tracker-dash-topbar {
+  padding-bottom: .85rem;
+  border-bottom: 1px solid var(--v4-rule);
+}
+/* El grupo de cuatro botones de exportación envuelve en vez de comprimirse.
+   `flex-wrap` sola no basta: con el `flex-shrink: 1` por defecto los botones
+   se estrechan hasta que la etiqueta queda apretada contra el icono en vez de
+   bajar de renglón. `flex: none` los manda a la línea siguiente.
+
+   NOTA sobre el desborde de 71 px que reporta `documentElement.scrollWidth`
+   en esta barra: es un desborde FANTASMA y es PREEXISTENTE (idéntico con esta
+   hoja desactivada). Ningún elemento pasa del viewport —el borde derecho más
+   lejano queda en 913 px de 956— y `window.scrollX` no se mueve. No se
+   "arregló" nada aquí: queda anotado para no volver a perseguirlo. */
+#section-tracker .tracker-export-btns {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+#section-tracker .tracker-export-btns > *,
+#section-tracker .tracker-dash-title-group > * {
+  flex: none;
+}
+#section-tracker .tracker-dash-title-group {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+#section-tracker .tracker-dash-title { min-width: 0; }
+#section-tracker .tracker-dash-title {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  letter-spacing: -.015em;
+  color: var(--v4-ink);
+}
+#section-tracker .tracker-back-btn,
+#section-tracker .portfolio-rename-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-tracker .tracker-back-btn:hover,
+#section-tracker .portfolio-rename-btn:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+  transform: none;
+}
+
+#section-tracker .tracker-export-dropdown {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+  padding: 0;
+}
+#section-tracker .tracker-export-dropdown button {
+  padding: .55rem .7rem;
+  border-radius: 0;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-tracker .tracker-export-dropdown button + button {
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .tracker-export-dropdown button:hover {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-ink);
+}
+#section-tracker .tracker-export-dropdown strong { color: var(--v4-ink); }
+#section-tracker .tracker-export-dropdown small { color: var(--v4-ink-3); }
+
+#section-tracker .tracker-price-status-bar {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-tracker .tracker-price-status-msg {
+  font: 400 var(--v4-t-mini)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------------- 4. EL REGISTRO */
+
+/* Nueve tarjetas de KPI con radio de 18 px y borde propio eran el «muro de
+   métricas» que DESIGN.md §1 rechaza. Aquí son un solo bloque: una cifra de
+   récord arriba y las anotaciones divididas por reglas de 1 px. */
+#section-tracker .tracker-kpi-grid,
+#section-tracker .kpi-strip {
+  gap: 0;
+  border: 1px solid var(--v4-rule);
+  background: var(--v4-surface);
+  border-radius: 4px 4px 0 0;
+  overflow: visible;
+}
+#section-tracker .kpi-strip {
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+  margin-top: 0;
+}
+#section-tracker .tracker-kpi-grid > *,
+#section-tracker .kpi-strip > * { min-width: 0; }
+
+#section-tracker .summary-item {
+  padding: .8rem 1rem;
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+}
+#section-tracker .tracker-kpi-grid > .summary-item:first-child,
+#section-tracker .kpi-strip > .summary-item:first-child {
+  border-inline-start: 0;
+}
+#section-tracker .summary-item span {
+  margin-bottom: .35rem;
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .summary-item strong {
+  font: 600 1.0625rem/1.2 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .summary-item em {
+  font-style: normal;
+  font: 400 var(--v4-t-mini)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+/* La cifra de récord: sólo la primera hero crece. No hay tres «hero metric»
+   compitiendo por la misma jerarquía. */
+#section-tracker .tracker-kpi-grid > .tracker-kpi-hero:first-child strong {
+  font-size: clamp(1.5rem, 1.2rem + 1.1vw, 2rem);
+  letter-spacing: -.02em;
+}
+#section-tracker .summary-item--muted strong { color: var(--v4-ink-2); }
+
+#section-tracker .kpi-info-btn {
+  width: 16px;
+  height: 16px;
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+  font: 600 10px/1 var(--v4-sans);
+}
+#section-tracker .kpi-info-btn:hover {
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+#section-tracker .kpi-tooltip {
+  background: var(--v4-ink);
+  color: var(--v4-surface);
+  border: 0;
+  border-radius: 2px;
+  font: 400 var(--v4-t-mini)/1.5 var(--v4-sans);
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-tracker .kpi-alt-currency-select,
+#section-tracker .kpi-cash-btn {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-label);
+  text-transform: none;
+  letter-spacing: 0;
+}
+#section-tracker .kpi-cash-btn:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+#section-tracker .kpi-details {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .kpi-details-summary {
+  padding: .55rem 1rem;
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-cobalt-ink);
+}
+#section-tracker .kpi-details-grid > * { min-width: 0; }
+
+/* ------------------------------------------------------- 5. Pestañas    */
+
+/* Tira con regla inferior y marca de 2 px: el mismo idioma que Resumen,
+   Ajustes, Mercados y Creación de portafolio. Consistencia entre pantallas
+   es virtud en modo Operate (DESIGN.md §7). */
+#section-tracker .tracker-tab-nav {
+  gap: 0;
+  padding: 0;
+  margin-bottom: 1.25rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--v4-rule);
+  border-radius: 0;
+  overflow-x: auto;
+}
+#section-tracker .tracker-tab-btn {
+  flex: none;
+  min-width: 0;
+  padding: .5rem .75rem;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  box-shadow: none;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .tracker-tab-btn:hover {
+  background: none;
+  color: var(--v4-ink);
+}
+#section-tracker .tracker-tab-btn.active {
+  background: none;
+  border-bottom-color: var(--v4-cobalt-line);
+  color: var(--v4-ink);
+  font-weight: 600;
+  box-shadow: none;
+}
+#section-tracker .tab-count {
+  background: var(--v4-sunken);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+  font-family: var(--v4-sans);
+}
+#section-tracker .tracker-tab-btn.active .tab-count {
+  background: var(--v4-cobalt);
+  color: #fff;
+}
+#section-tracker .tab-group-label {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .tab-group-sep { background: var(--v4-rule); }
+
+/* --------------------------------------------- 6. La rejilla de datos   */
+
+#section-tracker .tracker-table-shell,
+#section-tracker .tracker-table-wrap {
+  margin-top: 1rem;
+  min-width: 0;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  overflow-x: auto;
+}
+#section-tracker .tracker-table {
+  background: var(--v4-surface);
+  font-family: var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+}
+#section-tracker .tracker-table th,
+#section-tracker .tracker-table td {
+  padding: .5rem .7rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+  color: var(--v4-ink-2);
+  font-size: var(--v4-t-mini);
+}
+/* Cabecera fija: con 13 columnas y decenas de filas, perder los rótulos al
+   desplazarse es perder la tabla. */
+#section-tracker .tracker-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+  white-space: nowrap;
+}
+#section-tracker .tracker-table tbody tr:hover td {
+  background: var(--v4-cobalt-tint);
+}
+#section-tracker .tracker-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--v4-sunken);
+  border-top: 1px solid var(--v4-rule);
+  font-weight: 600;
+  color: var(--v4-ink);
+}
+
+/* Densidad de fila: SÓLO relleno, sin `height` fija.
+   El prototipo medía 36 px, pero allí la celda era una cifra. En el tracker
+   real cada fila lleva un lienzo de sparkline, una celda de ticker de dos
+   líneas y un menú de acciones: la altura la manda el contenido (~70 px) y
+   forzar 36 px lo recortaría. La densidad se gana con el relleno y el cuerpo
+   de 13 px, no peleándose con el contenido. */
+#section-tracker .tracker-table--positions > tbody > tr:not(.pos-lots-row) > td {
+  padding-block: .3rem;
+}
+#section-tracker .tracker-table--positions.is-compact > tbody > tr:not(.pos-lots-row) > td {
+  padding-block: .15rem;
+}
+
+/* Columna de ticker congelada. Necesita fondo propio: si es transparente, el
+   contenido de las columnas de al lado se ve por debajo al desplazar.
+   `>` en toda la cadena: sin él, la tabla de lotes anidada dentro de
+   `.pos-lots-row` también congelaría su primera columna. */
+#section-tracker .tracker-table--positions > thead > tr > .th-ticker-sticky,
+#section-tracker .tracker-table--positions > tbody > tr > td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--v4-surface);
+  border-inline-end: 1px solid var(--v4-rule);
+}
+#section-tracker .tracker-table--positions > thead > tr > .th-ticker-sticky {
+  z-index: 4;
+  background: var(--v4-sunken);
+}
+#section-tracker .tracker-table--positions > tbody > tr:hover > td:first-child {
+  background: var(--v4-cobalt-tint);
+}
+/* La tabla de lotes es una tabla dentro de una celda: no hereda la rejilla. */
+#section-tracker .pos-lots-table th,
+#section-tracker .pos-lots-table td {
+  position: static;
+  background: none;
+  border-inline-end: 0;
+}
+
+#section-tracker .th-sortable { cursor: pointer; }
+#section-tracker .th-sortable:hover { color: var(--v4-ink); }
+#section-tracker .pos-ticker-dot,
+#section-tracker .pos-note-dot { border-radius: 1px; }
+#section-tracker .pos-ticker-logo { border-radius: 2px; }
+#section-tracker .pos-row.is-active > td { background: var(--v4-cobalt-tint); }
+#section-tracker .pos-lots-inner,
+#section-tracker .pos-lots-table {
+  background: var(--v4-sunken);
+  font-family: var(--v4-sans);
+}
+#section-tracker .pos-expand-btn,
+#section-tracker .pos-action-trigger,
+#section-tracker .tx-action-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-tracker .pos-expand-btn:hover,
+#section-tracker .pos-action-trigger:hover,
+#section-tracker .tx-action-btn:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule);
+  color: var(--v4-ink);
+}
+#section-tracker .pos-action-menu,
+#section-tracker .custom-select-list,
+#section-tracker .ticker-suggestions {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+  padding: 0;
+}
+#section-tracker .pos-action-dropdown,
+#section-tracker .custom-select-list > *,
+#section-tracker .ticker-suggestion-item {
+  padding: .5rem .7rem;
+  border-radius: 0;
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+}
+#section-tracker .pos-action-dropdown:hover,
+#section-tracker .custom-select-list > *:hover,
+#section-tracker .ticker-suggestion-item:hover {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-ink);
+}
+#section-tracker .pos-action-danger { color: var(--v4-neg); }
+#section-tracker .pos-action-danger:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  color: var(--v4-neg);
+}
+#section-tracker .tx-action-del:hover { color: var(--v4-neg); }
+#section-tracker .tx-month-header td {
+  background: var(--v4-sunken);
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .tx-load-more-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-tracker .tx-load-more-btn:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+
+/* --------------------------------------- 7. Controles: dos idiomas      */
+
+/* 7a. Marca de regla — posición en una escala de tiempo. */
+#section-tracker .perf-period-nav,
+#section-tracker .pos-return-period-toggle,
+#section-tracker .mc-year-nav,
+#section-tracker .var-conf-btns,
+#section-tracker .whatif-period {
+  gap: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--v4-rule);
+  border-radius: 0;
+}
+#section-tracker .perf-period-btn,
+#section-tracker .pos-period-btn,
+#section-tracker .var-conf-btn {
+  padding: .3rem .55rem;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .perf-period-btn:hover,
+#section-tracker .pos-period-btn:hover,
+#section-tracker .var-conf-btn:hover {
+  background: none;
+  color: var(--v4-ink);
+}
+#section-tracker .perf-period-btn.active,
+#section-tracker .pos-period-btn.active,
+#section-tracker .var-conf-btn.active {
+  background: none;
+  border-color: transparent;
+  border-bottom-color: var(--v4-cobalt-line);
+  color: var(--v4-ink);
+  font-weight: 600;
+}
+#section-tracker .pos-period-label {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* 7b. Pulgar relleno — modos excluyentes. */
+#section-tracker .value-series-toggle,
+#section-tracker .composition-toggle,
+#section-tracker .donut-base-toggle,
+#section-tracker .cash-op-toggle {
+  gap: 0;
+  padding: 2px;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+}
+#section-tracker .value-series-btn,
+#section-tracker .comp-btn,
+#section-tracker .donut-base-btn,
+#section-tracker .cash-op-btn {
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  color: var(--v4-ink-2);
+  box-shadow: none;
+}
+#section-tracker .value-series-btn:hover,
+#section-tracker .comp-btn:hover,
+#section-tracker .donut-base-btn:hover,
+#section-tracker .cash-op-btn:hover {
+  background: color-mix(in srgb, var(--v4-cobalt-tint) 70%, transparent);
+  color: var(--v4-ink);
+}
+#section-tracker .value-series-btn.active,
+#section-tracker .comp-btn.active,
+#section-tracker .donut-base-btn.active,
+#section-tracker .cash-op-btn.active {
+  background: var(--v4-cobalt);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+/* -------------------------------------------------- 8. Cromo de lienzos */
+
+#section-tracker .value-chart-wrap,
+#section-tracker .perf-chart-wrap,
+#section-tracker .mc-chart-wrap,
+#section-tracker .whatif-chart-wrap,
+#section-tracker .investment-value-chart-wrap,
+#section-tracker .div-bars-wrap,
+#section-tracker .holdings-bar-wrap,
+#section-tracker .attribution-wrap,
+#section-tracker .risk-contrib-wrap,
+#section-tracker .corr-matrix-wrap,
+#section-tracker .alloc-donut-wrap,
+#section-tracker .alloc-geo-map {
+  min-width: 0;
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-tracker .perf-chart-tooltip,
+#section-tracker .donut-chart-tooltip,
+#section-tracker .investment-value-tooltip,
+#section-tracker .corr-matrix-tooltip,
+#section-tracker .kpi-tooltip {
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+#section-tracker .perf-chart-tooltip,
+#section-tracker .donut-chart-tooltip,
+#section-tracker .investment-value-tooltip,
+#section-tracker .corr-matrix-tooltip {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  box-shadow: var(--v4-shadow-lift);
+  color: var(--v4-ink-2);
+}
+#section-tracker .perf-chart-tooltip strong,
+#section-tracker .donut-chart-tooltip strong { color: var(--v4-ink); }
+#section-tracker .donut-chart-tooltip small { color: var(--v4-ink-3); }
+
+#section-tracker .value-chart-readout strong {
+  font: 600 1.25rem/1.2 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .value-chart-delta,
+#section-tracker .perf-date-pill {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+}
+#section-tracker .perf-date-pill {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+}
+#section-tracker .value-custom-popover {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-tracker .value-custom-error { color: var(--v4-neg); font-family: var(--v4-sans); }
+
+/* Leyendas: el color de cada punto es dato (identifica la posición). */
+#section-tracker .donut-legend-item,
+#section-tracker .alloc-legend-item,
+#section-tracker .mc-legend-item,
+#section-tracker .investment-value-legend {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+}
+#section-tracker .donut-legend-item { border-bottom: 1px solid var(--v4-rule-soft); }
+#section-tracker .donut-legend-ticker,
+#section-tracker .alloc-legend-label { color: var(--v4-ink); font-weight: 600; }
+#section-tracker .donut-legend-weight,
+#section-tracker .donut-legend-value,
+#section-tracker .alloc-legend-pct { color: var(--v4-ink-3); }
+#section-tracker .donut-legend-dot,
+#section-tracker .alloc-legend-dot,
+#section-tracker .mc-legend-swatch { border-radius: 1px; }
+#section-tracker .treemap-tile-ticker,
+#section-tracker .treemap-tile-chg { font-family: var(--v4-sans); }
+
+/* ------------------------------------- 9. Métricas de pestaña (no KPI wall) */
+
+#section-tracker .perf-metrics-grid,
+#section-tracker .mc-stats-grid,
+#section-tracker .corr-metrics-grid,
+#section-tracker .whatif-stats-grid,
+#section-tracker .div-kpi-row {
+  gap: 0;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#section-tracker .perf-metrics-grid > *,
+#section-tracker .mc-stats-grid > *,
+#section-tracker .corr-metrics-grid > *,
+#section-tracker .whatif-stats-grid > *,
+#section-tracker .div-kpi-row > * { min-width: 0; }
+#section-tracker .perf-metric-card,
+#section-tracker .mc-stat-card,
+#section-tracker .div-kpi {
+  padding: .7rem .85rem;
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--v4-rule-soft);
+  border-block-start: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+}
+#section-tracker .perf-metric-label,
+#section-tracker .mc-stat-label,
+#section-tracker .div-kpi-label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .perf-metric-value,
+#section-tracker .mc-stat-value,
+#section-tracker .div-kpi-value {
+  font: 600 1.0625rem/1.2 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .perf-metric-sub,
+#section-tracker .mc-stat-sub {
+  font: 400 var(--v4-t-label)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .perf-info-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+
+/* --------------------------------- 10. Correlación, rebalanceo y metas  */
+
+#section-tracker .corr-matrix { font-family: var(--v4-sans); }
+#section-tracker .corr-matrix-title-wrap,
+#section-tracker .corr-pairs-title {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .corr-matrix-info { color: var(--v4-ink-3); }
+#section-tracker .corr-scale-bar { border-radius: 0; }
+#section-tracker .corr-scale-ticks,
+#section-tracker .corr-pair-names {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+}
+#section-tracker .corr-pair-row { border-bottom: 1px solid var(--v4-rule-soft); }
+
+#section-tracker .rebal-opt-summary,
+#section-tracker .rebal-ai-panel {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-tracker .rebal-opt-summary-title,
+#section-tracker .rebal-ai-head {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .rebal-ai-body { font-family: var(--v4-sans); color: var(--v4-ink-2); }
+#section-tracker .rebal-ai-disclaimer,
+#section-tracker .rebal-cash-label,
+#section-tracker .rebal-weight-sum,
+#section-tracker .rebal-opt-msg,
+#section-tracker .fin-note,
+#section-tracker .form-hint {
+  font: 400 var(--v4-t-mini)/1.55 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .rebal-target-input {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .rebal-target-val { font-family: var(--v4-sans); color: var(--v4-ink-2); }
+
+#section-tracker .goal-progress-card {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-tracker .goal-progress-label {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .goal-progress-meta,
+#section-tracker .goal-progress-amounts {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-3);
+}
+#section-tracker .goal-progress-bar {
+  background: var(--v4-rule-soft);
+  border-radius: 0;
+}
+#section-tracker .goal-progress-fill { border-radius: 0; }
+#section-tracker .goal-prob-badge {
+  background: var(--v4-cobalt-tint);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-cobalt-ink);
+}
+#section-tracker .goal-prob-value { font-family: var(--v4-sans); color: var(--v4-ink); }
+#section-tracker .goal-prob-cap { font-family: var(--v4-sans); color: var(--v4-ink-3); }
+
+#section-tracker .closed-trades-summary {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+
+#section-tracker .tx-filters {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-tracker .tx-filters-toggle-btn,
+#section-tracker .tx-filter-clear,
+#section-tracker .positions-density-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-tracker .tx-filters-toggle-btn:hover,
+#section-tracker .tx-filter-clear:hover,
+#section-tracker .positions-density-btn:hover,
+#section-tracker .positions-density-btn[aria-pressed="true"] {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+#section-tracker .tx-filters-count {
+  background: var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+  font-family: var(--v4-sans);
+}
+#section-tracker .tx-filter-group label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* ---------------------------------------------- 11. Campos y botonería  */
+
+#section-tracker input[type="text"],
+#section-tracker input[type="number"],
+#section-tracker input[type="date"],
+#section-tracker input[type="search"],
+#section-tracker select,
+#section-tracker textarea,
+#section-tracker .custom-select-trigger {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  font-size: 1rem; /* 16px: evita el zoom de iOS (DESIGN.md §3) */
+  color: var(--v4-ink);
+}
+#section-tracker input::placeholder,
+#section-tracker textarea::placeholder { color: var(--v4-ink-3); }
+#section-tracker input:focus,
+#section-tracker select:focus,
+#section-tracker textarea:focus,
+#section-tracker .custom-select-trigger:focus {
+  border-color: var(--v4-cobalt-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v4-cobalt-line) 20%, transparent);
+  outline: none;
+}
+#section-tracker .form-row label,
+#section-tracker .goal-field label,
+#section-tracker .mc-ctrl > label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .positions-search { font-size: var(--v4-t-mini); }
+
+#section-tracker .button.primary {
+  background: var(--v4-cobalt);
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+  font-family: var(--v4-sans);
+  box-shadow: none;
+}
+#section-tracker .button.primary:hover {
+  background: color-mix(in srgb, var(--v4-cobalt) 88%, #000);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+#section-tracker .button.ghost,
+#section-tracker .button.secondary,
+#section-tracker .tracker-refresh-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-tracker .button.ghost:hover,
+#section-tracker .button.secondary:hover,
+#section-tracker .tracker-refresh-btn:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+  transform: none;
+  box-shadow: none;
+}
+#section-tracker .button.danger,
+#section-tracker .share-revoke {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--v4-neg) 45%, transparent);
+  border-radius: 2px;
+  color: var(--v4-neg);
+}
+#section-tracker .button.danger:hover,
+#section-tracker .share-revoke:hover {
+  background: color-mix(in srgb, var(--v4-neg) 10%, transparent);
+  border-color: var(--v4-neg);
+}
+
+/* --------------------------------------------------------- 12. Diálogos */
+
+#section-tracker .tracker-modal-backdrop {
+  background: color-mix(in srgb, #040B14 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+#section-tracker .tracker-modal {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-tracker .tracker-modal-header {
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-tracker .tracker-modal-header h3 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  letter-spacing: -.015em;
+  color: var(--v4-ink);
+}
+#section-tracker .tracker-modal-close {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-tracker .tracker-modal-close:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  border-color: var(--v4-neg);
+  color: var(--v4-neg);
+}
+#section-tracker .delete-confirm-msg,
+#section-tracker .share-modal-desc {
+  font: 400 var(--v4-t-small)/1.6 var(--v4-sans);
+  color: var(--v4-ink-2);
+  max-width: 60ch;
+}
+/* La acción destructiva se separa con su propia regla (DESIGN.md §4). */
+#section-tracker .delete-confirm-actions {
+  padding-top: .75rem;
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .share-link-row input {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-tracker .withdraw-net-preview,
+#section-tracker .report-preset-row {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-tracker .withdraw-net-amount { font-family: var(--v4-sans); color: var(--v4-ink); }
+#section-tracker .withdraw-ticker-display { font-family: var(--v4-sans); color: var(--v4-ink-2); }
+#section-tracker .report-preset {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-tracker .report-preset:hover,
+#section-tracker .report-preset.active {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+
+/* ------------------------------------------------- 13. Asistente IA     */
+
+#section-tracker .ai-chat-panel {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+  backdrop-filter: none;
+}
+#section-tracker .ai-chat-header {
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-tracker .ai-chat-title-text strong {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .ai-chat-sub { font-family: var(--v4-sans); color: var(--v4-ink-3); }
+#section-tracker .ai-chat-spark { color: var(--v4-cobalt-ink); }
+#section-tracker .ai-chat-min,
+#section-tracker .ai-chat-close {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-tracker .ai-chat-messages {
+  background: var(--v4-surface);
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-tracker .ai-chat-chip {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+}
+#section-tracker .ai-chat-chip:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+#section-tracker .ai-chat-input-row {
+  background: var(--v4-sunken);
+  border-top: 1px solid var(--v4-rule);
+}
+#section-tracker .ai-chat-send {
+  background: var(--v4-cobalt);
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+}
+
+/* ------------------------------------------------------------ 14. Móvil */
+
+/* Trampa recurrente de DESIGN.md §6: sin `min-width: 0` en los ítems de
+   rejilla, las tablas y los lienzos empujan la columna y la página desborda
+   en vez de scrollear dentro de su contenedor. */
+#section-tracker .tracker-tab-panel > *,
+#section-tracker .allocation-row > *,
+#section-tracker .rebal-controls > *,
+#section-tracker .mc-controls > *,
+#section-tracker .goal-form-grid > *,
+#section-tracker .whatif-controls > * {
+  min-width: 0;
+}
+
+@media (max-width: 40rem) {
+  #section-tracker .tracker-kpi-grid,
+  #section-tracker .kpi-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+  #section-tracker .summary-item {
+    padding: .65rem .8rem;
+    border-block-start: 1px solid var(--v4-rule-soft);
+  }
+  /* Con dos columnas, «primer hijo» ya no basta para saber quién abre fila. */
+  #section-tracker .tracker-kpi-grid > .summary-item:nth-child(odd),
+  #section-tracker .kpi-strip > .summary-item:nth-child(odd) {
+    border-inline-start: 0;
+  }
+  #section-tracker .portfolio-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}

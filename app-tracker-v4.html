@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portafolio Tracker | BlackPortfolio</title>
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="app-v4.css">
+  <link rel="stylesheet" href="app-ui-v4.css">
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="app">
+<!--
+  THESIS: Segundo corte del rediseño de la app — el corazón del producto. Modo Operate llevado a
+  su extremo: nueve pestañas y una tabla de doce columnas sin que la lámina deje de leerse como
+  documento de comité.
+  OWN-WORLD: Mismo mundo que landing-v4 con la densidad de una herramienta. Cero fotografía,
+  serif sólo en títulos de panel, el cobalto es serie de datos antes que acción.
+  DECISIÓN ABIERTA QUE ESTE CORTE RESUELVE (DESIGN.md §12): la tabla de posiciones deja de ser
+  lámina-documento y pasa a rejilla de datos — encabezado fijo, ticker congelado, fila de 36 px.
+  SIGNATURE: el registro (.ledger). La regla inferior de la banda de cifras NO es un borde: es la
+  serie de valor del portafolio dibujada a 1px. La estructura de la página y el dato son la misma
+  línea.
+  FIRST VIEWPORT: barra alta, navegación con Tracker marcado, nombre del portafolio, el registro
+  con la cifra de récord, y la primera pestaña ya cargada.
+  DATOS: todos de muestra, marcados con .stamp. Los identificadores son los que ya usa main.js.
+-->
+
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="app__top">
+  <a class="mark" href="landing-v4.html"><b>Black</b><span>Portfolio</span></a>
+  <div class="app__top-actions">
+    <span class="app__plan">Plan <b>Advisor Pro</b></span>
+    <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+    </button>
+    <span class="app__avatar" aria-hidden="true">FP</span>
+  </div>
+</header>
+
+<div class="app__body">
+
+  <nav class="app__nav" aria-label="Secciones de la aplicación">
+    <ul>
+      <li><a href="app-home-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>Resumen</a></li>
+      <li><a href="app-tracker-v4.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M4 19V5m0 14 5-6 4 3 5-8"/></svg>Tracker</a></li>
+      <li><a href="app-analizador-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 3"/></svg>Analizador</a></li>
+      <li><a href="app-optimizacion-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c4-14 12-14 16 0"/><circle cx="14" cy="10" r="1.6"/></svg>Optimización</a></li>
+      <li><a href="app-mercados-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Mercados</a></li>
+      <li><a href="app-topdown-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 8h18M3 16h18"/></svg>Top-down</a></li>
+      <li><a href="app-ajustes-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2m0 13v2M4.2 8l1.7 1m12.2 6 1.7 1M4.2 16l1.7-1m12.2-6 1.7-1"/></svg>Ajustes</a></li>
+    </ul>
+  </nav>
+
+  <main class="app__main" id="contenido">
+
+    <p class="preview-note">
+      <b>Vista previa del rediseño del Tracker.</b> Cifras de muestra, internamente consistentes.
+      Los identificadores de los controles son los que ya usa <code>main.js</code>: el trasplante
+      no toca la lógica. <button type="button" class="btn-text" id="protoStatesBtn">Ver estados</button>
+    </p>
+
+    <!-- ══════════════════ Vista: lista de portafolios ══════════════════ -->
+    <div id="trackerListView" hidden>
+
+      <div class="app__head app__head--row">
+        <div>
+          <h1>Portafolios</h1>
+          <p>Tres carteras y una vista consolidada. Abre una para operarla.</p>
+        </div>
+        <div class="head-actions">
+          <button id="trackerGoCompareBtn" class="btn btn--quiet btn--sm" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+            Comparar
+          </button>
+          <button id="importCsvBtn" class="btn btn--quiet btn--sm" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Importar CSV
+          </button>
+          <button id="newPortfolioBtn" class="btn btn--primary btn--sm" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nuevo portafolio
+          </button>
+        </div>
+        <input id="importCsvInput" type="file" accept=".csv,text/csv" hidden>
+      </div>
+
+      <!-- El consolidado va arriba y se lee como asiento de apertura, no como tarjeta. -->
+      <div id="consolidatedBar" class="consolidated">
+        <div class="consolidated__fig">
+          <span class="lab">Patrimonio consolidado</span>
+          <strong class="fig">$127,940.18</strong>
+          <span class="delta pos">+$1,604.77 · +1.27% hoy</span>
+        </div>
+        <dl class="consolidated__meta">
+          <div><dt>Carteras</dt><dd>3</dd></div>
+          <div><dt>Posiciones</dt><dd>14</dd></div>
+          <div><dt>Retorno total</dt><dd class="pos">+34.81%</dd></div>
+        </dl>
+        <span class="stamp">Datos de muestra</span>
+      </div>
+
+      <!-- Registro de carteras: filas de libro, no muro de tarjetas iguales. -->
+      <section class="panel panel--flush" aria-labelledby="tituloCarteras">
+        <div class="panel__head">
+          <h2 id="tituloCarteras">Mis carteras</h2>
+          <p class="panel__meta">Valor · día · retorno</p>
+        </div>
+        <div class="grid-scroll">
+          <table class="tbl tbl--register" id="portfolioCardsGrid">
+            <thead>
+              <tr>
+                <th scope="col">Cartera</th>
+                <th scope="col" class="th-spark">90 días</th>
+                <th scope="col" class="n">Valor</th>
+                <th scope="col" class="n">Hoy</th>
+                <th scope="col" class="n">Retorno</th>
+                <th scope="col"><span class="sr">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody><!-- app-tracker-v4.js --></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div id="noPortfoliosMsg" class="empty" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v4H3zM3 11h18v10H3z"/><path d="M7 15h4M7 18h2"/></svg>
+        <b>Todavía no tienes carteras</b>
+        <p>Crea una cartera para registrar posiciones, medir su riesgo y exportar el reporte.</p>
+        <button class="btn btn--primary btn--sm" type="button">Crear la primera cartera</button>
+      </div>
+
+      <!-- Watchlist -->
+      <section class="panel panel--flush" aria-labelledby="tituloWatch">
+        <div class="panel__head">
+          <h2 id="tituloWatch">Lista de seguimiento</h2>
+          <p class="panel__meta">Vigilas sin poseer</p>
+        </div>
+        <div class="panel__body panel__body--tight">
+          <form id="watchlistForm" class="inline-form">
+            <label class="sr" for="watchlistInput">Agregar ticker a la lista de seguimiento</label>
+            <input id="watchlistInput" type="text" placeholder="AAPL, BTC-USD, NAFTRAC.MX…" autocomplete="off">
+            <button class="btn btn--quiet btn--sm" type="submit">Agregar</button>
+          </form>
+        </div>
+        <div class="grid-scroll" id="watchlistTableShell">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th scope="col">Ticker</th>
+                <th scope="col" class="th-spark">30 días</th>
+                <th scope="col" class="n">Precio</th>
+                <th scope="col" class="n">Cambio diario</th>
+                <th scope="col"><span class="sr">Quitar</span></th>
+              </tr>
+            </thead>
+            <tbody id="watchlistTableBody"><!-- app-tracker-v4.js --></tbody>
+          </table>
+        </div>
+        <p id="watchlistEmptyMsg" class="panel__foot" hidden>Tu lista está vacía. Agrega un activo para vigilar su precio.</p>
+      </section>
+    </div>
+
+    <!-- ══════════════════ Vista: dashboard de cartera ══════════════════ -->
+    <div id="trackerDashView">
+
+      <div class="dash-top">
+        <button id="backToListBtn" class="btn-back" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>
+          Mis carteras
+        </button>
+
+        <div class="dash-title">
+          <h1 id="dashPortfolioName">Núcleo global</h1>
+          <button id="renamePortfolioBtn" class="icon-btn icon-btn--xs" type="button" aria-label="Editar nombre de la cartera">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <span class="stamp">Datos de muestra</span>
+        </div>
+
+        <div class="dash-actions">
+          <button id="trackerAiChatBtn" class="btn btn--quiet btn--sm" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z"/><path d="M19 14l.8 2L22 16.8l-2.2.8L19 20l-.8-2.4L16 16.8l2.2-.8L19 14z"/></svg>
+            Asistente
+          </button>
+          <div class="menu" id="trackerExportMenu">
+            <button id="exportMenuTrigger" class="btn btn--quiet btn--sm" type="button" aria-haspopup="true" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar
+              <svg viewBox="0 0 20 20" aria-hidden="true" class="ico ico--chev"><path d="M5.5 7.5L10 12.5L14.5 7.5"/></svg>
+            </button>
+            <div class="menu__list" role="menu" hidden>
+              <button id="exportCsvBtn" type="button" role="menuitem"><b>Transacciones (CSV)</b><span>Historial de movimientos</span></button>
+              <button id="exportPositionsBtn" type="button" role="menuitem"><b>Posiciones (CSV)</b><span>Reimportable a otra cartera</span></button>
+              <button id="exportPdfBtn" type="button" role="menuitem"><b>Reporte PDF</b><span>Informe por rango de fechas</span></button>
+              <button id="exportDeckBtn" type="button" role="menuitem"><b>Presentación</b><span>Deck interactivo para exponer</span></button>
+            </div>
+          </div>
+          <button id="sharePortfolioBtn" class="btn btn--quiet btn--sm" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+            Compartir
+          </button>
+          <button id="editPortfolioSettingsBtn" class="icon-btn icon-btn--sm" type="button" aria-label="Ajustes de la cartera">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── EL REGISTRO ────────────────────────────────────────────────
+           La cifra de récord manda; el resto son anotaciones separadas por
+           reglas, no tarjetas. La regla inferior es la serie de valor. -->
+      <section class="ledger" aria-label="Cifras de la cartera">
+        <div class="ledger__main">
+          <div class="ledger__record">
+            <span class="ledger__lab">
+              Valor actual
+              <label class="sr" for="dashAltCurrencySelect">Ver equivalencia en otra moneda</label>
+              <select id="dashAltCurrencySelect" class="alt-cur">
+                <option value="">Sin equivalencia</option>
+                <option value="MXN">MXN</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </span>
+            <strong id="dashCurrentValue" class="ledger__fig">$85,008.65</strong>
+            <em id="dashCurrentValueAlt" class="ledger__alt"></em>
+            <em id="dashAltFxRate" class="ledger__alt"></em>
+          </div>
+          <div class="ledger__today">
+            <span class="ledger__lab">Cambio de hoy</span>
+            <strong id="dashDayChangeAmt" class="ledger__fig ledger__fig--sm pos">+$1,118.95</strong>
+            <em id="dashDayChangePct" class="pos">+1.39%</em>
+          </div>
+        </div>
+
+        <dl class="ledger__row">
+          <div class="ledger__cell">
+            <dt>Retorno total <button class="hint" type="button" aria-label="Qué es el retorno total" data-hint="Ganancia o pérdida total (no realizada + realizada) sobre el costo invertido de las posiciones con precio.">?</button></dt>
+            <dd><b id="dashReturnAmt" class="pos">+$24,737.80</b><em id="dashReturnPct" class="pos">+42.55%</em><em id="dashReturnAmtAlt" class="ledger__alt"></em></dd>
+          </div>
+          <div class="ledger__cell">
+            <dt>P/L no realizada <button class="hint" type="button" aria-label="Qué es la P/L no realizada" data-hint="Ganancia o pérdida de las posiciones que sigues teniendo. Cambia con el precio y sólo se materializa al vender.">?</button></dt>
+            <dd><b id="dashUnrealizedPnL" class="pos">+$23,453.50</b></dd>
+          </div>
+          <div class="ledger__cell">
+            <dt>P/L realizada <button class="hint" type="button" aria-label="Qué es la P/L realizada" data-hint="Ganancia o pérdida ya materializada por ventas, comparada con el costo promedio de esas acciones.">?</button></dt>
+            <dd><b id="dashRealizedPnL" class="pos">+$1,284.30</b></dd>
+          </div>
+          <div class="ledger__cell">
+            <dt>Total invertido</dt>
+            <dd><b id="dashTotalInvested">$58,391.44</b><em id="dashInvestedNote" class="ledger__alt">incluye comisiones e IVA</em></dd>
+          </div>
+          <div class="ledger__cell">
+            <dt>Efectivo</dt>
+            <dd><b id="dashCashBalance">$3,412.65</b><button id="manageCashBtn" class="cell-act" type="button">Aportar o retirar</button></dd>
+          </div>
+          <div class="ledger__cell">
+            <dt>XIRR anual <button class="hint" type="button" aria-label="Qué es el XIRR" data-hint="Tasa interna de retorno anualizada que pondera el momento exacto de cada flujo: compras, ventas y dividendos.">?</button></dt>
+            <dd><b id="dashXirr" class="pos">+24.80%</b></dd>
+          </div>
+          <div class="ledger__cell">
+            <dt>Posiciones</dt>
+            <dd><b id="dashPositionCount">6</b></dd>
+          </div>
+        </dl>
+
+        <details class="ledger__more">
+          <summary>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5L10 12.5L14.5 7.5"/></svg>
+            Comisiones, IVA y referencia
+          </summary>
+          <dl class="ledger__row ledger__row--quiet">
+            <div class="ledger__cell"><dt>Comisiones</dt><dd><b id="dashTotalCommissions">$214.60</b></dd></div>
+            <div class="ledger__cell"><dt>IVA total</dt><dd><b id="dashTotalIva">$34.34</b></dd></div>
+            <div class="ledger__cell"><dt>Referencia</dt><dd><b id="dashBenchmark">S&amp;P 500</b></dd></div>
+          </dl>
+        </details>
+
+        <!-- SIGNATURE: la regla inferior de la banda es la serie de valor. -->
+        <canvas class="ledger__rule" id="ledgerSpark" aria-hidden="true"></canvas>
+      </section>
+
+      <div class="status-bar">
+        <span id="dashPriceStatus" class="status-bar__msg">Precios al 30 jul 2026, 14:32 · Yahoo Finance y CoinGecko</span>
+        <button id="refreshPricesBtn" class="btn btn--quiet btn--sm" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="ico ico--spin"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Actualizar precios
+        </button>
+      </div>
+
+      <!-- ── Pestañas ─────────────────────────────────────────────────── -->
+      <div class="tabs">
+        <div class="tabs__strip" role="tablist" aria-label="Vistas de la cartera" id="trackerTabs">
+          <span class="tabs__ink" aria-hidden="true"></span>
+          <button class="tabs__btn" role="tab" id="tab-summary" aria-controls="tabPanelSummary" aria-selected="true" data-tab="summary" type="button">Resumen</button>
+          <span class="tabs__group">Análisis</span>
+          <button class="tabs__btn" role="tab" id="tab-desempeno" aria-controls="tabPanelDesempeno" aria-selected="false" tabindex="-1" data-tab="desempeno" type="button">Desempeño</button>
+          <button class="tabs__btn" role="tab" id="tab-correlacion" aria-controls="tabPanelCorrelacion" aria-selected="false" tabindex="-1" data-tab="correlacion" type="button">Correlación</button>
+          <button class="tabs__btn" role="tab" id="tab-rebalanceo" aria-controls="tabPanelRebalanceo" aria-selected="false" tabindex="-1" data-tab="rebalanceo" type="button">Rebalanceo</button>
+          <span class="tabs__group">Proyección</span>
+          <button class="tabs__btn" role="tab" id="tab-proyeccion" aria-controls="tabPanelProyeccion" aria-selected="false" tabindex="-1" data-tab="proyeccion" type="button">Monte Carlo</button>
+          <button class="tabs__btn" role="tab" id="tab-metas" aria-controls="tabPanelMetas" aria-selected="false" tabindex="-1" data-tab="metas" type="button">Metas</button>
+          <button class="tabs__btn" role="tab" id="tab-whatif" aria-controls="tabPanelWhatif" aria-selected="false" tabindex="-1" data-tab="whatif" type="button">What-If</button>
+          <span class="tabs__group">Movimientos</span>
+          <button class="tabs__btn" role="tab" id="tab-transacciones" aria-controls="tabPanelTransacciones" aria-selected="false" tabindex="-1" data-tab="transacciones" type="button">Transacciones</button>
+          <button class="tabs__btn" role="tab" id="tab-dividendos" aria-controls="tabPanelDividendos" aria-selected="false" tabindex="-1" data-tab="dividendos" type="button">Dividendos</button>
+        </div>
+      </div>
+
+      <!-- ── 1. Resumen ───────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelSummary" role="tabpanel" aria-labelledby="tab-summary" tabindex="0">
+
+        <section class="panel panel--wide">
+          <div class="panel__head panel__head--chart">
+            <div>
+              <h2>Valor de la cartera</h2>
+              <div class="readout">
+                <strong id="valueChartLatest">$85,008.65</strong>
+                <span id="valueChartDelta" class="pos">+$21,304.12 · +33.44% en 1 año</span>
+              </div>
+            </div>
+            <div class="panel__controls">
+              <div class="seg seg--sm" id="valueSeriesToggle" role="group" aria-label="Serie a mostrar">
+                <span class="seg__thumb" aria-hidden="true"></span>
+                <button type="button" aria-pressed="true" data-series="value">Valor</button>
+                <button type="button" aria-pressed="false" data-series="invested">vs Invertido</button>
+                <button type="button" aria-pressed="false" data-series="benchmark">vs Benchmark</button>
+              </div>
+              <div class="periods" id="valueChartPeriodNav" role="group" aria-label="Periodo">
+                <button type="button" data-range="1mo">1M</button>
+                <button type="button" data-range="3mo">3M</button>
+                <button type="button" data-range="6mo">6M</button>
+                <button type="button" data-range="1y" aria-pressed="true">1A</button>
+                <button type="button" data-range="max">Máx</button>
+                <button type="button" data-range="custom" id="valueCustomBtn">Personalizado</button>
+              </div>
+            </div>
+          </div>
+          <div id="valueCustomPopover" class="popover" hidden>
+            <label>Desde <input type="date" id="valueCustomFrom" value="2025-07-30"></label>
+            <label>Hasta <input type="date" id="valueCustomTo" value="2026-07-30"></label>
+            <button type="button" class="btn btn--primary btn--sm" id="valueCustomApply">Aplicar</button>
+            <span id="valueCustomError" class="msg err"></span>
+          </div>
+          <div class="chart chart--tall" id="valueChartWrap">
+            <canvas id="portfolioValueChart" aria-label="Evolución del valor de la cartera"></canvas>
+            <div id="portfolioValueTooltip" class="chart__tip" hidden></div>
+          </div>
+          <p class="panel__foot" id="valueChartStatus">Valor de mercado de las posiciones más el efectivo. La banda gris es el capital invertido acumulado.</p>
+        </section>
+
+        <div class="panels panels--2">
+          <section class="panel" id="compositionCard" data-comp="donut">
+            <div class="panel__head panel__head--chart">
+              <div>
+                <h2>Composición</h2>
+                <p class="panel__meta" id="compositionSub">Distribución por posición</p>
+              </div>
+              <div class="panel__controls">
+                <div class="seg seg--sm" id="donutBaseToggle" role="group" aria-label="Base de cálculo">
+                  <span class="seg__thumb" aria-hidden="true"></span>
+                  <button type="button" aria-pressed="true" data-base="current">Valor actual</button>
+                  <button type="button" aria-pressed="false" data-base="invested">Invertido</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel__controls panel__controls--sub">
+              <div class="seg seg--sm" id="compositionToggle" role="group" aria-label="Tipo de vista">
+                <span class="seg__thumb" aria-hidden="true"></span>
+                <button type="button" aria-pressed="true" data-comp="donut">Ponderación</button>
+                <button type="button" aria-pressed="false" data-comp="bars">Top 10</button>
+                <button type="button" aria-pressed="false" data-comp="heatmap">Mapa de calor</button>
+              </div>
+            </div>
+
+            <div class="comp" data-comp-panel="donut">
+              <div class="comp__donut">
+                <canvas id="portfolioDonutChart" aria-label="Ponderación de la cartera"></canvas>
+                <div id="portfolioDonutTooltip" class="chart__tip" role="status" hidden></div>
+              </div>
+              <ul id="donutLegend" class="legend" aria-label="Detalle de ponderaciones"></ul>
+            </div>
+
+            <div class="comp" data-comp-panel="bars" hidden>
+              <p class="panel__meta" id="holdingsBarSubtitle">Por valor actual</p>
+              <div class="chart" style="--h:220px"><canvas id="holdingsBarChart"></canvas></div>
+            </div>
+
+            <div class="comp" data-comp-panel="heatmap" hidden>
+              <div id="holdingsTreemap" class="treemap"></div>
+              <p class="panel__foot" id="heatmapEmptyMsg" hidden>Actualiza precios para ver el mapa de calor.</p>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel__head">
+              <h2>Concentración</h2>
+              <p class="panel__meta">HHI y peso de las cinco mayores</p>
+            </div>
+            <div class="panel__body">
+              <div class="gauge">
+                <div class="gauge__row">
+                  <span class="gauge__lab">Índice HHI</span>
+                  <span class="gauge__val">0.213</span>
+                </div>
+                <div class="gauge__track"><span class="gauge__fill" style="--w:21.3%"></span><span class="gauge__mark" style="--x:25%" title="Umbral de concentración alta"></span></div>
+                <p class="gauge__note">Por debajo de 0.25: concentración moderada. La marca señala el umbral.</p>
+              </div>
+              <dl class="pairs">
+                <div><dt>Top 5 del capital</dt><dd>94.91%</dd></div>
+                <div><dt>Mayor posición</dt><dd>BTC-USD · 31.52%</dd></div>
+                <div><dt>Clases de activo</dt><dd>3 de 6</dd></div>
+                <div><dt>Divisas</dt><dd>USD, MXN</dd></div>
+              </dl>
+            </div>
+            <p class="panel__foot">Monitoreo y análisis. Nada de esto es una recomendación de inversión.</p>
+          </section>
+        </div>
+
+        <section class="panel panel--wide">
+          <div class="panel__head panel__head--chart">
+            <div>
+              <h2>Posiciones</h2>
+              <p class="panel__meta"><span id="posCountLabel">6 activos</span> · orden por valor</p>
+            </div>
+            <div class="panel__controls">
+              <label class="sr" for="positionsSearchInput">Buscar ticker</label>
+              <div class="field-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                <input id="positionsSearchInput" type="text" placeholder="Buscar ticker…" autocomplete="off">
+              </div>
+              <button id="positionsDensityBtn" class="icon-btn icon-btn--sm" type="button" aria-pressed="false" aria-label="Alternar densidad de la tabla">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              </button>
+              <button id="addPositionBtn" class="btn btn--primary btn--sm" type="button">Agregar posición</button>
+            </div>
+          </div>
+
+          <div class="panel__controls panel__controls--sub">
+            <div class="seg seg--sm" id="posReturnPeriodToggle" role="group" aria-label="Periodo del retorno por posición">
+              <span class="seg__thumb" aria-hidden="true"></span>
+              <button type="button" aria-pressed="true" data-period="total">Total</button>
+              <button type="button" aria-pressed="false" data-period="1d">1D</button>
+              <button type="button" aria-pressed="false" data-period="1w">1S</button>
+              <button type="button" aria-pressed="false" data-period="1m">1M</button>
+              <button type="button" aria-pressed="false" data-period="ytd">YTD</button>
+            </div>
+          </div>
+
+          <!-- REJILLA DE DATOS: encabezado fijo + ticker congelado. -->
+          <div class="grid-scroll grid-scroll--sticky" id="positionsTableShell">
+            <table class="tbl tbl--grid" id="positionsTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze"><button type="button" class="th-sort" data-sort="ticker">Ticker</button></th>
+                  <th scope="col" class="th-spark">30 días</th>
+                  <th scope="col"><button type="button" class="th-sort" data-sort="date">Compra</button></th>
+                  <th scope="col" class="n"><button type="button" class="th-sort" data-sort="avg">Precio prom.</button></th>
+                  <th scope="col" class="n"><button type="button" class="th-sort" data-sort="price">Precio actual</button></th>
+                  <th scope="col" class="n"><button type="button" class="th-sort" data-sort="day">Hoy</button></th>
+                  <th scope="col" class="n"><button type="button" class="th-sort" data-sort="qty">Cantidad</button></th>
+                  <th scope="col" class="n"><button type="button" class="th-sort" data-sort="cost">Costo</button></th>
+                  <th scope="col" class="n" aria-sort="descending"><button type="button" class="th-sort" data-sort="value">Valor</button></th>
+                  <th scope="col" class="n" id="thPosReturn"><button type="button" class="th-sort" data-sort="return">Retorno</button></th>
+                  <th scope="col" class="n" title="Retorno de la posición menos el del benchmark desde la fecha de compra">vs Bench.</th>
+                  <th scope="col"><span class="sr">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody id="positionsTableBody"><!-- app-tracker-v4.js --></tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row" class="th-freeze">Total</th>
+                  <td class="th-spark"></td><td></td><td></td><td></td>
+                  <td class="n pos">+$1,118.95</td>
+                  <td></td>
+                  <td class="n">$58,142.50</td>
+                  <td class="n">$81,596.00</td>
+                  <td class="n pos">+40.34%</td>
+                  <td class="n pos">+12.8 pp</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div id="noPositionsMsg" class="empty" hidden>
+            <b>Sin posiciones</b>
+            <p>Agrega la primera para empezar a medir el riesgo y el retorno de esta cartera.</p>
+            <button class="btn btn--primary btn--sm" type="button">Agregar posición</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── 2. Desempeño ─────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelDesempeno" role="tabpanel" aria-labelledby="tab-desempeno" tabindex="0" hidden>
+
+        <!-- Doce métricas: tabla de razones, no doce tarjetas iguales. -->
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2>Métricas de riesgo y retorno</h2>
+            <p class="panel__meta">Retornos diarios · 1 año · vs S&amp;P 500</p>
+          </div>
+          <div class="grid-scroll">
+            <table class="tbl tbl--metrics">
+              <thead>
+                <tr><th scope="col">Métrica</th><th scope="col" class="n">Cartera</th><th scope="col" class="n">Referencia</th><th scope="col">Lectura</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">Retorno TWR <span class="sub">Ponderado por tiempo</span></th><td class="n pos" id="twrValue">+38.42%</td><td class="n">+21.60%</td><td>Supera a la referencia por 16.8 pp</td></tr>
+                <tr><th scope="row">Sharpe <span class="sub">Tasa libre de riesgo 4.30%</span></th><td class="n" id="sharpeValue">1.42</td><td class="n">0.98</td><td>Mejor retorno por unidad de riesgo</td></tr>
+                <tr><th scope="row">Volatilidad anualizada</th><td class="n" id="volatilityValue">18.61%</td><td class="n">13.20%</td><td>Oscila más que el índice</td></tr>
+                <tr><th scope="row">VaR 95% <span class="sub">Diario</span></th><td class="n neg" id="varValue">−2.11%</td><td class="n">−1.42%</td><td>Un día de cada 20 cae más que eso</td></tr>
+                <tr><th scope="row">Beta</th><td class="n" id="betaValue">1.18</td><td class="n">1.00</td><td>Amplifica el movimiento del mercado</td></tr>
+                <tr><th scope="row">Max drawdown <span class="sub">Pico a valle</span></th><td class="n neg" id="maxDrawdownValue">−22.41%</td><td class="n neg">−14.90%</td><td>Caída máxima entre nov 2024 y abr 2025</td></tr>
+                <tr><th scope="row">Tracking error</th><td class="n" id="trackingErrorValue">9.81%</td><td class="n">—</td><td>Se aparta bastante de la referencia</td></tr>
+                <tr><th scope="row">Sortino <span class="sub">Ajustado a la baja</span></th><td class="n" id="sortinoValue">1.96</td><td class="n">1.31</td><td>El riesgo está sobre todo al alza</td></tr>
+                <tr><th scope="row">Calmar</th><td class="n" id="calmarValue">1.71</td><td class="n">1.45</td><td>Retorno anual sobre la peor caída</td></tr>
+                <tr><th scope="row">Alpha (Jensen) <span class="sub">Anualizado</span></th><td class="n pos" id="alphaValue">+6.24%</td><td class="n">0.00%</td><td>Retorno no explicado por el mercado</td></tr>
+                <tr><th scope="row">Information ratio</th><td class="n" id="infoRatioValue">0.63</td><td class="n">—</td><td>Retorno activo por unidad de desvío</td></tr>
+                <tr><th scope="row">Captura ↑ / ↓</th><td class="n" id="captureValue">118% / 94%</td><td class="n">100% / 100%</td><td>Sube más y baja casi igual</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="panel__foot">Cada razón se calcula con los retornos diarios del último año. Cambiar el periodo cambia todas.</p>
+        </section>
+
+        <section class="panel panel--wide">
+          <div class="panel__head panel__head--chart">
+            <div><h2>Rendimiento acumulado</h2><p class="panel__meta">Base 100 · cartera contra referencia</p></div>
+            <div class="periods" role="group" aria-label="Periodo">
+              <button type="button" data-range="1mo">1M</button>
+              <button type="button" data-range="3mo">3M</button>
+              <button type="button" data-range="6mo">6M</button>
+              <button type="button" data-range="1y" aria-pressed="true">1A</button>
+              <button type="button" data-range="max">Máx</button>
+            </div>
+          </div>
+          <div class="chart" id="perfChartWrap" style="--h:300px">
+            <canvas id="perfLineChart" aria-label="Rendimiento acumulado contra la referencia"></canvas>
+            <div id="perfChartTooltip" class="chart__tip" hidden></div>
+          </div>
+          <p class="panel__foot" id="perfChartStatus">Ambas series arrancan en 100 el 30 de julio de 2025.</p>
+        </section>
+
+        <div class="panels panels--2">
+          <section class="panel" id="attributionCard">
+            <div class="panel__head">
+              <h2>Contribución al retorno</h2>
+              <p class="panel__meta">Puntos porcentuales sobre el costo</p>
+            </div>
+            <div id="attributionChartWrap" class="bars"></div>
+            <p class="panel__foot" id="attributionStatus">Suma 40.34 pp: la P/L no realizada de la cartera.</p>
+          </section>
+
+          <section class="panel investment-value-card">
+            <div class="panel__head panel__head--chart">
+              <div><h2>Invertido vs mercado</h2><p class="panel__meta">Evolución histórica</p></div>
+              <ul class="key">
+                <li><i class="key__swatch key__swatch--rule"></i>Capital invertido</li>
+                <li><i class="key__swatch key__swatch--line"></i>Valor de mercado</li>
+              </ul>
+            </div>
+            <div class="chart" id="investmentValueChartWrap" style="--h:240px">
+              <canvas id="investmentValueChart" aria-label="Capital invertido contra valor de mercado"></canvas>
+              <div id="investmentValueTooltip" class="chart__tip" role="status" hidden></div>
+            </div>
+            <p class="panel__foot" id="investmentValueStatus">La distancia entre las dos líneas es la ganancia no realizada.</p>
+          </section>
+        </div>
+
+        <div class="panels panels--3">
+          <section class="panel">
+            <div class="panel__head"><h2>Clase de activo</h2></div>
+            <div class="comp comp--sm">
+              <div class="comp__donut comp__donut--sm"><canvas id="assetClassDonutChart" aria-label="Distribución por clase de activo"></canvas></div>
+              <ul id="assetClassDonutLegend" class="legend legend--sm"></ul>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel__head"><h2>Sector</h2></div>
+            <div class="comp comp--sm">
+              <div class="comp__donut comp__donut--sm"><canvas id="sectorDonutChart" aria-label="Distribución por sector"></canvas></div>
+              <ul id="sectorDonutLegend" class="legend legend--sm"></ul>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel__head"><h2>Geografía</h2></div>
+            <div class="panel__body panel__body--tight">
+              <div id="geoWorldMap" class="geo"></div>
+              <ul id="geoDonutLegend" class="legend legend--sm"></ul>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ── 3. Correlación ───────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelCorrelacion" role="tabpanel" aria-labelledby="tab-correlacion" tabindex="0" hidden>
+        <section class="ledger ledger--plain" aria-label="Diversificación">
+          <dl class="ledger__row">
+            <div class="ledger__cell">
+              <dt>Correlación promedio <button class="hint" type="button" aria-label="Qué es la correlación promedio" data-hint="Promedio de las correlaciones entre todos los pares. Rango −1 a +1; valores bajos indican mejor diversificación.">?</button></dt>
+              <dd><b id="corrAvgValue">0.38</b><em>entre 15 pares</em></dd>
+            </div>
+            <div class="ledger__cell">
+              <dt>Score de diversificación</dt>
+              <dd><b id="corrDivScore">68 / 100</b><em id="corrDivLabel">Aceptable</em></dd>
+            </div>
+            <div class="ledger__cell">
+              <dt>Par más correlacionado</dt>
+              <dd><b id="corrMaxPair">VOO · MSFT</b><em id="corrMaxVal">0.86 — redundancia probable</em></dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2>Matriz de correlación</h2>
+            <p class="panel__meta">Pearson · retornos diarios · 1 año</p>
+          </div>
+          <div class="grid-scroll" id="corrMatrixWrap"></div>
+          <div class="panel__body panel__body--tight">
+            <div class="scale">
+              <span>−1 inversa</span>
+              <span class="scale__bar" aria-hidden="true"></span>
+              <span>+1 idéntica</span>
+            </div>
+            <p class="note-line" id="corrStatus">El valor va impreso en cada celda: el color acompaña, no informa solo.</p>
+          </div>
+          <div class="panel__body" id="corrTopPairs"></div>
+        </section>
+
+        <section class="panel panel--wide" id="riskContribCard">
+          <div class="panel__head">
+            <h2>Contribución al riesgo</h2>
+            <p class="panel__meta">Peso en capital contra riesgo aportado</p>
+          </div>
+          <div id="riskContribWrap" class="bars bars--risk"></div>
+          <p class="panel__foot" id="riskContribStatus">La marca vertical es el peso en capital. Si la barra la rebasa, el activo aporta más riesgo del que le tocaría por tamaño.</p>
+        </section>
+      </div>
+
+      <!-- ── 4. Rebalanceo ────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelRebalanceo" role="tabpanel" aria-labelledby="tab-rebalanceo" tabindex="0" hidden>
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2>Rebalanceo sugerido</h2>
+            <p class="panel__meta">Simulación · no modifica la cartera</p>
+          </div>
+          <div class="panel__body panel__body--tight">
+            <div class="toolbar">
+              <button id="rebalOptimizeBtn" class="btn btn--primary btn--sm" type="button">Sugerir objetivos óptimos</button>
+              <label class="sr" for="rebalOptMode">Objetivo de la optimización</label>
+              <select id="rebalOptMode" class="select">
+                <option value="maxsharpe">Máx. retorno/riesgo (Sharpe)</option>
+                <option value="minvar">Mínima volatilidad</option>
+              </select>
+              <button id="rebalEqualBtn" class="btn btn--quiet btn--sm" type="button">Pesos iguales</button>
+              <button id="rebalCurrentBtn" class="btn btn--quiet btn--sm" type="button">Pesos actuales</button>
+              <button id="rebalNormalizeBtn" class="btn btn--quiet btn--sm" type="button">Normalizar a 100%</button>
+              <button id="rebalExportBtn" class="btn btn--quiet btn--sm" type="button">Exportar plan</button>
+              <label class="field-inline">Aporte adicional
+                <input id="rebalExtraCash" type="number" step="any" min="0" value="0" placeholder="0">
+              </label>
+              <span id="rebalWeightSum" class="tag tag--ok">Objetivos suman 100.0%</span>
+            </div>
+          </div>
+          <div class="grid-scroll">
+            <table class="tbl tbl--grid" id="rebalTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze">Ticker</th>
+                  <th scope="col" class="n">Valor actual</th>
+                  <th scope="col" class="n">Peso actual</th>
+                  <th scope="col" class="n">Objetivo</th>
+                  <th scope="col" class="n">Valor objetivo</th>
+                  <th scope="col" class="n">Desvío</th>
+                  <th scope="col">Acción</th>
+                </tr>
+              </thead>
+              <tbody><!-- app-tracker-v4.js --></tbody>
+            </table>
+          </div>
+          <p class="panel__foot" id="rebalNote">Plan calculado con los precios del 30 jul 2026. Herramienta de análisis: no ejecuta órdenes ni constituye asesoría.</p>
+        </section>
+      </div>
+
+      <!-- ── 5. Monte Carlo ───────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelProyeccion" role="tabpanel" aria-labelledby="tab-proyeccion" tabindex="0" hidden>
+        <section class="panel panel--wide">
+          <div class="panel__head panel__head--chart">
+            <div><h2>Simulación Monte Carlo</h2><p class="panel__meta">10 000 trayectorias · GBM sobre 2 años de histórico</p></div>
+            <div class="periods" id="mcYearNav" role="group" aria-label="Horizonte">
+              <button type="button" data-years="1">1A</button>
+              <button type="button" data-years="3">3A</button>
+              <button type="button" data-years="5">5A</button>
+              <button type="button" data-years="10" aria-pressed="true">10A</button>
+              <button type="button" data-years="20">20A</button>
+              <button type="button" data-years="30">30A</button>
+            </div>
+          </div>
+          <div class="panel__body panel__body--tight">
+            <div class="toolbar toolbar--fields" id="mcControls">
+              <label class="field-inline">Aporte mensual <input id="mcContribution" type="number" step="any" value="500"></label>
+              <label class="field-inline">Meta objetivo <input id="mcGoal" type="number" step="any" value="250000"></label>
+              <label class="field-inline">Histórico
+                <select id="mcHistRange" class="select"><option value="1y">1 año</option><option value="2y" selected>2 años</option><option value="5y">5 años</option></select>
+              </label>
+              <label class="field-inline">Modelo
+                <select id="mcModel" class="select"><option value="gbm" selected>GBM · Normal</option><option value="bootstrap">Bootstrap histórico</option><option value="t">t-Student · colas pesadas</option></select>
+              </label>
+              <label class="check"><input id="mcInflEnabled" type="checkbox"> Ajustar por inflación</label>
+              <label class="field-inline">Tasa <input id="mcInflRate" type="number" step="0.1" min="0" max="50" value="3.5" disabled></label>
+            </div>
+            <ul class="key key--fan" id="mcLegend">
+              <li><i class="key__band key__band--3"></i>5% – 95%</li>
+              <li><i class="key__band key__band--2"></i>10% – 90%</li>
+              <li><i class="key__band key__band--1"></i>25% – 75%</li>
+              <li><i class="key__swatch key__swatch--line"></i>Mediana</li>
+            </ul>
+          </div>
+          <div class="chart" style="--h:320px"><canvas id="mcCanvas" aria-label="Abanico de trayectorias simuladas"></canvas></div>
+          <p class="panel__foot" id="mcStatus">La línea punteada es la meta de $250,000. La mediana la cruza en el año 7.</p>
+        </section>
+        <dl class="ledger ledger--plain" id="mcStatsGrid"></dl>
+      </div>
+
+      <!-- ── 6. Metas ─────────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelMetas" role="tabpanel" aria-labelledby="tab-metas" tabindex="0" hidden>
+        <section class="panel panel--wide">
+          <div class="panel__head">
+            <h2>Meta financiera</h2>
+            <p class="panel__meta">Probabilidad estimada con la misma simulación</p>
+          </div>
+          <div class="panel__body">
+            <form id="goalForm" class="form-grid">
+              <div class="field field--wide">
+                <label for="goalName">Nombre de la meta</label>
+                <input id="goalName" type="text" maxlength="60" value="Enganche de casa" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="goalTarget">Monto objetivo</label>
+                <input id="goalTarget" type="number" step="any" min="0" value="250000">
+              </div>
+              <div class="field">
+                <label for="goalYears">Horizonte (años)</label>
+                <input id="goalYears" type="number" step="1" min="1" max="40" value="10">
+              </div>
+              <div class="field">
+                <label for="goalMonthly">Aporte mensual</label>
+                <input id="goalMonthly" type="number" step="any" min="0" value="500">
+              </div>
+              <div class="field field--check">
+                <label class="check"><input id="goalInflEnabled" type="checkbox"> Ajustar por inflación (3.5% anual)</label>
+              </div>
+              <div class="form-grid__actions">
+                <button id="goalSaveBtn" class="btn btn--primary btn--sm" type="submit">Calcular y guardar</button>
+                <button id="goalClearBtn" class="btn btn--quiet btn--sm" type="button">Eliminar meta</button>
+              </div>
+            </form>
+            <p id="goalStatus" class="msg"></p>
+          </div>
+        </section>
+
+        <div id="goalResult">
+          <section class="panel panel--wide">
+            <div class="panel__head panel__head--chart">
+              <div>
+                <h2 id="goalProgressName">Enganche de casa</h2>
+                <div class="readout"><strong id="goalProgressCurrent">$85,008.65</strong><span id="goalProgressTarget">de $250,000.00</span></div>
+              </div>
+              <div class="prob" id="goalProbBadge">
+                <strong id="goalProbValue">73%</strong>
+                <span>probabilidad de lograrla</span>
+              </div>
+            </div>
+            <div class="panel__body">
+              <div class="gauge">
+                <div class="gauge__track gauge__track--tall"><span class="gauge__fill" id="goalProgressFill" style="--w:34%"></span></div>
+                <p class="gauge__note" id="goalProgressMeta">34.0% recorrido · faltan $164,991.35 · con $500 al mes la mediana llega en el año 7</p>
+              </div>
+            </div>
+          </section>
+          <dl class="ledger ledger--plain" id="goalStatsGrid"></dl>
+        </div>
+
+        <div id="goalEmptyState" class="empty" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          <b>Sin metas definidas</b>
+          <p>Define un objetivo y un horizonte para ver la probabilidad de alcanzarlo con tu cartera actual.</p>
+        </div>
+      </div>
+
+      <!-- ── 7. What-If ───────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelWhatif" role="tabpanel" aria-labelledby="tab-whatif" tabindex="0" hidden>
+        <section class="panel panel--wide">
+          <div class="panel__head">
+            <h2>Simulación «¿y si…?»</h2>
+            <p class="panel__meta">Comprar y mantener otro activo contra tu cartera</p>
+          </div>
+          <div class="panel__body panel__body--tight">
+            <div class="toolbar toolbar--fields">
+              <label class="field-inline">Activo alternativo <input id="whatifTicker" type="text" value="QQQ" autocomplete="off"></label>
+              <label class="field-inline">Monto inicial <input id="whatifAmount" type="number" step="any" min="0" value="58142"></label>
+              <div class="periods" id="whatifPeriodNav" role="group" aria-label="Periodo">
+                <button type="button" data-range="6mo">6M</button>
+                <button type="button" data-range="1y" aria-pressed="true">1A</button>
+                <button type="button" data-range="2y">2A</button>
+                <button type="button" data-range="5y">5A</button>
+              </div>
+              <button id="whatifRunBtn" class="btn btn--primary btn--sm" type="button">Simular</button>
+            </div>
+          </div>
+          <div class="chart" style="--h:280px"><canvas id="whatifCanvas" aria-label="Cartera contra el activo alternativo"></canvas></div>
+          <p class="panel__foot" id="whatifStatus">Ambas series parten del mismo monto el 30 de julio de 2025.</p>
+        </section>
+        <dl class="ledger ledger--plain" id="whatifStatsGrid"></dl>
+      </div>
+
+      <!-- ── 8. Transacciones ─────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelTransacciones" role="tabpanel" aria-labelledby="tab-transacciones" tabindex="0" hidden>
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head panel__head--chart">
+            <div><h2>Historial de transacciones</h2><p class="panel__meta" id="txCountLabel">18 movimientos · de nov 2022 a jul 2026</p></div>
+            <button type="button" id="txFiltersToggleBtn" class="btn btn--quiet btn--sm" aria-expanded="false" aria-controls="txFiltersPanel">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Filtros
+              <span id="txFiltersCount" class="tag tag--count" hidden>0</span>
+            </button>
+          </div>
+          <div class="panel__body panel__body--tight" id="txFiltersPanel" hidden>
+            <div class="toolbar toolbar--fields">
+              <label class="field-inline">Tipo
+                <select id="txFilterType" class="select"><option value="">Todos</option><option value="COMPRA">Compra</option><option value="VENTA">Venta</option><option value="DIVIDENDO">Dividendo</option></select>
+              </label>
+              <label class="field-inline">Ticker <input type="text" id="txFilterTicker" placeholder="AAPL"></label>
+              <label class="field-inline">Desde <input type="date" id="txFilterFrom"></label>
+              <label class="field-inline">Hasta <input type="date" id="txFilterTo"></label>
+              <button class="btn btn--quiet btn--sm" type="button" id="txFilterClear">Limpiar</button>
+            </div>
+          </div>
+          <div class="grid-scroll grid-scroll--sticky" id="txTableShell">
+            <table class="tbl tbl--grid">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze"><button type="button" class="th-sort" data-txsort="date">Fecha</button></th>
+                  <th scope="col">Tipo</th>
+                  <th scope="col">Ticker</th>
+                  <th scope="col" class="n">Cantidad</th>
+                  <th scope="col" class="n">Precio</th>
+                  <th scope="col" class="n">Comisión</th>
+                  <th scope="col" class="n">Total neto</th>
+                  <th scope="col"><span class="sr">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody id="txTableBody"><!-- app-tracker-v4.js --></tbody>
+            </table>
+          </div>
+          <div id="noTxMsg" class="empty" hidden><b>Sin movimientos</b><p>Las compras, ventas y dividendos aparecerán aquí.</p></div>
+        </section>
+
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2>Operaciones cerradas</h2>
+            <p class="panel__meta">Cada venta emparejada con sus compras (FIFO)</p>
+          </div>
+          <div class="panel__body panel__body--tight" id="closedTradesSummary">
+            <dl class="pairs pairs--inline">
+              <div><dt>Operaciones</dt><dd>3</dd></div>
+              <div><dt>Acertadas</dt><dd>2 de 3 · 66.7%</dd></div>
+              <div><dt>P/L realizada</dt><dd class="pos">+$1,284.30</dd></div>
+              <div><dt>Tenencia media</dt><dd>11 meses</dd></div>
+            </dl>
+          </div>
+          <div class="grid-scroll">
+            <table class="tbl tbl--grid">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze">Ticker</th><th scope="col">Compra</th><th scope="col">Venta</th>
+                  <th scope="col" class="n">Tenencia</th><th scope="col" class="n">Cantidad</th>
+                  <th scope="col" class="n">P. compra</th><th scope="col" class="n">P. venta</th>
+                  <th scope="col" class="n">P/L</th><th scope="col" class="n">Retorno</th>
+                </tr>
+              </thead>
+              <tbody id="closedTradesBody"><!-- app-tracker-v4.js --></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── 9. Dividendos ────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tabPanelDividendos" role="tabpanel" aria-labelledby="tab-dividendos" tabindex="0" hidden>
+        <section class="ledger ledger--plain" aria-label="Dividendos">
+          <dl class="ledger__row">
+            <div class="ledger__cell"><dt>Recibidos</dt><dd><b id="divTotalReceived">$1,842.16</b><em>desde nov 2022</em></dd></div>
+            <div class="ledger__cell"><dt>Yield sobre costo (12m)</dt><dd><b id="divYieldOnCost">1.42%</b></dd></div>
+            <div class="ledger__cell"><dt>Activos que pagan</dt><dd><b id="divPayerCount">4</b><em>de 6</em></dd></div>
+            <div class="ledger__cell"><dt>Últimos 12 meses</dt><dd><b id="divTrailing12">$826.40</b></dd></div>
+            <div class="ledger__cell"><dt>Proyectado (12m) <button class="hint" type="button" aria-label="Cómo se proyecta" data-hint="Proyecta la frecuencia y el monto histórico de cada activo sobre tu cantidad actual de acciones.">?</button></dt><dd><b id="divForecast12">$894.05</b></dd></div>
+          </dl>
+        </section>
+
+        <section class="panel panel--wide">
+          <div class="panel__head">
+            <h2>Ingreso mensual</h2>
+            <p class="panel__meta">Recibido (12m) y proyectado (12m)</p>
+          </div>
+          <div class="chart" style="--h:220px"><canvas id="divMonthlyChart" aria-label="Dividendos por mes"></canvas></div>
+          <p class="panel__foot" id="divMonthlyStatus">Las columnas con contorno punteado son estimaciones, no pagos confirmados.</p>
+        </section>
+
+        <div class="panels panels--2">
+          <section class="panel panel--flush">
+            <div class="panel__head"><h2>Por activo</h2><p class="panel__meta">En la moneda de la cartera</p></div>
+            <div class="grid-scroll">
+              <table class="tbl" id="divByTickerTable">
+                <thead><tr><th scope="col">Ticker</th><th scope="col" class="n">Pagos</th><th scope="col" class="n">Recibido</th><th scope="col">Último</th><th scope="col" class="n">Yield s/costo</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel panel--flush">
+            <div class="panel__head"><h2>Calendario futuro</h2><p class="panel__meta">Próximos 12 meses · estimado</p></div>
+            <div class="grid-scroll">
+              <table class="tbl" id="divForecastTable">
+                <thead><tr><th scope="col">Fecha</th><th scope="col">Ticker</th><th scope="col" class="n">Por acción</th><th scope="col" class="n">Acciones</th><th scope="col" class="n">Pago est.</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="panel__foot" id="divForecastStatus">Estimado a partir del historial. Las fechas exactas las fija el emisor.</p>
+          </section>
+        </div>
+      </div>
+
+    </div><!-- /trackerDashView -->
+  </main>
+</div>
+
+<!-- ── Asistente IA ──────────────────────────────────────────────────── -->
+<aside id="aiChatPanel" class="assist" aria-label="Asistente de cartera" hidden>
+  <div class="assist__head" id="aiChatHeader">
+    <div>
+      <b>Asistente</b>
+      <span>Lee esta cartera, no tu cuenta</span>
+    </div>
+    <div class="assist__acts">
+      <button id="aiChatMinBtn" class="icon-btn icon-btn--xs" type="button" aria-label="Minimizar asistente">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button id="aiChatCloseBtn" class="icon-btn icon-btn--xs" type="button" aria-label="Cerrar asistente">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="aiChatMessages" class="assist__log" aria-live="polite"></div>
+  <div class="assist__chips" id="aiChatSuggestions">
+    <button type="button" data-q="¿Cómo está diversificado?">¿Cómo está diversificado?</button>
+    <button type="button" data-q="Riesgos de concentración">Riesgos de concentración</button>
+    <button type="button" data-q="Aportes y detractores">Aportes y detractores</button>
+  </div>
+  <form id="aiChatForm" class="assist__input">
+    <label class="sr" for="aiChatInput">Pregunta sobre tu cartera</label>
+    <textarea id="aiChatInput" rows="1" placeholder="Pregunta sobre tu cartera…" maxlength="500"></textarea>
+    <button id="aiChatSendBtn" class="btn btn--primary btn--sm" type="submit" aria-label="Enviar pregunta">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </form>
+</aside>
+
+<!-- ── Diálogo: agregar posición ─────────────────────────────────────── -->
+<div class="dlg" id="addPositionModal" role="dialog" aria-modal="true" aria-labelledby="addPosTitle" hidden>
+  <div class="dlg__card dlg__card--plain">
+    <div class="dlg__head">
+      <h2 id="addPosTitle">Agregar posición</h2>
+      <button id="closePositionModalBtn" class="icon-btn icon-btn--xs" type="button" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="addPositionForm" class="form-grid">
+      <div class="field field--wide">
+        <label for="posTickerInput">Ticker</label>
+        <input id="posTickerInput" type="text" placeholder="VOO, AAPL, BTC-USD" required autocomplete="off" spellcheck="false">
+        <div id="posTickerSuggestions" class="suggest" hidden></div>
+      </div>
+      <div class="field"><label for="posAvgPriceInput">Precio promedio</label><input id="posAvgPriceInput" type="number" step="0.0001" min="0.0001" placeholder="0.00" required></div>
+      <div class="field"><label for="posCurrencyInput">Divisa</label>
+        <select id="posCurrencyInput" class="select"><option>USD</option><option>MXN</option><option>EUR</option><option>GBP</option><option>CAD</option><option>BRL</option></select>
+      </div>
+      <div class="field"><label for="posQuantityInput">Cantidad</label><input id="posQuantityInput" type="number" step="any" min="0" placeholder="0" required></div>
+      <div class="field"><label for="posPurchaseDateInput">Fecha de compra</label><input id="posPurchaseDateInput" type="date" required></div>
+      <div class="field"><label for="posCommissionInput">Comisión (%)</label><input id="posCommissionInput" type="number" step="0.01" min="0" max="100" value="0"></div>
+      <div class="field field--check"><label class="check"><input id="posIvaCheck" type="checkbox"> Aplica IVA sobre la comisión</label></div>
+      <div class="field" id="posIvaRateRow" hidden><label for="posIvaRateInput">Tasa de IVA (%)</label><input id="posIvaRateInput" type="number" step="0.01" min="0" max="100" value="16"></div>
+      <div class="form-grid__actions">
+        <button class="btn btn--quiet btn--sm" type="button" data-close-dlg>Cancelar</button>
+        <button class="btn btn--primary btn--sm" type="submit">Agregar posición</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Diálogo: nueva cartera ────────────────────────────────────────── -->
+<div class="dlg" id="newPortfolioModal" role="dialog" aria-modal="true" aria-labelledby="newPfTitle" hidden>
+  <div class="dlg__card dlg__card--plain">
+    <div class="dlg__head">
+      <h2 id="newPfTitle">Nueva cartera</h2>
+      <button id="closePortfolioModalBtn" class="icon-btn icon-btn--xs" type="button" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="newPortfolioForm" class="form-grid">
+      <div class="field field--wide"><label for="portfolioNameInput">Nombre</label><input id="portfolioNameInput" type="text" placeholder="Núcleo global" required></div>
+      <div class="field field--wide"><label for="portfolioDescInput">Descripción (opcional)</label><input id="portfolioDescInput" type="text" placeholder="Para qué es esta cartera"></div>
+      <div class="field"><label for="portfolioBenchmarkInput">Índice de referencia</label>
+        <select id="portfolioBenchmarkInput" class="select">
+          <option value="^GSPC">S&amp;P 500</option><option value="^IXIC">NASDAQ 100</option><option value="^DJI">Dow Jones</option>
+          <option value="URTH">MSCI World</option><option value="EEM">MSCI Emerging Markets</option><option value="^MXX">IPC México</option>
+          <option value="none">Sin referencia</option>
+        </select>
+      </div>
+      <div class="field"><label for="portfolioCurrencyInput">Moneda principal</label>
+        <select id="portfolioCurrencyInput" class="select"><option value="USD">USD — dólar</option><option value="MXN">MXN — peso mexicano</option><option value="EUR">EUR — euro</option></select>
+      </div>
+      <div class="form-grid__actions">
+        <button class="btn btn--quiet btn--sm" type="button" data-close-dlg>Cancelar</button>
+        <button class="btn btn--primary btn--sm" type="submit">Crear cartera</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Barra de estados (sólo prototipo) ─────────────────────────────── -->
+<div class="proto" id="protoBar" hidden>
+  <b>Estados</b>
+  <button type="button" data-state="normal" aria-pressed="true">Con datos</button>
+  <button type="button" data-state="loading">Cargando</button>
+  <button type="button" data-state="empty">Vacío</button>
+  <button type="button" data-state="error">Error</button>
+  <button type="button" data-state="locked">Sin plan</button>
+  <button type="button" class="proto__x" id="protoClose" aria-label="Cerrar barra de estados">✕</button>
+</div>
+
+<script src="app-tracker-v4.js"></script>
+</body>
+</html>

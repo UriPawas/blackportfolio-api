@@ -1,0 +1,467 @@
+/* ==========================================================================
+   BlackPortfolio — cascarón V4 de main.html (migración por sesiones a la
+   nueva imagen: sidebar, topbar (incl. cuenta/avisos), lámina de contenido,
+   nav móvil e inicio rápido móvil, mecanismo de tema).
+
+   SOLO REESTILIZA. Ningún selector de main.js se renombra ni se mueve; el
+   contenido de cada sección (#section-home, #section-tracker, etc.) sigue
+   con el look de main.css hasta que se migre en una sesión aparte.
+
+   Todos los tokens llevan el prefijo `--v4-` a propósito: main.css y
+   styles.css ya usan `--surface`, `--text`, `--muted`, `--border`, etc. para
+   TODO el contenido. Reusar esos nombres aquí pisaría silenciosamente el
+   valor que ven cientos de reglas ajenas a esta sesión.
+   ========================================================================== */
+
+/* -------------------------------------------------------------- 1. Tokens  */
+
+:root {
+  --v4-paper:        #F1F4F8;
+  --v4-surface:      #FFFFFF;
+  --v4-sunken:       #E8ECF2;
+  --v4-ink:          #0B1524;
+  --v4-ink-2:        #33415A;
+  --v4-ink-3:        #5A6980;
+  --v4-rule:         #D6DDE6;
+  --v4-rule-soft:    #E4E9EF;
+  --v4-rule-strong:  #B5C0CE;
+  --v4-cobalt:       #13429B;
+  --v4-cobalt-ink:   #13429B;
+  --v4-cobalt-tint:  #E7EDF8;
+  --v4-cobalt-line:  #2A5CBE;
+  --v4-pos:          #0A6B4A;
+  --v4-neg:          #A11E20;
+  --v4-serif:        "Spectral", "Iowan Old Style", Georgia, serif;
+  --v4-sans:         "Libre Franklin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --v4-t-label:      .6875rem;
+  --v4-t-mini:       .8125rem;
+  --v4-t-small:      .875rem;
+  --v4-shadow-lift:  0 8px 18px -12px rgba(11, 21, 36, .22);
+}
+
+html[data-theme="dark"] {
+  --v4-paper:        #0A1220;
+  --v4-surface:      #101B2B;
+  --v4-sunken:       #0C1725;
+  --v4-ink:          #E9EEF6;
+  --v4-ink-2:        #B4C1D5;
+  --v4-ink-3:        #8C9BB3;
+  --v4-rule:         #22314A;
+  --v4-rule-soft:    #1A2739;
+  --v4-rule-strong:  #364964;
+  --v4-cobalt:       #1E4FD0;
+  --v4-cobalt-ink:   #7CA0FF;
+  --v4-cobalt-tint:  #15243E;
+  --v4-cobalt-line:  #6E97FF;
+  --v4-pos:          #45B98A;
+  --v4-neg:          #E4787A;
+  --v4-shadow-lift:  0 10px 22px -14px rgba(0, 0, 0, .55);
+}
+
+/* ---------------------------------------------------------- 2. Fondo base */
+
+body.main-page {
+  background: var(--v4-paper);
+  background-image: none;
+}
+
+/* El sistema V4 rechaza por contrato los orbes de fondo y la retícula
+   luminosa (DESIGN.md §1) — son divs decorativos sin lectura de JS, sólo
+   se ocultan. */
+body.main-page .background-orb,
+body.main-page .grid-overlay {
+  display: none;
+}
+
+/* --------------------------------------------------------- 3. Barra lateral */
+
+.dashboard-sidebar-shell {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+
+.dashboard-sidebar-shell .brand,
+.dashboard-sidebar-shell .brand-mark {
+  font-family: var(--v4-serif);
+  color: var(--v4-ink);
+}
+.dashboard-sidebar-shell .brand-mark {
+  color: var(--v4-cobalt-ink);
+}
+
+.dashboard-sidebar-shell .eyebrow {
+  font: 600 var(--v4-t-label)/1 var(--v4-sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+.dashboard-sidebar-shell .sidebar-close-btn,
+.dashboard-topbar .sidebar-toggle-btn {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+}
+.dashboard-sidebar-shell .sidebar-close-btn:hover,
+.dashboard-topbar .sidebar-toggle-btn:hover {
+  background: var(--v4-cobalt-tint);
+}
+.dashboard-sidebar-shell .sidebar-close-btn .bar,
+.dashboard-topbar .sidebar-toggle-btn .bar {
+  background: var(--v4-ink-2);
+}
+
+.dashboard-sidebar-shell .dashboard-user-card {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+.dashboard-sidebar-shell .dashboard-user-card:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  box-shadow: none;
+}
+.dashboard-sidebar-shell .user-avatar {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+  border: 1px solid var(--v4-rule);
+  font-family: var(--v4-sans);
+}
+.dashboard-sidebar-shell .user-card-info strong {
+  color: var(--v4-ink);
+  font-family: var(--v4-sans);
+}
+
+.dashboard-nav {
+  gap: 2px;
+}
+
+.dashboard-nav-item {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-small);
+  color: var(--v4-ink-2);
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  padding: .6rem .75rem;
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+}
+.dashboard-nav-item::before {
+  display: none;
+}
+.dashboard-nav-item:hover {
+  transform: none;
+  color: var(--v4-ink);
+  background: var(--v4-sunken);
+  border-color: transparent;
+  box-shadow: none;
+}
+.dashboard-nav-item.active {
+  background: var(--v4-cobalt-tint);
+  border-left-color: var(--v4-cobalt-line);
+  color: var(--v4-ink);
+  font-weight: 600;
+}
+
+.dashboard-sidebar-footer .button.secondary {
+  background: transparent;
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink-2);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+.dashboard-sidebar-footer .button.secondary:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+  box-shadow: none;
+  transform: none;
+}
+.dashboard-sidebar-footer .button.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--v4-neg);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+.dashboard-sidebar-footer .button.ghost:hover {
+  background: color-mix(in srgb, var(--v4-neg) 8%, transparent);
+  border-color: color-mix(in srgb, var(--v4-neg) 35%, transparent);
+  color: var(--v4-neg);
+  box-shadow: none;
+  transform: none;
+}
+
+/* ------------------------------------------------------ 3.5 Lámina de contenido */
+
+/* Sólo la envoltura; el contenido de cada #section-* sigue con el look de
+   main.css hasta la sesión de migración de contenido. */
+.dashboard-content-shell {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+
+/* ------------------------------------------------------------- 4. Topbar  */
+
+.dashboard-topbar {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--v4-rule);
+}
+.dashboard-topbar .eyebrow {
+  font: 600 var(--v4-t-label)/1 var(--v4-sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+.dashboard-topbar h1 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  color: var(--v4-ink);
+  letter-spacing: -.015em;
+}
+
+/* ----------------------------------- 4.5 Meta de topbar (cuenta y avisos) */
+
+.dashboard-topbar-meta .mini-status-card {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+.dashboard-topbar-meta .mini-status-card span:not(.eyebrow) {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+.dashboard-topbar-meta .mini-status-card strong {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+.dashboard-topbar-meta .user-avatar {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+  border: 1px solid var(--v4-rule);
+}
+
+.notif-bell {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink-2);
+  border-radius: 2px;
+}
+.notif-bell:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule-strong);
+}
+.notif-badge {
+  background: var(--v4-neg);
+}
+.notif-panel {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+.notif-panel-head {
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+.notif-panel-head strong {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+.notif-mark-read {
+  font-family: var(--v4-sans);
+  color: var(--v4-cobalt-ink);
+}
+.notif-item:hover {
+  background: var(--v4-sunken);
+}
+.notif-item.is-unread {
+  background: var(--v4-cobalt-tint);
+}
+.notif-item-title {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+.notif-item-body,
+.notif-item-time {
+  color: var(--v4-ink-3);
+}
+.notif-empty {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* --------------------------------------------------- 5. Tema (Ajustes)   */
+
+#themeToggleButton {
+  background: transparent;
+  border: 1px solid var(--v4-rule);
+  color: var(--v4-ink-2);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+#themeToggleButton:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+}
+
+/* ------------------------------------------------------ 6. Nav móvil     */
+
+@media (max-width: 720px) {
+  .mobile-bottom-nav {
+    background: var(--v4-surface);
+    border: 1px solid var(--v4-rule);
+    box-shadow: var(--v4-shadow-lift);
+    backdrop-filter: none;
+    border-radius: 12px;
+  }
+  .mobile-bottom-nav-item {
+    color: var(--v4-ink-3);
+    font-family: var(--v4-sans);
+  }
+  .mobile-bottom-nav-item.active {
+    color: var(--v4-cobalt-ink);
+    background: var(--v4-cobalt-tint);
+  }
+
+  /* Barra superior fija: main.css la pinta con un azul-noche fijo (94%
+     opaco) sea cual sea el tema; aquí reacciona al tema real. */
+  .dashboard-topbar {
+    background: color-mix(in srgb, var(--v4-surface) 94%, transparent);
+    border-bottom: 1px solid var(--v4-rule);
+  }
+
+  .mobile-quick-start button {
+    background: var(--v4-surface);
+    border: 1px solid var(--v4-rule);
+    color: var(--v4-ink);
+  }
+  .mobile-quick-start span {
+    background: var(--v4-cobalt-tint);
+    color: var(--v4-cobalt-ink);
+  }
+  .mobile-quick-start strong {
+    font-family: var(--v4-sans);
+  }
+}
+
+/* ------------------------------------------- 8. Refuerzo en modo claro  */
+
+/* main.css trae su propio bloque `body.light-mode .X`, que tiene MÁS
+   especificidad (elemento `body` + 2 clases) que los selectores de arriba
+   (sólo clases), así que gana pase lo que pase el orden de los `<link>`.
+   Sin este refuerzo, en tema claro la app vuelve a caer en el look viejo.
+   Cada regla de aquí repite el mismo token --v4- ya usado arriba, sólo que
+   bajo un selector con especificidad igual o mayor a la de main.css. */
+
+body.light-mode .dashboard-sidebar-shell,
+body.light-mode .dashboard-content-shell {
+  background: var(--v4-surface);
+  border-color: var(--v4-rule);
+  box-shadow: var(--v4-shadow-lift);
+}
+
+body.light-mode .dashboard-sidebar-shell .eyebrow,
+body.light-mode .dashboard-topbar .eyebrow {
+  color: var(--v4-ink-3);
+}
+
+body.light-mode .sidebar-close-btn,
+body.light-mode .dashboard-topbar .sidebar-toggle-btn {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule);
+}
+body.light-mode .sidebar-close-btn:hover,
+body.light-mode .dashboard-topbar .sidebar-toggle-btn:hover {
+  background: var(--v4-cobalt-tint);
+}
+
+body.light-mode .dashboard-user-card {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-soft);
+}
+
+body.light-mode .dashboard-nav-item {
+  color: var(--v4-ink-2);
+  background: transparent;
+  border-left-color: transparent;
+}
+body.light-mode .dashboard-nav-item:hover {
+  color: var(--v4-ink);
+  background: var(--v4-sunken);
+  border-left-color: transparent;
+}
+body.light-mode .dashboard-nav-item.active {
+  background: var(--v4-cobalt-tint);
+  border-left-color: var(--v4-cobalt-line);
+  color: var(--v4-ink);
+}
+
+body.light-mode .dashboard-sidebar-footer .button.secondary {
+  background: transparent;
+  border-color: var(--v4-rule);
+  color: var(--v4-ink-2);
+}
+body.light-mode .dashboard-sidebar-footer .button.secondary:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+body.light-mode .dashboard-sidebar-footer .button.ghost {
+  border-color: transparent;
+  color: var(--v4-neg);
+}
+
+body.light-mode .dashboard-topbar {
+  background: transparent;
+}
+body.light-mode .dashboard-topbar h1 {
+  color: var(--v4-ink);
+}
+
+body.light-mode .dashboard-topbar-meta .mini-status-card {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-soft);
+}
+body.light-mode .dashboard-topbar-meta .mini-status-card span:not(.eyebrow) {
+  color: var(--v4-ink-3);
+}
+body.light-mode .dashboard-topbar-meta .mini-status-card strong {
+  color: var(--v4-ink);
+}
+body.light-mode .dashboard-topbar-meta .user-avatar {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+  border-color: var(--v4-rule);
+}
+
+@media (max-width: 720px) {
+  body.light-mode .dashboard-topbar {
+    background: color-mix(in srgb, var(--v4-surface) 94%, transparent);
+  }
+  body.light-mode .mobile-bottom-nav {
+    background: var(--v4-surface);
+    border-color: var(--v4-rule);
+    box-shadow: var(--v4-shadow-lift);
+  }
+  body.light-mode .mobile-bottom-nav-item {
+    color: var(--v4-ink-3);
+  }
+  body.light-mode .mobile-bottom-nav-item.active {
+    color: var(--v4-cobalt-ink);
+    background: var(--v4-cobalt-tint);
+  }
+  body.light-mode .mobile-quick-start button {
+    background: var(--v4-surface);
+    border-color: var(--v4-rule);
+    color: var(--v4-ink);
+  }
+  body.light-mode .mobile-quick-start span {
+    background: var(--v4-cobalt-tint);
+    color: var(--v4-cobalt-ink);
+  }
+}

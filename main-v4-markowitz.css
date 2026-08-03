@@ -1,0 +1,721 @@
+/* ==========================================================================
+   BlackPortfolio — #section-markowitz (Creación de portafolio) en V4.
+
+   Requiere `main-v4-shell.css` cargado antes (reusa sus tokens `--v4-*`).
+
+   ── Tesis de la pantalla (DESIGN.md §8 + app-optimizacion-v4.html) ──
+   Un banco de trabajo con dos tiempos: a la izquierda lo que se configura,
+   a la derecha lo que sale. Los tres pasos numerados SÍ son una secuencia
+   real (activos → modelo → parámetros → optimizar), así que el numeral se
+   conserva —DESIGN.md §1 sólo prohíbe la numeración decorativa—, pero deja
+   de ser un disco de color y pasa a ser una marca de documento.
+
+   ── Especificidad ──
+   Todo cuelga de `#section-markowitz` (1,1,0), que gana contra los
+   `body.light-mode .x` de main.css (0,2,1) sin duplicar reglas por tema:
+   los tokens `--v4-*` ya cambian solos. main.css NO tiene ninguna regla
+   `body.light-mode #section-markowitz …`, así que aquí no hace falta el
+   bloque de refuerzo que sí lleva Mercados.
+   `!important` sólo donde main.css ya lo usa (`.mkw-pos`, `.mkw-neg`,
+   `.mkw-calc-tab-active`).
+
+   ── Alcance ──
+   SOLO REESTILIZA. Ningún id/clase de markowitz.js se renombra. Lo que el
+   CSS no alcanza —las gráficas de lienzo— se retematiza en `markowitz.js`
+   (`chartColors()` y las matrices de calor).
+   ========================================================================== */
+
+/* ---------------------------------------------------- 0. Marco y láminas */
+
+#section-markowitz .mkw-layout {
+  gap: 1rem;
+}
+/* Trampa recurrente de DESIGN.md §6: sin `min-width: 0` la tabla de pesos y
+   las matrices empujan la columna y la página desborda en vez de scrollear. */
+#section-markowitz .mkw-left-col,
+#section-markowitz .mkw-right-col {
+  gap: 1rem;
+  min-width: 0;
+}
+
+/* `.dashboard-card` es global y lo usan secciones aún sin migrar: escopado. */
+#section-markowitz .dashboard-card {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-markowitz .dashboard-card:hover {
+  border-color: var(--v4-rule);
+  box-shadow: var(--v4-shadow-lift);
+  transform: none;
+}
+
+#section-markowitz .card-header {
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-markowitz .card-header h3 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  font-size: 1.0625rem;
+  letter-spacing: -.01em;
+  color: var(--v4-ink);
+}
+#section-markowitz .card-header > span {
+  font: 500 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* El paso de la secuencia: cifra en cobalto sobre papel hundido, cuadrada.
+   Antes era un disco relleno de marca. */
+#section-markowitz .mkw-step-badge {
+  width: 20px;
+  height: 20px;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: none;
+  font: 600 var(--v4-t-label)/18px var(--v4-sans);
+  color: var(--v4-cobalt-ink);
+}
+
+#section-markowitz .mkw-step-hint,
+#section-markowitz .mkw-mode-desc,
+#section-markowitz .mkw-fi-note,
+#section-markowitz .mkw-info-note {
+  font: 400 var(--v4-t-mini)/1.55 var(--v4-sans);
+  color: var(--v4-ink-3);
+  max-width: 62ch;
+}
+#section-markowitz .mkw-asset-count {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------------ 1. Presets (paso 1) */
+
+/* Deja de ser una fila de tres tarjetas iguales —el contenedor perezoso que
+   DESIGN.md §1 rechaza— y pasa a ser una lista de opciones con reglas. */
+#section-markowitz .mkw-preset-cards {
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#section-markowitz .mkw-preset-card {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  padding: .55rem .7rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+  text-align: start;
+}
+#section-markowitz .mkw-preset-cards > .mkw-preset-card:last-child {
+  border-bottom: 0;
+}
+#section-markowitz .mkw-preset-card:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule-soft);
+  transform: none;
+  box-shadow: none;
+}
+#section-markowitz .mkw-preset-card-title {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-preset-card-sub {
+  font: 400 var(--v4-t-label)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------- 2. Campos y controles */
+
+#section-markowitz .mkw-ticker-input,
+#section-markowitz .form-row input,
+#section-markowitz .form-row select,
+#section-markowitz .mkw-fi-field input,
+#section-markowitz .mkw-sb-weight,
+#section-markowitz .mkw-saved-select,
+#section-markowitz .mc-ctrl input,
+#section-markowitz .mc-ctrl select {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-ticker-input,
+#section-markowitz .form-row input,
+#section-markowitz .form-row select {
+  font-size: 1rem; /* 16px: evita el zoom de iOS (DESIGN.md §3) */
+}
+#section-markowitz .mkw-ticker-input::placeholder,
+#section-markowitz .mkw-fi-field input::placeholder {
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-ticker-input:focus,
+#section-markowitz .form-row input:focus,
+#section-markowitz .form-row select:focus,
+#section-markowitz .mkw-fi-field input:focus,
+#section-markowitz .mkw-sb-weight:focus,
+#section-markowitz .mkw-saved-select:focus {
+  border-color: var(--v4-cobalt-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v4-cobalt-line) 20%, transparent);
+  outline: none;
+}
+#section-markowitz .mkw-ticker-input.mkw-input-flash {
+  border-color: var(--v4-cobalt-line);
+}
+
+#section-markowitz .form-row label,
+#section-markowitz .mkw-fi-field label,
+#section-markowitz .mc-ctrl > label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* Botonería */
+#section-markowitz .button.primary,
+#section-markowitz .mkw-run-btn {
+  background: var(--v4-cobalt);
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+  font-family: var(--v4-sans);
+  box-shadow: none;
+}
+#section-markowitz .button.primary:hover,
+#section-markowitz .mkw-run-btn:hover {
+  background: color-mix(in srgb, var(--v4-cobalt) 88%, #000);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+#section-markowitz .mkw-run-btn:disabled {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule);
+  color: var(--v4-ink-3);
+}
+#section-markowitz .button.ghost {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#section-markowitz .button.ghost:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+  transform: none;
+  box-shadow: none;
+}
+
+#section-markowitz .ticker-suggestions {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+  padding: 0;
+}
+#section-markowitz .ticker-suggestion-item {
+  padding: .5rem .7rem;
+  border-radius: 0;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markowitz .ticker-suggestion-item + .ticker-suggestion-item {
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-markowitz .ticker-suggestion-item:hover {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-ink);
+}
+
+/* --------------------------------------------------- 3. Lista de activos */
+
+#section-markowitz .mkw-empty-assets {
+  padding: .8rem;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font: 400 var(--v4-t-mini)/1.5 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-asset-chip {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+#section-markowitz .mkw-chip-label {
+  font-weight: 600;
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-chip-name {
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-chip-fi {
+  background: var(--v4-cobalt-tint);
+  border-radius: 2px;
+  color: var(--v4-cobalt-ink);
+  font-size: var(--v4-t-label);
+}
+#section-markowitz .mkw-chip-remove { color: var(--v4-ink-3); }
+#section-markowitz .mkw-chip-remove:hover { color: var(--v4-neg); }
+
+#section-markowitz .mkw-saved-bar {
+  padding-top: .75rem;
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-markowitz .mkw-saved-del {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-saved-del:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  border-color: var(--v4-neg);
+  color: var(--v4-neg);
+}
+
+/* ------------------------------------------------------ 4. Modelo (paso 2) */
+
+/* Modos excluyentes → el idioma del control segmentado (pulgar lleno), no la
+   tira de pestañas con regla, que aquí no gobierna paneles de lectura. */
+#section-markowitz .mkw-mode-tabs {
+  gap: 0;
+  padding: 2px;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+}
+#section-markowitz .mkw-mode-tab {
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markowitz .mkw-mode-tab:hover {
+  background: color-mix(in srgb, var(--v4-cobalt-tint) 70%, transparent);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-mode-tab.mkw-mode-active {
+  background: var(--v4-cobalt);
+  color: #fff;
+  font-weight: 600;
+}
+#section-markowitz .mkw-mode-rec {
+  background: var(--v4-surface);
+  border-radius: 2px;
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-mode-tab.mkw-mode-active .mkw-mode-rec {
+  background: color-mix(in srgb, #fff 22%, transparent);
+  color: #fff;
+}
+
+#section-markowitz .mkw-sb-title {
+  font: 600 var(--v4-t-label)/1.4 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-sb-hint {
+  font: 400 var(--v4-t-mini)/1.5 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-sb-factor {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-markowitz .mkw-sb-factor-info strong {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-sb-factor-info span {
+  font: 400 var(--v4-t-label)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-sb-pct { color: var(--v4-ink-3); font-family: var(--v4-sans); }
+#section-markowitz .mkw-bl-view {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------ 5. Parámetros (paso 3) */
+
+#section-markowitz .mkw-adv-toggle {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-cobalt-ink);
+}
+#section-markowitz .mkw-adv-toggle:hover { color: var(--v4-cobalt-ink); }
+#section-markowitz .mkw-adv-hint,
+#section-markowitz .mkw-constraints-opt,
+#section-markowitz .mkw-rfr-label {
+  font: 400 var(--v4-t-label)/1.3 var(--v4-sans);
+  color: var(--v4-ink-3);
+  text-transform: none;
+  letter-spacing: 0;
+}
+#section-markowitz .mkw-constraints-header {
+  padding-top: .75rem;
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-markowitz .mkw-constraints-title {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-fi-section {
+  background: none;
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-markowitz .mkw-fi-toggle {
+  font: 500 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+
+#section-markowitz .mkw-status {
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+}
+#section-markowitz .mkw-status-loading {
+  background: var(--v4-sunken);
+  color: var(--v4-ink-2);
+}
+#section-markowitz .mkw-status-error {
+  background: color-mix(in srgb, var(--v4-neg) 10%, transparent);
+  color: var(--v4-neg);
+}
+#section-markowitz .mkw-status-success {
+  background: color-mix(in srgb, var(--v4-pos) 10%, transparent);
+  color: var(--v4-pos);
+}
+
+/* --------------------------------------------------- 6. Nota metodológica */
+
+#section-markowitz .mkw-info-summary {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markowitz .mkw-info-summary:hover { color: var(--v4-ink); }
+#section-markowitz .mkw-info-text,
+#section-markowitz .mkw-info-point {
+  font: 400 var(--v4-t-small)/1.6 var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markowitz .mkw-info-text strong,
+#section-markowitz .mkw-info-point strong { color: var(--v4-ink); }
+#section-markowitz .mkw-mu-warning {
+  background: color-mix(in srgb, var(--v4-cobalt-line) 8%, transparent);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+
+/* ------------------------------------------------------- 7. Resultados   */
+
+#section-markowitz .mkw-results-toolbar {
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+
+#section-markowitz .mkw-frontier-wrap,
+#section-markowitz .mc-chart-wrap {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+
+/* Las dos carteras óptimas: registro de cifras separadas por reglas, no dos
+   tarjetas de métrica gigante (DESIGN.md §1). */
+#section-markowitz .mkw-optimal-row { gap: 1rem; }
+#section-markowitz .mkw-optimal-card { padding: 0; overflow: hidden; }
+#section-markowitz .mkw-optimal-title {
+  padding: .6rem .85rem;
+  margin: 0;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+/* La marca de identidad de la cartera (el mismo color que su marcador en la
+   frontera). El color lo escribe markowitz.js: es dato. */
+#section-markowitz .mkw-optimal-mark {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 1px;
+}
+#section-markowitz .mkw-optimal-metrics {
+  gap: 0;
+  padding: 0;
+}
+#section-markowitz .mkw-metric {
+  padding: .5rem .85rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+  font: 400 var(--v4-t-mini)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-metric strong {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-small);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-pos { color: var(--v4-pos) !important; }
+#section-markowitz .mkw-neg { color: var(--v4-neg) !important; }
+#section-markowitz .mkw-select-btn { margin: .75rem .85rem; width: auto; }
+
+/* Periodos de proyección: marca de regla (posición en una escala de tiempo),
+   el mismo idioma que el selector de rango de Mercados. */
+#section-markowitz .mc-year-nav {
+  gap: 0;
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-markowitz .var-conf-btn {
+  padding: .3rem .55rem;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markowitz .var-conf-btn:hover {
+  background: none;
+  color: var(--v4-ink);
+}
+#section-markowitz .var-conf-btn.active {
+  background: none;
+  border-bottom-color: var(--v4-cobalt-line);
+  color: var(--v4-ink);
+  font-weight: 600;
+}
+
+#section-markowitz .mkw-forecast-legend,
+#section-markowitz .mc-legend,
+#section-markowitz .perf-chart-status,
+#section-markowitz .mkw-calc-matrix-note {
+  font: 400 var(--v4-t-mini)/1.5 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* -------------------------------------------------- 8. Tabla de pesos    */
+
+#section-markowitz .tracker-table {
+  font-family: var(--v4-sans);
+}
+#section-markowitz .tracker-table thead th {
+  padding: .5rem .7rem;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-markowitz .tracker-table tbody td {
+  padding: .45rem .7rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+}
+#section-markowitz .tracker-table tbody tr:hover td {
+  background: var(--v4-cobalt-tint);
+}
+#section-markowitz .mkw-weights-table-shell {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  min-width: 0;
+}
+#section-markowitz .mkw-weight-bar-bg {
+  background: var(--v4-rule-soft);
+  border-radius: 0;
+}
+#section-markowitz .mkw-weight-bar-fill { border-radius: 0; }
+#section-markowitz .mkw-table-dot { border-radius: 2px; }
+
+/* -------------------------------------------- 9. Cálculos y metodología  */
+
+/* Pestañas que SÍ gobiernan paneles → tira con regla inferior y marca de
+   2px, el mismo idioma que Resumen y Ajustes. */
+#section-markowitz .mkw-calc-tabs {
+  gap: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-markowitz .mkw-calc-tab {
+  flex: none;
+  padding: .5rem .75rem;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  color: var(--v4-ink-3);
+  white-space: nowrap;
+}
+#section-markowitz .mkw-calc-tab:hover { color: var(--v4-ink); }
+#section-markowitz .mkw-calc-tab.mkw-calc-tab-active {
+  border-bottom-color: var(--v4-cobalt-line) !important;
+  color: var(--v4-ink) !important;
+  font-weight: 600;
+}
+
+#section-markowitz .mkw-method-block {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-markowitz .mkw-method-block:hover {
+  border-color: var(--v4-rule-strong);
+  transform: none;
+  box-shadow: none;
+}
+#section-markowitz .mkw-method-title {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-method-formula {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  color: var(--v4-cobalt-ink);
+}
+#section-markowitz .mkw-method-desc {
+  font: 400 var(--v4-t-mini)/1.6 var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markowitz .mkw-calc-placeholder {
+  padding: 1rem;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font: 400 var(--v4-t-mini)/1.5 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+#section-markowitz .mkw-matrix-wrap { min-width: 0; }
+#section-markowitz .mkw-matrix-table th {
+  background: var(--v4-sunken);
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .06em;
+  color: var(--v4-ink-3);
+}
+/* El fondo de cada celda lo escribe markowitz.js (es el valor de la matriz,
+   o sea dato). El COLOR DE TEXTO ya no: se fija a la tinta del tema para
+   evitar la franja donde ni el blanco ni el negro llegan a 4.5:1 — la misma
+   trampa que resolvió el prototipo con `--tint-cap`. */
+#section-markowitz .mkw-matrix-table td {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-var-badge {
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+
+/* ----------------------------------------- 10. Modal de comparación     */
+
+#section-markowitz .tracker-modal {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+#section-markowitz .tracker-modal-header {
+  padding-bottom: .6rem;
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-markowitz .tracker-modal-header h3 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  letter-spacing: -.015em;
+  color: var(--v4-ink);
+}
+#section-markowitz .tracker-modal-close {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-markowitz .tracker-modal-close:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  border-color: var(--v4-neg);
+  color: var(--v4-neg);
+}
+#section-markowitz .mkw-compare-item {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-markowitz .mkw-compare-item:hover { border-color: var(--v4-rule-strong); }
+#section-markowitz .mkw-compare-item-name {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markowitz .mkw-compare-item-sub,
+#section-markowitz .mkw-compare-count {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markowitz .mkw-cmp-badge {
+  background: var(--v4-cobalt-tint);
+  border-radius: 2px;
+  color: var(--v4-cobalt-ink);
+  font-family: var(--v4-sans);
+}
+#section-markowitz .mkw-cmp-best { color: var(--v4-pos) !important; }
+
+/* ------------------------------------------------------------ 11. Móvil */
+
+@media (max-width: 900px) {
+  #section-markowitz .mkw-calc-tabs {
+    /* Con `flex: none` arriba, la tira scrollea en vez de desbordar la
+       página — DESIGN.md §6. */
+    scrollbar-width: thin;
+  }
+  #section-markowitz .mkw-optimal-row { gap: .75rem; }
+}
+
+@media (max-width: 40rem) {
+  /* Los tres modos medían 408 px dentro de una columna de 302: desbordaban
+     la lámina y un `overflow-x: hidden` de main.css los recortaba EN
+     SILENCIO (la trampa de DESIGN.md §6). Apilados caben, y el control
+     segmentado sigue leyéndose como tal — es el `seg--stack` del prototipo. */
+  #section-markowitz .mkw-mode-tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #section-markowitz .mkw-mode-tab {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

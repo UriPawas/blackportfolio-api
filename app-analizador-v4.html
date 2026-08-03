@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analizador | BlackPortfolio</title>
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="app-v4.css">
+  <link rel="stylesheet" href="app-ui-v4.css">
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        root.setAttribute('data-theme', saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="app" data-section="analizador">
+<!--
+  THESIS: Un dictamen de valuación, no un tablero. El veredicto va arriba con su rango y su
+  supuesto crítico a la vista; el modelo que lo sostiene va debajo y se puede auditar renglón por
+  renglón. Un número de valor intrínseco sin sus supuestos es propaganda.
+  FORM: Los supuestos (tasa libre de riesgo, ERP, crecimiento terminal) viven en la cabecera del
+  documento, no escondidos en un panel plegable de tercer nivel.
+-->
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="app__top">
+  <a class="mark" href="landing-v4.html"><b>Black</b><span>Portfolio</span></a>
+  <div class="app__top-actions">
+    <span class="app__plan">Plan <b>Advisor Pro</b></span>
+    <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+    </button>
+    <span class="app__avatar" aria-hidden="true">FP</span>
+  </div>
+</header>
+
+<div class="app__body">
+  <nav class="app__nav" aria-label="Secciones de la aplicación">
+    <ul>
+      <li><a href="app-home-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>Resumen</a></li>
+      <li><a href="app-tracker-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M4 19V5m0 14 5-6 4 3 5-8"/></svg>Tracker</a></li>
+      <li><a href="app-analizador-v4.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 3"/></svg>Analizador</a></li>
+      <li><a href="app-optimizacion-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c4-14 12-14 16 0"/><circle cx="14" cy="10" r="1.6"/></svg>Optimización</a></li>
+      <li><a href="app-mercados-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Mercados</a></li>
+      <li><a href="app-topdown-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 8h18M3 16h18"/></svg>Top-down</a></li>
+      <li><a href="app-ajustes-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2m0 13v2M4.2 8l1.7 1m12.2 6 1.7 1M4.2 16l1.7-1m12.2-6 1.7-1"/></svg>Ajustes</a></li>
+    </ul>
+  </nav>
+
+  <main class="app__main" id="contenido">
+    <p class="preview-note">
+      <b>Vista previa del rediseño.</b> Cifras de muestra. Los identificadores de los controles son
+      los que ya usa <code>main.js</code>. <button type="button" class="btn-text" id="protoStatesBtn">Ver estados</button>
+    </p>
+
+    <div class="app__head app__head--row">
+      <div>
+        <h1>Analizador</h1>
+        <p>Valuación por descuento de flujos, sensibilidad y consenso, para hasta cuatro activos a la vez.</p>
+      </div>
+      <div class="head-actions">
+        <button id="analyzerRunBtn" class="btn btn--primary btn--sm" type="button">Correr análisis</button>
+      </div>
+    </div>
+
+    <!-- ── Activos y supuestos ────────────────────────────────────────── -->
+    <section class="panel panel--wide">
+      <div class="panel__head">
+        <h2>Activos y supuestos</h2>
+        <p class="panel__meta">Lo que entra al modelo</p>
+      </div>
+      <div class="panel__body">
+        <form class="inline-form" id="analyzerForm">
+          <label class="sr" for="analyzerInput">Agregar ticker al análisis</label>
+          <div class="field-search field-search--grow">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input id="analyzerInput" type="text" placeholder="AAPL, MSFT, KO…" autocomplete="off">
+            <div id="analyzerSuggestions" class="suggest" hidden></div>
+          </div>
+          <button id="analyzerAddBtn" class="btn btn--quiet btn--sm" type="submit">Agregar</button>
+        </form>
+
+        <ul class="chips" id="analyzerAssetCards" aria-label="Activos en el análisis"></ul>
+
+        <!-- Los supuestos se ven siempre: el valor intrínseco es una función de -->
+        <!-- ellos y esconderlos convierte una estimación en un dictamen.        -->
+        <dl class="assump" id="asmPanel">
+          <div class="assump__item">
+            <dt><label for="asmRf">Tasa libre de riesgo</label></dt>
+            <dd><input id="asmRf" type="number" step="0.1" value="4.3"><span>% anual</span></dd>
+          </div>
+          <div class="assump__item">
+            <dt><label for="asmErp">Prima de riesgo (ERP)</label></dt>
+            <dd><input id="asmErp" type="number" step="0.1" value="5.0"><span>%</span></dd>
+          </div>
+          <div class="assump__item">
+            <dt><label for="asmTv">Crecimiento terminal</label></dt>
+            <dd><input id="asmTv" type="number" step="0.1" value="2.5"><span>%</span></dd>
+          </div>
+          <div class="assump__item">
+            <dt><label for="asmTax">Tasa impositiva</label></dt>
+            <dd><input id="asmTax" type="number" step="0.1" value="21.0"><span>%</span></dd>
+          </div>
+          <div class="assump__item">
+            <dt><label for="asmYears">Horizonte</label></dt>
+            <dd><input id="asmYears" type="number" step="1" min="3" max="15" value="10"><span>años</span></dd>
+          </div>
+          <div class="assump__acts">
+            <button id="asmApplyBtn" class="btn btn--quiet btn--sm" type="button">Aplicar</button>
+            <button id="asmResetBtn" class="btn btn--quiet btn--sm" type="button">Restablecer</button>
+          </div>
+        </dl>
+      </div>
+      <p class="panel__foot">
+        Cambiar cualquiera de estos cinco números cambia el valor intrínseco de los cuatro activos.
+        Por eso viven arriba y no en un panel escondido.
+      </p>
+    </section>
+
+    <div id="analyzerLoading" class="notice" hidden>
+      <b>Corriendo el modelo</b>
+      <p>
+        <span class="skel skel--line" style="width:70%"></span>
+        <span class="skel skel--line" style="width:52%"></span>
+        <span class="skel skel--line" style="width:64%"></span>
+      </p>
+    </div>
+
+    <div id="analyzerResults">
+
+      <!-- ── El veredicto, arriba ─────────────────────────────────────── -->
+      <section class="ledger" aria-label="Veredicto de valuación">
+        <div class="ledger__main">
+          <div class="ledger__record">
+            <span class="ledger__lab">AAPL · valor intrínseco</span>
+            <strong class="ledger__fig" id="dcfIntrinsic">$186.40</strong>
+            <em class="ledger__alt">rango $154.10 – $228.70 según sensibilidad</em>
+          </div>
+          <div class="ledger__today">
+            <span class="ledger__lab">Contra el precio de mercado</span>
+            <strong class="ledger__fig ledger__fig--sm neg" id="dcfGap">−12.9%</strong>
+            <em class="neg">cotiza a $214.05 · sobrevalorada</em>
+          </div>
+          <span class="stamp">Datos de muestra</span>
+        </div>
+        <dl class="ledger__row" id="dcfResultsGrid"></dl>
+        <canvas class="ledger__rule" id="anlzRule" aria-hidden="true"></canvas>
+      </section>
+
+      <div class="verdict verdict--warn" id="decisionGrid">
+        <span class="verdict__mark" aria-hidden="true"></span>
+        <div>
+          <b>Mantener · no ampliar</b>
+          <p>El descuento de flujos queda 12.9% por debajo del precio y el consenso de analistas
+            apenas lo justifica. El supuesto que más mueve el resultado es el crecimiento terminal:
+            con 3.0% en vez de 2.5% la acción dejaría de estar cara.</p>
+        </div>
+      </div>
+
+      <!-- ── Cómo se llegó ahí ────────────────────────────────────────── -->
+      <section class="panel panel--wide">
+        <div class="panel__head">
+          <h2>De la caja al valor</h2>
+          <p class="panel__meta">Puentes del descuento de flujos</p>
+        </div>
+        <div class="chart" style="--h:280px">
+          <canvas id="dcfWaterfallChart" aria-label="Cascada del descuento de flujos"></canvas>
+        </div>
+        <p class="panel__foot">
+          Flujo libre proyectado a 10 años, más valor terminal, menos deuda neta, entre las acciones
+          en circulación. El valor terminal pesa 61% del total: por eso su supuesto es el crítico.
+        </p>
+      </section>
+
+      <div class="panels panels--2">
+        <section class="panel panel--flush">
+          <div class="panel__head">
+            <h2>Sensibilidad</h2>
+            <p class="panel__meta">WACC contra crecimiento terminal</p>
+          </div>
+          <div class="grid-scroll" id="sensitivityGrid"></div>
+          <div class="panel__body panel__body--tight">
+            <div class="scale">
+              <span>Sobrevalorada</span>
+              <span class="scale__bar" aria-hidden="true"></span>
+              <span>Infravalorada</span>
+            </div>
+            <p class="note-line">Cada celda es el valor intrínseco con ese par de supuestos. El valor va impreso: el color acompaña.</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel__head">
+            <h2>Probabilidad de subida</h2>
+            <p class="panel__meta">10 000 simulaciones sobre los supuestos</p>
+          </div>
+          <div class="chart" style="--h:230px">
+            <canvas id="monteCarloChart" aria-label="Distribución del valor intrínseco simulado"></canvas>
+          </div>
+          <dl class="ledger__row ledger__row--quiet" id="mcResultsGrid"></dl>
+        </section>
+      </div>
+
+      <!-- ── Consenso y técnico ───────────────────────────────────────── -->
+      <section class="panel panel--wide panel--flush" id="analystTechCard">
+        <div class="panel__head">
+          <h2>Consenso y lectura técnica</h2>
+          <p class="panel__meta">Analistas contra precio</p>
+        </div>
+        <div class="grid-scroll">
+          <table class="tbl tbl--metrics" id="analystTechGrid">
+            <thead>
+              <tr><th scope="col">Señal</th><th scope="col" class="n">Valor</th><th scope="col" class="n">Rango</th><th scope="col">Lectura</th></tr>
+            </thead>
+            <tbody><!-- app-sections-v4.js --></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Comparación entre activos ────────────────────────────────── -->
+      <section class="panel panel--wide panel--flush">
+        <div class="panel__head">
+          <h2>Fundamentales comparados</h2>
+          <p class="panel__meta">Los cuatro activos del análisis</p>
+        </div>
+        <div class="grid-scroll grid-scroll--sticky">
+          <table class="tbl tbl--grid" id="comparisonTable">
+            <thead>
+              <tr>
+                <th scope="col" class="th-freeze">Métrica</th>
+                <th scope="col" class="n">AAPL</th>
+                <th scope="col" class="n">MSFT</th>
+                <th scope="col" class="n">KO</th>
+                <th scope="col" class="n">JNJ</th>
+                <th scope="col">Mejor</th>
+              </tr>
+            </thead>
+            <tbody><!-- app-sections-v4.js --></tbody>
+          </table>
+        </div>
+        <p class="panel__foot">Fuente: Yahoo Finance, último reporte trimestral disponible.</p>
+      </section>
+
+      <div class="panels panels--2">
+        <section class="panel panel--flush" id="correlationSection">
+          <div class="panel__head">
+            <h2>Correlación</h2>
+            <p class="panel__meta">Retornos diarios · 1 año</p>
+          </div>
+          <div class="grid-scroll" id="correlationGrid"></div>
+          <p class="panel__foot">Añadir KO y JNJ a una cartera con AAPL y MSFT sí diversifica: la correlación cruzada no pasa de 0.34.</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel__head panel__head--chart">
+            <div><h2>Veredicto del analista</h2><p class="panel__meta">Generado con IA sobre los datos de arriba</p></div>
+            <button id="aiVerdictBtn" class="btn btn--quiet btn--sm" type="button">Generar</button>
+          </div>
+          <div class="panel__body" id="aiVerdictBody">
+            <p class="empty-inline">Se envían claves, múltiplos y métricas. Nunca tu nombre, tu correo ni tu identificador.</p>
+          </div>
+          <p class="panel__foot">Análisis, no asesoría. La decisión y su resultado son tuyos.</p>
+        </section>
+      </div>
+
+      <section class="panel panel--wide panel--flush" id="analyzerNewsSection">
+        <div class="panel__head">
+          <h2>Noticias</h2>
+          <p class="panel__meta">De los cuatro activos · últimas 72 horas</p>
+        </div>
+        <ul class="news" id="analyzerNewsList"></ul>
+      </section>
+    </div>
+
+    <div id="analyzerEmpty" class="empty" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+      <b>Sin activos que analizar</b>
+      <p>Agrega hasta cuatro claves arriba y corre el modelo. Cada análisis tarda unos segundos.</p>
+    </div>
+  </main>
+</div>
+
+<div class="proto" id="protoBar" hidden>
+  <b>Estados</b>
+  <button type="button" data-state="normal" aria-pressed="true">Con datos</button>
+  <button type="button" data-state="loading">Cargando</button>
+  <button type="button" data-state="empty">Vacío</button>
+  <button type="button" data-state="error">Error</button>
+  <button type="button" class="proto__x" id="protoClose" aria-label="Cerrar barra de estados">✕</button>
+</div>
+
+<script src="app-ui-v4.js"></script>
+<script src="app-sections-v4.js"></script>
+</body>
+</html>

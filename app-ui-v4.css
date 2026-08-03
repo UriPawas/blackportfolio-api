@@ -1,0 +1,1764 @@
+/* ==========================================================================
+   BlackPortfolio — capa de componentes de la app v4
+   Nació en el Tracker y ahora la comparten las siete secciones: es la única
+   fuente de verdad visual de la app. Hereda tokens de landing-v4.css y el
+   cascarón (barra, navegación, panel, diálogo) de app-v4.css.
+
+   Orden de carga en toda página de la app:
+     landing-v4.css → app-v4.css → app-ui-v4.css → [página]-v4.css (si hace falta)
+
+   Si un componente aparece en dos secciones, vive aquí. Una sección sólo tiene
+   hoja propia cuando su forma no se repite en ninguna otra (la mesa de trabajo
+   de Mercados, el lienzo de Resumen).
+
+   Tres decisiones que gobiernan todo el archivo:
+
+   1. EL REGISTRO, NO LAS TARJETAS. Nueve cifras de cabecera no son nueve
+      cajas: son una cifra de récord y siete anotaciones separadas por reglas
+      de 1px. Un muro de tarjetas iguales obliga a leerlas todas; un registro
+      se recorre.
+   2. LA TABLA ES REJILLA DE DATOS (resuelve DESIGN.md §12). Doce columnas y
+      cincuenta filas dejaron de caber en una lámina-documento: encabezado
+      fijo, clave congelada a la izquierda, fila de 36 px, cifras tabulares.
+   3. LA REGLA INFERIOR DE LA BANDA ES LA SERIE. No hay borde decorativo: la
+      línea que cierra el registro es el valor de la cartera dibujado a 1px.
+      La estructura de la página y el dato son la misma línea.
+   ========================================================================== */
+
+/* En main.css no existe una regla global de `.hidden` (DESIGN.md §8). Aquí sí,
+   para que ningún panel nuevo dependa de una lista por ID. */
+[hidden] { display: none !important; }
+.hidden  { display: none !important; }
+
+.sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+.app__main .stamp { vertical-align: middle; }
+
+/* Un icono dentro de un botón nunca hereda el `stroke-width` del cuerpo. */
+.ico { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ico--chev { width: 12px; height: 12px; stroke-width: 2.1; }
+
+.icon-btn--sm { width: 34px; height: 34px; }
+.icon-btn--sm svg { width: 15px; height: 15px; }
+.icon-btn--xs { width: 30px; height: 30px; border-color: transparent; }
+.icon-btn--xs svg { width: 14px; height: 14px; }
+.icon-btn--xs:hover { border-color: var(--rule); }
+
+.select {
+  min-height: 34px;
+  padding: .3rem 1.9rem .3rem .6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--surface) var(--chev) no-repeat right .5rem center;
+  background-size: 11px;
+  color: var(--ink);
+  font: 500 var(--t-mini)/1.2 var(--sans);
+  appearance: none;
+  cursor: pointer;
+}
+:root { --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%235A6980' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 7.5 10 12.5 14.5 7.5'/%3E%3C/svg%3E"); }
+[data-theme="dark"] { --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238C9BB3' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 7.5 10 12.5 14.5 7.5'/%3E%3C/svg%3E"); }
+
+input[type="text"], input[type="number"], input[type="date"], textarea {
+  min-height: 34px;
+  padding: .35rem .6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--t-mini)/1.4 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+input::placeholder, textarea::placeholder { color: var(--ink-3); }
+input:focus-visible, textarea:focus-visible, select:focus-visible { border-color: var(--cobalt-line); }
+
+/* ---------------------------------------------------- 1. Cabecera lista   */
+
+.app__head--row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.head-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+/* --------------------------------------------------- 2. El consolidado    */
+
+/* Asiento de apertura: la cifra manda, el resto queda al margen derecho. */
+.consolidated {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s4) var(--s5);
+  margin-top: var(--s5);
+  padding: var(--s4) var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--cobalt-line);
+  border-radius: 2px;
+  box-shadow: var(--shadow-lift);
+}
+.consolidated__fig .lab,
+.ledger__lab {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.consolidated .fig {
+  display: block;
+  margin-top: .2rem;
+  font: 500 clamp(1.75rem, 1.2rem + 1.6vw, 2.35rem)/1 var(--sans);
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.consolidated .delta { font-size: var(--t-mini); font-variant-numeric: tabular-nums; }
+
+.consolidated__meta { display: flex; gap: var(--s5); margin: 0; }
+.consolidated__meta div { min-width: 0; }
+.consolidated__meta dt {
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+}
+.consolidated__meta dd {
+  margin: .2rem 0 0;
+  font: 600 .9375rem/1.2 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------- 3. EL REGISTRO       */
+
+.ledger {
+  position: relative;
+  margin-top: var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+}
+
+/* La cifra de récord y el día, lado a lado, sobre el fondo hundido. */
+.ledger__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s4) var(--s7);
+  padding: var(--s4) var(--s5) var(--s4);
+  background: var(--sunken);
+  border-bottom: 1px solid var(--rule);
+}
+.ledger__fig {
+  display: block;
+  margin-top: .15rem;
+  font: 500 clamp(2rem, 1.3rem + 2.2vw, 2.9rem)/1 var(--sans);
+  letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ledger__fig--sm { font-size: clamp(1.25rem, 1rem + .8vw, 1.6rem); }
+.ledger__today em { display: block; margin-top: .1rem; font-style: normal; font-size: var(--t-mini); font-variant-numeric: tabular-nums; }
+.ledger__alt { display: block; font-style: normal; font-size: var(--t-mini); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ledger__alt:empty { display: none; }
+
+.alt-cur {
+  min-height: 26px;
+  padding: 0 1.1rem 0 .4rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent var(--chev) no-repeat right .25rem center;
+  background-size: 9px;
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  appearance: none;
+  cursor: pointer;
+}
+
+/* Las siete anotaciones: reglas, no cajas. */
+.ledger__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  margin: 0;
+}
+.ledger__cell {
+  min-width: 0;
+  padding: .7rem var(--s4);
+  border-inline-start: 1px solid var(--rule-soft);
+  border-block-start: 1px solid var(--rule-soft);
+}
+/* La primera columna de cada renglón no lleva regla a la izquierda: la caja ya
+   la tiene. Sin esto la rejilla se ve doblemente enmarcada. */
+.ledger__row > .ledger__cell:first-child { border-inline-start: 0; }
+.ledger__cell dt {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font: 600 var(--t-label)/1.3 var(--sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.ledger__cell dd { margin: .25rem 0 0; }
+.ledger__cell b {
+  display: block;
+  font: 600 1.0625rem/1.2 var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.ledger__cell em { display: block; margin-top: .05rem; font-style: normal; font-size: var(--t-mini); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ledger__cell b.pos, .ledger__cell em.pos { color: var(--pos); }
+.ledger__cell b.neg, .ledger__cell em.neg { color: var(--neg); }
+
+.ledger--plain { box-shadow: none; margin-top: var(--s5); }
+.ledger--plain .ledger__row { border-top: 0; }
+.ledger--plain .ledger__cell { border-block-start: 0; }
+@media (max-width: 47.99rem) {
+  .ledger--plain .ledger__cell:nth-child(n+2) { border-block-start: 1px solid var(--rule-soft); }
+}
+
+/* Una acción dentro de la celda va bajo la cifra y con subrayado: en el rótulo
+   se confundía con una palabra más de la etiqueta. */
+.cell-act {
+  position: relative;
+  margin-top: .15rem;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--rule-strong);
+  background: none;
+  font: 500 var(--t-mini)/1.3 var(--sans);
+  color: var(--cobalt-ink);
+  cursor: pointer;
+}
+.cell-act:hover { border-bottom-color: var(--cobalt-line); }
+
+/* Una frase nunca va en versalitas: `.panel__meta` es para rótulos cortos. */
+.note-line { margin: .5rem 0 0; font-size: var(--t-mini); color: var(--ink-3); }
+
+.ledger__more { border-top: 1px solid var(--rule-soft); }
+.ledger__more summary {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .55rem var(--s4);
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+  list-style: none;
+}
+.ledger__more summary::-webkit-details-marker { display: none; }
+.ledger__more summary:hover { color: var(--ink-2); background: var(--sunken); }
+.ledger__more summary svg {
+  width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2;
+  stroke-linecap: round; stroke-linejoin: round;
+  transition: transform .18s var(--ease);
+}
+.ledger__more[open] summary svg { transform: rotate(180deg); }
+.ledger__row--quiet .ledger__cell b { font-size: .9375rem; font-weight: 500; color: var(--ink-2); }
+
+/* SIGNATURE — la regla que cierra el registro es la serie de valor. */
+.ledger__rule {
+  display: block;
+  width: 100%;
+  height: 42px;
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* ------------------------------------------------- 4. Barra de estado     */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  padding: .5rem 0 0;
+}
+.status-bar__msg { font-size: var(--t-mini); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.status-bar__msg.is-stale { color: var(--neg); }
+
+/* ------------------------------------------------------ 5. Pestañas       */
+
+.tabs {
+  position: sticky;
+  top: 52px;
+  z-index: 20;
+  margin-top: var(--s4);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  /* Un hijo de rejilla no encoge por debajo de su contenido: sin esto la tira
+     nunca activa su `overflow-x` (DESIGN.md §6). */
+  min-width: 0;
+}
+.tabs__strip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.tabs__strip::-webkit-scrollbar { display: none; }
+
+.tabs__btn {
+  position: relative;
+  flex: none;
+  min-height: 40px;
+  padding: .55rem .62rem;
+  border: 0;
+  background: none;
+  font: 500 .875rem/1.2 var(--sans);
+  color: var(--ink-3);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .16s var(--ease);
+}
+.tabs__btn:hover { color: var(--ink-2); }
+.tabs__btn[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+
+/* El rótulo de grupo no es un botón: separa y nombra las tres familias. */
+.tabs__group {
+  flex: none;
+  padding: 0 .5rem 0 .75rem;
+  border-left: 1px solid var(--rule);
+  margin-left: .3rem;
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  opacity: .75;
+  white-space: nowrap;
+}
+
+/* La marca de ubicación se desliza; nunca es sólo color. */
+.tabs__ink {
+  position: absolute;
+  left: 0; bottom: -1px;
+  width: 1px; height: 2px;
+  background: var(--cobalt-line);
+  transform-origin: left center;
+  transition: transform .26s var(--ease);
+}
+
+.tab-panel { padding-top: var(--s5); }
+.tab-panel:focus-visible { outline-offset: -2px; }
+
+/* --------------------------------------------------------- 6. Láminas     */
+
+.panel { min-width: 0; }
+.panel + .panel, .panel + .panels, .panels + .panel, .panels + .panels,
+.ledger--plain + .panel, .panel + .ledger--plain, .panels + .ledger--plain { margin-top: var(--s5); }
+.panel--flush .panel__body:last-of-type { padding-bottom: 0; }
+
+.panels--2 { display: grid; gap: var(--s5); }
+.panels--3 { display: grid; gap: var(--s5); }
+@media (min-width: 62rem) {
+  .panels--2 { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+  .panels--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+}
+
+.panel__head--chart { align-items: flex-start; }
+.panel__controls { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
+.panel__controls--sub {
+  padding: .55rem .875rem;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.readout {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .55rem;
+  margin-top: .3rem;
+}
+.readout strong {
+  font: 600 1.35rem/1 var(--sans);
+  letter-spacing: -.015em;
+  font-variant-numeric: tabular-nums;
+}
+.readout span { font-size: var(--t-mini); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------- 7. Controles     */
+
+/* `.seg` = modos excluyentes (pulgar lleno). `.periods` = posición en una
+   escala (marca de regla). Dos idiomas, dos significados; no se mezclan. */
+.seg--sm { padding: 2px; }
+.seg--sm button { min-height: 30px; padding: .3rem .6rem; font-size: var(--t-mini); }
+
+.periods {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.periods button {
+  min-height: 30px;
+  padding: .3rem .6rem;
+  border: 0;
+  border-left: 1px solid var(--rule-soft);
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: 500 var(--t-mini)/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background-color .16s var(--ease), color .16s var(--ease);
+}
+.periods button:first-of-type { border-left: 0; }
+.periods button:hover { background: var(--sunken); color: var(--ink-2); }
+.periods button[aria-pressed="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--cobalt-tint);
+  border-bottom-color: var(--cobalt-line);
+}
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.toolbar--fields { gap: var(--s3) var(--s4); }
+
+.field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.field-inline input { width: 7rem; }
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: var(--t-mini);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.check input { width: 15px; height: 15px; accent-color: var(--cobalt); }
+
+.field-search { position: relative; display: inline-flex; align-items: center; }
+.field-search svg {
+  position: absolute; left: .5rem;
+  width: 14px; height: 14px; fill: none; stroke: var(--ink-3); stroke-width: 1.9; stroke-linecap: round;
+  pointer-events: none;
+}
+.field-search input { padding-left: 1.75rem; width: 11rem; }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: .2rem .45rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.tag--ok { color: var(--pos); border-color: color-mix(in srgb, var(--pos) 40%, transparent); }
+.tag--warn { color: var(--neg); border-color: color-mix(in srgb, var(--neg) 40%, transparent); }
+.tag--count { background: var(--cobalt-tint); color: var(--cobalt-ink); border-color: var(--cobalt-line); }
+
+.popover {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s3);
+  padding: .7rem .875rem;
+  border-bottom: 1px solid var(--rule-soft);
+  background: var(--sunken);
+}
+.popover label {
+  display: flex; flex-direction: column; gap: .25rem;
+  font: 600 var(--t-label)/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+}
+
+.menu { position: relative; }
+.menu__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 15rem;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-plate);
+}
+.menu__list button {
+  display: block;
+  width: 100%;
+  padding: .5rem .6rem;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.menu__list button:hover { background: var(--cobalt-tint); }
+.menu__list b { display: block; font: 600 .875rem/1.3 var(--sans); color: var(--ink); }
+.menu__list span { display: block; font-size: var(--t-mini); color: var(--ink-3); }
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  min-height: 32px;
+  padding: .5rem .6rem .5rem 0;
+  border: 0;
+  background: none;
+  font: 500 var(--t-mini)/1 var(--sans);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color .16s var(--ease);
+}
+.btn-back:hover { color: var(--cobalt-ink); }
+.btn-back svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Objetivo táctil sin deformar el diseño: el control chico conserva su tamaño
+   óptico y crece por debajo con una zona transparente. Aplica a los tres
+   controles que la retícula obliga a mantener pequeños. */
+.hint::after,
+.cell-act::after,
+.th-sort::before {
+  content: "";
+  position: absolute;
+  inset: -9px -3px;
+}
+.hint::after, .cell-act::after { inset: -11px -8px; }
+
+/* El signo de ayuda es una nota al pie, no un globo de color. */
+.hint {
+  position: relative;
+  width: 15px; height: 15px;
+  display: inline-grid; place-items: center;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  background: none;
+  font: 600 9px/1 var(--sans);
+  color: var(--ink-3);
+  cursor: help;
+}
+.hint:hover { border-color: var(--cobalt-line); color: var(--cobalt-ink); }
+.hint-pop {
+  position: fixed;
+  z-index: 70;
+  max-width: 22rem;
+  padding: .5rem .65rem;
+  background: var(--band);
+  color: var(--on-band);
+  border-radius: 2px;
+  font: 400 var(--t-mini)/1.45 var(--sans);
+  box-shadow: var(--shadow-plate);
+  pointer-events: none;
+}
+
+/* ------------------------------------- 8. Cabecera de la barra de cartera */
+
+.dash-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .35rem var(--s4);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+.dash-top .btn-back { grid-column: 1 / -1; justify-self: start; }
+.dash-title { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; min-width: 0; }
+.dash-title h1 { font-size: 1.5rem; letter-spacing: -.02em; margin: 0; }
+.dash-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); justify-self: end; }
+
+/* ------------------------------------------- 9. Rejilla de datos (tablas) */
+
+.grid-scroll {
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  min-width: 0;
+}
+.grid-scroll--sticky { max-height: 27rem; }
+
+.tbl th, .tbl td { white-space: nowrap; }
+.tbl .sub { display: block; font-weight: 400; font-size: var(--t-label); letter-spacing: 0; text-transform: none; color: var(--ink-3); }
+
+.tbl--grid { font-size: var(--t-mini); }
+.tbl--grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: .45rem .7rem;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--rule-strong);
+  text-align: left;
+}
+.tbl--grid thead th.n, .tbl--grid td.n, .tbl--grid tfoot td.n { text-align: right; }
+.tbl--grid tbody td, .tbl--grid tbody th, .tbl--grid tfoot td, .tbl--grid tfoot th {
+  height: 36px;
+  padding: 0 .7rem;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-mini);
+  color: var(--ink-2);
+  vertical-align: middle;
+}
+
+/* Una celda de encabezado de FILA es un dato, no un rótulo: hereda de `.tbl th`
+   las versalitas, el interletrado y el relleno de cabecera, y con eso el nombre
+   del activo salía en mayúsculas y la fila crecía a 46 px. */
+.tbl--grid tbody th {
+  font: 600 var(--t-mini)/1.3 var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+.tbl--grid tbody tr:hover td, .tbl--grid tbody tr:hover th { background: var(--cobalt-tint); }
+.tbl--grid tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+
+/* La clave se queda fija: sin ella, doce columnas se leen a ciegas. */
+.th-freeze {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink);
+  box-shadow: 1px 0 0 var(--rule-soft);
+}
+.tbl--grid thead .th-freeze { z-index: 3; background: var(--sunken); box-shadow: 1px 0 0 var(--rule-strong); }
+.tbl--grid tbody tr:hover .th-freeze { background: var(--cobalt-tint); }
+
+.tbl--grid tfoot td, .tbl--grid tfoot th {
+  background: var(--sunken);
+  border-bottom: 0;
+  border-top: 1px solid var(--rule-strong);
+  font-weight: 600;
+  color: var(--ink);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+.tbl--grid tfoot .th-freeze { z-index: 4; }
+
+.th-sort {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.th-sort::after {
+  content: "";
+  width: 0; height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0;
+  transition: opacity .16s var(--ease), transform .16s var(--ease);
+}
+.th-sort:hover::after { opacity: .35; }
+[aria-sort] .th-sort { color: var(--cobalt-ink); }
+[aria-sort] .th-sort::after { opacity: 1; }
+[aria-sort="ascending"] .th-sort::after { transform: rotate(180deg); }
+.n .th-sort { flex-direction: row-reverse; }
+
+.th-spark { width: 74px; }
+.tbl .spark { display: block; width: 62px; height: 18px; }
+
+/* Marca del activo: cuadro entintado con la inicial. El hueco se reserva
+   siempre para que las claves queden alineadas. */
+.tk { display: inline-flex; align-items: center; gap: .5rem; min-width: 0; }
+.tk__badge {
+  flex: none;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--sunken);
+  font: 600 9px/1 var(--sans);
+  letter-spacing: .02em;
+  color: var(--ink-3);
+}
+.tk__sym { font-weight: 600; letter-spacing: .03em; color: var(--ink); }
+.tk__name { display: block; font-weight: 400; font-size: var(--t-label); color: var(--ink-3); letter-spacing: 0; }
+
+/* Un signo antes que un color: el retorno se lee sin distinguir tonos. */
+.sign { font-variant-numeric: tabular-nums; }
+.sign--up::before { content: "▲ "; font-size: .7em; }
+.sign--down::before { content: "▼ "; font-size: .7em; }
+
+.row-act {
+  width: 26px; height: 26px;
+  display: inline-grid; place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .16s var(--ease), border-color .16s var(--ease);
+}
+.row-act svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+tr:hover .row-act, .row-act:focus-visible { opacity: 1; }
+.row-act:hover { border-color: var(--rule-strong); color: var(--ink); }
+
+/* Registro de carteras: fila alta, clicable entera. */
+.tbl--register tbody td { height: 52px; cursor: pointer; }
+.tbl--register .tk__sym { font-size: .9375rem; letter-spacing: -.005em; }
+.tbl--register .n { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl--register tbody tr:focus-visible { outline: 2px solid var(--cobalt-line); outline-offset: -2px; }
+
+/* Tabla de razones: la lectura en prosa a la derecha evita doce tarjetas. */
+.tbl--metrics th[scope="row"] { font-weight: 600; color: var(--ink); text-align: left; }
+.tbl--metrics td.n { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+.tbl--metrics td:last-child { white-space: normal; color: var(--ink-3); font-size: var(--t-mini); }
+
+/* La promesa de la rejilla es la fila de 36 px, y con dos renglones de texto a
+   interlínea normal el contenido la rebasa. Dentro de la rejilla —y sólo ahí—
+   la clave y su nombre van a interlínea corta. */
+.tbl--grid .tk__sym, .tbl--grid .tk__name { line-height: 1.15; }
+
+/* Densidad compacta: mismo contenido, 30 px de fila. */
+.is-dense .tbl--grid tbody td, .is-dense .tbl--grid tbody th { height: 30px; }
+.is-dense .tbl--grid .tk__name { display: none; }
+
+/* -------------------------------------------------------- 10. Gráficas    */
+
+.chart {
+  position: relative;
+  height: var(--h, 260px);
+  padding: var(--s3) .875rem;
+}
+.chart--tall { --h: 340px; }
+.chart canvas { display: block; width: 100%; height: 100%; }
+.chart__tip {
+  position: absolute;
+  z-index: 5;
+  padding: .4rem .55rem;
+  background: var(--band);
+  color: var(--on-band);
+  border-radius: 2px;
+  font: 500 var(--t-label)/1.5 var(--sans);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-plate);
+}
+.chart__tip b { display: block; font-weight: 600; font-size: var(--t-mini); }
+
+.key { display: flex; flex-wrap: wrap; gap: var(--s3); margin: 0; padding: 0; list-style: none; }
+.key li { display: inline-flex; align-items: center; gap: .4rem; font-size: var(--t-label); color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; font-weight: 600; }
+.key__swatch { width: 14px; height: 2px; background: var(--cobalt-line); }
+.key__swatch--rule { height: 0; border-top: 2px dashed var(--ink-3); background: none; }
+.key__band { width: 14px; height: 10px; border: 1px solid var(--cobalt-line); }
+.key__band--1 { background: color-mix(in srgb, var(--cobalt-line) 42%, transparent); }
+.key__band--2 { background: color-mix(in srgb, var(--cobalt-line) 26%, transparent); }
+.key__band--3 { background: color-mix(in srgb, var(--cobalt-line) 13%, transparent); }
+.key--fan { margin-top: var(--s3); }
+
+/* ----------------------------------------------------- 11. Composición    */
+
+.comp { padding: var(--s4) .875rem; }
+.comp--sm { padding: var(--s3) .875rem; }
+.comp__donut { position: relative; height: 220px; }
+.comp__donut--sm { height: 150px; }
+.comp__donut canvas { display: block; width: 100%; height: 100%; }
+
+@media (min-width: 48rem) {
+  .comp[data-comp-panel="donut"] { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--s4); align-items: center; }
+}
+
+.legend { margin: var(--s3) 0 0; padding: 0; list-style: none; }
+.legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: .55rem;
+  padding: .3rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-mini);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+.legend li:last-child { border-bottom: 0; }
+.legend i { width: 10px; height: 10px; border-radius: 1px; }
+.legend b { font-weight: 600; color: var(--ink); letter-spacing: .03em; }
+.legend .n { text-align: right; color: var(--ink); font-weight: 600; }
+.legend .n--w { color: var(--ink-3); font-weight: 400; }
+.legend--sm { margin-top: var(--s2); }
+.legend--sm li { grid-template-columns: 10px minmax(0, 1fr) auto; padding: .22rem 0; }
+
+.treemap {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: 42px;
+  gap: 2px;
+}
+.treemap__cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: .3rem .45rem;
+  border-radius: 1px;
+  overflow: hidden;
+  transition: filter .16s var(--ease);
+}
+.treemap__cell:hover { filter: brightness(1.06); }
+.treemap__cell b { font: 600 var(--t-mini)/1.1 var(--sans); letter-spacing: .03em; }
+/* Sobre una celda tintada sólo `--ink` llega al mínimo en los dos temas: la
+   jerarquía la hace el tamaño y el peso, no un segundo gris. */
+.treemap__cell span { font: 500 var(--t-label)/1.2 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* ------------------------------------------------- 12. Barras horizontales*/
+
+.bars { padding: var(--s3) .875rem; }
+.bars__row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: .7rem;
+  padding: .28rem 0;
+}
+.bars__lab { font: 600 var(--t-mini)/1 var(--sans); letter-spacing: .03em; color: var(--ink); }
+.bars__track { position: relative; height: 14px; background: var(--sunken); border-radius: 1px; }
+/* Sin transición de `width`: la barra se pinta una vez con su valor final y
+   animar una propiedad de layout sólo agrega trabajo al hilo principal. */
+.bars__fill { position: absolute; top: 0; height: 100%; border-radius: 1px; }
+.bars__fill--pos { background: var(--pos); }
+.bars__fill--neg { background: var(--neg); }
+.bars__fill--seq { background: var(--cobalt-line); }
+.bars__zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--rule-strong); }
+.bars__val { text-align: right; font: 600 var(--t-mini)/1 var(--sans); font-variant-numeric: tabular-nums; }
+/* La marca vertical es el peso en capital: si la barra la rebasa, el activo
+   aporta más riesgo del que le tocaría por tamaño. */
+.bars__mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); }
+.bars--risk .bars__row { grid-template-columns: 5.5rem minmax(0, 1fr) 7rem; }
+
+/* ------------------------------------------ 13. Medidor y pares de datos  */
+
+.gauge { padding-bottom: var(--s3); }
+.gauge__row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
+.gauge__lab { font: 600 var(--t-label)/1 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.gauge__val { font: 600 1.125rem/1 var(--sans); font-variant-numeric: tabular-nums; }
+.gauge__track {
+  position: relative;
+  height: 8px;
+  margin-top: .5rem;
+  background: var(--sunken);
+  border: 1px solid var(--rule-soft);
+  border-radius: 1px;
+}
+.gauge__track--tall { height: 14px; }
+.gauge__fill { position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--cobalt-line); border-radius: 1px; }
+.gauge__mark { position: absolute; top: -4px; bottom: -4px; left: var(--x); width: 2px; background: var(--ink); }
+.gauge__note { margin: .5rem 0 0; font-size: var(--t-mini); color: var(--ink-3); }
+
+.pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0; margin: 0; }
+.pairs div { padding: .55rem 0; border-top: 1px solid var(--rule-soft); }
+.pairs dt { font: 600 var(--t-label)/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.pairs dd { margin: .25rem 0 0; font: 600 .9375rem/1.2 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+.pairs--inline div { border-top: 0; padding-top: 0; }
+
+.prob {
+  text-align: right;
+  padding-left: var(--s4);
+  border-left: 1px solid var(--rule);
+}
+.prob strong { display: block; font: 500 2rem/1 var(--sans); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--cobalt-ink); }
+.prob span { font: 600 var(--t-label)/1.3 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+/* ----------------------------------------------- 14. Matriz y escala      */
+
+.corr { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.corr th, .corr td { padding: 0; }
+.corr thead th, .corr tbody th {
+  padding: .4rem .55rem;
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .05em;
+  color: var(--ink-2);
+  background: var(--sunken);
+  white-space: nowrap;
+}
+.corr tbody th { position: sticky; left: 0; z-index: 1; text-align: left; box-shadow: 1px 0 0 var(--rule); }
+.corr thead th { position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--rule); }
+.corr thead th:first-child { z-index: 3; }
+.corr td {
+  width: 3.6rem; height: 34px;
+  text-align: center;
+  font: 600 var(--t-mini)/1 var(--sans);
+  border: 1px solid var(--surface);
+}
+.corr td.is-self { color: var(--ink-3); font-weight: 400; background: var(--sunken); }
+
+/* Escala tintada. La intensidad se pasa por `--m` (0 a 1) y el tope vive en un
+   token que cambia con el tema, así que la celda se repinta sola al cambiar de
+   modo: no hay que volver a renderizar la tabla.
+
+   El tope no es estético: es el punto donde el texto en `--ink` conserva 4.5:1
+   sobre la mezcla más fuerte. Con un umbral de "a partir de aquí letra blanca"
+   siempre queda una franja intermedia ilegible en la que ni el negro ni el
+   blanco llegan al mínimo. Un solo color de texto y un tope medido lo evitan. */
+:root            { --tint-cap: 46%; }
+[data-theme="dark"] { --tint-cap: 55%; }
+
+.tint {
+  background: color-mix(in srgb, var(--tint-hue, var(--cobalt)) calc(var(--m, 0) * var(--tint-cap)), var(--surface));
+  color: var(--ink);
+}
+.tint--neg { --tint-hue: var(--neg); }
+.tint--pos { --tint-hue: var(--pos); }
+
+.scale { display: flex; align-items: center; gap: var(--s3); font: 600 var(--t-label)/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.scale__bar {
+  flex: 1 1 auto;
+  height: 8px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--neg) 0%, var(--sunken) 50%, var(--cobalt) 100%);
+}
+
+.top-pairs { display: grid; gap: .35rem; margin: 0; padding: 0; list-style: none; }
+.top-pairs li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-mini);
+  color: var(--ink-2);
+}
+.top-pairs li:last-child { border-bottom: 0; }
+.top-pairs b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------- 15. Geografía  */
+
+.geo { display: grid; gap: 2px; }
+.geo__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .55rem; }
+.geo__bar { height: 10px; background: var(--cobalt-line); border-radius: 1px; }
+
+/* ------------------------------------------------------ 16. Formularios   */
+
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s3) var(--s4); }
+.field { display: flex; flex-direction: column; gap: .3rem; min-width: 0; position: relative; }
+.field--wide { grid-column: 1 / -1; }
+.field--check { justify-content: flex-end; }
+.field label {
+  font: 600 var(--t-label)/1.2 var(--sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.field input, .field select { width: 100%; }
+.form-grid__actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--rule-soft); }
+
+.inline-form { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.inline-form input { flex: 1 1 14rem; }
+
+.suggest {
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-plate);
+}
+
+/* --------------------------------------------------------- 17. Estados    */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  margin-top: var(--s5);
+  padding: var(--s7) var(--s5);
+  background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+  border-radius: 2px;
+  text-align: center;
+}
+.empty svg { width: 26px; height: 26px; fill: none; stroke: var(--ink-3); stroke-width: 1.4; }
+.empty b { font: 500 1.125rem/1.2 var(--serif); color: var(--ink); }
+.empty p { margin: 0; max-width: 44ch; font-size: var(--t-small); color: var(--ink-2); }
+.empty .btn { margin-top: var(--s2); }
+
+/* Esqueleto: la forma de lo que viene, no una rueda en medio del contenido. */
+.skel { background: var(--sunken); border-radius: 1px; color: transparent !important; }
+.skel--line { height: 10px; display: inline-block; width: 100%; }
+.motion-ok .skel { animation: skelPulse 1.4s ease-in-out infinite; }
+@keyframes skelPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+.notice {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+  margin: var(--s5) 0 0;
+  padding: var(--s4) var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--neg);
+  border-radius: 2px;
+}
+.notice--plan { border-top-color: var(--cobalt-line); }
+.notice b { font: 500 1.0625rem/1.3 var(--serif); color: var(--ink); }
+.notice p { margin: 0; max-width: 56ch; font-size: var(--t-small); color: var(--ink-2); }
+
+/* ------------------------------------------------------- 18. Asistente    */
+
+.assist {
+  position: fixed;
+  right: var(--s4); bottom: var(--s4);
+  z-index: 60;
+  width: min(23rem, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  max-height: min(32rem, calc(100dvh - 6rem));
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-top: 2px solid var(--cobalt-line);
+  border-radius: 2px;
+  box-shadow: var(--shadow-plate);
+}
+.assist__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: .55rem .7rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--sunken);
+}
+.assist__head b { display: block; font: 600 .875rem/1.2 var(--sans); }
+.assist__head span { display: block; font-size: var(--t-label); color: var(--ink-3); }
+.assist__acts { display: flex; gap: .15rem; }
+.assist__log { flex: 1 1 auto; overflow-y: auto; padding: .7rem; display: grid; gap: .55rem; align-content: start; }
+.assist__msg { max-width: 92%; padding: .45rem .6rem; border-radius: 2px; font-size: var(--t-mini); line-height: 1.5; }
+.assist__msg--bot { background: var(--sunken); color: var(--ink-2); border-left: 1px solid var(--cobalt-line); }
+.assist__msg--me { justify-self: end; background: var(--cobalt-tint); color: var(--ink); }
+.assist__chips { display: flex; flex-wrap: wrap; gap: .3rem; padding: 0 .7rem .5rem; }
+.assist__chips button {
+  padding: .25rem .5rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: none;
+  font: 500 var(--t-label)/1.3 var(--sans);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.assist__chips button:hover { border-color: var(--cobalt-line); color: var(--cobalt-ink); }
+.assist__input { display: flex; gap: .35rem; padding: .5rem; border-top: 1px solid var(--rule); }
+.assist__input textarea { flex: 1 1 auto; resize: none; }
+.assist--min .assist__log, .assist--min .assist__chips, .assist--min .assist__input { display: none; }
+
+/* --------------------------------------------------------- 19. Diálogos   */
+
+.dlg__card--plain { border-top-color: var(--cobalt-line); }
+.dlg__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s4); }
+.dlg__head h2 { margin: 0; }
+
+/* --------------------------------------- 20. Barra de estados (prototipo) */
+
+.proto {
+  position: fixed;
+  left: var(--s4); bottom: var(--s4);
+  z-index: 75;
+  display: flex; flex-wrap: wrap; align-items: center; gap: .3rem;
+  padding: .4rem .5rem;
+  background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-lift);
+}
+.proto b { font: 600 var(--t-label)/1 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); margin-right: .3rem; }
+.proto button {
+  padding: .25rem .45rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: none;
+  font: 500 var(--t-label)/1.3 var(--sans);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.proto button[aria-pressed="true"] { background: var(--cobalt-tint); border-color: var(--cobalt-line); color: var(--cobalt-ink); font-weight: 600; }
+.proto__x { border-color: transparent !important; color: var(--ink-3) !important; }
+
+/* -------------------------------------------------------- 21. Movimiento  */
+
+/* Sólo respuesta a la acción (DESIGN.md §7). Tres momentos y ninguno más:
+   el panel que entra, el pulgar que se desliza y el destello del dato que
+   acaba de actualizarse. */
+.motion-ok .tab-panel[data-entering] { animation: panelIn .2s var(--ease) both; }
+@keyframes panelIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.motion-ok .btn:active, .motion-ok .tabs__btn:active, .motion-ok .periods button:active { transform: scale(.97); }
+
+/* Destello del dato actualizado: dura lo que tarda el ojo en ubicarlo. */
+.motion-ok .is-fresh { animation: freshFlash .55s var(--ease); }
+@keyframes freshFlash {
+  from { background-color: var(--cobalt-tint); }
+  to   { background-color: transparent; }
+}
+
+.ico--spin { transition: transform .5s var(--ease); }
+.motion-ok [aria-busy="true"] .ico--spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   22. Vocabulario de las otras seis secciones
+   Todo lo de abajo se apoya en lo de arriba: mismas reglas de 1 px, mismas
+   versalitas para rótulos, mismas cifras tabulares, mismo cobalto como dato.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ---------------------------------------------- 22a. Cadena (Top-down)    */
+
+/* El número no decora: es el orden del método. Macro manda sobre sector y
+   sector sobre activo, y la página se lee en ese orden o no se lee. */
+.stage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s4);
+  padding-bottom: var(--s7);
+  margin-top: var(--s6);
+}
+.stage__num {
+  position: relative;
+  font: 500 1.5rem/1 var(--serif);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+/* La línea que baja del número es la cadena de decisión. */
+.stage:not(.stage--last) .stage__num::after {
+  content: "";
+  position: absolute;
+  top: 2.2rem; bottom: -3.4rem; left: 50%;
+  width: 1px;
+  background: var(--rule);
+}
+.stage__body { min-width: 0; }
+.stage__head { padding-bottom: var(--s4); border-bottom: 1px solid var(--rule); }
+.stage__head h2 { margin: 0; font-size: 1.35rem; letter-spacing: -.015em; }
+.stage__head p { margin: .3rem 0 0; font-size: var(--t-small); color: var(--ink-2); max-width: 62ch; }
+
+/* Veredicto: rótulo, texto y una marca. El estado va en la regla superior —el
+   mismo gesto que `.consolidated` y `.dlg__card`— y no en una pestaña de color
+   pegada al costado, que es el tic más reconocible de una interfaz generada. */
+.verdict {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s3);
+  margin-top: var(--s5);
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--rule-strong);
+  border-radius: 2px;
+}
+.verdict__mark { width: 8px; height: 8px; margin-top: .45rem; background: var(--ink-3); border-radius: 50%; }
+.verdict--ok { border-top-color: var(--pos); }
+.verdict--ok .verdict__mark { background: var(--pos); }
+.verdict--warn { border-top-color: var(--neg); }
+.verdict--warn .verdict__mark { background: var(--neg); }
+.verdict b { display: block; font: 500 1.0625rem/1.35 var(--serif); color: var(--ink); }
+.verdict p { margin: .3rem 0 0; font-size: var(--t-small); color: var(--ink-2); max-width: 68ch; }
+
+.picks { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
+
+/* ------------------------------------------------------ 22b. Fichas       */
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s3) 0 0; padding: 0; list-style: none; }
+.chips li, .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .3rem .3rem .3rem .55rem;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  font: 600 var(--t-mini)/1.3 var(--sans);
+  letter-spacing: .03em;
+  color: var(--ink);
+}
+.chips em { font-style: normal; font-weight: 400; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.chips button {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 0; border-radius: 1px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.chips button:hover { background: var(--sunken); color: var(--neg); }
+.chips button svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; }
+.chips--stack { display: grid; gap: 1px; padding: var(--s3) .875rem; }
+.chips--stack li { justify-content: space-between; }
+
+/* Los supuestos se ven siempre: el valor intrínseco es una función de ellos. */
+.assump {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0;
+  margin: var(--s4) 0 0;
+  border-top: 1px solid var(--rule);
+}
+.assump__item { padding: .6rem var(--s3); border-inline-start: 1px solid var(--rule-soft); }
+.assump__item:first-child { border-inline-start: 0; padding-inline-start: 0; }
+.assump dt { font: 600 var(--t-label)/1.2 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.assump dd { display: flex; align-items: baseline; gap: .35rem; margin: .3rem 0 0; }
+.assump input { width: 4.5rem; }
+.assump dd span { font-size: var(--t-mini); color: var(--ink-3); }
+.assump__acts { display: flex; align-items: flex-end; gap: var(--s2); padding: .6rem var(--s3); }
+
+.steps { margin: 0; padding-left: 1.25rem; display: grid; gap: .5rem; }
+.steps li { font-size: var(--t-small); color: var(--ink-2); }
+.steps b { color: var(--ink); font-weight: 600; }
+
+.news { margin: 0; padding: 0; list-style: none; }
+.news li { padding: .6rem .875rem; border-bottom: 1px solid var(--rule-soft); }
+.news li:last-child { border-bottom: 0; }
+.news a { display: block; font: 500 var(--t-small)/1.45 var(--sans); color: var(--ink); text-decoration: none; }
+.news a:hover { color: var(--cobalt-ink); text-decoration: underline; text-underline-offset: .18em; }
+.news .news__meta {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  margin-top: .2rem;
+  font: 600 var(--t-label)/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+}
+.news .news__tk { color: var(--cobalt-ink); }
+
+.empty-inline { margin: 0; font-size: var(--t-small); color: var(--ink-3); }
+
+/* ------------------------------------------ 22c. Banco (Optimización)     */
+
+.bench { display: grid; gap: var(--s5); margin-top: var(--s5); align-items: start; }
+.bench__setup, .bench__out { display: grid; gap: var(--s5); align-content: start; min-width: 0; }
+@media (min-width: 75rem) {
+  .bench { grid-template-columns: 22rem minmax(0, 1fr); }
+  .bench__setup { position: sticky; top: 4.5rem; }
+}
+
+.seg--stack { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.seg--stack .seg__thumb, .seg--wrap .seg__thumb { display: none; }
+.seg--stack button[aria-pressed="true"], .seg--wrap button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--cobalt);
+  border-radius: 1px;
+}
+.seg--wrap { display: flex; flex-wrap: wrap; }
+
+.factor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7rem auto;
+  align-items: center;
+  gap: .6rem;
+  padding: .45rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.factor output { font: 600 var(--t-mini)/1 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+.factor input[type="range"] { width: 100%; accent-color: var(--cobalt); }
+
+.views { margin: 0 0 var(--s3); padding: 0; list-style: none; display: grid; gap: .35rem; }
+
+.form-grid--tight { gap: var(--s2) var(--s3); margin-top: var(--s3); }
+.panel__foot--act { display: grid; gap: var(--s2); background: var(--sunken); }
+
+.comp--pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.comp--pair .panel__meta { text-align: center; }
+
+/* --------------------------------------------- 22d. Mesa (Mercados)       */
+
+.app--wide .app__main--flush { padding: 0; }
+
+.market-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-inline: var(--s4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  overflow: hidden;
+}
+.market-strip .quotes { flex: 1 1 auto; min-width: 0; border: 0; }
+
+.fng { display: flex; align-items: center; gap: .5rem; flex: none; padding-left: var(--s3); border-left: 1px solid var(--rule); }
+.fng__lab { font: 600 var(--t-label)/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.fng__track {
+  position: relative;
+  width: 70px; height: 6px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--neg) 0%, var(--sunken) 50%, var(--pos) 100%);
+}
+.fng__mark { position: absolute; top: -3px; bottom: -3px; left: var(--x); width: 2px; background: var(--ink); }
+.fng__val { font: 600 var(--t-mini)/1 var(--sans); font-variant-numeric: tabular-nums; }
+
+.desk { display: grid; min-width: 0; }
+@media (min-width: 62rem)  { .desk { grid-template-columns: 13rem minmax(0, 1fr); } }
+@media (min-width: 100rem) { .desk { grid-template-columns: 13rem minmax(0, 1fr) 19rem; } }
+
+.desk__rail { min-width: 0; border-right: 1px solid var(--rule); background: var(--surface); }
+.desk__rail-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  padding: .5rem .7rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--sunken);
+}
+.desk__rail-head h2 { margin: 0; font: 600 var(--t-label)/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+
+.wl { margin: 0; padding: 0; list-style: none; }
+.wl li { border-bottom: 1px solid var(--rule-soft); }
+.wl button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .1rem .5rem;
+  width: 100%;
+  padding: .45rem .7rem;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.wl button:hover { background: var(--sunken); }
+.wl button[aria-current="true"] { background: var(--cobalt-tint); border-left-color: var(--cobalt-line); }
+.wl__sym { font: 600 var(--t-mini)/1.3 var(--sans); letter-spacing: .03em; color: var(--ink); }
+.wl__px  { font: 500 var(--t-mini)/1.3 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink-2); text-align: right; }
+.wl__chg { grid-column: 2; font: 600 var(--t-label)/1.2 var(--sans); font-variant-numeric: tabular-nums; text-align: right; }
+.wl__name { grid-column: 1; font: 400 var(--t-label)/1.2 var(--sans); color: var(--ink-3); }
+
+.desk__main { min-width: 0; display: flex; flex-direction: column; }
+.desk__bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2);
+  padding: .5rem var(--s4);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+.desk__bar-spacer { flex: 1 1 auto; }
+.field-search--grow { flex: 1 1 12rem; }
+.field-search--grow input, .field-search--ticker input { width: 100%; }
+.field-search--ticker { position: relative; width: 11rem; }
+.field-search--ticker input { font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+
+.compare {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2);
+  padding: .45rem var(--s4);
+  border-bottom: 1px solid var(--rule);
+  background: var(--sunken);
+}
+.compare .chips { margin: 0; }
+
+.asset {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--s3) var(--s5);
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+.asset__id b { display: block; font: 600 1.125rem/1.1 var(--sans); letter-spacing: .04em; }
+.asset__id span { display: block; font-size: var(--t-label); color: var(--ink-3); }
+.asset__px strong { font: 500 1.6rem/1 var(--sans); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.asset__px span { display: block; margin-top: .15rem; font-size: var(--t-mini); font-variant-numeric: tabular-nums; }
+.asset__range { min-width: 10rem; }
+.asset__range-lab { font: 600 var(--t-label)/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.asset__range-track { position: relative; display: block; height: 4px; margin: .4rem 0 .2rem; background: var(--sunken); border: 1px solid var(--rule-soft); }
+.asset__range-fill { position: absolute; top: -3px; bottom: -3px; left: var(--x); width: 2px; background: var(--cobalt-line); }
+.asset__range-ends { display: flex; justify-content: space-between; font: 400 var(--t-label)/1 var(--sans); font-style: normal; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.asset__range-ends i { font-style: normal; }
+.asset__ohlc { display: flex; flex-wrap: wrap; gap: .1rem .8rem; margin-inline-start: auto; font: 400 var(--t-label)/1.6 var(--sans); color: var(--ink-3); }
+.asset__ohlc b { font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* El lienzo: precio, volumen y un subpanel. Tres alturas, un solo eje. */
+.board { flex: 1 1 auto; display: grid; grid-template-rows: minmax(0, 1fr) 64px 88px auto; min-height: 26rem; background: var(--surface); }
+.board__price, .board__vol, .board__sub { position: relative; min-height: 0; }
+.board__vol, .board__sub { border-top: 1px solid var(--rule-soft); }
+.board canvas { display: block; width: 100%; height: 100%; }
+.board__price #drawingCanvas { position: absolute; inset: 0; }
+.board__legend {
+  position: absolute; top: .5rem; left: .7rem;
+  margin: 0; padding: 0; list-style: none;
+  display: grid; gap: .1rem;
+  font: 600 var(--t-label)/1.4 var(--sans); font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.board__legend li { display: flex; align-items: center; gap: .35rem; }
+.board__legend i { width: 12px; height: 2px; }
+.board__overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--surface) 82%, transparent); }
+.board__overlay b { font: 500 1rem/1.3 var(--serif); color: var(--ink-2); }
+.board__status { margin: 0; padding: .5rem var(--s4); border-top: 1px solid var(--rule); font-size: var(--t-mini); color: var(--ink-3); }
+
+.tools { display: flex; gap: .15rem; padding: .35rem var(--s4); border-top: 1px solid var(--rule); background: var(--sunken); }
+.tools button {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 1px solid transparent; border-radius: 2px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.tools button:hover { border-color: var(--rule); color: var(--ink); }
+.tools button[aria-pressed="true"] { background: var(--cobalt-tint); border-color: var(--cobalt-line); color: var(--cobalt-ink); }
+.tools svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+.desk__side { min-width: 0; display: grid; gap: var(--s4); align-content: start; padding: var(--s4); border-top: 1px solid var(--rule); }
+@media (min-width: 100rem) { .desk__side { border-top: 0; border-left: 1px solid var(--rule); } }
+.desk__side .panel { margin-top: 0; }
+
+.rating { padding-bottom: var(--s3); }
+.rating__word { display: block; font: 500 1.125rem/1.2 var(--serif); color: var(--ink); }
+.rating__track { position: relative; display: block; height: 6px; margin: .5rem 0 .3rem; border-radius: 1px; background: linear-gradient(90deg, var(--neg) 0%, var(--sunken) 50%, var(--pos) 100%); }
+.rating__mark { position: absolute; top: -4px; bottom: -4px; left: var(--x); width: 2px; background: var(--ink); }
+.rating__ends { display: flex; justify-content: space-between; font: 600 var(--t-label)/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.rating__ends i { font-style: normal; }
+
+/* Hoja de indicadores: 34 opciones no caben en un menú plano. */
+.sheet { position: fixed; inset: 0; z-index: 80; display: grid; place-items: end center; padding: var(--s4); pointer-events: none; }
+.sheet__card {
+  pointer-events: auto;
+  width: min(48rem, 100%);
+  max-height: 82dvh;
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-top: 2px solid var(--cobalt-line);
+  border-radius: 2px;
+  box-shadow: var(--shadow-plate);
+}
+.sheet__scrim { position: fixed; inset: 0; z-index: 79; background: color-mix(in srgb, var(--band-deep) 55%, transparent); backdrop-filter: blur(3px); }
+.sheet__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: .7rem .875rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--sunken);
+}
+.sheet__head h2 { margin: 0; font-family: var(--serif); font-size: 1.0625rem; font-weight: 500; }
+.sheet__acts { display: flex; align-items: center; gap: var(--s2); }
+.sheet__body { overflow-y: auto; padding: var(--s3) .875rem var(--s4); }
+.ind-group + .ind-group { margin-top: var(--s4); }
+.ind-group__lab {
+  display: block;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--rule);
+  font: 600 var(--t-label)/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.ind-group__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0; margin: 0; padding: 0; list-style: none; }
+.ind-group__list label {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .4rem .2rem;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-mini);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.ind-group__list label:hover { color: var(--ink); }
+.ind-group__list input { width: 15px; height: 15px; accent-color: var(--cobalt); }
+
+/* ---------------------------------------- 22e. Escritorio (Resumen)       */
+
+.tabs--desk { display: flex; align-items: center; gap: var(--s3); }
+.tabs--desk .tabs__strip { flex: 1 1 auto; min-width: 0; }
+.tabs__acts { display: flex; align-items: center; gap: var(--s2); flex: none; padding-bottom: .3rem; }
+.tabs__sep { width: 1px; height: 20px; background: var(--rule); }
+.tabs--inline { position: static; margin-top: 0; background: var(--sunken); }
+
+/* Las guías de la rejilla aparecen cuando vas a mover algo y desaparecen
+   después. Dejarlas encendidas todo el tiempo las convierte en decoración —y
+   en el tic de tablero generado—; encendidas al tomar una tarjeta son una
+   superficie de medición, que es justo cuando sirven. */
+.canvas {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s4);
+  margin-top: var(--s5);
+  padding: var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper);
+}
+@media (min-width: 62rem) {
+  .canvas { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .canvas:has(.card__grip:hover),
+  .canvas:has(.card__grip:focus-visible) {
+    /* Una franja por columna real de la rejilla: 100/12 del ancho útil. */
+    background-image: repeating-linear-gradient(to right, var(--rule) 0 1px, transparent 1px calc((100% - 2 * var(--s4)) / 12));
+    background-position: var(--s4) 0;
+    background-repeat: repeat-x;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  grid-column: span 4;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+  transition: box-shadow .16s var(--ease), border-color .16s var(--ease);
+}
+.card:hover { border-color: var(--rule-strong); box-shadow: var(--shadow-plate); }
+@media (min-width: 62rem) {
+  .card--w4 { grid-column: span 4; }
+  .card--w8 { grid-column: span 8; }
+}
+.card__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: .5rem .7rem;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--rule);
+}
+.card__head h2 { margin: 0; font: 500 1rem/1.2 var(--serif); letter-spacing: -.01em; }
+.card__acts { display: flex; align-items: center; gap: var(--s2); }
+.card__link { font: 600 var(--t-label)/1 var(--sans); letter-spacing: .07em; text-transform: uppercase; color: var(--cobalt-ink); text-decoration: none; }
+.card__link:hover { text-decoration: underline; text-underline-offset: .2em; }
+.card__delta { font: 600 var(--t-mini)/1 var(--sans); font-variant-numeric: tabular-nums; }
+.card__grip {
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  padding: 0; border: 0; background: none;
+  color: var(--ink-3);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity .16s var(--ease);
+}
+.card:hover .card__grip, .card__grip:focus-visible { opacity: 1; }
+.card__grip svg { width: 15px; height: 15px; fill: currentColor; stroke: none; }
+.card__body { flex: 1 1 auto; padding: .7rem .875rem; min-height: 0; }
+.card__body--flush { padding: 0; }
+.card__body--split { display: grid; gap: var(--s4); align-items: center; }
+@media (min-width: 48rem) { .card__body--split { grid-template-columns: auto minmax(0, 1fr); } }
+.card__record .ledger__fig { font-size: clamp(1.6rem, 1.2rem + 1.2vw, 2.1rem); }
+.card__record em { display: block; margin-top: .15rem; font-style: normal; font-size: var(--t-mini); font-variant-numeric: tabular-nums; }
+.card__foot { margin: 0; padding: .45rem .875rem; border-top: 1px solid var(--rule-soft); background: var(--sunken); font-size: var(--t-label); color: var(--ink-3); }
+.card__rule { display: block; width: 100%; height: 30px; border-top: 1px solid var(--rule-soft); }
+.card .grid-scroll { max-height: 100%; }
+.card .treemap { grid-auto-rows: 34px; }
+
+/* El hueco no es una tarjeta vacía: es la invitación a llenar la rejilla. */
+.slot {
+  grid-column: span 4;
+  min-height: 8rem;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: .4rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 2px;
+  background: none;
+  font: 600 var(--t-label)/1 var(--sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: border-color .16s var(--ease), color .16s var(--ease), background-color .16s var(--ease);
+}
+.slot:hover { border-color: var(--cobalt-line); color: var(--cobalt-ink); background: var(--cobalt-tint); }
+.slot svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+
+.agenda { margin: 0; padding: 0; list-style: none; }
+.agenda li {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: .6rem;
+  padding: .42rem .875rem;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-mini);
+  color: var(--ink-2);
+}
+.agenda li:last-child { border-bottom: 0; }
+.agenda time { font: 600 var(--t-label)/1.4 var(--sans); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.agenda b { font-weight: 600; color: var(--ink); }
+
+.note-body { margin: 0; font-size: var(--t-small); line-height: 1.6; color: var(--ink-2); }
+
+.pairs--card { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
+.pairs--rows { grid-template-columns: minmax(0, 1fr); }
+.pairs--rows div { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
+.pairs--rows dd { margin: 0; }
+
+/* ------------------------------------------------- 22f. Ajustes           */
+
+.state-dot { display: inline-block; width: 7px; height: 7px; margin-right: .35rem; border-radius: 50%; background: var(--ink-3); }
+.state-dot--ok { background: var(--pos); }
+
+.checks { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; }
+.checks__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .1rem .6rem;
+  padding: .6rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.checks__item:last-child { border-bottom: 0; }
+.checks__mark {
+  grid-row: span 2;
+  width: 18px; height: 18px;
+  margin-top: .15rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  position: relative;
+}
+.checks__item--ok .checks__mark { border-color: var(--pos); }
+/* La palomita se dibuja con bordes: sin SVG y sin depender del color. */
+.checks__item--ok .checks__mark::after {
+  content: "";
+  position: absolute;
+  left: 5px; top: 3px;
+  width: 5px; height: 9px;
+  border: solid var(--pos);
+  border-width: 0 1.6px 1.6px 0;
+  transform: rotate(42deg);
+}
+.checks__item b { font-size: .9375rem; font-weight: 600; color: var(--ink); }
+.checks__item > span:last-child { grid-column: 2; font-size: var(--t-mini); color: var(--ink-3); }
+
+.avatar-row { display: inline-flex; align-items: center; gap: var(--s2); }
+.picker { margin-top: var(--s3); padding: var(--s3); border: 1px solid var(--rule); border-radius: 2px; background: var(--sunken); }
+.picker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: var(--s2); margin-bottom: var(--s3); }
+.picker__grid button {
+  aspect-ratio: 1;
+  display: grid; place-items: center;
+  border: 1px solid var(--rule); border-radius: 2px;
+  background: var(--surface);
+  font: 600 .8125rem/1 var(--sans);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.picker__grid button[aria-pressed="true"] { border-color: var(--cobalt-line); background: var(--cobalt-tint); color: var(--cobalt-ink); }
+
+.totp { display: grid; gap: var(--s4); margin: var(--s4) 0; }
+@media (min-width: 34rem) { .totp { grid-template-columns: 132px minmax(0, 1fr); } }
+/* El QR se dibuja como SVG en `app-sections-v4.js`: un tablero falso hecho con
+   dos degradados cruzados es el mismo tic de rejilla decorativa que evitamos en
+   el escritorio, y además no se parece a un QR. */
+.totp__qr {
+  width: 132px; height: 132px;
+  padding: 6px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: #fff;
+}
+.totp__qr svg { display: block; width: 100%; height: 100%; }
+.totp__key {
+  display: block;
+  margin: .3rem 0 .4rem;
+  padding: .4rem .5rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--sunken);
+  font: 600 .875rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .12em;
+  color: var(--ink);
+}
+
+.otp { display: flex; gap: .4rem; margin: var(--s4) 0 0; }
+.otp input {
+  width: 2.6rem; height: 3rem;
+  text-align: center;
+  font: 600 1.25rem/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress { display: grid; gap: .35rem; margin: var(--s3) 0; }
+.progress__lab { font: 600 var(--t-label)/1 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.progress__track { display: block; height: 4px; background: var(--sunken); border: 1px solid var(--rule-soft); border-radius: 1px; }
+.progress__fill { display: block; height: 100%; width: var(--w); background: var(--cobalt-line); }
+
+.options { margin: var(--s4) 0 0; padding: 0; list-style: none; display: grid; gap: .4rem; }
+.options button {
+  display: block;
+  width: 100%;
+  padding: .6rem .7rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s var(--ease), background-color .16s var(--ease);
+}
+.options button:hover { border-color: var(--rule-strong); background: var(--sunken); }
+.options button[aria-pressed="true"] { border-color: var(--cobalt-line); background: var(--cobalt-tint); }
+.options b { display: block; font-size: .9375rem; font-weight: 600; color: var(--ink); }
+.options span { display: block; margin-top: .1rem; font-size: var(--t-mini); color: var(--ink-3); }
+
+.dlg__card--wide { max-width: 44rem; }
+.menu__list--grid { min-width: 22rem; }
+@media (min-width: 34rem) { .menu__list--grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------------------------------------------------------- 23. Móvil     */
+
+/* `.tabs` se pega bajo la barra alta en TODOS los anchos: `.app__top` es
+   sticky a 0 con 52 px de alto, así que 52 px es el techo también en móvil. */
+
+@media (max-width: 61.99rem) {
+  /* La mesa de Mercados deja de ser mesa: rail arriba, lienzo, ficha abajo. */
+  .desk__rail { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .desk__rail .wl { display: flex; overflow-x: auto; overscroll-behavior-x: contain; }
+  .desk__rail .wl li { flex: none; border-bottom: 0; border-right: 1px solid var(--rule-soft); }
+  .desk__rail .wl button { border-left: 0; border-bottom: 2px solid transparent; min-width: 8rem; }
+  .desk__rail .wl button[aria-current="true"] { border-bottom-color: var(--cobalt-line); }
+  .bench__setup { position: static; }
+}
+
+@media (max-width: 47.99rem) {
+  .alt-cur { min-height: 30px; }
+  .btn-back { min-height: 36px; }
+  .stage { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+  .stage__num::after { display: none; }
+  .verdict { grid-template-columns: auto minmax(0, 1fr); }
+  .verdict .stamp { grid-column: 2; justify-self: start; }
+  .assump__item { border-inline-start: 0; padding-inline: 0; border-block-start: 1px solid var(--rule-soft); }
+  .canvas { padding: var(--s3); gap: var(--s3); background-image: none; }
+  .card, .slot { grid-column: 1 / -1; }
+  .comp--pair { grid-template-columns: minmax(0, 1fr); }
+  .board { grid-template-rows: minmax(0, 1fr) 52px 70px auto; min-height: 20rem; }
+  .asset__ohlc { margin-inline-start: 0; }
+  .otp input { width: 2.2rem; height: 2.6rem; font-size: 1.1rem; }
+  .sheet { padding: 0; }
+  .sheet__card { max-height: 88dvh; border-radius: 2px 2px 0 0; }
+  .tabs--desk { flex-direction: column; align-items: stretch; }
+  .tabs__acts { justify-content: flex-end; }
+  .dash-top { grid-template-columns: minmax(0, 1fr); }
+  .dash-actions { justify-self: start; }
+  .prob { border-left: 0; border-top: 1px solid var(--rule); padding: var(--s3) 0 0; text-align: left; }
+  .panel__head--chart { flex-direction: column; align-items: stretch; }
+  .comp__donut { height: 190px; }
+  .bars__row { grid-template-columns: 4.5rem minmax(0, 1fr) 4rem; }
+  .bars--risk .bars__row { grid-template-columns: 4.5rem minmax(0, 1fr) 5.5rem; }
+  .treemap { grid-auto-rows: 38px; }
+  .field-search input { width: 100%; }
+  .field-search { flex: 1 1 8rem; }
+  .assist { right: var(--s2); left: var(--s2); bottom: var(--s2); width: auto; }
+  .proto { left: var(--s2); right: var(--s2); bottom: 0; border-radius: 2px 2px 0 0; }
+}
+
+@media (max-width: 40rem) {
+  .ledger__main { padding-inline: var(--s4); gap: var(--s4); }
+  .ledger__cell { padding-inline: var(--s4); }
+  .consolidated { padding-inline: var(--s4); }
+  .consolidated__meta { gap: var(--s4); }
+  .grid-scroll--sticky { max-height: 22rem; }
+}

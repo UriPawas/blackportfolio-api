@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resumen | BlackPortfolio</title>
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="app-v4.css">
+  <link rel="stylesheet" href="app-ui-v4.css">
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        root.setAttribute('data-theme', saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="app" data-section="home">
+<!--
+  THESIS: Un escritorio, no un tablero de bienvenida. El usuario arma su propia primera pantalla
+  con tarjetas que trae de las otras seis secciones; la app no decide por él qué es importante.
+  FORM: Las tarjetas NO son todas del mismo tamaño ni todas icono+título+texto — cada una lleva el
+  dato real que justifica su existencia, y la rejilla se ve (guías de 1px) para que arrastrar sea
+  una operación con reglas, no un acomodo a ojo.
+-->
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="app__top">
+  <a class="mark" href="landing-v4.html"><b>Black</b><span>Portfolio</span></a>
+  <div class="app__top-actions">
+    <span class="app__plan">Plan <b>Advisor Pro</b></span>
+    <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+    </button>
+    <span class="app__avatar" aria-hidden="true">FP</span>
+  </div>
+</header>
+
+<div class="app__body">
+  <nav class="app__nav" aria-label="Secciones de la aplicación">
+    <ul>
+      <li><a href="app-home-v4.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>Resumen</a></li>
+      <li><a href="app-tracker-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M4 19V5m0 14 5-6 4 3 5-8"/></svg>Tracker</a></li>
+      <li><a href="app-analizador-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 3"/></svg>Analizador</a></li>
+      <li><a href="app-optimizacion-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c4-14 12-14 16 0"/><circle cx="14" cy="10" r="1.6"/></svg>Optimización</a></li>
+      <li><a href="app-mercados-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Mercados</a></li>
+      <li><a href="app-topdown-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 8h18M3 16h18"/></svg>Top-down</a></li>
+      <li><a href="app-ajustes-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2m0 13v2M4.2 8l1.7 1m12.2 6 1.7 1M4.2 16l1.7-1m12.2-6 1.7-1"/></svg>Ajustes</a></li>
+    </ul>
+  </nav>
+
+  <main class="app__main" id="contenido">
+    <p class="preview-note">
+      <b>Vista previa del rediseño.</b> Cifras de muestra. Los identificadores de los controles son
+      los que ya usa <code>main.js</code>. <button type="button" class="btn-text" id="protoStatesBtn">Ver estados</button>
+    </p>
+
+    <!-- ── Espacios ───────────────────────────────────────────────────── -->
+    <div class="tabs tabs--desk">
+      <div class="tabs__strip" role="tablist" aria-label="Espacios de trabajo" id="hubTabs">
+        <span class="tabs__ink" aria-hidden="true"></span>
+        <button class="tabs__btn" role="tab" id="tab-dia" aria-controls="hubCanvas" aria-selected="true" type="button">Mi día</button>
+        <button class="tabs__btn" role="tab" id="tab-cripto" aria-controls="hubCanvas" aria-selected="false" tabindex="-1" type="button">Cripto</button>
+        <button class="tabs__btn" role="tab" id="tab-macro" aria-controls="hubCanvas" aria-selected="false" tabindex="-1" type="button">Macro</button>
+      </div>
+      <div class="tabs__acts">
+        <button class="icon-btn icon-btn--xs" id="hubAddSpaceBtn" type="button" aria-label="Nuevo espacio">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <span class="tabs__sep" aria-hidden="true"></span>
+        <button class="icon-btn icon-btn--sm" id="hubExportBtn" type="button" aria-label="Exportar la configuración del espacio">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="icon-btn icon-btn--sm" id="hubHelpBtn" type="button" aria-label="Ayuda del escritorio">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.4-2.6 2.4"/><circle cx="12" cy="17" r=".9" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <div class="menu">
+          <button class="btn btn--primary btn--sm" id="hubAddWidgetBtn" type="button" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Agregar tarjeta
+          </button>
+          <div class="menu__list menu__list--grid" id="hubAddWidgetMenu" role="menu" hidden>
+            <button type="button" role="menuitem" data-widget-type="chart"><b>Gráfica de precio</b><span>Un activo, un rango</span></button>
+            <button type="button" role="menuitem" data-widget-type="watchlist"><b>Lista de seguimiento</b><span>Precio y cambio del día</span></button>
+            <button type="button" role="menuitem" data-widget-type="portfolio"><b>Resumen de cartera</b><span>Valor, día y retorno</span></button>
+            <button type="button" role="menuitem" data-widget-type="risk"><b>Riesgo de cartera</b><span>Volatilidad, VaR y beta</span></button>
+            <button type="button" role="menuitem" data-widget-type="dividends"><b>Dividendos y flujo</b><span>Recibido y proyectado</span></button>
+            <button type="button" role="menuitem" data-widget-type="heatmap"><b>Mapa de calor</b><span>Sectores del día</span></button>
+            <button type="button" role="menuitem" data-widget-type="calendar"><b>Calendario</b><span>Reportes y dividendos</span></button>
+            <button type="button" role="menuitem" data-widget-type="sentiment"><b>Noticias</b><span>De tus posiciones</span></button>
+            <button type="button" role="menuitem" data-widget-type="macro"><b>Macro</b><span>Tasas, inflación, empleo</span></button>
+            <button type="button" role="menuitem" data-widget-type="note"><b>Nota</b><span>Texto libre o una cifra</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── El lienzo ──────────────────────────────────────────────────── -->
+    <div class="canvas" id="hubCanvas" role="tabpanel" aria-labelledby="tab-dia" tabindex="0">
+
+      <!-- Cartera: la tarjeta ancla, ocupa el ancho de la primera fila -->
+      <article class="card card--w8 card--h2" data-widget="portfolio">
+        <div class="card__head">
+          <h2>Núcleo global</h2>
+          <div class="card__acts">
+            <a class="card__link" href="app-tracker-v4.html">Abrir en Tracker</a>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta Núcleo global">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body card__body--split">
+          <div class="card__record">
+            <span class="ledger__lab">Valor actual</span>
+            <strong class="ledger__fig">$85,008.65</strong>
+            <em class="pos">+$1,118.95 · +1.39% hoy</em>
+          </div>
+          <dl class="pairs pairs--card">
+            <div><dt>Retorno total</dt><dd class="pos">+42.55%</dd></div>
+            <div><dt>XIRR anual</dt><dd class="pos">+24.80%</dd></div>
+            <div><dt>Posiciones</dt><dd>6</dd></div>
+            <div><dt>Efectivo</dt><dd>$3,412.65</dd></div>
+          </dl>
+        </div>
+        <canvas class="card__rule" id="homeSpark" aria-hidden="true"></canvas>
+      </article>
+
+      <!-- Gráfica de precio -->
+      <article class="card card--w4 card--h2" data-widget="chart">
+        <div class="card__head">
+          <h2>AAPL</h2>
+          <div class="card__acts">
+            <span class="card__delta pos">+1.18%</span>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta AAPL">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body card__body--flush">
+          <div class="chart" style="--h:150px"><canvas id="homeChartAapl" aria-label="Precio de AAPL a 6 meses"></canvas></div>
+        </div>
+        <p class="card__foot">$214.05 · 6 meses</p>
+      </article>
+
+      <!-- Lista de seguimiento -->
+      <article class="card card--w4 card--h3" data-widget="watchlist">
+        <div class="card__head">
+          <h2>Seguimiento</h2>
+          <div class="card__acts">
+            <a class="card__link" href="app-mercados-v4.html">Mercados</a>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta Seguimiento">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body card__body--flush">
+          <div class="grid-scroll">
+            <table class="tbl tbl--grid"><tbody id="homeWatchlist"></tbody></table>
+          </div>
+        </div>
+      </article>
+
+      <!-- Riesgo -->
+      <article class="card card--w4 card--h3" data-widget="risk">
+        <div class="card__head">
+          <h2>Riesgo</h2>
+          <div class="card__acts">
+            <span class="tag">1 año</span>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta Riesgo">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body">
+          <dl class="pairs pairs--rows">
+            <div><dt>Volatilidad anual</dt><dd>18.61%</dd></div>
+            <div><dt>VaR 95% diario</dt><dd class="neg">−2.11%</dd></div>
+            <div><dt>Beta vs S&amp;P</dt><dd>1.18</dd></div>
+            <div><dt>Max drawdown</dt><dd class="neg">−22.41%</dd></div>
+            <div><dt>Sharpe</dt><dd>1.42</dd></div>
+          </dl>
+        </div>
+        <p class="card__foot">La mayor fuente de riesgo es BTC-USD: 44.8% del total con 31.5% del capital.</p>
+      </article>
+
+      <!-- Mapa de calor sectorial -->
+      <article class="card card--w4 card--h2" data-widget="heatmap">
+        <div class="card__head">
+          <h2>Sectores hoy</h2>
+          <div class="card__acts">
+            <a class="card__link" href="app-topdown-v4.html">Top-down</a>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta Sectores hoy">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body">
+          <div class="treemap" id="homeSectors"></div>
+        </div>
+      </article>
+
+      <!-- Dividendos -->
+      <article class="card card--w4 card--h2" data-widget="dividends">
+        <div class="card__head">
+          <h2>Dividendos</h2>
+          <div class="card__acts">
+            <span class="tag">12 meses</span>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta Dividendos">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body card__body--flush">
+          <div class="chart" style="--h:120px"><canvas id="homeDivChart" aria-label="Dividendos por mes"></canvas></div>
+        </div>
+        <p class="card__foot">$826.40 recibidos · $894.05 proyectados</p>
+      </article>
+
+      <!-- Calendario -->
+      <article class="card card--w4 card--h2" data-widget="calendar">
+        <div class="card__head">
+          <h2>Próximos eventos</h2>
+          <div class="card__acts">
+            <span class="tag">30 días</span>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta Próximos eventos">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body card__body--flush">
+          <ol class="agenda" id="homeAgenda"></ol>
+        </div>
+      </article>
+
+      <!-- Nota -->
+      <article class="card card--w4 card--h2" data-widget="note">
+        <div class="card__head">
+          <h2>Nota</h2>
+          <div class="card__acts">
+            <span class="tag">Editada hoy</span>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta Nota">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body">
+          <p class="note-body">Revisar la concentración en BTC antes del rebalanceo trimestral. Si sigue arriba de 30% del capital, vender hasta 25% y llevar el efectivo a renta fija corta.</p>
+        </div>
+      </article>
+
+      <!-- Noticias -->
+      <article class="card card--w8 card--h2" data-widget="sentiment">
+        <div class="card__head">
+          <h2>De tus posiciones</h2>
+          <div class="card__acts">
+            <span class="tag">72 horas</span>
+            <button class="card__grip" type="button" aria-label="Mover la tarjeta De tus posiciones">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="card__body card__body--flush">
+          <ul class="news" id="homeNews"></ul>
+        </div>
+      </article>
+
+      <!-- Hueco de la rejilla: no es una tarjeta, es la invitación -->
+      <button class="slot" id="hubEmptyCta" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Agregar tarjeta
+      </button>
+    </div>
+
+    <div class="empty" id="hubEmpty" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+      <b>Este espacio está vacío</b>
+      <p>Arma tu primera pantalla con tarjetas de las otras secciones: una gráfica, tu lista de seguimiento, el riesgo de la cartera, una nota.</p>
+      <button type="button" class="btn btn--primary btn--sm">Agregar la primera tarjeta</button>
+    </div>
+  </main>
+</div>
+
+<div class="proto" id="protoBar" hidden>
+  <b>Estados</b>
+  <button type="button" data-state="normal" aria-pressed="true">Con tarjetas</button>
+  <button type="button" data-state="loading">Cargando</button>
+  <button type="button" data-state="empty">Espacio vacío</button>
+  <button type="button" data-state="error">Sin datos de mercado</button>
+  <button type="button" class="proto__x" id="protoClose" aria-label="Cerrar barra de estados">✕</button>
+</div>
+
+<script src="app-ui-v4.js"></script>
+<script src="app-sections-v4.js"></script>
+</body>
+</html>

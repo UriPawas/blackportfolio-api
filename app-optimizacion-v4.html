@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Optimización | BlackPortfolio</title>
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="app-v4.css">
+  <link rel="stylesheet" href="app-ui-v4.css">
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        root.setAttribute('data-theme', saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="app" data-section="optimizacion">
+<!--
+  THESIS: Un banco de trabajo con dos tiempos: a la izquierda lo que se configura, a la derecha lo
+  que sale. La pantalla anterior encimaba entrada y resultado en una sola columna infinita.
+  FORM: La comparación "cartera actual vs propuesta" va en DOS COLUMNAS DE TABLA, no en dos
+  gráficas de pastel encimadas (DESIGN.md §8): el ojo compara cifras, no áreas.
+-->
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="app__top">
+  <a class="mark" href="landing-v4.html"><b>Black</b><span>Portfolio</span></a>
+  <div class="app__top-actions">
+    <span class="app__plan">Plan <b>Advisor Pro</b></span>
+    <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+    </button>
+    <span class="app__avatar" aria-hidden="true">FP</span>
+  </div>
+</header>
+
+<div class="app__body">
+  <nav class="app__nav" aria-label="Secciones de la aplicación">
+    <ul>
+      <li><a href="app-home-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>Resumen</a></li>
+      <li><a href="app-tracker-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M4 19V5m0 14 5-6 4 3 5-8"/></svg>Tracker</a></li>
+      <li><a href="app-analizador-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 3"/></svg>Analizador</a></li>
+      <li><a href="app-optimizacion-v4.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c4-14 12-14 16 0"/><circle cx="14" cy="10" r="1.6"/></svg>Optimización</a></li>
+      <li><a href="app-mercados-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Mercados</a></li>
+      <li><a href="app-topdown-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 8h18M3 16h18"/></svg>Top-down</a></li>
+      <li><a href="app-ajustes-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2m0 13v2M4.2 8l1.7 1m12.2 6 1.7 1M4.2 16l1.7-1m12.2-6 1.7-1"/></svg>Ajustes</a></li>
+    </ul>
+  </nav>
+
+  <main class="app__main" id="contenido">
+    <p class="preview-note">
+      <b>Vista previa del rediseño.</b> Cifras de muestra. Los identificadores de los controles son
+      los que ya usa <code>main.js</code>.
+    </p>
+
+    <div class="app__head app__head--row">
+      <div>
+        <h1>Optimización</h1>
+        <p>Frontera eficiente sobre tus activos, con las restricciones que tú pongas.</p>
+      </div>
+      <div class="head-actions">
+        <label class="sr" for="mkwSavedSelect">Carteras guardadas</label>
+        <select id="mkwSavedSelect" class="select">
+          <option value="">Carteras guardadas…</option>
+          <option value="1">Núcleo global · máx. Sharpe</option>
+          <option value="2">Defensiva · mínima varianza</option>
+        </select>
+        <button id="mkwLoadBtn" class="btn btn--quiet btn--sm" type="button">Cargar</button>
+        <button id="mkwSaveBtn" class="btn btn--quiet btn--sm" type="button">Guardar</button>
+        <button id="mkwCompareBtn" class="btn btn--quiet btn--sm" type="button" data-open-dlg="mkwCompareModal">Comparar</button>
+      </div>
+    </div>
+
+    <div class="bench">
+
+      <!-- ── Lo que se configura ──────────────────────────────────────── -->
+      <div class="bench__setup">
+        <section class="panel">
+          <div class="panel__head">
+            <h2>Activos</h2>
+            <p class="panel__meta" id="mkwAssetCount">6 de 20</p>
+          </div>
+          <div class="panel__body panel__body--tight">
+            <form class="inline-form" id="mkwAddForm">
+              <label class="sr" for="mkwTickerInput">Agregar activo</label>
+              <div class="field-search field-search--grow">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                <input id="mkwTickerInput" type="text" placeholder="VOO, AAPL, BTC-USD…" autocomplete="off">
+                <div id="mkwTickerSuggestions" class="suggest" hidden></div>
+              </div>
+              <button id="mkwAddAssetBtn" class="btn btn--quiet btn--sm" type="submit">Agregar</button>
+            </form>
+            <p id="mkwInputMsg" class="msg"></p>
+          </div>
+          <ul class="chips chips--stack" id="mkwAssetList" aria-label="Activos a optimizar"></ul>
+        </section>
+
+        <section class="panel">
+          <div class="panel__head">
+            <h2>Modelo</h2>
+            <p class="panel__meta">Cómo se estiman los retornos</p>
+          </div>
+          <div class="panel__body">
+            <div class="seg seg--sm seg--stack" id="mkwModeToggle" role="group" aria-label="Modelo de optimización">
+              <span class="seg__thumb" aria-hidden="true"></span>
+              <button type="button" aria-pressed="true" data-mode="mvo">Media-varianza</button>
+              <button type="button" aria-pressed="false" data-mode="smartbeta">Smart Beta</button>
+              <button type="button" aria-pressed="false" data-mode="bl">Black-Litterman</button>
+            </div>
+            <p id="mkwModeDesc" class="note-line">
+              Markowitz clásico: el retorno esperado sale del histórico y la covarianza de los
+              retornos diarios del periodo elegido.
+            </p>
+
+            <div id="mkwSmartBetaPanel" hidden>
+              <div class="factor">
+                <label class="check"><input id="sbMomentum" type="checkbox" checked> Momentum</label>
+                <input id="sbMomentumW" type="range" min="0" max="100" value="40" aria-label="Peso del factor momentum">
+                <output>40%</output>
+              </div>
+              <div class="factor">
+                <label class="check"><input id="sbLowVol" type="checkbox" checked> Baja volatilidad</label>
+                <input id="sbLowVolW" type="range" min="0" max="100" value="35" aria-label="Peso del factor baja volatilidad">
+                <output>35%</output>
+              </div>
+              <div class="factor">
+                <label class="check"><input id="sbMeanRev" type="checkbox"> Reversión a la media</label>
+                <input id="sbMeanRevW" type="range" min="0" max="100" value="25" aria-label="Peso del factor reversión a la media">
+                <output>25%</output>
+              </div>
+              <p id="sbNote" class="note-line">Los pesos de los factores se normalizan a 100% al correr.</p>
+            </div>
+
+            <div id="mkwBLPanel" hidden>
+              <ul class="views" id="mkwBLViews"></ul>
+              <button id="mkwBLAddViewBtn" class="btn btn--quiet btn--sm" type="button">Agregar visión</button>
+              <div class="form-grid form-grid--tight">
+                <div class="field">
+                  <label for="blTau">Tau (τ) — confianza en el prior</label>
+                  <input id="blTau" type="number" step="0.01" min="0.01" max="1" value="0.05">
+                </div>
+                <div class="field">
+                  <label for="blDelta">Delta (δ) — aversión al riesgo</label>
+                  <input id="blDelta" type="number" step="0.1" min="0.1" max="10" value="2.5">
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel__head">
+            <h2>Parámetros</h2>
+            <p class="panel__meta">Periodo y restricciones</p>
+          </div>
+          <div class="panel__body">
+            <div class="form-grid form-grid--tight">
+              <div class="field">
+                <label for="mkwPeriod">Periodo histórico</label>
+                <select id="mkwPeriod" class="select">
+                  <option value="1y">1 año</option>
+                  <option value="2y" selected>2 años</option>
+                  <option value="5y">5 años</option>
+                  <option value="10y">10 años</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="mkwRfr">Tasa libre de riesgo</label>
+                <input id="mkwRfr" type="number" step="0.1" value="4.3">
+              </div>
+              <div class="field">
+                <label for="mkwNSim">Carteras a simular</label>
+                <select id="mkwNSim" class="select">
+                  <option value="10000" selected>10 000</option>
+                  <option value="25000">25 000</option>
+                  <option value="50000">50 000</option>
+                  <option value="75000">75 000</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="mkwVarConf">Confianza del VaR</label>
+                <select id="mkwVarConf" class="select">
+                  <option value="0.90">90%</option>
+                  <option value="0.95" selected>95%</option>
+                  <option value="0.99">99%</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row">
+              <span class="row__label">
+                <b>Piso y techo de renta fija</b>
+                <span>Obliga a que los bonos queden dentro de un rango.</span>
+              </span>
+              <label class="check"><input id="mkwFiEnabled" type="checkbox"> Activar</label>
+            </div>
+            <div class="form-grid form-grid--tight" id="mkwFiOptions" hidden>
+              <div class="field"><label for="mkwFiMin">Mínimo (%)</label><input id="mkwFiMin" type="number" min="0" max="100" value="10"></div>
+              <div class="field"><label for="mkwFiMax">Máximo (%)</label><input id="mkwFiMax" type="number" min="0" max="100" value="40"></div>
+            </div>
+
+            <div class="row">
+              <span class="row__label">
+                <b>Peso máximo por activo</b>
+                <span>Evita que la frontera concentre todo en un solo nombre.</span>
+              </span>
+              <label class="check"><input id="mkwMaxWeightEnabled" type="checkbox" checked> Activar</label>
+            </div>
+            <div class="form-grid form-grid--tight" id="mkwMaxWeightOptions">
+              <div class="field"><label for="mkwMaxWeight">Máximo (%)</label><input id="mkwMaxWeight" type="number" min="1" max="100" value="30"></div>
+            </div>
+          </div>
+          <div class="panel__foot panel__foot--act">
+            <button id="mkwRunBtn" class="btn btn--primary btn--wide" type="button">Correr optimización</button>
+            <p id="mkwStatus" class="msg"></p>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── Lo que sale ──────────────────────────────────────────────── -->
+      <div class="bench__out" id="mkwResultsSection">
+
+        <section class="panel panel--wide">
+          <div class="panel__head panel__head--chart">
+            <div><h2>Frontera eficiente</h2><p class="panel__meta">10 000 carteras simuladas · 2 años</p></div>
+            <button id="mkwExportCsvBtn" class="btn btn--quiet btn--sm" type="button">Exportar CSV</button>
+          </div>
+          <div class="chart" style="--h:320px">
+            <canvas id="mkwFrontierCanvas" aria-label="Frontera eficiente: riesgo contra retorno"></canvas>
+            <div class="chart__tip" id="mkwFrontierTip" hidden></div>
+          </div>
+          <p class="panel__foot">
+            Cada punto es una combinación de pesos. El borde superior izquierdo es la frontera: por
+            debajo de ella cargas riesgo que no te paga.
+          </p>
+        </section>
+
+        <!-- Dos columnas de tabla, no dos pasteles encimados. -->
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2 id="mkwWeightsPanelTitle">Actual contra propuesta</h2>
+            <p class="panel__meta">Objetivo: máximo Sharpe</p>
+          </div>
+          <div class="grid-scroll">
+            <table class="tbl tbl--grid" id="mkwWeightsTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze">Activo</th>
+                  <th scope="col" class="n">Peso actual</th>
+                  <th scope="col" class="n">Mín. varianza</th>
+                  <th scope="col" class="n">Máx. Sharpe</th>
+                  <th scope="col" class="n">Cambio</th>
+                  <th scope="col">Movimiento</th>
+                </tr>
+              </thead>
+              <tbody id="mkwWeightsTableBody"><!-- app-sections-v4.js --></tbody>
+            </table>
+          </div>
+          <div class="panel__body panel__body--tight">
+            <div class="comp comp--sm comp--pair">
+              <div>
+                <p class="panel__meta">Actual</p>
+                <div class="comp__donut comp__donut--sm"><canvas id="mkwCurrentPie" aria-label="Pesos actuales"></canvas></div>
+              </div>
+              <div>
+                <p class="panel__meta">Propuesta</p>
+                <div class="comp__donut comp__donut--sm"><canvas id="mkwWeightsPie" aria-label="Pesos propuestos"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2>Las dos carteras de referencia</h2>
+            <p class="panel__meta">Extremos de la frontera</p>
+          </div>
+          <div class="grid-scroll">
+            <table class="tbl tbl--metrics">
+              <thead>
+                <tr><th scope="col">Métrica</th><th scope="col" class="n" id="mkwMinVarCard">Mínima varianza</th><th scope="col" class="n" id="mkwMaxSharpeCard">Máximo Sharpe</th><th scope="col">Lectura</th></tr>
+              </thead>
+              <tbody><!-- app-sections-v4.js --></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel panel--wide">
+          <div class="panel__head panel__head--chart">
+            <div><h2>Proyección de trayectorias</h2><p class="panel__meta">Cartera propuesta · Monte Carlo</p></div>
+            <div class="periods" id="mkwForecastYearNav" role="group" aria-label="Horizonte">
+              <button type="button" data-years="1">1A</button>
+              <button type="button" data-years="3">3A</button>
+              <button type="button" data-years="5" aria-pressed="true">5A</button>
+              <button type="button" data-years="10">10A</button>
+            </div>
+          </div>
+          <div class="panel__body panel__body--tight">
+            <ul class="key key--fan" id="mkwForecastLegend">
+              <li><i class="key__band key__band--3"></i>5% – 95%</li>
+              <li><i class="key__band key__band--2"></i>10% – 90%</li>
+              <li><i class="key__band key__band--1"></i>25% – 75%</li>
+              <li><i class="key__swatch key__swatch--line"></i>Mediana</li>
+            </ul>
+          </div>
+          <div class="chart" style="--h:280px"><canvas id="mkwForecastCanvas" aria-label="Trayectorias simuladas de la cartera propuesta"></canvas></div>
+          <p class="panel__foot" id="mkwForecastStatus">Con $85,008.65 iniciales y sin aportes adicionales.</p>
+        </section>
+
+        <section class="panel panel--wide panel--flush" id="mkwCalcCard">
+          <div class="panel__head">
+            <h2>Cálculos y metodología</h2>
+            <p class="panel__meta">Todo lo que sostiene los números de arriba</p>
+          </div>
+          <div class="tabs tabs--inline">
+            <div class="tabs__strip" role="tablist" aria-label="Detalle del cálculo" id="mkwCalcTabs">
+              <span class="tabs__ink" aria-hidden="true"></span>
+              <button class="tabs__btn" role="tab" id="tab-met" aria-controls="mkwCalcPanelMethodology" aria-selected="true" type="button">Metodología</button>
+              <button class="tabs__btn" role="tab" id="tab-stats" aria-controls="mkwCalcPanelStats" aria-selected="false" tabindex="-1" type="button">Estadísticas</button>
+              <button class="tabs__btn" role="tab" id="tab-cov" aria-controls="mkwCalcPanelCovariance" aria-selected="false" tabindex="-1" type="button">Covarianza</button>
+              <button class="tabs__btn" role="tab" id="tab-corr" aria-controls="mkwCalcPanelCorrelation" aria-selected="false" tabindex="-1" type="button">Correlación</button>
+              <button class="tabs__btn" role="tab" id="tab-var" aria-controls="mkwCalcPanelVar" aria-selected="false" tabindex="-1" type="button">VaR</button>
+            </div>
+          </div>
+
+          <div class="panel__body" id="mkwCalcPanelMethodology" role="tabpanel" aria-labelledby="tab-met" tabindex="0">
+            <ol class="steps">
+              <li><b>Retornos diarios logarítmicos</b> de cada activo sobre el periodo elegido, alineados por fecha; se descartan los días sin cotización en alguno.</li>
+              <li><b>Retorno esperado anualizado</b> = media diaria × 252. En Smart Beta se sustituye por la puntuación de factores; en Black-Litterman, por el prior de mercado corregido con tus visiones.</li>
+              <li><b>Matriz de covarianza</b> anualizada (× 252) sobre los mismos retornos.</li>
+              <li><b>Simulación</b> de 10 000 vectores de pesos que suman 1 y respetan tus restricciones.</li>
+              <li><b>Selección</b> de la cartera de mínima varianza y la de máximo Sharpe con la tasa libre de riesgo que fijaste.</li>
+            </ol>
+            <p class="note-line">
+              El supuesto fuerte, y conviene decirlo: la covarianza histórica se toma como estimador
+              de la futura. En crisis las correlaciones suben y la frontera deja de valer.
+            </p>
+          </div>
+
+          <div class="panel__body" id="mkwCalcPanelStats" role="tabpanel" aria-labelledby="tab-stats" tabindex="0" hidden>
+            <div class="grid-scroll" id="mkwCalcStatsContent"></div>
+          </div>
+          <div class="panel__body" id="mkwCalcPanelCovariance" role="tabpanel" aria-labelledby="tab-cov" tabindex="0" hidden>
+            <div class="grid-scroll" id="mkwCalcCovContent"></div>
+          </div>
+          <div class="panel__body" id="mkwCalcPanelCorrelation" role="tabpanel" aria-labelledby="tab-corr" tabindex="0" hidden>
+            <div class="grid-scroll" id="mkwCalcCorrContent"></div>
+            <div class="scale" style="margin-top:var(--s3)">
+              <span>−1 inversa</span><span class="scale__bar" aria-hidden="true"></span><span>+1 idéntica</span>
+            </div>
+          </div>
+          <div class="panel__body" id="mkwCalcPanelVar" role="tabpanel" aria-labelledby="tab-var" tabindex="0" hidden>
+            <div class="grid-scroll" id="mkwCalcVarContent"></div>
+            <p class="note-line">VaR paramétrico al 95%: pérdida diaria que sólo se supera uno de cada veinte días.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Diálogo: comparar carteras ────────────────────────────────────── -->
+<div class="dlg" id="mkwCompareModal" role="dialog" aria-modal="true" aria-labelledby="mkwCompareTitle" hidden>
+  <div class="dlg__card dlg__card--plain dlg__card--wide">
+    <div class="dlg__head">
+      <h2 id="mkwCompareTitle">Comparar carteras</h2>
+      <button id="mkwCompareCloseBtn" class="icon-btn icon-btn--xs" type="button" aria-label="Cerrar" data-close-dlg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="toolbar">
+      <label class="field-inline">Objetivo
+        <select id="mkwCompareMode" class="select">
+          <option value="maxsharpe" selected>Máximo Sharpe</option>
+          <option value="minvar">Mínima volatilidad</option>
+        </select>
+      </label>
+      <button id="mkwCompareRunBtn" class="btn btn--primary btn--sm" type="button">Comparar</button>
+    </div>
+    <p id="mkwCompareHint" class="note-line">Elige dos o más carteras guardadas. Se recalculan con el mismo objetivo para que la comparación sea justa.</p>
+    <ul class="chips chips--stack" id="mkwCompareList"></ul>
+    <div id="mkwCompareResult"></div>
+  </div>
+</div>
+
+<script src="app-ui-v4.js"></script>
+<script src="app-sections-v4.js"></script>
+</body>
+</html>

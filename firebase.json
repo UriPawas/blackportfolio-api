@@ -27,7 +27,16 @@
       "backups/**",
       "*.bpbackup",
       "bump-version.js",
-      "update_tickers.py"
+      "update_tickers.py",
+      "mobile/**",
+      "app-home-v4.html",
+      "app-tracker-v4.html",
+      "app-analizador-v4.html",
+      "app-optimizacion-v4.html",
+      "app-mercados-v4.html",
+      "app-topdown-v4.html",
+      "app-ajustes-v4.html",
+      "_dev_*"
     ],
     "headers": [
       {

@@ -1,0 +1,946 @@
+/* ==========================================================================
+   BlackPortfolio — #section-markets (Mercados) en V4.
+
+   Requiere `main-v4-shell.css` cargado antes (reusa sus tokens `--v4-*`).
+
+   ── Tesis de la pantalla (DESIGN.md + app-mercados-v4.html) ──
+   Es la ÚNICA superficie de la app donde el lienzo manda sobre el documento.
+   La gráfica ocupa todo lo que puede; la lista de seguimiento y la ficha del
+   activo son el margen del papel, no otra columna de tarjetas. Los 34
+   indicadores van agrupados por familia, con la familia escrita —no
+   codificada en un borde de color, que sería el arcoíris que DESIGN.md §2
+   rechaza (el punto de color de cada indicador SÍ se conserva: es el color
+   real de la serie en el lienzo, o sea dato).
+
+   ── Especificidad ──
+   Todo cuelga de `#section-markets` (1,1,0), que gana contra los
+   `body.light-mode .x` de main.css (0,2,1) sin necesidad de duplicar reglas
+   por tema: los tokens `--v4-*` ya cambian solos.
+
+   EXCEPCIÓN medida: main.css SÍ tiene un puñado de reglas
+   `body.light-mode #section-markets .x` (11893-11918, 14508, 14963) que son
+   (1,2,1) y por tanto ganan. Ésas —y sólo ésas— llevan su gemela al final,
+   en la sección 12.
+
+   ── Alcance ──
+   SOLO REESTILIZA. Ningún id/clase de main.js se renombra. `#indSettingsPanel`
+   vive FUERA de la sección (es hermano de `</section>`), así que se ataca por
+   su propio id.
+   ========================================================================== */
+
+/* -------------------------------------------- 0. `.hidden` de la sección */
+
+/* Mismo bug preexistente que se documentó en Ajustes: main.css no tiene regla
+   global de `.hidden` (DESIGN.md §8), oculta por lista de ids en ~2829.
+   `#tickerNewsSection` no está en esa lista y `.ticker-news-section` no
+   declara la suya, así que el titular «Noticias» se pintaba SIEMPRE, incluso
+   sin noticias que mostrar. Escopado a la sección y sin `!important` para que
+   un `style="display:…"` de JS siga mandando. */
+#section-markets .hidden {
+  display: none;
+}
+
+/* ------------------------------------------------ 1. Cinta de referencia */
+
+#section-markets .market-overview-row {
+  gap: .75rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--v4-rule);
+  margin-bottom: 1rem;
+}
+
+/* El pizarrón: etiquetas en versalitas, cifras tabulares, 1px de separación
+   entre ítems. Sin tarjetas redondeadas. */
+#section-markets .market-overview-bar {
+  gap: 0;
+}
+
+#section-markets .mkt-index-tile {
+  padding: .45rem .85rem;
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+  box-shadow: none;
+}
+#section-markets .market-overview-bar > .mkt-index-tile:first-child {
+  border-inline-start: 0;
+}
+#section-markets .mkt-index-tile:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule-soft);
+  transform: none;
+  box-shadow: none;
+}
+#section-markets .mkt-index-tile.active-tile {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule-soft);
+}
+
+#section-markets .mkt-index-label {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-markets .mkt-index-price {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markets .mkt-index-chg {
+  font-family: var(--v4-sans);
+}
+#section-markets .mkt-index-chg.pos,
+#section-markets .mkt-index-spark polyline.pos { color: var(--v4-pos); stroke: var(--v4-pos); }
+#section-markets .mkt-index-chg.neg,
+#section-markets .mkt-index-spark polyline.neg { color: var(--v4-neg); stroke: var(--v4-neg); }
+
+#section-markets .fng-gauge {
+  padding: .35rem .7rem;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-markets .fng-gauge-value {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markets .fng-gauge-text,
+#section-markets .market-updated {
+  font: 400 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------------------- 2. La mesa (grid) */
+
+#section-markets .market-workspace {
+  gap: 1rem;
+}
+/* Trampa recurrente de DESIGN.md §6: un hijo de grid no encoge por debajo de
+   su contenido, así que sin esto el lienzo empuja la página a desbordar. */
+#section-markets .market-wl-sidebar,
+#section-markets .market-main-col,
+#section-markets .market-stats-rail {
+  min-width: 0;
+}
+
+/* ------------------------------------------- 3. Lista de seguimiento (rail) */
+
+#section-markets .market-wl-sidebar,
+#section-markets .market-stats-rail {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+
+#section-markets .market-wl-head,
+#section-markets .stats-rail-head {
+  padding: .6rem .8rem;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+#section-markets .market-wl-add-btn {
+  width: 22px;
+  height: 22px;
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+}
+#section-markets .market-wl-add-btn:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+
+#section-markets .market-wl-items {
+  padding: 0;
+}
+#section-markets .market-wl-empty {
+  padding: .9rem .8rem;
+  font: 400 var(--v4-t-mini)/1.5 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+#section-markets .market-wl-item {
+  padding: .45rem .8rem;
+  border-radius: 0;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-markets .market-wl-item:last-child { border-bottom: 0; }
+#section-markets .market-wl-item:hover {
+  background: var(--v4-cobalt-tint);
+}
+#section-markets .market-wl-item.active {
+  background: var(--v4-cobalt-tint);
+  box-shadow: inset 2px 0 0 var(--v4-cobalt-line);
+}
+#section-markets .market-wl-sym {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  letter-spacing: 0;
+  color: var(--v4-ink);
+}
+#section-markets .market-wl-price {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markets .market-wl-chg { font-family: var(--v4-sans); }
+#section-markets .market-wl-chg.pos { color: var(--v4-pos); }
+#section-markets .market-wl-chg.neg { color: var(--v4-neg); }
+#section-markets .market-wl-rm {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-3);
+}
+#section-markets .market-wl-rm:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  border-color: var(--v4-neg);
+  color: var(--v4-neg);
+}
+
+/* --------------------------------------------------- 4. Barra de la mesa */
+
+#section-markets .market-toolbar {
+  gap: .6rem;
+  padding: .6rem .75rem;
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px 4px 0 0;
+  border-bottom: 0;
+  box-shadow: none;
+}
+
+#section-markets .market-input-pill {
+  min-width: 190px;
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+}
+#section-markets .market-input-pill:focus-within {
+  border-color: var(--v4-cobalt-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v4-cobalt-line) 20%, transparent);
+}
+#section-markets .market-input {
+  font-family: var(--v4-sans);
+  font-size: 1rem; /* 16px: evita el zoom de iOS (DESIGN.md §3) */
+  letter-spacing: .02em;
+  color: var(--v4-ink);
+  background: none;
+}
+#section-markets .market-input::placeholder { color: var(--v4-ink-3); }
+
+#section-markets .market-input-action,
+#section-markets .market-circle-button,
+#section-markets .market-menu-button {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+}
+#section-markets .market-input-action {
+  border: 0;
+  background: none;
+}
+#section-markets .market-input-action:hover,
+#section-markets .market-circle-button:hover,
+#section-markets .market-menu-button:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+#section-markets .market-circle-button.active {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+#section-markets .market-divider {
+  background: var(--v4-rule);
+}
+
+#section-markets .indicator-count {
+  min-width: 16px;
+  padding: 0 4px;
+  background: var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+  font: 600 var(--v4-t-label)/16px var(--v4-sans);
+}
+
+/* Rango: el idioma de «marca de regla» (DESIGN.md §4 / .periods) —posición en
+   una escala de tiempo—, no el pulgar relleno del control segmentado. */
+#section-markets .market-range-seg {
+  gap: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-markets .market-range-btn {
+  padding: .35rem .5rem;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  letter-spacing: .03em;
+  color: var(--v4-ink-3);
+  margin-bottom: -1px;
+}
+#section-markets .market-range-btn:hover {
+  background: none;
+  color: var(--v4-ink);
+}
+#section-markets .market-range-btn.active {
+  background: none;
+  border-bottom-color: var(--v4-cobalt-line);
+  color: var(--v4-ink);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------ 5. Menús y sugerencias */
+
+#section-markets .market-menu,
+#section-markets .ticker-suggestions {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+  padding: 0;
+}
+#section-markets .market-menu-item,
+#section-markets .market-menu-check {
+  padding: .5rem .7rem;
+  border-radius: 0;
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+}
+#section-markets .market-menu-item + .market-menu-item,
+#section-markets .market-menu-check + .market-menu-check {
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-markets .market-menu-item:hover,
+#section-markets .market-menu-check:hover {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-ink);
+}
+#section-markets .market-menu-item.active-range {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-cobalt-ink);
+}
+
+#section-markets .ticker-suggestion-item {
+  padding: .5rem .7rem;
+  border-radius: 0;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markets .ticker-suggestion-item + .ticker-suggestion-item {
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-markets .ticker-suggestion-item:hover {
+  background: var(--v4-cobalt-tint);
+  color: var(--v4-ink);
+}
+
+/* --------------------------------------------- 6. Panel de indicadores  */
+
+#section-markets .indicator-backdrop {
+  background: color-mix(in srgb, #040B14 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+#section-markets .indicator-panel {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: 0 24px 60px -20px rgba(4, 11, 20, .55);
+  backdrop-filter: none;
+}
+#section-markets .indicator-panel-head {
+  padding: .75rem 1rem;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-markets .indicator-panel-title {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: -.015em;
+  text-transform: none;
+  color: var(--v4-ink);
+}
+#section-markets .indicator-clear-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+}
+#section-markets .indicator-clear-btn:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+#section-markets .indicator-close-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+}
+#section-markets .indicator-close-btn:hover {
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  border-color: var(--v4-neg);
+  color: var(--v4-neg);
+}
+
+/* La familia se lee en la etiqueta, no en un borde de color de 2px: seis
+   hues distintos serían el arcoíris que DESIGN.md §2 prohíbe. El punto de
+   cada fila (`.ind-dot`) sí conserva su color — es el de la serie real. */
+#section-markets .indicator-section {
+  border-left: 0;
+  border-top: 1px solid var(--v4-rule-soft);
+  padding: .35rem 0 .6rem;
+}
+#section-markets .indicator-section + .indicator-section {
+  border-top: 1px solid var(--v4-rule-soft);
+}
+#section-markets .indicator-section-label {
+  padding: .5rem 1rem .35rem;
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+
+#section-markets .indicator-row {
+  padding: .4rem 1rem;
+  border-radius: 0;
+}
+#section-markets .indicator-row:hover {
+  background: var(--v4-cobalt-tint);
+}
+#section-markets .indicator-row.active {
+  background: var(--v4-cobalt-tint);
+  box-shadow: inset 2px 0 0 var(--v4-cobalt-line);
+}
+#section-markets .ind-name {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markets .ind-desc {
+  font: 400 var(--v4-t-label)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markets .ind-badge {
+  border-radius: 2px;
+  border: 1px solid var(--v4-rule);
+  background: none;
+  color: transparent;
+}
+#section-markets .indicator-row.active .ind-badge {
+  background: var(--v4-cobalt);
+  border-color: var(--v4-cobalt);
+  color: #fff;
+}
+
+/* --------------------------------------------- 7. Barra de comparación  */
+
+#section-markets .market-compare-bar {
+  padding: .5rem .75rem;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule);
+  border-bottom: 0;
+  border-radius: 0;
+}
+#section-markets .compare-bar-label {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+/* Los colores de los chips identifican cada serie sobrepuesta en el lienzo:
+   son dato, no decoración. Sólo se les quita la píldora. */
+#section-markets .compare-chip { border-radius: 2px; font-family: var(--v4-sans); }
+#section-markets .compare-input {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markets .compare-input:focus {
+  border-color: var(--v4-cobalt-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v4-cobalt-line) 20%, transparent);
+}
+#section-markets .compare-add-btn {
+  background: var(--v4-cobalt);
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+  font-family: var(--v4-sans);
+}
+#section-markets .compare-add-btn:hover {
+  background: color-mix(in srgb, var(--v4-cobalt) 88%, #000);
+}
+#section-markets .compare-close-btn {
+  color: var(--v4-ink-3);
+}
+#section-markets .compare-close-btn:hover { color: var(--v4-neg); }
+
+/* ------------------------------------------------------- 8. El lienzo   */
+
+/* Dejaba de ser una caja azul-noche de TradingView (#131722 fijo, sin lectura
+   de tema) y pasa a ser la lámina del documento. El interior del canvas NO lo
+   alcanza el CSS: lo retematiza `getMarketChartTheme()` en main.js. */
+#section-markets .market-chart-shell {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 0 0 4px 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+
+#section-markets .market-chart-header {
+  padding: .6rem .9rem;
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+  border-top: 1px solid var(--v4-rule);
+}
+#section-markets .market-chart-header strong {
+  font: 600 1.05rem/1.2 var(--v4-sans);
+  letter-spacing: .04em;
+  color: var(--v4-ink);
+}
+/* Por id, no por `.market-chart-header span`: ese selector es (1,1,1) y
+   ganaría a los (1,1,0) de abajo — el precio y la variación acabarían con el
+   gris de la nota al pie. */
+#section-markets #chartMetaLabel {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-3);
+}
+#section-markets .chart-price-label {
+  font-family: var(--v4-sans);
+  font-size: 1.15rem;
+  color: var(--v4-ink);
+}
+/* El signo lo escribe main.js (`+`/`−`), así que el color no es el único
+   portador — DESIGN.md §2. Se le quita la píldora de fondo. */
+#section-markets .chart-change-pct {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-family: var(--v4-sans);
+}
+#section-markets .chart-change-pct.pos { color: var(--v4-pos); background: none; }
+#section-markets .chart-change-pct.neg { color: var(--v4-neg); background: none; }
+
+#section-markets .crosshair-ohlc { font-family: var(--v4-sans); }
+#section-markets .crosshair-ohlc span { color: var(--v4-ink-3); }
+#section-markets .crosshair-ohlc b.pos { color: var(--v4-pos); }
+#section-markets .crosshair-ohlc b.neg { color: var(--v4-neg); }
+
+#section-markets .chart-52w-bar { font-family: var(--v4-sans); color: var(--v4-ink-3); }
+#section-markets .chart-52w-label {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .08em;
+  color: var(--v4-ink-3);
+}
+#section-markets .chart-52w-track { background: var(--v4-rule); border-radius: 0; }
+#section-markets .chart-52w-fill { background: var(--v4-cobalt-line); border-radius: 0; }
+
+#section-markets .chart-fullscreen-btn {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+}
+#section-markets .chart-fullscreen-btn:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+
+#section-markets .market-chart-status {
+  padding: .35rem .9rem;
+  background: var(--v4-surface);
+  border-bottom: 1px solid var(--v4-rule-soft);
+  font: 400 var(--v4-t-mini)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markets .market-chart-status[data-state="error"] {
+  color: var(--v4-neg);
+}
+#section-markets .market-chart {
+  background: var(--v4-surface);
+}
+#section-markets .market-chart-overlay {
+  background: color-mix(in srgb, var(--v4-surface) 92%, transparent);
+  color: var(--v4-ink-2);
+}
+#section-markets .market-chart-overlay p {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markets .market-chart-overlay svg { fill: var(--v4-ink-3); }
+#section-markets .market-chart-loader {
+  background: color-mix(in srgb, var(--v4-surface) 94%, transparent);
+  border-radius: 0;
+}
+
+/* ---------------------------------------------- 9. Herramientas de dibujo */
+
+#section-markets .chart-drawing-toolbar {
+  background: color-mix(in srgb, var(--v4-surface) 96%, transparent);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  box-shadow: var(--v4-shadow-lift);
+  backdrop-filter: none;
+}
+#section-markets .cdt-sep { background: var(--v4-rule-soft); }
+#section-markets .cdt-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+}
+#section-markets .cdt-btn:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule);
+  color: var(--v4-ink);
+}
+#section-markets .cdt-btn.cdt-active {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-cobalt-line);
+  color: var(--v4-cobalt-ink);
+}
+#section-markets .cdt-btn.cdt-long { color: var(--v4-pos); }
+#section-markets .cdt-btn.cdt-short { color: var(--v4-neg); }
+#section-markets .cdt-btn.cdt-danger { color: var(--v4-neg); }
+#section-markets .cdt-btn::after {
+  background: var(--v4-ink);
+  color: var(--v4-surface);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+
+/* Leyenda de indicadores sobre el lienzo */
+#section-markets .ind-leg-item {
+  background: color-mix(in srgb, var(--v4-surface) 92%, transparent);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+}
+#section-markets .ind-leg-name { color: var(--v4-ink-2); }
+#section-markets .ind-leg-val { color: var(--v4-ink); }
+#section-markets .ind-leg-settings,
+#section-markets .ind-leg-remove { color: var(--v4-ink-3); }
+#section-markets .ind-leg-settings:hover { color: var(--v4-cobalt-ink); }
+#section-markets .ind-leg-remove:hover { color: var(--v4-neg); }
+
+/* ------------------------------------------------ 10. Ficha del activo  */
+
+#section-markets .tech-rating-card {
+  padding: .8rem;
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-markets .tr-title {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  color: var(--v4-ink-3);
+}
+#section-markets .tr-badge {
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  font-weight: 600;
+}
+#section-markets .tr-badge.tr-strong-buy,
+#section-markets .tr-badge.tr-buy {
+  background: color-mix(in srgb, var(--v4-pos) 14%, transparent);
+  color: var(--v4-pos);
+}
+#section-markets .tr-badge.tr-neutral {
+  background: var(--v4-sunken);
+  color: var(--v4-ink-2);
+}
+#section-markets .tr-badge.tr-sell,
+#section-markets .tr-badge.tr-strong-sell {
+  background: color-mix(in srgb, var(--v4-neg) 14%, transparent);
+  color: var(--v4-neg);
+}
+#section-markets .tr-gauge-track {
+  height: 4px;
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--v4-neg), var(--v4-rule), var(--v4-pos));
+}
+#section-markets .tr-gauge-marker {
+  background: var(--v4-ink);
+  border-radius: 0;
+  box-shadow: none;
+}
+#section-markets .tr-gauge-labels,
+#section-markets .tr-bd-row span {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markets .tr-bd-row strong {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+
+#section-markets .stats-rail-item {
+  padding: .45rem .8rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-markets .stats-rail-label {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-3);
+}
+#section-markets .stats-rail-value {
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink);
+}
+#section-markets .stats-rail-value.pos { color: var(--v4-pos); }
+#section-markets .stats-rail-value.neg { color: var(--v4-neg); }
+#section-markets .stats-rail-empty {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* ------------------------------------------- 11. Ficha de empresa y noticias */
+
+#section-markets .company-info-panel {
+  background: var(--v4-surface);
+  border-radius: 0 0 4px 4px;
+}
+#section-markets .company-info-header {
+  border-bottom: 1px solid var(--v4-rule);
+}
+#section-markets .company-info-header h2 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  letter-spacing: -.015em;
+  color: var(--v4-ink);
+}
+#section-markets .company-info-header .company-meta,
+#section-markets .company-description p {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markets .company-meta-tag {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#section-markets .company-stat-card {
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+}
+#section-markets .company-stat-label {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .08em;
+  color: var(--v4-ink-3);
+}
+#section-markets .company-stat-value {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markets .company-stat-value.positive { color: var(--v4-pos); }
+#section-markets .company-stat-value.negative { color: var(--v4-neg); }
+#section-markets .company-description h3 {
+  font-family: var(--v4-serif);
+  font-weight: 500;
+  color: var(--v4-ink);
+}
+#section-markets .company-info-error {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+
+#section-markets .ticker-news-section {
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--v4-rule);
+  margin-top: 1.25rem;
+}
+#section-markets .ticker-news-title {
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .1em;
+  color: var(--v4-ink-3);
+}
+#section-markets .news-card {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+}
+#section-markets .news-card:hover {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule-strong);
+}
+#section-markets .news-thumb { border-radius: 2px; }
+#section-markets .news-source {
+  font-family: var(--v4-sans);
+  color: var(--v4-cobalt-ink);
+}
+#section-markets .news-headline {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-markets .news-time {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-markets .ticker-news-empty {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
+/* Panel de ajustes de indicador — vive FUERA de `#section-markets` (hermano
+   de `</section>`), así que se ataca por su id propio. */
+#indSettingsPanel {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule);
+  border-radius: 4px;
+  box-shadow: var(--v4-shadow-lift);
+}
+#indSettingsPanel .ind-settings-head {
+  background: var(--v4-sunken);
+  border-bottom: 1px solid var(--v4-rule);
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#indSettingsPanel .ind-settings-close-btn { color: var(--v4-ink-3); }
+#indSettingsPanel .ind-settings-close-btn:hover { color: var(--v4-neg); }
+#indSettingsPanel .ind-sf-label {
+  font-family: var(--v4-sans);
+  color: var(--v4-ink-2);
+}
+#indSettingsPanel .ind-sf-num {
+  background: var(--v4-surface);
+  border: 1px solid var(--v4-rule-strong);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  color: var(--v4-ink);
+}
+#indSettingsPanel .ind-sf-num:focus {
+  border-color: var(--v4-cobalt-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v4-cobalt-line) 20%, transparent);
+}
+#indSettingsPanel .ind-sf-color {
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+}
+#indSettingsPanel .ind-settings-footer {
+  background: var(--v4-sunken);
+  border-top: 1px solid var(--v4-rule);
+}
+#indSettingsPanel .ind-settings-apply-btn {
+  background: var(--v4-cobalt);
+  border: 1px solid var(--v4-cobalt);
+  border-radius: 2px;
+  color: #fff;
+  font-family: var(--v4-sans);
+}
+#indSettingsPanel .ind-settings-apply-btn:hover {
+  background: color-mix(in srgb, var(--v4-cobalt) 88%, #000);
+}
+#indSettingsPanel .ind-settings-reset-btn {
+  background: none;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  color: var(--v4-ink-2);
+  font-family: var(--v4-sans);
+}
+#indSettingsPanel .ind-settings-reset-btn:hover {
+  background: var(--v4-sunken);
+  border-color: var(--v4-rule-strong);
+  color: var(--v4-ink);
+}
+
+/* ------------------------------------------- 12. Refuerzo `body.light-mode` */
+
+/* main.css tiene once reglas `body.light-mode #section-markets .x` (1,2,1)
+   que ganan a las de arriba (1,1,0). Éstas son sus gemelas, con los mismos
+   tokens: no cambian nada en oscuro (los tokens ya son los correctos), sólo
+   impiden que el look viejo regrese en claro. */
+
+body.light-mode #section-markets {
+  background: none;
+}
+body.light-mode #section-markets .mkt-index-tile {
+  background: none;
+  border-color: var(--v4-rule-soft);
+}
+body.light-mode #section-markets .market-toolbar {
+  background: var(--v4-surface);
+  border-color: var(--v4-rule);
+  border-bottom: 0;
+  box-shadow: none;
+}
+body.light-mode #section-markets .market-wl-sidebar,
+body.light-mode #section-markets .market-stats-rail {
+  background: var(--v4-surface);
+  border-color: var(--v4-rule);
+  box-shadow: var(--v4-shadow-lift);
+}
+body.light-mode #section-markets .ticker-news-section {
+  background: none;
+  border-color: var(--v4-rule);
+}
+body.light-mode #section-markets .market-chart-shell {
+  background: var(--v4-surface);
+  border-color: var(--v4-rule);
+}
+body.light-mode #section-markets .market-chart-header {
+  background: var(--v4-sunken);
+  border-bottom-color: var(--v4-rule);
+}
+body.light-mode #section-markets .market-chart-status {
+  background: var(--v4-surface);
+  color: var(--v4-ink-3);
+}
+body.light-mode #section-markets #chartMetaLabel {
+  color: var(--v4-ink-3);
+}
+body.light-mode #section-markets .market-chart-header strong,
+body.light-mode #section-markets .chart-price-label {
+  color: var(--v4-ink);
+}
+body.light-mode #section-markets .market-chart {
+  background: var(--v4-surface);
+}
+body.light-mode #section-markets .chart-52w-track {
+  background: var(--v4-rule);
+}
+body.light-mode #section-markets .stats-rail-item {
+  border-bottom-color: var(--v4-rule-soft);
+}
+
+/* ---------------------------------------------------------- 13. Móvil    */
+
+@media (max-width: 900px) {
+  #section-markets .market-toolbar {
+    border-radius: 4px 4px 0 0;
+  }
+  /* En pantalla completa el lienzo se come la lámina; el marco sobra. */
+  #section-markets .market-chart-fullscreen .market-chart-shell {
+    border-radius: 0;
+  }
+}

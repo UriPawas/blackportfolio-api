@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Top-down | BlackPortfolio</title>
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing-v4.css">
+  <link rel="stylesheet" href="app-v4.css">
+  <link rel="stylesheet" href="app-ui-v4.css">
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('bp-theme');
+        root.setAttribute('data-theme', saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      } catch (e) { /* almacenamiento bloqueado */ }
+      root.classList.add('js');
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
+    })();
+  </script>
+</head>
+<body class="app" data-section="topdown">
+<!--
+  THESIS: El análisis top-down es una CADENA de decisión: el entorno manda sobre el sector y el
+  sector sobre el activo. La pantalla anterior lo presentaba como cinco tarjetas sueltas; aquí el
+  orden de lectura ES el método.
+  FORM: Numeración 01/02/03 justificada — aquí la secuencia sí carga información que el lector
+  necesita. El semáforo macro nunca informa sólo con color: rótulo, signo y valor.
+-->
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="app__top">
+  <a class="mark" href="landing-v4.html"><b>Black</b><span>Portfolio</span></a>
+  <div class="app__top-actions">
+    <span class="app__plan">Plan <b>Advisor Pro</b></span>
+    <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+    </button>
+    <span class="app__avatar" aria-hidden="true">FP</span>
+  </div>
+</header>
+
+<div class="app__body">
+  <nav class="app__nav" aria-label="Secciones de la aplicación">
+    <ul>
+      <li><a href="app-home-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>Resumen</a></li>
+      <li><a href="app-tracker-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M4 19V5m0 14 5-6 4 3 5-8"/></svg>Tracker</a></li>
+      <li><a href="app-analizador-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 3"/></svg>Analizador</a></li>
+      <li><a href="app-optimizacion-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c4-14 12-14 16 0"/><circle cx="14" cy="10" r="1.6"/></svg>Optimización</a></li>
+      <li><a href="app-mercados-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Mercados</a></li>
+      <li><a href="app-topdown-v4.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 8h18M3 16h18"/></svg>Top-down</a></li>
+      <li><a href="app-ajustes-v4.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2m0 13v2M4.2 8l1.7 1m12.2 6 1.7 1M4.2 16l1.7-1m12.2-6 1.7-1"/></svg>Ajustes</a></li>
+    </ul>
+  </nav>
+
+  <main class="app__main" id="contenido">
+    <p class="preview-note">
+      <b>Vista previa del rediseño.</b> Cifras de muestra. Los identificadores de los controles son
+      los que ya usa <code>main.js</code>.
+    </p>
+
+    <div class="app__head app__head--row">
+      <div>
+        <h1>Top-down</h1>
+        <p>Del entorno al sector y del sector al activo. Cada paso restringe al siguiente.</p>
+      </div>
+      <div class="head-actions">
+        <span id="tdLastUpdated" class="status-bar__msg">Datos al 30 jul 2026, 09:00 · FRED y Yahoo Finance</span>
+        <button id="tdRefreshBtn" class="btn btn--quiet btn--sm" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="ico ico--spin"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Actualizar
+        </button>
+      </div>
+    </div>
+
+    <!-- ── 01 · Macro ─────────────────────────────────────────────────── -->
+    <section class="stage" aria-labelledby="tdMacroTitle">
+      <div class="stage__num" aria-hidden="true">01</div>
+      <div class="stage__body">
+        <div class="stage__head">
+          <h2 id="tdMacroTitle">Macro</h2>
+          <p>Tasas, inflación y crecimiento. Lo que el ciclo permite antes de elegir nada.</p>
+        </div>
+
+        <div id="tdRegimeBanner" class="verdict verdict--warn">
+          <span class="verdict__mark" aria-hidden="true"></span>
+          <div>
+            <b id="tdMacroVerdict">Régimen: desaceleración con inflación contenida</b>
+            <p>Curva aún invertida (−0.42 pp), inflación cediendo y desempleo al alza. Históricamente
+              favorece calidad defensiva y duración; castiga cíclicas apalancadas.</p>
+          </div>
+          <span class="stamp">Datos de muestra</span>
+        </div>
+
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2>Indicadores</h2>
+            <p class="panel__meta">Último dato y variación</p>
+          </div>
+          <div class="grid-scroll">
+            <table class="tbl tbl--grid" id="tdMacroGrid">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze">Indicador</th>
+                  <th scope="col" class="th-spark">12 meses</th>
+                  <th scope="col" class="n">Último</th>
+                  <th scope="col" class="n">Previo</th>
+                  <th scope="col" class="n">Variación</th>
+                  <th scope="col">Lectura</th>
+                </tr>
+              </thead>
+              <tbody><!-- app-sections-v4.js --></tbody>
+            </table>
+          </div>
+          <p class="panel__foot">Monitoreo y análisis. Nada de esto es una recomendación de inversión.</p>
+        </section>
+
+        <div id="tdTopPicks" class="picks"></div>
+      </div>
+    </section>
+
+    <!-- ── 02 · Sector ────────────────────────────────────────────────── -->
+    <section class="stage" aria-labelledby="tdSectorTitle">
+      <div class="stage__num" aria-hidden="true">02</div>
+      <div class="stage__body">
+        <div class="stage__head">
+          <h2 id="tdSectorTitle">Sector</h2>
+          <p>Qué sectores se posicionan mejor en ese ciclo, medido contra el índice.</p>
+        </div>
+
+        <div id="tdSectorVerdict" class="verdict verdict--ok">
+          <span class="verdict__mark" aria-hidden="true"></span>
+          <div>
+            <b>Salud y consumo básico lideran la fuerza relativa</b>
+            <p>Ambos superan al S&amp;P 500 en el periodo y coinciden con lo que el régimen favorece.
+              Tecnología sube más en absoluto pero pierde contra el índice.</p>
+          </div>
+        </div>
+
+        <section class="panel panel--wide">
+          <div class="panel__head panel__head--chart">
+            <div>
+              <h2>Fuerza relativa sectorial</h2>
+              <p class="panel__meta">Retorno del sector menos el del S&amp;P 500</p>
+            </div>
+            <div class="periods" id="tdPeriodNav" role="group" aria-label="Periodo">
+              <button type="button" data-period="1mo" aria-pressed="true">1M</button>
+              <button type="button" data-period="3mo">3M</button>
+              <button type="button" data-period="ytd">YTD</button>
+              <button type="button" data-period="1y">1A</button>
+            </div>
+          </div>
+          <div id="tdHeatmapGrid" class="bars"></div>
+          <p class="panel__foot" id="tdHeatmapStatus">★ marca los sectores que el régimen macro favorece. La cifra manda; el color acompaña.</p>
+        </section>
+
+        <div class="panels panels--2">
+          <section class="panel">
+            <div class="panel__head panel__head--chart">
+              <div><h2>Riesgo y retorno</h2><p class="panel__meta">Volatilidad contra retorno del periodo</p></div>
+              <span class="tag" title="El tamaño del punto es el Sharpe del sector">tamaño = Sharpe</span>
+            </div>
+            <div class="chart" style="--h:280px" id="tdScatter">
+              <canvas id="tdScatterCanvas" aria-label="Cuadrante de riesgo y retorno por sector"></canvas>
+              <div class="chart__tip" id="tdScatterTip" hidden></div>
+            </div>
+            <p class="panel__foot">Arriba a la izquierda: más retorno con menos riesgo. Es el único cuadrante que interesa.</p>
+          </section>
+
+          <section class="panel panel--flush">
+            <div class="panel__head">
+              <h2>Ranking</h2>
+              <p class="panel__meta" id="tdRankingPeriodLabel">Último mes</p>
+            </div>
+            <div class="grid-scroll">
+              <table class="tbl tbl--grid" id="tdRankingTable">
+                <thead>
+                  <tr>
+                    <th scope="col" class="th-freeze">Sector</th>
+                    <th scope="col" class="n">Retorno</th>
+                    <th scope="col" class="n">vs S&amp;P</th>
+                    <th scope="col" class="n">Sharpe</th>
+                    <th scope="col">Régimen</th>
+                  </tr>
+                </thead>
+                <tbody><!-- app-sections-v4.js --></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 03 · Activo ────────────────────────────────────────────────── -->
+    <section class="stage stage--last" aria-labelledby="tdAssetTitle">
+      <div class="stage__num" aria-hidden="true">03</div>
+      <div class="stage__body">
+        <div class="stage__head">
+          <h2 id="tdAssetTitle">Activo</h2>
+          <p>Dentro de los sectores que sobrevivieron a los dos filtros anteriores.</p>
+        </div>
+
+        <div id="tdAssetVerdict" class="verdict">
+          <span class="verdict__mark" aria-hidden="true"></span>
+          <div>
+            <b>6 candidatos en Salud y Consumo básico</b>
+            <p>Filtrados por capitalización mayor a 10 000 M USD y fuerza relativa positiva a 3 meses.
+              Abre cualquiera en Mercados para verlo con indicadores.</p>
+          </div>
+        </div>
+
+        <section class="panel panel--wide panel--flush">
+          <div class="panel__head">
+            <h2>Candidatos</h2>
+            <p class="panel__meta">Del sector al ticker</p>
+          </div>
+          <div class="grid-scroll">
+            <table class="tbl tbl--grid" id="tdCandidates">
+              <thead>
+                <tr>
+                  <th scope="col" class="th-freeze">Ticker</th>
+                  <th scope="col" class="th-spark">3 meses</th>
+                  <th scope="col">Sector</th>
+                  <th scope="col" class="n">Precio</th>
+                  <th scope="col" class="n">3M</th>
+                  <th scope="col" class="n">vs sector</th>
+                  <th scope="col"><span class="sr">Abrir en Mercados</span></th>
+                </tr>
+              </thead>
+              <tbody><!-- app-sections-v4.js --></tbody>
+            </table>
+          </div>
+          <p class="panel__foot">
+            El marco top-down complementa la optimización de cartera y el análisis individual:
+            no la sustituye. <a href="app-optimizacion-v4.html">Ir a Optimización</a>.
+          </p>
+        </section>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="app-ui-v4.js"></script>
+<script src="app-sections-v4.js"></script>
+</body>
+</html>

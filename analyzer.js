@@ -807,10 +807,28 @@ const AnalyzerModule = (() => {
     renderDCFChart();
   }
 
+  /* Los ejes, la rejilla y la leyenda estaban escritos a mano en tonos claros
+     sobre fondo oscuro: en tema claro la rejilla quedaba invisible sobre
+     blanco y los rótulos por debajo de 4.5:1. Mismo patrón que main.js ya usa
+     en `getPerfChartColors()` — se lee la clase real del <body>, que es de
+     donde main.js cuelga el tema. Los colores de SERIE no van aquí: son dato
+     (escenario y activo) y no cambian con el tema. */
+  function getAnalyzerChartColors() {
+    const isLight = document.body.classList.contains("light-mode");
+    return {
+      grid:      isLight ? "rgba(11,21,36,0.10)"  : "rgba(233,238,246,0.10)",
+      axisLabel: isLight ? "#5A6980"              : "#8C9BB3",
+      legend:    isLight ? "#33415A"              : "#B4C1D5",
+      refFill:   isLight ? "rgba(11,21,36,0.08)"  : "rgba(233,238,246,0.12)",
+      refLine:   isLight ? "rgba(11,21,36,0.45)"  : "rgba(233,238,246,0.45)",
+    };
+  }
+
   function renderDCFChart() {
     const canvas = $("dcfWaterfallChart");
     if (!canvas || !window.Chart) return;
     if (dcfChartInst) { dcfChartInst.destroy(); dcfChartInst = null; }
+    const themeColors = getAnalyzerChartColors();
 
     const valid = assets.filter(a => a.dcf?.scenarios);
     if (!valid.length) return;
@@ -824,8 +842,8 @@ const AnalyzerModule = (() => {
       {
         label: "Precio actual",
         data: valid.map(a => n(a.info.currentPrice || a.info.regularMarketPrice, 0)),
-        backgroundColor: "rgba(255,255,255,0.12)",
-        borderColor: "rgba(255,255,255,0.45)",
+        backgroundColor: themeColors.refFill,
+        borderColor: themeColors.refLine,
         borderWidth: 2,
         borderDash: [5, 3],
         borderSkipped: false,
@@ -847,12 +865,12 @@ const AnalyzerModule = (() => {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { labels: { color: "#b0b8c8", font: { size: 12, family: "Inter" } } },
+          legend: { labels: { color: themeColors.legend, font: { size: 12, family: "Libre Franklin" } } },
           tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.parsed.y.toFixed(2)}` } },
         },
         scales: {
-          x: { ticks: { color: "#8892a4", font: { size: 12 } }, grid: { color: "rgba(255,255,255,0.05)" } },
-          y: { ticks: { color: "#8892a4", callback: v => `$${v.toFixed(0)}` }, grid: { color: "rgba(255,255,255,0.05)" } },
+          x: { ticks: { color: themeColors.axisLabel, font: { size: 11 } }, grid: { color: themeColors.grid } },
+          y: { ticks: { color: themeColors.axisLabel, font: { size: 11 }, callback: v => `$${v.toFixed(0)}` }, grid: { color: themeColors.grid } },
         },
       },
     });
@@ -905,6 +923,7 @@ const AnalyzerModule = (() => {
     const valid = assets.filter(a => a.mc?.fanPaths);
     if (!valid.length) return;
 
+    const themeColors = getAnalyzerChartColors();
     const nPts    = valid[0].mc.nChartPts;
     const labels  = Array.from({ length: nPts }, (_, k) => {
       const d = k * CHART_SAMPLE;
@@ -939,16 +958,16 @@ const AnalyzerModule = (() => {
         plugins: {
           legend: {
             labels: {
-              color: "#b0b8c8",
-              font: { size: 11, family: "Inter" },
+              color: themeColors.legend,
+              font: { size: 11, family: "Libre Franklin" },
               filter: item => item.text.includes("Mediana") || item.text.includes("P90") || item.text.includes("P10"),
             },
           },
           tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.parsed.y.toFixed(2)}` } },
         },
         scales: {
-          x: { ticks: { color: "#8892a4", maxTicksLimit: 13 }, grid: { color: "rgba(255,255,255,0.04)" } },
-          y: { ticks: { color: "#8892a4", callback: v => `$${v.toFixed(0)}` }, grid: { color: "rgba(255,255,255,0.04)" } },
+          x: { ticks: { color: themeColors.axisLabel, font: { size: 11 }, maxTicksLimit: 13 }, grid: { color: themeColors.grid } },
+          y: { ticks: { color: themeColors.axisLabel, font: { size: 11 }, callback: v => `$${v.toFixed(0)}` }, grid: { color: themeColors.grid } },
         },
       },
     });

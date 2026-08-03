@@ -7,9 +7,28 @@
   <meta name="description" content="Area principal de BlackPortfolio con inicio personalizable, navegacion interna y modulo Portafolio Tracker.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=11">
   <link rel="stylesheet" href="main.css?v=32">
+  <link rel="stylesheet" href="main-v4-shell.css?v=1">
+  <link rel="stylesheet" href="main-v4-home.css?v=1">
+  <link rel="stylesheet" href="main-v4-settings.css?v=1">
+  <link rel="stylesheet" href="main-v4-analyzer.css?v=1">
+  <link rel="stylesheet" href="main-v4-markets.css?v=3">
+  <link rel="stylesheet" href="main-v4-markowitz.css?v=3">
+  <link rel="stylesheet" href="main-v4-topdown.css?v=5">
+  <link rel="stylesheet" href="main-v4-tracker.css?v=5">
+  <script>
+    /* Sesión 1 del cascarón V4: refleja el tema real (localStorage
+       "blackportfolio-theme", el mismo que usa main.js) en data-theme antes
+       del primer paint, para que main-v4-shell.css no parpadee. */
+    (function () {
+      try {
+        var saved = localStorage.getItem('blackportfolio-theme');
+        document.documentElement.dataset.theme = saved === 'light' ? 'light' : 'dark';
+      } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+    })();
+  </script>
   <style>
     .company-info-animation {
       display: flex;
@@ -29,6 +48,14 @@
   </style>
 </head>
 <body class="main-page">
+  <script>
+    /* Mantiene html[data-theme] sincronizado con el toggle real de main.js
+       (body.classList "light-mode") para que main-v4-shell.css reaccione al
+       cambio de tema en vivo, sin tocar la lógica de main.js. */
+    new MutationObserver(function () {
+      document.documentElement.dataset.theme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+    }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  </script>
   <a class="skip-to-content" href="#dashboardContent">Saltar al contenido principal</a>
   <div class="background-orb orb-one"></div>
   <div class="background-orb orb-two"></div>
@@ -2651,7 +2678,6 @@
       <section id="section-settings" class="dashboard-section">
         <article class="dashboard-card settings-overview-card">
           <div class="settings-overview-copy">
-            <span class="settings-kicker">Centro de control</span>
             <h2>Cuenta, seguridad y preferencias</h2>
             <p>Administra tu perfil, protege el acceso y ajusta la experiencia de monitoreo desde un solo lugar.</p>
           </div>
@@ -2926,7 +2952,6 @@
           <article class="dashboard-card investor-profile-card">
             <div class="card-header">
               <div>
-                <span class="settings-kicker">Asignación estratégica</span>
                 <h3>Perfil de inversionista</h3>
               </div>
               <span id="investorProfileStatus" class="investor-profile-status">Pendiente</span>
@@ -3444,9 +3469,9 @@
   <script src="auth.js?v=11"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=35"></script>
-  <script src="markowitz.js?v=2"></script>
-  <script src="analyzer.js?v=2"></script>
-  <script src="topdown.js"></script>
+  <script src="main.js?v=40"></script>
+  <script src="markowitz.js?v=5"></script>
+  <script src="analyzer.js?v=3"></script>
+  <script src="topdown.js?v=4"></script>
 </body>
 </html>

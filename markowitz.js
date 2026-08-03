@@ -1263,19 +1263,26 @@
   };
 
   // ── Theme-aware chart palette (works in both dark and light themes) ────────
+  /* Los neutros replican los tokens `--v4-*` de main-v4-shell.css: el CSS no
+     entra a un <canvas>, así que ejes, rejilla y rótulos tienen que repetir
+     aquí los mismos valores. Si allá cambian, aquí también. Los colores de
+     SERIE (mv/ms, degradado de Sharpe) son dato y no se tocan. */
   function chartColors() {
-    const light = document.body.classList.contains("light-mode");
+    /* Misma fuente que main-v4-*.css (`html[data-theme]`), no
+       `body.light-mode`: son mecanismos distintos y pueden divergir. */
+    const light = document.documentElement.dataset.theme === "light";
     return {
       light,
-      grid:      light ? "rgba(15,23,42,0.08)"  : "rgba(255,255,255,0.06)",
-      gridBold:  light ? "rgba(15,23,42,0.14)"  : "rgba(255,255,255,0.12)",
-      tick:      light ? "rgba(15,23,42,0.55)"  : "rgba(255,255,255,0.42)",
-      axis:      light ? "rgba(15,23,42,0.7)"   : "rgba(255,255,255,0.5)",
-      legend:    light ? "rgba(15,23,42,0.72)"  : "rgba(255,255,255,0.68)",
-      halo:      light ? "#ffffff"              : "#0c0f1a",
-      baseline:  light ? "rgba(15,23,42,0.2)"   : "rgba(255,255,255,0.15)",
-      startDot:  light ? "rgba(15,23,42,0.45)"  : "rgba(255,255,255,0.55)",
-      panel:     light ? "rgba(255,255,255,0.85)" : "rgba(12,15,26,0.82)",
+      grid:      light ? "#E4E9EF"              : "#1A2739",
+      gridBold:  light ? "#D6DDE6"              : "#22314A",
+      tick:      light ? "#5A6980"              : "#8C9BB3",
+      axis:      light ? "#33415A"              : "#B4C1D5",
+      ink:       light ? "#0B1524"              : "#E9EEF6",
+      legend:    light ? "#33415A"              : "#B4C1D5",
+      halo:      light ? "#FFFFFF"              : "#101B2B",
+      baseline:  light ? "#B5C0CE"              : "#364964",
+      startDot:  light ? "#5A6980"              : "#8C9BB3",
+      panel:     light ? "rgba(255,255,255,0.9)" : "rgba(16,27,43,0.9)",
       mv: "#6f86ff",
       ms: "#f5b84c",
       // Sharpe gradient endpoints (low → high)
@@ -1373,7 +1380,7 @@
 
     // ── Grid ───────────────────────────────────────────────────────────────
     ctx.lineWidth = 1;
-    ctx.font = "10px Inter, system-ui, sans-serif";
+    ctx.font = "10px 'Libre Franklin', system-ui, sans-serif";
 
     const nGridY = 5, nGridX = 5;
     for (let i = 0; i <= nGridY; i++) {
@@ -1397,7 +1404,7 @@
 
     // ── Axis labels ────────────────────────────────────────────────────────
     ctx.fillStyle = C.axis;
-    ctx.font = "11px Inter, system-ui, sans-serif";
+    ctx.font = "11px 'Libre Franklin', system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Volatilidad anualizada", pad.l + pw / 2, H - 6);
     ctx.save();
@@ -1435,7 +1442,7 @@
       ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2);
       ctx.fillStyle = color; ctx.fill();
       ctx.strokeStyle = C.halo; ctx.lineWidth = 2; ctx.stroke();
-      ctx.font = "bold 9px Inter, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = "bold 9px 'Libre Franklin', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const tw = ctx.measureText(label).width;
       const py = y - 16;
       roundRectMkw(ctx, x - tw / 2 - 5, py - 7, tw + 10, 14, 4);
@@ -1453,7 +1460,7 @@
       { color: C.mv, label: "MV — Mín. Varianza" },
       { color: C.ms, label: "MS — Máx. Sharpe" },
     ];
-    ctx.font = "10px Inter, system-ui, sans-serif";
+    ctx.font = "10px 'Libre Franklin', system-ui, sans-serif";
     const legW = 142, legH = legendItems.length * 17 + 12;
     const legendX = pad.l + pw - legW + 14;
     const legendY = pad.t + 14;
@@ -1474,10 +1481,10 @@
     const volSpread = Math.max(...allVols) - Math.min(...allVols);
     const retSpread = Math.max(...allRets) - Math.min(...allRets);
     if (volSpread < 1e-4 && retSpread < 1e-4) {
-      ctx.font = "12px Inter, system-ui, sans-serif";
+      ctx.font = "12px 'Libre Franklin', system-ui, sans-serif";
       ctx.textAlign = "center"; ctx.fillStyle = C.axis;
       ctx.fillText("Los activos tienen series casi idénticas — sin dispersión que graficar.", pad.l + pw / 2, pad.t + ph / 2 - 8);
-      ctx.fillStyle = C.tick; ctx.font = "11px Inter, system-ui, sans-serif";
+      ctx.fillStyle = C.tick; ctx.font = "11px 'Libre Franklin', system-ui, sans-serif";
       ctx.fillText("Prueba con activos más diversos o recarga (Ctrl+Shift+R) si los datos llegaron incompletos.", pad.l + pw / 2, pad.t + ph / 2 + 12);
     }
   }
@@ -1526,7 +1533,10 @@
          </div>`
       : "";
     card.innerHTML = `
-      <div class="mkw-optimal-title" style="color:${color}">${title}</div>
+      <!-- El color identifica la cartera (mismo que su marcador en la
+           frontera): va en la marca, no en el texto. Escrito en el título,
+           #f5b84c medía 1.9:1 sobre la lámina clara. -->
+      <div class="mkw-optimal-title"><i class="mkw-optimal-mark" style="background:${color}" aria-hidden="true"></i>${title}</div>
       <div class="mkw-optimal-metrics">
         <div class="mkw-metric"><span>Retorno esp.</span><strong class="${p.ret >= 0 ? "mkw-pos" : "mkw-neg"}">${(p.ret * 100).toFixed(2)}%</strong></div>
         <div class="mkw-metric"><span>Volatilidad</span><strong>${(p.vol * 100).toFixed(2)}%</strong></div>
@@ -1616,7 +1626,7 @@
     ctx.fill();
 
     ctx.fillStyle = C.axis;
-    ctx.font = "bold 11px Inter, system-ui, sans-serif";
+    ctx.font = "bold 11px 'Libre Franklin', system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("Pesos", cx, cy);
@@ -1764,8 +1774,13 @@
     const bodyRows = tickers.map((t, i) => {
       const cells = tickers.map((_, j) => {
         const v = valueFn(i, j);
-        const { bg, text } = colorFn(v);
-        return `<td style="background:${bg};color:${text}">${formatFn(v)}</td>`;
+        const { bg } = colorFn(v);
+        /* Sin `color:` en línea: el estilo en línea le gana a cualquier hoja,
+           y el texto blanco fijo era ilegible sobre las celdas pálidas del
+           tema claro. La tinta la pone main-v4-markowitz.css (`--v4-ink`),
+           que además repinta sola al cambiar de tema. El fondo SÍ sigue aquí:
+           es el valor de la matriz. */
+        return `<td style="background:${bg}">${formatFn(v)}</td>`;
       }).join("");
       return `<tr><th>${t}</th>${cells}</tr>`;
     }).join("");
@@ -1778,36 +1793,44 @@
       </div>`;
   }
 
+  /* El tope de tinte (0.52 como máximo) no es estético: por encima de ~0.6 hay
+     una franja donde ni la tinta clara ni la oscura llegan a 4.5:1 sobre la
+     celda. Con este tope, `--v4-ink` mide 6.0:1 en oscuro y 9.8:1 en claro,
+     así que una sola tinta sirve para los dos temas. */
+  const HEAT_ALPHA_BASE = 0.10;
+  const HEAT_ALPHA_RANGE = 0.42;
+
   function covHeatColor(t) {
     // t ∈ [-1, 1] normalized by maxAbs
     const a = Math.abs(t);
+    const alpha = HEAT_ALPHA_BASE + a * HEAT_ALPHA_RANGE;
     if (t >= 0) {
       const r = Math.round(30 + (0 - 30) * a);
       const g = Math.round(30 + (200 - 30) * a);
       const b = Math.round(60 + (148 - 60) * a);
-      return { bg: `rgba(${r},${g},${b},${0.15 + a * 0.55})`, text: a > 0.4 ? "#e0ffe8" : "rgba(255,255,255,0.7)" };
+      return { bg: `rgba(${r},${g},${b},${alpha})` };
     } else {
       const r = Math.round(30 + (220 - 30) * a);
       const g = Math.round(30 + (50 - 30) * a);
       const b = Math.round(60 + (80 - 60) * a);
-      return { bg: `rgba(${r},${g},${b},${0.15 + a * 0.55})`, text: a > 0.4 ? "#ffe0e8" : "rgba(255,255,255,0.7)" };
+      return { bg: `rgba(${r},${g},${b},${alpha})` };
     }
   }
 
   function corrHeatColor(v) {
     v = Math.max(-1, Math.min(1, v));
+    const t = Math.abs(v);
+    const alpha = HEAT_ALPHA_BASE + t * HEAT_ALPHA_RANGE;
     if (v >= 0) {
-      const t = v;
       const r = Math.round(20 + (111 - 20) * t);
       const g = Math.round(20 + (134 - 20) * t);
       const b = Math.round(40 + (255 - 40) * t);
-      return { bg: `rgba(${r},${g},${b},${0.12 + t * 0.65})`, text: t > 0.5 ? "#d0e8ff" : "rgba(255,255,255,0.7)" };
+      return { bg: `rgba(${r},${g},${b},${alpha})` };
     } else {
-      const t = -v;
       const r = Math.round(20 + (242 - 20) * t);
       const g = Math.round(20 + (77 - 20) * t);
       const b = Math.round(40 + (106 - 40) * t);
-      return { bg: `rgba(${r},${g},${b},${0.12 + t * 0.65})`, text: t > 0.5 ? "#ffe0e8" : "rgba(255,255,255,0.7)" };
+      return { bg: `rgba(${r},${g},${b},${alpha})` };
     }
   }
 
@@ -1925,13 +1948,13 @@
       const y = toY(v);
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + cW, y);
       ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = C.tick; ctx.font = "10px Inter,sans-serif";
+      ctx.fillStyle = C.tick; ctx.font = "10px 'Libre Franklin',sans-serif";
       ctx.textAlign = "right"; ctx.textBaseline = "middle";
       ctx.fillText(fmtCompact(v), padL - 5, y);
     }
 
     // X axis labels (years)
-    ctx.fillStyle = C.tick; ctx.font = "10px Inter,sans-serif";
+    ctx.fillStyle = C.tick; ctx.font = "10px 'Libre Franklin',sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     for (let yr = 0; yr <= years; yr++) {
       ctx.fillText(yr === 0 ? "Hoy" : `Año ${yr}`, toX(yr * 12), padTop + cH + 5);
@@ -1969,7 +1992,7 @@
       const v = path[steps];
       const x = toX(steps) + 5;
       const y = toY(v);
-      ctx.fillStyle = color; ctx.font = "bold 10px Inter,sans-serif";
+      ctx.fillStyle = color; ctx.font = "bold 10px 'Libre Franklin',sans-serif";
       ctx.textAlign = "left"; ctx.textBaseline = "middle";
       ctx.fillText(`${label} ${fmtCompact(v)}`, x, y);
     }
@@ -2535,7 +2558,7 @@
         <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#f5b84c;height:3px;width:22px"></span>Máx. Sharpe</span>
         <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#6f86ff;height:3px;width:22px"></span>Mín. Varianza</span>
         <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#32d6a2;height:3px;width:22px"></span>1/N (igual peso)</span>
-        <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:transparent;border-top:2px dashed rgba(255,255,255,0.38);width:22px;display:inline-block;vertical-align:middle;margin-right:4px"></span>S&amp;P 500</span>
+        <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:transparent;border-top:2px dashed currentColor;opacity:.6;width:22px;display:inline-block;vertical-align:middle;margin-right:4px"></span>S&amp;P 500</span>
       </div>
       <div class="mc-chart-wrap"><canvas id="mkwBacktestCanvas"></canvas></div>
       <div id="mkwBacktestStatus" class="perf-chart-status">Cargando benchmark…</div>
@@ -2707,7 +2730,7 @@
                 <th style="color:#f5b84c">Máx. Sharpe</th>
                 <th style="color:#6f86ff">Mín. Varianza</th>
                 <th style="color:#32d6a2">1/N</th>
-                <th style="color:rgba(255,255,255,0.45)">S&amp;P 500</th>
+                <th>S&amp;P 500</th>
               </tr></thead>
               <tbody>
                 <tr><td>Retorno total (neto)</td>
@@ -2761,6 +2784,7 @@
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
 
+    const C = chartColors();
     const T = msCum.length;
     const pad = { t: 16, r: 20, b: 30, l: 64 };
     const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
@@ -2776,18 +2800,18 @@
       const v = yMin + (yMax - yMin) / 5 * i;
       const y = toY(v);
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cW, y);
-      ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.font = "10px Inter,sans-serif";
+      ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = C.tick; ctx.font = "10px 'Libre Franklin',sans-serif";
       ctx.textAlign = "right"; ctx.textBaseline = "middle";
       ctx.fillText((v * 100).toFixed(0), pad.l - 5, y);
     }
 
-    ctx.save(); ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.font = "10px Inter,sans-serif";
+    ctx.save(); ctx.fillStyle = C.tick; ctx.font = "10px 'Libre Franklin',sans-serif";
     ctx.textAlign = "center"; ctx.translate(14, pad.t + cH / 2); ctx.rotate(-Math.PI / 2);
     ctx.fillText("Valor (base 100)", 0, 0); ctx.restore();
 
     const weeks = T - 1, years = Math.max(1, Math.round(weeks / 52));
-    ctx.fillStyle = "rgba(255,255,255,0.38)"; ctx.font = "10px Inter,sans-serif";
+    ctx.fillStyle = C.tick; ctx.font = "10px 'Libre Franklin',sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     for (let yr = 0; yr <= years; yr++) {
       const idx = Math.min(Math.round(yr * weeks / years), weeks);
@@ -2795,11 +2819,11 @@
     }
 
     ctx.beginPath(); ctx.moveTo(pad.l, toY(1)); ctx.lineTo(pad.l + cW, toY(1));
-    ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = C.baseline; ctx.lineWidth = 1; ctx.stroke();
 
     ctx.beginPath();
     spyCum.forEach((v, i) => ctx[i === 0 ? "moveTo" : "lineTo"](toX(i), toY(v)));
-    ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = C.tick; ctx.lineWidth = 1.5;
     ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
 
     ctx.beginPath();
@@ -2844,8 +2868,9 @@
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, totalSize, totalSize);
 
+    const CH = chartColors();
     const fontSize = Math.max(9, Math.round(cellSize * 0.18));
-    ctx.font = `${fontSize}px Inter,sans-serif`;
+    ctx.font = `${fontSize}px 'Libre Franklin',sans-serif`;
 
     for (let i = 0; i < N; i++) {
       for (let j = 0; j < N; j++) {
@@ -2855,14 +2880,17 @@
         const y = labelPad + i * cellSize;
         ctx.fillStyle = bg;
         ctx.fillRect(x, y, cellSize - 1, cellSize - 1);
-        ctx.fillStyle = Math.abs(v) > 0.55 ? "#fff" : "rgba(255,255,255,0.7)";
+        /* Una sola tinta para los dos temas: con el tope de tinte de
+           `corrHeatColor` la celda nunca se oscurece lo bastante como para
+           necesitar texto blanco en claro (ni al revés). */
+        ctx.fillStyle = CH.ink;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText(v.toFixed(2), x + cellSize / 2 - 0.5, y + cellSize / 2);
       }
     }
 
-    ctx.fillStyle = "rgba(255,255,255,0.65)";
-    ctx.font = `${Math.max(8, fontSize - 1)}px Inter,sans-serif`;
+    ctx.fillStyle = CH.tick;
+    ctx.font = `${Math.max(8, fontSize - 1)}px 'Libre Franklin',sans-serif`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     tickers.forEach((t, j) => {
       const label = t.length > 6 ? t.slice(0, 5) + "…" : t;

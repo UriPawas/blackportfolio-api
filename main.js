@@ -911,7 +911,11 @@ function closeMenus() {
 
 function showChartStatus(message, type = "info") {
   marketChartStatus.textContent = message;
-  marketChartStatus.style.color = type === "error" ? "#ff8ca4" : "var(--muted)";
+  /* El color va por atributo, no en línea: el rosa fijo del error (#ff8ca4)
+     medía ~2.3:1 sobre la lámina clara, y un estilo en línea no lo puede
+     corregir ninguna hoja. Lo pinta main-v4-markets.css con `--v4-neg`. */
+  marketChartStatus.dataset.state = type;
+  marketChartStatus.style.color = "";
 }
 
 function showChartOverlay(message) {
@@ -1163,6 +1167,56 @@ function toggleFavorite() {
   renderMarketToolbar();
 }
 
+/* El lienzo de Mercados venía con el tema oscuro fijo de TradingView
+   (#131722 de fondo, #b2b5be de texto, rejilla #2a2e39, tipografía Inter):
+   no leía el tema de la app, así que en modo claro quedaba un rectángulo
+   azul-noche dentro de una lámina blanca. El CSS no entra a un <canvas>,
+   igual que pasó con las gráficas del Analizador.
+
+   Los valores replican los tokens `--v4-*` de main-v4-shell.css; si allá
+   cambian, aquí también. Los colores de SERIE (velas, indicadores) NO se
+   tocan: son dato, no cromo. */
+function getMarketChartTheme() {
+  /* Se lee `html[data-theme]` —la misma fuente que main-v4-*.css— y no
+     `body.light-mode`: son dos mecanismos distintos y pueden divergir. */
+  const light = document.documentElement.dataset.theme === "light";
+  const sans = "'Libre Franklin', system-ui, -apple-system, 'Segoe UI', sans-serif";
+  return {
+    layout: {
+      background: { color: light ? "#FFFFFF" : "#101B2B" },
+      textColor: light ? "#5A6980" : "#8C9BB3",
+      fontSize: 11,
+      fontFamily: sans
+    },
+    grid: {
+      vertLines: { color: light ? "#E4E9EF" : "#1A2739", style: 0 },
+      horzLines: { color: light ? "#E4E9EF" : "#1A2739", style: 0 }
+    },
+    crosshair: {
+      mode: 1,
+      vertLine: {
+        color: light ? "#5A6980" : "#8C9BB3",
+        width: 1,
+        style: 1,
+        labelBackgroundColor: light ? "#0B1524" : "#22314A"
+      },
+      horzLine: {
+        color: light ? "#5A6980" : "#8C9BB3",
+        width: 1,
+        style: 1,
+        labelBackgroundColor: light ? "#0B1524" : "#22314A"
+      }
+    },
+    rightPriceScale: { borderColor: light ? "#D6DDE6" : "#22314A" },
+    timeScale: { borderColor: light ? "#D6DDE6" : "#22314A" }
+  };
+}
+
+function applyMarketChartTheme() {
+  if (!tvChart) return;
+  try { tvChart.applyOptions(getMarketChartTheme()); } catch { /* gráfico destruido */ }
+}
+
 function ensureChart() {
   if (!window.LightweightCharts) {
     showChartStatus("No se pudo cargar la libreria del grafico.", "error");
@@ -1173,39 +1227,18 @@ function ensureChart() {
     return true;
   }
 
+  const theme = getMarketChartTheme();
   tvChart = window.LightweightCharts.createChart(marketChartContainer, {
     autoSize: true,
-    layout: {
-      background: { color: "#131722" },
-      textColor: "#b2b5be",
-      fontSize: 12,
-      fontFamily: "'Inter', 'Trebuchet MS', sans-serif"
-    },
-    grid: {
-      vertLines: { color: "rgba(42,46,57,0.8)", style: 0 },
-      horzLines: { color: "rgba(42,46,57,0.8)", style: 0 }
-    },
-    crosshair: {
-      mode: 1,
-      vertLine: {
-        color: "rgba(177,181,195,0.5)",
-        width: 1,
-        style: 1,
-        labelBackgroundColor: "#2a2e39"
-      },
-      horzLine: {
-        color: "rgba(177,181,195,0.5)",
-        width: 1,
-        style: 1,
-        labelBackgroundColor: "#2a2e39"
-      }
-    },
+    layout: theme.layout,
+    grid: theme.grid,
+    crosshair: theme.crosshair,
     rightPriceScale: {
-      borderColor: "rgba(42,46,57,1)",
+      borderColor: theme.rightPriceScale.borderColor,
       scaleMargins: { top: 0.1, bottom: 0.1 }
     },
     timeScale: {
-      borderColor: "rgba(42,46,57,1)",
+      borderColor: theme.timeScale.borderColor,
       timeVisible: true,
       secondsVisible: false,
       rightOffset: 5,
@@ -4399,13 +4432,46 @@ function initializeTheme() {
 function applyTheme(theme) {
   const isDark = theme === "dark";
   document.body.classList.toggle("light-mode", !isDark);
+  /* `html[data-theme]` es lo que leen las hojas main-v4-*.css (y el script
+     pre-paint de main.html). main.html ya lo sincroniza con un
+     MutationObserver, pero ése corre en una microtarea: si no se escribe
+     aquí, las funciones que retematizan los lienzos —que se llaman en la
+     línea de abajo, sincrónicamente— leerían el tema anterior. */
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
   localStorage.setItem(themeStorageKey, theme);
   updateThemeButton(theme);
   window.redrawMarkowitzCharts?.();
+  applyMarketChartTheme();
+  redrawTrackerCharts();
+}
+
+/* Los lienzos del tracker leen la paleta en el momento de pintar, así que al
+   cambiar de tema se quedaban con los neutros del tema anterior (rejilla y
+   ejes oscuros sobre lámina blanca). No basta con volver a hacer clic en la
+   pestaña activa: su handler está guardado por banderas `*Loaded`.
+   Los tres lienzos con estado se repintan directo; para el resto se bajan las
+   banderas y se re-dispara la pestaña, que es el mecanismo propio de la app. */
+function redrawTrackerCharts() {
+  const dash = document.getElementById("trackerDashView");
+  if (!dash || dash.classList.contains("hidden")) return;
+  try {
+    document.querySelectorAll("#portfolioValueChart").forEach((c) => paintPortfolioValueChart(c));
+    document.querySelectorAll("#portfolioDonutChart").forEach((c) => paintPortfolioDonut(c));
+    document.querySelectorAll("#investmentValueChart").forEach((c) => paintInvestmentValueChart(c));
+  } catch { /* aún sin datos */ }
+  const active = document.querySelector(".tracker-tab-btn.active");
+  if (!active) return;
+  const tab = active.dataset.tab;
+  if (tab === "desempeno") perfTabLoaded = false;
+  else if (tab === "proyeccion") mcTabLoaded = false;
+  else if (tab === "correlacion") corrTabLoaded = false;
+  else if (tab === "metas") goalTabLoaded = false;
+  else return; // Resumen y las pestañas de tabla no tienen lienzo que rehacer
+  active.click();
 }
 
 function toggleTheme() {
-  const currentTheme = document.body.classList.contains("light-mode") ? "light" : "dark";
+  const currentTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
   const newTheme = currentTheme === "dark" ? "light" : "dark";
   applyTheme(newTheme);
 }
@@ -4960,7 +5026,7 @@ function renderSeasonalChart(data, years, MONTHS, container) {
       ctx.setLineDash([]);
 
       ctx.fillStyle = isZ ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.28)";
-      ctx.font = `${isZ ? 500 : 400} 10px Inter,sans-serif`;
+      ctx.font = `${isZ ? 500 : 400} 10px 'Libre Franklin',sans-serif`;
       ctx.textAlign = "right";
       ctx.fillText((v > 0 ? "+" : "") + v + "%", PAD.left - 7, y + 3.5);
     }
@@ -5037,7 +5103,7 @@ function renderSeasonalChart(data, years, MONTHS, container) {
     MONTHS.forEach((m, i) => {
       const isH = hSeg === i + 1;
       ctx.fillStyle = isH ? "rgba(255,255,255,0.82)" : "rgba(255,255,255,0.3)";
-      ctx.font = `${isH ? 600 : 400} 10.5px Inter,sans-serif`;
+      ctx.font = `${isH ? 600 : 400} 10.5px 'Libre Franklin',sans-serif`;
       ctx.textAlign = "center";
       ctx.fillText(m, xPos(i + 0.5), CH - PAD.bottom + 16);
     });
@@ -5052,7 +5118,7 @@ function renderSeasonalChart(data, years, MONTHS, container) {
       ctx.fillStyle = isH ? "#ffd166" : "#ffd16688";
       ctx.beginPath(); ctx.arc(legX + 4, PAD.top + 8, isH ? 4 : 3, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = isH ? "rgba(255,209,102,0.95)" : "rgba(255,209,102,0.5)";
-      ctx.font = `${isH ? 600 : 500} 9.5px Inter,sans-serif`;
+      ctx.font = `${isH ? 600 : 500} 9.5px 'Libre Franklin',sans-serif`;
       ctx.textAlign = "left";
       ctx.fillText(`Prom  ${av >= 0 ? "+" : ""}${av.toFixed(1)}%`, legX + 13, PAD.top + 12);
     }
@@ -5063,7 +5129,7 @@ function renderSeasonalChart(data, years, MONTHS, container) {
       ctx.fillStyle = isH ? d.color : d.color + "88";
       ctx.beginPath(); ctx.arc(legX + 4, legY - 2.5, isH ? 4 : 2.8, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = isH ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.38)";
-      ctx.font = `${isH ? 600 : 400} 9.5px Inter,sans-serif`;
+      ctx.font = `${isH ? 600 : 400} 9.5px 'Libre Franklin',sans-serif`;
       ctx.textAlign = "left";
       ctx.fillText(`${d.yr}  ${final >= 0 ? "+" : ""}${final.toFixed(1)}%`, legX + 13, legY);
     });
@@ -9281,13 +9347,13 @@ function renderDividendMonthlyChart(receivedByMonth, projectedByMonth, cur) {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  const lightMode = document.body.classList.contains("light-mode");
+  const lightMode = document.documentElement.dataset.theme === "light";
   const pad = { left: 56, right: 14, top: 16, bottom: 40 };
   const cw = width - pad.left - pad.right, ch = height - pad.top - pad.bottom;
-  const axisColor = lightMode ? "rgba(23,32,51,0.5)" : "rgba(226,232,255,0.45)";
-  const gridColor = lightMode ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.07)";
+  const axisColor = lightMode ? "#5A6980" : "#8C9BB3";
+  const gridColor = lightMode ? "#E4E9EF" : "#1A2739";
 
-  ctx.font = "500 10px Inter, sans-serif";
+  ctx.font = "500 10px 'Libre Franklin', sans-serif";
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (let s = 0; s <= 4; s++) {
     const v = (maxV / 4) * s, y = pad.top + ch * (1 - s / 4);
@@ -9320,14 +9386,14 @@ function renderDividendMonthlyChart(receivedByMonth, projectedByMonth, cur) {
       const [yy, mm] = b.key.split("-");
       const lbl = new Date(+yy, +mm - 1, 1).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
       ctx.save();
-      ctx.fillStyle = axisColor; ctx.font = "500 9px Inter, sans-serif";
+      ctx.fillStyle = axisColor; ctx.font = "500 9px 'Libre Franklin', sans-serif";
       ctx.textAlign = "center"; ctx.textBaseline = "top";
       ctx.fillText(lbl, cx, height - pad.bottom + 8);
       ctx.restore();
     }
   });
   // Leyenda
-  ctx.font = "600 10px Inter, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.font = "600 10px 'Libre Franklin', sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
   ctx.fillStyle = GAIN_COLOR; ctx.fillRect(pad.left, height - 12, 10, 10);
   ctx.fillStyle = axisColor; ctx.fillText("Recibido", pad.left + 16, height - 7);
   ctx.fillStyle = "rgba(111,134,255,0.6)"; ctx.fillRect(pad.left + 90, height - 12, 10, 10);
@@ -10061,7 +10127,7 @@ function paintPortfolioDonut(canvas) {
   if (!state) return;
   const { size, dpr, cx, cy, outerR, innerR, entries, grandTotal, positionsCount, currency, hoverIndex } = state;
   const ctx = canvas.getContext("2d");
-  const lightMode = document.body.classList.contains("light-mode");
+  const lightMode = document.documentElement.dataset.theme === "light";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
 
@@ -10069,10 +10135,10 @@ function paintPortfolioDonut(canvas) {
     ctx.beginPath();
     ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
     ctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);
-    ctx.fillStyle = lightMode ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.05)";
+    ctx.fillStyle = lightMode ? "#E8ECF2" : "#0C1725";
     ctx.fill();
-    ctx.fillStyle = lightMode ? "rgba(15,23,42,0.42)" : "rgba(255,255,255,0.32)";
-    ctx.font = "600 13px Inter, sans-serif";
+    ctx.fillStyle = lightMode ? "#5A6980" : "#8C9BB3";
+    ctx.font = "600 13px 'Libre Franklin', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("Sin datos", cx, cy);
@@ -10101,11 +10167,11 @@ function paintPortfolioDonut(canvas) {
   const activeEntry = hoverIndex === null ? null : entries[hoverIndex];
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = lightMode ? "#172033" : "#e8edff";
-  ctx.font = "700 16px Inter, sans-serif";
+  ctx.fillStyle = lightMode ? "#0B1524" : "#E9EEF6";
+  ctx.font = "700 16px 'Libre Franklin', sans-serif";
   ctx.fillText(activeEntry ? activeEntry.label : `${positionsCount} ${positionsCount === 1 ? "activo" : "activos"}`, cx, cy - 10);
-  ctx.fillStyle = lightMode ? "rgba(23,32,51,0.58)" : "rgba(226,232,255,0.5)";
-  ctx.font = "500 11px Inter, sans-serif";
+  ctx.fillStyle = lightMode ? "#33415A" : "#B4C1D5";
+  ctx.font = "500 11px 'Libre Franklin', sans-serif";
   ctx.fillText(activeEntry ? `${(activeEntry.value / grandTotal * 100).toFixed(1)}% del total` : formatCurrency(grandTotal, currency), cx, cy + 12);
 }
 
@@ -10366,7 +10432,7 @@ function drawAllocationDonut(canvas, data, total, centerWord) {
     ctx.fillStyle = "rgba(255,255,255,0.05)";
     ctx.fill();
     ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.font = "bold 12px Inter, sans-serif";
+    ctx.font = "bold 12px 'Libre Franklin', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("Sin datos", cx, cy);
@@ -10386,7 +10452,7 @@ function drawAllocationDonut(canvas, data, total, centerWord) {
     startAngle += sweep + gap;
   });
   ctx.fillStyle = "#dce5ff";
-  ctx.font = "bold 11px Inter, sans-serif";
+  ctx.font = "bold 11px 'Libre Franklin', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(data.length + " " + (centerWord || "grupos"), cx, cy);
@@ -10499,7 +10565,7 @@ function drawHoldingsBarChart(canvas, positions, currency) {
   ctx.clearRect(0, 0, w, h);
 
   // Ancho dinámico del label: el ticker más largo + holgura
-  ctx.font = "bold 12px Inter, sans-serif";
+  ctx.font = "bold 12px 'Libre Franklin', sans-serif";
   const maxTickerW = withValue.reduce((m, it) => Math.max(m, ctx.measureText(it.ticker).width), 0);
   const padL = Math.max(72, Math.ceil(maxTickerW) + 16);
 
@@ -10520,13 +10586,13 @@ function drawHoldingsBarChart(canvas, positions, currency) {
     ctx.globalAlpha = 1;
 
     ctx.fillStyle = "rgba(220,229,255,0.88)";
-    ctx.font = "bold 12px Inter, sans-serif";
+    ctx.font = "bold 12px 'Libre Franklin', sans-serif";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     ctx.fillText(item.ticker, padL - 8, y + barH / 2);
 
     ctx.fillStyle = "rgba(220,229,255,0.62)";
-    ctx.font = "11px Inter, sans-serif";
+    ctx.font = "11px 'Libre Franklin', sans-serif";
     ctx.textAlign = "left";
     ctx.fillText((pct * 100).toFixed(1) + "%", padL + barW + 6, y + barH / 2);
   });
@@ -12042,18 +12108,23 @@ function calcMaxDrawdown(dailyReturns) {
   return maxDD * 100;
 }
 
+/* Los neutros replican los tokens `--v4-*` de main-v4-shell.css: el CSS no
+   entra a un <canvas>, así que rejilla, ejes y línea base tienen que repetir
+   aquí los mismos valores. Si allá cambian, aquí también. La serie de la
+   cartera y la del benchmark son DATO y conservan su identidad; sólo se
+   alinean al cobalto del sistema, que es la familia de serie (DESIGN.md §7). */
 function getPerfChartColors() {
-  const isLight = document.body.classList.contains("light-mode");
+  const isLight = document.documentElement.dataset.theme === "light";
   return {
-    grid:       isLight ? "rgba(0,0,0,0.07)"   : "rgba(255,255,255,0.07)",
-    baseline:   isLight ? "rgba(0,0,0,0.2)"    : "rgba(255,255,255,0.25)",
-    axisLabel:  isLight ? "rgba(0,0,0,0.4)"    : "rgba(255,255,255,0.38)",
-    portfolio:  "#6f86ff",
-    benchmark:  isLight ? "rgba(0,0,0,0.35)"   : "rgba(255,255,255,0.42)",
-    fillFrom:   isLight ? "rgba(111,134,255,0.15)" : "rgba(111,134,255,0.18)",
-    fillTo:     "rgba(111,134,255,0)",
-    crosshair:  isLight ? "rgba(0,0,0,0.18)"   : "rgba(255,255,255,0.2)",
-    dotBorder:  isLight ? "#fff"               : "#0d0d14",
+    grid:       isLight ? "#E4E9EF"            : "#1A2739",
+    baseline:   isLight ? "#B5C0CE"            : "#364964",
+    axisLabel:  isLight ? "#5A6980"            : "#8C9BB3",
+    portfolio:  isLight ? "#2A5CBE"            : "#6E97FF",
+    benchmark:  isLight ? "#5A6980"            : "#8C9BB3",
+    fillFrom:   isLight ? "rgba(42,92,190,0.14)" : "rgba(110,151,255,0.16)",
+    fillTo:     "rgba(110,151,255,0)",
+    crosshair:  isLight ? "#5A6980"            : "#8C9BB3",
+    dotBorder:  isLight ? "#FFFFFF"            : "#101B2B",
   };
 }
 
@@ -12092,14 +12163,14 @@ function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labe
   };
   const uid = `pc${(Date.now() % 1e7).toString(36)}`;
 
-  const isLight = document.body.classList.contains("light-mode");
-  const portColor = "#6f86ff";
-  const bmColor   = isLight ? "rgba(0,0,0,0.45)"  : "rgba(255,255,255,0.45)";
-  const gridClr   = isLight ? "rgba(0,0,0,0.07)"  : "rgba(255,255,255,0.07)";
-  const blClr     = isLight ? "rgba(0,0,0,0.18)"  : "rgba(255,255,255,0.22)";
-  const axClr     = isLight ? "rgba(0,0,0,0.4)"   : "rgba(255,255,255,0.38)";
-  const xhClr     = isLight ? "rgba(0,0,0,0.2)"   : "rgba(255,255,255,0.25)";
-  const dotBg     = isLight ? "#ffffff"            : "#0d0d14";
+  const isLight = document.documentElement.dataset.theme === "light";
+  const portColor = isLight ? "#2A5CBE" : "#6E97FF";
+  const bmColor   = isLight ? "#5A6980" : "#8C9BB3";
+  const gridClr   = isLight ? "#E4E9EF" : "#1A2739";
+  const blClr     = isLight ? "#B5C0CE" : "#364964";
+  const axClr     = isLight ? "#5A6980" : "#8C9BB3";
+  const xhClr     = isLight ? "#5A6980" : "#8C9BB3";
+  const dotBg     = isLight ? "#FFFFFF" : "#101B2B";
 
   // Path data
   const portPathD = portfolioCumulative.map((d, i) =>
@@ -12218,7 +12289,7 @@ function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labe
     const t = mkEl("text", {
       x: padL - 8, y: (toY(v) + padTop).toFixed(1),
       "text-anchor": "end", "dominant-baseline": "middle",
-      fill: axClr, "font-size": "10", "font-family": "Inter, sans-serif"
+      fill: axClr, "font-size": "10", "font-family": "'Libre Franklin', sans-serif"
     });
     t.textContent = (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
     svg.appendChild(t);
@@ -12230,7 +12301,7 @@ function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labe
     const t = mkEl("text", {
       x: (toX(i) + padL).toFixed(1), y: padTop + chartH + 16,
       "text-anchor": "middle",
-      fill: axClr, "font-size": "10", "font-family": "Inter, sans-serif"
+      fill: axClr, "font-size": "10", "font-family": "'Libre Franklin', sans-serif"
     });
     t.textContent = portfolioCumulative[i].date;
     svg.appendChild(t);
@@ -12248,7 +12319,7 @@ function drawPerfChart(canvasEl, portfolioCumulative, benchmarkCumulative, _labe
     const lt = mkEl("text", {
       x: lx.toFixed(1), y: ly,
       "dominant-baseline": "middle",
-      fill: axClr, "font-size": "11", "font-family": "Inter, sans-serif"
+      fill: axClr, "font-size": "11", "font-family": "'Libre Franklin', sans-serif"
     });
     lt.textContent = lbl;
     svg.appendChild(lt);
@@ -12400,7 +12471,7 @@ function paintInvestmentValueChart(canvas) {
   if (!state) return;
   const { width, height, dpr, points, currency, hoverIndex } = state;
   const ctx = canvas.getContext("2d");
-  const lightMode = document.body.classList.contains("light-mode");
+  const lightMode = document.documentElement.dataset.theme === "light";
   const pad = { left: 64, right: 20, top: 22, bottom: 38 };
   const chartWidth = width - pad.left - pad.right;
   const chartHeight = height - pad.top - pad.bottom;
@@ -12408,8 +12479,8 @@ function paintInvestmentValueChart(canvas) {
   ctx.clearRect(0, 0, width, height);
 
   if (!points.length) {
-    ctx.fillStyle = lightMode ? "rgba(23,32,51,0.5)" : "rgba(226,232,255,0.45)";
-    ctx.font = "500 13px Inter, sans-serif";
+    ctx.fillStyle = lightMode ? "#5A6980" : "#8C9BB3";
+    ctx.font = "500 13px 'Libre Franklin', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Sin datos históricos suficientes", width / 2, height / 2);
     return;
@@ -12430,9 +12501,9 @@ function paintInvestmentValueChart(canvas) {
   state.chartWidth = chartWidth;
   state.chartHeight = chartHeight;
 
-  const gridColor = lightMode ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.07)";
-  const axisColor = lightMode ? "rgba(23,32,51,0.48)" : "rgba(226,232,255,0.42)";
-  ctx.font = "500 10px Inter, sans-serif";
+  const gridColor = lightMode ? "#E4E9EF" : "#1A2739";
+  const axisColor = lightMode ? "#5A6980" : "#8C9BB3";
+  ctx.font = "500 10px 'Libre Franklin', sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   for (let step = 0; step <= 4; step++) {
@@ -12460,7 +12531,7 @@ function paintInvestmentValueChart(canvas) {
   });
 
   const marketGradient = ctx.createLinearGradient(0, pad.top, 0, height - pad.bottom);
-  marketGradient.addColorStop(0, lightMode ? "rgba(111,134,255,0.18)" : "rgba(111,134,255,0.24)");
+  marketGradient.addColorStop(0, lightMode ? "rgba(42,92,190,0.16)" : "rgba(110,151,255,0.20)");
   marketGradient.addColorStop(1, "rgba(111,134,255,0)");
   ctx.beginPath();
   points.forEach((point, index) => ctx[index ? "lineTo" : "moveTo"](toX(index), toY(point.market)));
@@ -12490,7 +12561,7 @@ function paintInvestmentValueChart(canvas) {
     ctx.beginPath();
     ctx.moveTo(x, pad.top);
     ctx.lineTo(x, height - pad.bottom);
-    ctx.strokeStyle = lightMode ? "rgba(15,23,42,0.22)" : "rgba(255,255,255,0.22)";
+    ctx.strokeStyle = lightMode ? "#B5C0CE" : "#364964";
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 4]);
     ctx.stroke();
@@ -12501,7 +12572,7 @@ function paintInvestmentValueChart(canvas) {
       ctx.fillStyle = color;
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = lightMode ? "#ffffff" : "#0d0f17";
+      ctx.strokeStyle = lightMode ? "#FFFFFF" : "#101B2B";
       ctx.stroke();
     });
   }
@@ -12867,15 +12938,15 @@ function paintPortfolioValueChart(canvas) {
   if (!state) return;
   const { width, height, dpr, points, currency, hoverIndex, compare } = state;
   const ctx = canvas.getContext("2d");
-  const lightMode = document.body.classList.contains("light-mode");
+  const lightMode = document.documentElement.dataset.theme === "light";
   const pad = { left: 64, right: 20, top: 20, bottom: 34 };
   const chartWidth = width - pad.left - pad.right;
   const chartHeight = height - pad.top - pad.bottom;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
   if (points.length < 2) {
-    ctx.fillStyle = lightMode ? "rgba(23,32,51,0.5)" : "rgba(226,232,255,0.45)";
-    ctx.font = "500 13px Inter, sans-serif";
+    ctx.fillStyle = lightMode ? "#5A6980" : "#8C9BB3";
+    ctx.font = "500 13px 'Libre Franklin', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("Sin datos históricos suficientes", width / 2, height / 2);
     return;
@@ -12897,10 +12968,10 @@ function paintPortfolioValueChart(canvas) {
 
   const up = values[values.length - 1] >= values[0];
   const lineColor = up ? "#32d6a2" : "#ff6b81";
-  const gridColor = lightMode ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.07)";
-  const axisColor = lightMode ? "rgba(23,32,51,0.48)" : "rgba(226,232,255,0.42)";
+  const gridColor = lightMode ? "#E4E9EF" : "#1A2739";
+  const axisColor = lightMode ? "#5A6980" : "#8C9BB3";
 
-  ctx.font = "500 10px Inter, sans-serif";
+  ctx.font = "500 10px 'Libre Franklin', sans-serif";
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (let v = minV; v <= maxV + axisStep * 1e-6; v += axisStep) {
     const y = toY(v);
@@ -12942,7 +13013,7 @@ function paintPortfolioValueChart(canvas) {
     ctx.lineWidth = 1.8; ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
     // Etiqueta de la serie de comparación
-    ctx.font = "600 11px Inter, sans-serif";
+    ctx.font = "600 11px 'Libre Franklin', sans-serif";
     ctx.textAlign = "left"; ctx.textBaseline = "top";
     ctx.fillStyle = compare.color || "#8aa0ff";
     ctx.fillText(compare.label || "", pad.left + 6, pad.top + 2);
@@ -12951,11 +13022,11 @@ function paintPortfolioValueChart(canvas) {
   if (hoverIndex !== null && points[hoverIndex]) {
     const x = toX(hoverIndex);
     ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, height - pad.bottom);
-    ctx.strokeStyle = lightMode ? "rgba(15,23,42,0.22)" : "rgba(255,255,255,0.22)";
+    ctx.strokeStyle = lightMode ? "#B5C0CE" : "#364964";
     ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(x, toY(points[hoverIndex].value), 4, 0, Math.PI * 2);
     ctx.fillStyle = lineColor; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = lightMode ? "#ffffff" : "#0d0f17"; ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = lightMode ? "#FFFFFF" : "#101B2B"; ctx.stroke();
   }
 }
 
@@ -13723,11 +13794,11 @@ function drawMonteCarloChart(canvas, sim, years, currency) {
       const y = toY(v);
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + chartW, y);
       ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = C.axisLabel; ctx.font = "10px Inter, sans-serif";
+      ctx.fillStyle = C.axisLabel; ctx.font = "10px 'Libre Franklin', sans-serif";
       ctx.textAlign = "right"; ctx.textBaseline = "middle";
       ctx.fillText(formatCurrencyCompact(v, currency), padL - 6, y);
     }
-    ctx.fillStyle = C.axisLabel; ctx.font = "10px Inter, sans-serif";
+    ctx.fillStyle = C.axisLabel; ctx.font = "10px 'Libre Franklin', sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     for (let yr = 0; yr <= years; yr++) {
       const t = yr * 12;
@@ -14448,7 +14519,7 @@ function applyLanguage(lang) {
   }
 
   // update theme button label without touching icon
-  const isDark = !document.body.classList.contains("light-mode");
+  const isDark = document.documentElement.dataset.theme !== "light";
   const themeLabel = document.querySelector("#themeToggleButton .theme-label");
   if (themeLabel) themeLabel.textContent = isDark ? t.theme_dark : t.theme_light;
 
@@ -16759,25 +16830,25 @@ function mkBtn(html, title, danger) {
 
           const textTop = by + bh * 0.44;
           const fs = Math.min(bw / (label.length + 1) * 1.4, bh * 0.22, 17);
-          ctx.font = `700 ${fs}px Inter,sans-serif`;
+          ctx.font = `700 ${fs}px 'Libre Franklin',sans-serif`;
           ctx.fillStyle = "rgba(255,255,255,0.95)";
           ctx.fillText(label, cx, textTop + fs * 0.5);
           const pctStr = pct != null ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—";
-          ctx.font = `${Math.max(8, fs * 0.72)}px Inter,sans-serif`;
+          ctx.font = `${Math.max(8, fs * 0.72)}px 'Libre Franklin',sans-serif`;
           ctx.fillStyle = "rgba(255,255,255,0.72)";
           ctx.fillText(pctStr, cx, textTop + fs * 1.9);
         } else if (bh >= 38 && bw >= 30) {
           const fs = Math.min(bw / (label.length + 1) * 1.4, bh * 0.28, 18);
-          ctx.font = `700 ${fs}px Inter,sans-serif`;
+          ctx.font = `700 ${fs}px 'Libre Franklin',sans-serif`;
           ctx.fillStyle = "rgba(255,255,255,0.95)";
           ctx.fillText(label, cx, cy - fs * 0.55);
           const pctStr = pct != null ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—";
-          ctx.font = `${Math.max(8, fs * 0.72)}px Inter,sans-serif`;
+          ctx.font = `${Math.max(8, fs * 0.72)}px 'Libre Franklin',sans-serif`;
           ctx.fillStyle = "rgba(255,255,255,0.72)";
           ctx.fillText(pctStr, cx, cy + fs * 0.65);
         } else if (bh >= 14 && bw >= 14) {
           const fs = Math.min(bw / (label.length + 1) * 1.3, bh * 0.46, 13);
-          ctx.font = `700 ${fs}px Inter,sans-serif`;
+          ctx.font = `700 ${fs}px 'Libre Franklin',sans-serif`;
           ctx.fillStyle = "rgba(255,255,255,0.9)";
           ctx.fillText(label, cx, cy);
         }
@@ -16789,7 +16860,7 @@ function mkBtn(html, title, danger) {
         ctx.fillStyle = "rgba(0,0,0,0.45)";
         ctx.fillRect(0, ch - 20, cw, 20);
         ctx.fillStyle = "rgba(255,255,255,0.5)";
-        ctx.font = "10px Inter,sans-serif";
+        ctx.font = "10px 'Libre Franklin',sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(`${zoom.toFixed(1)}×  •  Rueda: zoom  •  Arrastrar: mover  •  Doble clic: reset`, cw / 2, ch - 10);
