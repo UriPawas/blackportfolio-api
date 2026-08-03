@@ -1171,3 +1171,312 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   15. PESTAÑA «CORRELACIÓN» — matriz + contribución al riesgo
+
+   La pestaña llegó a V4 sólo con el cromo del contenedor: por dentro seguía
+   con el lenguaje anterior (radios de 5/6/8/10/12 px conviviendo, barras
+   pastilla con degradado, tres tarjetas de KPI con borde, y una rampa de
+   color azul↔rosa inventada que no existe en el sistema). Este bloque la
+   pasa entera al idioma de la app.
+
+   Tres decisiones:
+
+   a) UN SOLO EJE DE COLOR PARA LAS DOS TARJETAS. La correlación alta es el
+      caso adverso de esta pestaña (activos redundantes) → `--v4-neg`; la
+      correlación inversa es cobertura → `--v4-pos`. La contribución al riesgo
+      usa el mismo par: cobalto para lo normal, `--v4-neg` para el activo que
+      aporta más riesgo que peso, `--v4-pos` para el que lo reduce. Desaparece
+      el ámbar suelto (#FFB547) que no es token de nada.
+      El tinte de las celdas lo emite `_corrColor()` en main.js con
+      `color-mix` sobre esos mismos tokens: si se cambia la rampa hay que
+      cambiar también `.corr-scale-bar` aquí abajo, o la leyenda contradice a
+      la matriz.
+
+   b) EL REGISTRO, NO LAS TARJETAS (tesis #2 de este archivo). Las tres cifras
+      de `.rc-kpis` pasan al mismo registro de reglas de 1 px que ya usa
+      `.corr-metrics-grid` 400 px más arriba, en la misma pestaña. Eran dos
+      lenguajes distintos para la misma clase de dato.
+
+   c) LA PISTA ES UNA REGLA GRADUADA. `.rc-track` deja de ser una pastilla con
+      relleno degradado: canal hundido a ras, relleno plano y el peso marcado
+      con una púa de 1 px que sobresale por arriba y por abajo. Lo que hay que
+      comparar es dónde cae la púa respecto al final de la barra, y una púa
+      lee mejor que un tirador de slider.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ---------------------------------------------- 15.1 Matriz de correlación */
+
+#section-tracker .corr-matrix-wrap {
+  overflow: auto;
+  max-height: min(70vh, 34rem);
+  margin: .35rem 0 0;
+}
+#section-tracker table.corr-matrix {
+  border-collapse: separate;
+  /* 1 px de calle: el tinte forma un campo continuo y la separación es una
+     regla, no un hueco. Con los 3 px anteriores cada celda flotaba sola. */
+  border-spacing: 1px;
+  background: var(--v4-rule-soft);
+  font-size: var(--v4-t-mini);
+}
+#section-tracker table.corr-matrix th {
+  padding: .4rem .55rem;
+  background: var(--v4-surface);
+  font: 600 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+  z-index: 1;
+}
+#section-tracker table.corr-matrix thead th {
+  border-bottom: 1px solid var(--v4-rule);
+  padding-bottom: .5rem;
+}
+/* La esquina se congela en los dos ejes; antes sólo llevaba `top` y se
+   escapaba al scrollear en horizontal, dejando la fila de tickers huérfana. */
+#section-tracker table.corr-matrix thead th:first-child {
+  left: 0;
+  z-index: 3;
+  min-width: 4.5rem;
+}
+#section-tracker table.corr-matrix tbody th {
+  z-index: 2;
+  padding-right: .7rem;
+  border-right: 1px solid var(--v4-rule);
+  color: var(--v4-ink);
+  letter-spacing: .04em;
+}
+#section-tracker table.corr-matrix td {
+  min-width: 3.4rem;
+  padding: .5rem .55rem;
+  border-radius: 0;
+  font: 500 var(--v4-t-mini)/1.2 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  /* El tinte máximo es 40 % (CORR_TINT_CAP en main.js): a esa opacidad
+     `--v4-ink` cumple AA sobre los dos temas, así que el texto ya no necesita
+     invertirse a blanco en las celdas fuertes. */
+  color: var(--v4-ink);
+  transition: none;
+}
+#section-tracker table.corr-matrix td.corr-diag {
+  color: var(--v4-ink-3);
+  font-weight: 400;
+}
+/* |ρ| ≥ 0.7 se marca además con recuadro: la intensidad del tinte sola no es
+   distinguible sin percepción de color (WCAG «no sólo color»). */
+#section-tracker table.corr-matrix td.corr-strong {
+  box-shadow: inset 0 0 0 1px var(--v4-rule-strong);
+  font-weight: 700;
+}
+/* `scale()` sobre una celda de tabla desalineaba la rejilla entera al pasar
+   el ratón. Un contorno hacia dentro no mueve nada. */
+#section-tracker table.corr-matrix td:hover {
+  filter: none;
+  transform: none;
+  box-shadow: inset 0 0 0 1px var(--v4-cobalt-line);
+}
+
+/* Escala: mismos tokens y mismo tope que las celdas. */
+#section-tracker .corr-scale {
+  margin-top: 1.1rem;
+  gap: .7rem;
+  font: 500 var(--v4-t-label)/1.2 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .corr-scale-bar {
+  height: 10px;
+  border: 1px solid var(--v4-rule);
+  background-color: var(--v4-surface);
+  background-image: linear-gradient(90deg,
+    color-mix(in srgb, var(--v4-pos) 40%, transparent) 0%,
+    color-mix(in srgb, var(--v4-pos)  6%, transparent) 48%,
+    color-mix(in srgb, var(--v4-neg)  6%, transparent) 52%,
+    color-mix(in srgb, var(--v4-neg) 40%, transparent) 100%);
+}
+#section-tracker .corr-scale-ticks {
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink-3);
+  opacity: 1;
+}
+
+/* Pares más relacionados (sustituye la matriz en móvil). */
+#section-tracker .corr-pair-row {
+  padding: .5rem .1rem;
+  border-bottom: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .corr-pair-names {
+  font: 600 var(--v4-t-mini)/1.3 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .corr-pair-val {
+  font: 600 var(--v4-t-small)/1.2 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+}
+/* Sigue la misma dirección que la matriz: correlación positiva = redundancia. */
+#section-tracker .corr-pair-val.return-pos { color: var(--v4-neg); }
+#section-tracker .corr-pair-val.return-neg { color: var(--v4-pos); }
+#section-tracker .corr-pair-val small {
+  font: 500 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+  opacity: 1;
+}
+
+/* ------------------------------------------- 15.2 Contribución al riesgo */
+
+#section-tracker .risk-contrib-wrap {
+  /* El wrap no es un lienzo: heredaba el cromo de lámina de §8 y aquí se le
+     quita, porque su contenido ya trae sus propios bordes. */
+  gap: 1.1rem;
+  margin-top: 1rem;
+  background: none;
+  border: 0;
+}
+
+/* Registro de tres cifras — mismo idioma que `.corr-metrics-grid`. */
+#section-tracker .rc-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--v4-rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#section-tracker .rc-kpi {
+  gap: .15rem;
+  min-width: 0;
+  padding: .7rem .85rem;
+  background: none;
+  border: 0;
+  border-inline-start: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+}
+#section-tracker .rc-kpi:first-child { border-inline-start: 0; }
+#section-tracker .rc-kpi-label {
+  font: 600 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .rc-kpi strong {
+  font: 600 1.0625rem/1.2 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink);
+}
+#section-tracker .rc-kpi-sub {
+  font: 400 var(--v4-t-label)/1.4 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+#section-tracker .rc-kpi-good strong { color: var(--v4-pos); }
+
+/* Filas: reglas de 1 px, sin radio ni relleno de tarjeta. */
+#section-tracker .rc-list { border-top: 1px solid var(--v4-rule); }
+#section-tracker .rc-row {
+  grid-template-columns: 7.5rem minmax(0, 1fr) 8.25rem;
+  gap: 1rem;
+  padding: .5rem .3rem;
+  border-radius: 0;
+  border-bottom: 1px solid var(--v4-rule-soft);
+  transition: background .12s ease;
+}
+#section-tracker .rc-row:hover { background: var(--v4-cobalt-tint); }
+#section-tracker .rc-ticker {
+  font: 600 var(--v4-t-mini)/1.25 var(--v4-sans);
+  color: var(--v4-ink);
+}
+#section-tracker .rc-sigma {
+  font: 400 var(--v4-t-label)/1.3 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink-3);
+}
+#section-tracker .rc-badge {
+  padding: 0 .3rem;
+  border-radius: 2px;
+  font: 700 var(--v4-t-label)/1.5 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-neg);
+  background: color-mix(in srgb, var(--v4-neg) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--v4-neg) 35%, transparent);
+}
+
+/* La pista y la púa. */
+#section-tracker .rc-track {
+  height: 10px;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+  border-radius: 0;
+}
+#section-tracker .rc-fill {
+  border-radius: 0;
+  background: var(--v4-cobalt);
+}
+#section-tracker .rc-fill.hedge { background: var(--v4-pos); }
+#section-tracker .rc-alert .rc-fill { background: var(--v4-neg); }
+#section-tracker .rc-marker {
+  top: -4px;
+  bottom: -4px;
+  width: 1px;
+  border-radius: 0;
+  background: var(--v4-ink);
+  opacity: 1;
+}
+#section-tracker .rc-nums strong {
+  font: 600 var(--v4-t-small)/1.2 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink);
+}
+#section-tracker .rc-nums span {
+  font: 400 var(--v4-t-label)/1.3 var(--v4-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--v4-ink-3);
+}
+
+#section-tracker .rc-warn {
+  padding: .55rem .75rem;
+  border-radius: 2px;
+  font: 400 var(--v4-t-mini)/1.5 var(--v4-sans);
+  color: var(--v4-ink-2);
+  background: color-mix(in srgb, var(--v4-neg) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--v4-neg) 30%, transparent);
+}
+#section-tracker .rc-legend {
+  gap: 1.1rem;
+  font: 500 var(--v4-t-label)/1.3 var(--v4-sans);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+}
+#section-tracker .rc-legend i { border-radius: 0; }
+#section-tracker .rc-legend i.rc-i-fill { width: 14px; height: 8px; background: var(--v4-cobalt); }
+#section-tracker .rc-legend i.rc-i-warn { width: 14px; height: 8px; background: var(--v4-neg); }
+#section-tracker .rc-legend i.rc-i-marker { width: 1px; height: 12px; background: var(--v4-ink); opacity: 1; }
+#section-tracker .rc-note {
+  font: 400 var(--v4-t-label)/1.5 var(--v4-sans);
+  color: var(--v4-ink-3);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------ 15.3 Móvil */
+
+@media (max-width: 48rem) {
+  #section-tracker .rc-kpis { grid-template-columns: 1fr 1fr; }
+  #section-tracker .rc-kpi:nth-child(odd) { border-inline-start: 0; }
+  #section-tracker .rc-kpi:nth-child(n + 3) { border-block-start: 1px solid var(--v4-rule-soft); }
+}
+@media (max-width: 40rem) {
+  #section-tracker .rc-row {
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: .5rem .75rem;
+  }
+  /* La cifra baja bajo la barra, alineada con ella y no con el ticker. */
+  #section-tracker .rc-nums {
+    grid-column: 2;
+    justify-content: space-between;
+    margin-top: 0;
+  }
+  #section-tracker .corr-scale { gap: .5rem; }
+}

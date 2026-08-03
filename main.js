@@ -9503,16 +9503,23 @@ function _pearson(a, b) {
   const den = Math.sqrt(da * db);
   return den > 0 ? num / den : 0;
 }
+/* El tinte de la celda se emite como `color-mix` sobre un token `--v4-*`, no como
+   un rgba() ya resuelto: el fondo es un estilo EN LÍNEA que nadie recalcula, así
+   que con rgba() la matriz se quedaba en colores de oscuro al pasar a claro (la
+   misma trampa documentada en el rediseño de Top-Down). Con color-mix el color
+   base lo aporta el token y la celda se repinta sola al cambiar de tema.
+   Tope de tinte 40 %: por encima, el texto `--v4-ink` deja de cumplir contraste
+   AA en alguno de los dos temas. */
+const CORR_TINT_CAP = 0.40;
 function _corrColor(c, isDiag) {
-  if (isDiag) return "rgba(120,146,255,0.09)";
+  if (isDiag) return "var(--v4-sunken)";
   const t = Math.max(-1, Math.min(1, c));
-  const neg = [88, 124, 240];
-  const mid = [134, 142, 158];
-  const pos = [232, 104, 126];
-  const mix = (a, b, f) => a.map((v, i) => Math.round(v + (b[i] - v) * f));
-  const rgb = t >= 0 ? mix(mid, pos, t) : mix(mid, neg, -t);
-  const alpha = 0.12 + 0.72 * Math.abs(t);
-  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+  // Correlación alta = activos redundantes (adverso para diversificar) → --v4-neg.
+  // Correlación inversa = cobertura mutua (favorable) → --v4-pos. Misma dirección
+  // de lectura que la escala de abajo; si cambia una, debe cambiar la otra.
+  const token = t >= 0 ? "--v4-neg" : "--v4-pos";
+  const pct = (6 + (CORR_TINT_CAP * 100 - 6) * Math.abs(t)).toFixed(1);
+  return `color-mix(in srgb, var(${token}) ${pct}%, transparent)`;
 }
 async function renderCorrelationTab(portfolio) {
   corrTabLoaded = true;
@@ -9580,12 +9587,13 @@ async function renderCorrelationTab(portfolio) {
     for (let j = 0; j < n; j++) {
       const c = M[i][j], diag = i === j, abs = Math.abs(c);
       const highPos = !diag && c >= 0.55, highNeg = !diag && c <= -0.55;
-      const cls = [diag ? "corr-diag" : "", highPos ? "corr-high-pos" : "", highNeg ? "corr-high-neg" : ""].filter(Boolean).join(" ");
-      const textColor = (highPos || highNeg) ? "#fff" : "var(--text)";
-      const strength = !diag ? (abs >= 0.7 ? " ▲" : abs >= 0.4 ? " ●" : "") : "";
-      const label = diag ? "—" : `${c.toFixed(2)}${strength}`;
+      // `corr-strong` marca la magnitud con un recuadro, no sólo con color: la
+      // intensidad del tinte sola no es distinguible para daltonismo.
+      const cls = [diag ? "corr-diag" : "", highPos ? "corr-high-pos" : "", highNeg ? "corr-high-neg" : "",
+        !diag && abs >= 0.7 ? "corr-strong" : ""].filter(Boolean).join(" ");
+      const label = diag ? "—" : c.toFixed(2);
       const tipText = diag ? `${valid[i]} (auto-correlación)` : `${valid[i]} vs ${valid[j]}: ${c.toFixed(2)} · ${abs>=0.7?"Alta":abs>=0.4?"Moderada":"Baja"} correlación ${c>=0?"positiva":"negativa"}`;
-      html += `<td class="${cls}" style="background:${_corrColor(c, diag)};color:${textColor}" title="${tipText}">${label}</td>`;
+      html += `<td class="${cls}" style="background:${_corrColor(c, diag)}" title="${tipText}">${label}</td>`;
     }
     html += "</tr>";
   }

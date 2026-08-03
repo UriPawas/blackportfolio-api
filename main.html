@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="main-v4-markets.css?v=3">
   <link rel="stylesheet" href="main-v4-markowitz.css?v=3">
   <link rel="stylesheet" href="main-v4-topdown.css?v=5">
-  <link rel="stylesheet" href="main-v4-tracker.css?v=5">
+  <link rel="stylesheet" href="main-v4-tracker.css?v=6">
   <script>
     /* Sesión 1 del cascarón V4: refleja el tema real (localStorage
        "blackportfolio-theme", el mismo que usa main.js) en data-theme antes
@@ -1211,7 +1211,7 @@
                   <h3>Contribución al riesgo</h3>
                   <div class="corr-matrix-info">
                     <button class="kpi-info-btn" aria-label="Información sobre la contribución al riesgo">?</button>
-                    <span class="kpi-tooltip">Qué porcentaje de la volatilidad total del portafolio aporta cada activo, considerando su peso y sus correlaciones. La barra muestra el riesgo aportado y la marca vertical el peso en capital: si la barra rebasa la marca, el activo aporta más riesgo del que "debería" por su tamaño.</span>
+                    <span class="kpi-tooltip corr-matrix-tooltip">Qué porcentaje de la volatilidad total del portafolio aporta cada activo, considerando su peso y sus correlaciones. La barra muestra el riesgo aportado y la marca vertical el peso en capital: si la barra rebasa la marca, el activo aporta más riesgo del que "debería" por su tamaño.</span>
                   </div>
                 </div>
                 <span>Peso vs riesgo real · retornos diarios 1 año</span>
@@ -3469,7 +3469,7 @@
   <script src="auth.js?v=11"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=40"></script>
+  <script src="main.js?v=41"></script>
   <script src="markowitz.js?v=5"></script>
   <script src="analyzer.js?v=3"></script>
   <script src="topdown.js?v=4"></script>
