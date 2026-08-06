@@ -10296,32 +10296,54 @@ function drawDonutChart(canvas, positions, totalInvested, currency, cashBalance)
   paintPortfolioDonut(canvas);
 }
 
+// Pie de la leyenda: HHI sobre las posiciones (sin efectivo, que no es una
+// apuesta concentrada) con la misma lectura que usa la landing.
+function _donutConcentrationNote(posVals) {
+  const invested = posVals.reduce((s, v) => s + v, 0);
+  const n = posVals.filter((v) => v > 0).length;
+  if (!n || invested <= 0) return "";
+  const hhi = posVals.reduce((s, v) => s + Math.pow(v / invested, 2), 0);
+  const level = hhi < 0.15 ? "baja" : hhi < 0.25 ? "moderada" : "alta";
+  return `<span class="donut-legend-note">Concentración ${level}: HHI ${hhi.toFixed(2)} sobre ${n} ${n === 1 ? "posición" : "posiciones"}.</span>`;
+}
+
 function renderDonutLegend(positions, totalInvested, currency, cashBalance) {
   const legend = document.getElementById("donutLegend");
   const cash = cashBalance || 0;
   if (!positions.length && cash <= 0) { legend.innerHTML = ""; return; }
   const posVals = positions.map((p) => _donutPosValue(p, currency));
   const grandTotal = posVals.reduce((s, v) => s + v, 0) + cash;
+  // La barra de cada fila se escala contra la mayor ponderación, no contra el
+  // 100%: con 12 posiciones ninguna pasaría del 20% y todas las barras
+  // quedarían como muñones indistinguibles.
+  const maxVal = Math.max(...posVals, cash, 0) || 1;
+  const bar = (value) => ((value / maxVal) * 100).toFixed(1);
+
   let rows = positions.map((pos, i) => {
     const posTotal = posVals[i];
     const weight = grandTotal > 0 ? (posTotal / grandTotal * 100).toFixed(1) : "0.0";
-    return `<button class="donut-legend-item" type="button" data-index="${i}">
+    return `<button class="donut-legend-item" type="button" data-index="${i}" style="--dot:${CHART_COLORS[i % CHART_COLORS.length]};--w:${bar(posTotal)}%">
       <span class="donut-legend-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>
       <span class="donut-legend-ticker">${pos.ticker}</span>
+      <span class="donut-legend-track"><span class="donut-legend-fill"></span></span>
       <span class="donut-legend-value">${formatCurrency(posTotal, currency)}</span>
       <span class="donut-legend-weight">${weight}%</span>
     </button>`;
   });
   if (cash > 0) {
     const cashWeight = grandTotal > 0 ? (cash / grandTotal * 100).toFixed(1) : "0.0";
-    rows.push(`<button class="donut-legend-item" type="button" data-index="${positions.length}">
+    rows.push(`<button class="donut-legend-item" type="button" data-index="${positions.length}" style="--dot:#4ade80;--w:${bar(cash)}%">
       <span class="donut-legend-dot" style="background:#4ade80"></span>
       <span class="donut-legend-ticker">Efectivo</span>
+      <span class="donut-legend-track"><span class="donut-legend-fill"></span></span>
       <span class="donut-legend-value">${formatCurrency(cash, currency)}</span>
       <span class="donut-legend-weight">${cashWeight}%</span>
     </button>`);
   }
-  legend.innerHTML = rows.join("");
+
+  const baseLabel = donutBase === "current" ? "valor de mercado" : "capital invertido";
+  const head = `<span class="donut-legend-label">Peso por posición · ${baseLabel}</span>`;
+  legend.innerHTML = head + rows.join("") + _donutConcentrationNote(posVals);
   const canvas = document.getElementById("portfolioDonutChart");
   legend.querySelectorAll(".donut-legend-item").forEach((item) => {
     const index = Number(item.dataset.index);

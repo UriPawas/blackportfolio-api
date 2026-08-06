@@ -745,17 +745,184 @@
   font-size: var(--v4-t-mini);
   color: var(--v4-ink-2);
 }
-#section-tracker .donut-legend-item { border-bottom: 1px solid var(--v4-rule-soft); }
 #section-tracker .donut-legend-ticker,
 #section-tracker .alloc-legend-label { color: var(--v4-ink); font-weight: 600; }
 #section-tracker .donut-legend-weight,
 #section-tracker .donut-legend-value,
 #section-tracker .alloc-legend-pct { color: var(--v4-ink-3); }
-#section-tracker .donut-legend-dot,
 #section-tracker .alloc-legend-dot,
 #section-tracker .mc-legend-swatch { border-radius: 1px; }
 #section-tracker .treemap-tile-ticker,
 #section-tracker .treemap-tile-chg { font-family: var(--v4-sans); }
+
+/* ------------------------------- 8b. Composición · «Peso por posición» ------
+
+   La leyenda del donut era una lista de cuatro celdas estiradas a todo el
+   ancho de la lámina (~1600 px en escritorio): el 60% de cada fila era aire y
+   la ponderación sólo se leía en el número. Pasa a ser el mismo bloque que la
+   landing publica en «Asignación por clase de activo»: rótulo, filas
+   separadas por regla de 1 px con barra proporcional, y un pie de
+   concentración. El donut se queda como resumen parte-todo y la barra por
+   fila responde la pregunta que sigue («¿y en qué, exactamente?»).
+
+   La barra se escala contra la mayor ponderación, no contra el 100% — el
+   cálculo vive en `renderDonutLegend` y llega como `--w` en el estilo en
+   línea, junto con `--dot` (el color de la rebanada, que es dato). */
+
+#section-tracker .donut-wrap {
+  align-items: start;
+  gap: 0;
+  margin-top: 1rem;
+}
+#section-tracker .donut-chart-stage { margin: 0; }
+
+#section-tracker #donutLegend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  align-content: start;
+  gap: 0 2.25rem;
+  padding-inline-start: 1.75rem;
+  border-inline-start: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .donut-legend-label,
+#section-tracker .donut-legend-note {
+  grid-column: 1 / -1;
+  font-family: var(--v4-sans);
+}
+#section-tracker .donut-legend-label {
+  font-size: var(--v4-t-label);
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--v4-ink-3);
+  padding-bottom: .55rem;
+}
+#section-tracker .donut-legend-note {
+  margin-top: .85rem;
+  padding-top: .6rem;
+  border-top: 1px solid var(--v4-rule);
+  font-size: var(--v4-t-mini);
+  font-style: italic;
+  color: var(--v4-ink-3);
+}
+
+#section-tracker .donut-legend-item {
+  /* La columna del importe va FIJA a propósito: con `auto`, cada fila es su
+     propio contenedor de rejilla y «$1,850.00» le robaba píxeles a la barra
+     que «$99.99» no le robaba — las barras dejaban de ser comparables entre
+     sí, que es justo lo único que tienen que hacer. */
+  grid-template-columns: 9px 5.5rem minmax(2.5rem, 1fr) 5.5rem 3.25rem;
+  gap: .55rem;
+  padding: .42rem .5rem;
+  border: 0;
+  border-top: 1px solid var(--v4-rule-soft);
+  border-radius: 2px;
+  font-family: var(--v4-sans);
+  font-size: var(--v4-t-mini);
+  color: var(--v4-ink-2);
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+#section-tracker .donut-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
+  /* El color lo pone main.js en línea — es dato, no cromo. */
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+#section-tracker .donut-legend-track {
+  height: 8px;
+  min-width: 0;
+  background: var(--v4-sunken);
+  border: 1px solid var(--v4-rule-soft);
+}
+#section-tracker .donut-legend-fill {
+  display: block;
+  height: 100%;
+  width: var(--w, 0%);
+  /* La rebanada del donut y su barra comparten color, pero la barra va
+     rebajada para que el bloque no se convierta en un arcoíris; el hover la
+     sube a saturación completa. */
+  background: color-mix(in srgb, var(--dot, currentColor) 70%, transparent);
+  transition: background 140ms ease, filter 140ms ease;
+}
+#section-tracker .donut-legend-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#section-tracker .donut-legend-weight {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--v4-ink-2);
+}
+
+/* Hover / foco / eco del donut: los tres estados son el mismo lenguaje, porque
+   `setPortfolioDonutHover` pone `.is-highlighted` al pasar por la rebanada. */
+#section-tracker .donut-legend-item:hover,
+#section-tracker .donut-legend-item:focus-visible,
+#section-tracker .donut-legend-item.is-highlighted {
+  background: var(--v4-cobalt-tint);
+  border-color: var(--v4-rule);
+  box-shadow: inset 2px 0 0 0 var(--dot, var(--v4-cobalt-line));
+  transform: none;
+  outline: none;
+}
+#section-tracker .donut-legend-item:hover .donut-legend-fill,
+#section-tracker .donut-legend-item:focus-visible .donut-legend-fill,
+#section-tracker .donut-legend-item.is-highlighted .donut-legend-fill {
+  background: var(--dot, var(--v4-cobalt-line));
+}
+#section-tracker .donut-legend-item:hover .donut-legend-dot,
+#section-tracker .donut-legend-item:focus-visible .donut-legend-dot,
+#section-tracker .donut-legend-item.is-highlighted .donut-legend-dot {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot, currentColor) 22%, transparent);
+}
+#section-tracker .donut-legend-item:hover .donut-legend-ticker,
+#section-tracker .donut-legend-item:focus-visible .donut-legend-ticker,
+#section-tracker .donut-legend-item.is-highlighted .donut-legend-ticker {
+  color: var(--v4-cobalt-ink);
+}
+#section-tracker .donut-legend-item:focus-visible {
+  outline: 2px solid var(--v4-cobalt-line);
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  #section-tracker .donut-legend-item,
+  #section-tracker .donut-legend-dot,
+  #section-tracker .donut-legend-fill { transition: none; }
+  #section-tracker .donut-legend-item:hover .donut-legend-dot,
+  #section-tracker .donut-legend-item.is-highlighted .donut-legend-dot { transform: none; }
+}
+
+/* Una sola columna de filas antes de que la barra se quede sin recorrido. */
+@media (max-width: 1180px) {
+  #section-tracker #donutLegend { grid-template-columns: 1fr; }
+}
+/* El donut deja de ser columna: la regla vertical pasa a ser horizontal. */
+@media (max-width: 860px) {
+  #section-tracker .donut-wrap { display: block; }
+  #section-tracker .donut-chart-stage { margin: 0 auto .25rem; }
+  #section-tracker #donutLegend {
+    padding-inline-start: 0;
+    padding-top: 1rem;
+    border-inline-start: 0;
+    border-top: 1px solid var(--v4-rule-soft);
+  }
+}
+@media (max-width: 560px) {
+  /* main.css oculta `.donut-legend-value` a ≤480 px; aquí la barra cede su
+     espacio antes, que es la celda que peor aguanta el ancho corto. */
+  #section-tracker .donut-legend-item { grid-template-columns: 9px 1fr auto 3.25rem; }
+  #section-tracker .donut-legend-track { display: none; }
+}
+@media (max-width: 480px) {
+  /* Ahí main.css ya escondió `.donut-legend-value`: sin esta regla quedaría
+     una quinta columna vacía de 3.25rem al final de cada fila. */
+  #section-tracker .donut-legend-item { grid-template-columns: 9px 1fr 3.25rem; }
+}
 
 /* ------------------------------------- 9. Métricas de pestaña (no KPI wall) */
 
