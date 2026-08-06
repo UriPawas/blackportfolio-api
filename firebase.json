@@ -28,6 +28,8 @@
       "*.bpbackup",
       "bump-version.js",
       "update_tickers.py",
+      "files.zip",
+      "skills-lock.json",
       "mobile/**",
       "app-home-v4.html",
       "app-tracker-v4.html",
