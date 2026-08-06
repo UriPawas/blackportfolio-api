@@ -15584,7 +15584,7 @@ function mkBtn(html, title, danger) {
         }
       } else {
         return `<div class="hw-wl-logo hw-wl-logo--img" style="border-color:${border}">` +
-          `<img src="https://assets.parqet.com/logos/symbol/${sym}?format=png" alt="" ` +
+          `<img src="${API_BASE_URL}/logo/${encodeURIComponent(sym)}" alt="" loading="lazy" ` +
           `onerror="this.parentElement.className='hw-wl-logo';this.parentElement.style.background='${bgEsc}';this.parentElement.style.borderColor='${border}';this.parentElement.style.padding='';this.parentElement.textContent='${esc}'">` +
           `</div>`;
       }
@@ -16751,7 +16751,7 @@ function mkBtn(html, title, danger) {
       const img = new Image();
       img.onload = () => { logoCache.set(sym, img); scheduleLogoRedraw(); };
       img.onerror = () => { logoCache.set(sym, 'error'); };
-      img.src = `https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}?format=png`;
+      img.src = `${API_BASE_URL}/logo/${encodeURIComponent(sym)}`;
     }
 
     function draw() {
