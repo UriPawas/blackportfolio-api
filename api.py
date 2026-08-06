@@ -99,12 +99,16 @@ _REPORT_IMG_META      = _TTLCache(maxsize=40,  ttl=86400) # 24 h — id/autor/co
 _REPORT_IMG_BYTES     = _TTLCache(maxsize=12,  ttl=3600)  # 1 h  — JPEG del reporte
 _BINANCE_PRICE_CACHE  = _TTLCache(maxsize=200, ttl=30)    # 30 s  — precios crypto
 _TICKER_LOGO_CACHE    = _TTLCache(maxsize=300, ttl=86400) # 24 h  — URL de logo
+# PNG del logo. Un logo pesa 3-15 KB, así que 150 caben en ~1.5 MB: barato
+# comparado con dejar que cada fila del Tracker salga a internet por su cuenta.
+_LOGO_BYTES_CACHE     = _TTLCache(maxsize=150, ttl=86400) # 24 h  — PNG de logo
 
 _ALL_CACHES = [
     _CHART_CACHE, _SEASONALITY_CACHE_V2, _CALENDAR_CACHE_V2, _TIIE_CACHE_V2,
     _SEARCH_CACHE, _INFO_CACHE, _FINANCIALS_CACHE, _HOLDINGS_CACHE,
     _DIVIDENDS_CACHE, _NEWS_CACHE, _BINANCE_PRICE_CACHE,
     _REPORT_IMG_META, _REPORT_IMG_BYTES, _TICKER_LOGO_CACHE,
+    _LOGO_BYTES_CACHE,
 ]
 
 def _make_malloc_trim():
@@ -1847,6 +1851,57 @@ def ticker_logo(request: Request, symbol: str):
     # Cachea también el vacío: evita repreguntar por tickers sin logo.
     _TICKER_LOGO_CACHE.set(sym, url or "")
     return {"url": url or None}
+
+
+_LOGO_UPSTREAM = "https://assets.parqet.com/logos/symbol/"
+_LOGO_HEADERS = {"Cache-Control": "public, max-age=604800, immutable"}
+
+
+@app.get("/api/logo/{symbol}")
+@limiter.limit("240/minute")
+def ticker_logo_image(request: Request, symbol: str):
+    """Bytes del logo de un ticker, servidos desde aquí.
+
+    Antes cada fila del Tracker pedía el PNG directamente al CDN del
+    proveedor, así que un tercero veía la cartera completa de quien abriera
+    la sección. Ahora el navegador sólo habla con esta API y el símbolo no
+    sale de nuestra infraestructura salvo en esta llamada de servidor.
+
+    El símbolo se valida contra una lista blanca de caracteres y se
+    concatena a un prefijo fijo: no se acepta una URL arbitraria (SSRF).
+    """
+    sym = (symbol or "").strip().upper()[:20]
+    if not sym or not all(c.isalnum() or c in ".-" for c in sym):
+        raise HTTPException(status_code=404, detail="Simbolo no valido")
+    base = sym.split(".")[0]  # el CDN indexa por raíz: FMTY14.MX → FMTY14
+    if not base:
+        raise HTTPException(status_code=404, detail="Simbolo no valido")
+
+    cached = _LOGO_BYTES_CACHE.get(base)
+    if cached is not None:
+        if not cached:
+            raise HTTPException(status_code=404, detail="Sin logo")
+        return Response(content=cached, media_type="image/png", headers=_LOGO_HEADERS)
+
+    try:
+        res = _HTTP_SESSION.get(
+            _LOGO_UPSTREAM + base,
+            params={"format": "png", "size": 64},
+            timeout=8,
+        )
+        ok = (res.status_code == 200 and res.content
+              and res.headers.get("content-type", "").startswith("image/")
+              and len(res.content) <= 300_000)
+        data = res.content if ok else b""
+    except Exception:
+        data = b""
+
+    # Cachea también el vacío: sin esto, una cartera con diez tickers sin
+    # logo sale a internet diez veces en cada render.
+    _LOGO_BYTES_CACHE.set(base, data)
+    if not data:
+        raise HTTPException(status_code=404, detail="Sin logo")
+    return Response(content=data, media_type="image/png", headers=_LOGO_HEADERS)
 
 
 RAPIDAPI_FINANCE_HOST = "real-time-finance-data.p.rapidapi.com"

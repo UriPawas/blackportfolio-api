@@ -811,7 +811,7 @@
      propio contenedor de rejilla y «$1,850.00» le robaba píxeles a la barra
      que «$99.99» no le robaba — las barras dejaban de ser comparables entre
      sí, que es justo lo único que tienen que hacer. */
-  grid-template-columns: 9px 5.5rem minmax(2.5rem, 1fr) 5.5rem 3.25rem;
+  grid-template-columns: 20px 5.5rem minmax(2.5rem, 1fr) 5.5rem 3.25rem;
   gap: .55rem;
   padding: .42rem .5rem;
   border: 0;
@@ -822,13 +822,19 @@
   color: var(--v4-ink-2);
   transition: background 140ms ease, box-shadow 140ms ease;
 }
-#section-tracker .donut-legend-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 1px;
-  /* El color lo pone main.js en línea — es dato, no cromo. */
+/* La marca reusa el componente de la tabla de Posiciones (`.pos-ticker-logo`):
+   logotipo real servido por nuestra API, iniciales sobre el color de la
+   rebanada cuando el proveedor no lo tiene. Los logos llegan con sus colores
+   de marca; `saturate(.9)` les quita el filo sin volverlos irreconocibles. */
+#section-tracker .donut-legend-item .pos-ticker-logo {
+  width: 20px;
+  height: 20px;
+  margin-right: 0;
+  border-radius: 3px;
+  font-size: 7.5px;
   transition: transform 140ms ease, box-shadow 140ms ease;
 }
+#section-tracker .donut-legend-item .pos-ticker-logo img { filter: saturate(.9); }
 #section-tracker .donut-legend-track {
   height: 8px;
   min-width: 0;
@@ -874,11 +880,11 @@
 #section-tracker .donut-legend-item.is-highlighted .donut-legend-fill {
   background: var(--dot, var(--v4-cobalt-line));
 }
-#section-tracker .donut-legend-item:hover .donut-legend-dot,
-#section-tracker .donut-legend-item:focus-visible .donut-legend-dot,
-#section-tracker .donut-legend-item.is-highlighted .donut-legend-dot {
-  transform: scale(1.25);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot, currentColor) 22%, transparent);
+#section-tracker .donut-legend-item:hover .pos-ticker-logo,
+#section-tracker .donut-legend-item:focus-visible .pos-ticker-logo,
+#section-tracker .donut-legend-item.is-highlighted .pos-ticker-logo {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot, currentColor) 26%, transparent);
 }
 #section-tracker .donut-legend-item:hover .donut-legend-ticker,
 #section-tracker .donut-legend-item:focus-visible .donut-legend-ticker,
@@ -891,10 +897,10 @@
 }
 @media (prefers-reduced-motion: reduce) {
   #section-tracker .donut-legend-item,
-  #section-tracker .donut-legend-dot,
+  #section-tracker .donut-legend-item .pos-ticker-logo,
   #section-tracker .donut-legend-fill { transition: none; }
-  #section-tracker .donut-legend-item:hover .donut-legend-dot,
-  #section-tracker .donut-legend-item.is-highlighted .donut-legend-dot { transform: none; }
+  #section-tracker .donut-legend-item:hover .pos-ticker-logo,
+  #section-tracker .donut-legend-item.is-highlighted .pos-ticker-logo { transform: none; }
 }
 
 /* Una sola columna de filas antes de que la barra se quede sin recorrido. */
@@ -915,13 +921,13 @@
 @media (max-width: 560px) {
   /* main.css oculta `.donut-legend-value` a ≤480 px; aquí la barra cede su
      espacio antes, que es la celda que peor aguanta el ancho corto. */
-  #section-tracker .donut-legend-item { grid-template-columns: 9px 1fr auto 3.25rem; }
+  #section-tracker .donut-legend-item { grid-template-columns: 20px 1fr auto 3.25rem; }
   #section-tracker .donut-legend-track { display: none; }
 }
 @media (max-width: 480px) {
   /* Ahí main.css ya escondió `.donut-legend-value`: sin esta regla quedaría
      una quinta columna vacía de 3.25rem al final de cada fila. */
-  #section-tracker .donut-legend-item { grid-template-columns: 9px 1fr 3.25rem; }
+  #section-tracker .donut-legend-item { grid-template-columns: 20px 1fr 3.25rem; }
 }
 
 /* ------------------------------------- 9. Métricas de pestaña (no KPI wall) */

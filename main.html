@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="main-v4-markets.css?v=3">
   <link rel="stylesheet" href="main-v4-markowitz.css?v=3">
   <link rel="stylesheet" href="main-v4-topdown.css?v=5">
-  <link rel="stylesheet" href="main-v4-tracker.css?v=9">
+  <link rel="stylesheet" href="main-v4-tracker.css?v=10">
   <script>
     /* Sesión 1 del cascarón V4: refleja el tema real (localStorage
        "blackportfolio-theme", el mismo que usa main.js) en data-theme antes
@@ -577,7 +577,6 @@
                   </div>
                   <div class="composition-toggle" id="compositionToggle" role="group" aria-label="Tipo de vista de composición">
                     <button type="button" class="comp-btn active" data-comp="donut">Ponderación</button>
-                    <button type="button" class="comp-btn" data-comp="bars">Top 10</button>
                     <button type="button" class="comp-btn" data-comp="heatmap">Mapa de calor</button>
                   </div>
                 </div>
@@ -590,13 +589,6 @@
                     <div id="portfolioDonutTooltip" class="donut-chart-tooltip hidden" role="status"></div>
                   </div>
                   <div id="donutLegend" class="donut-legend" aria-label="Detalle de ponderaciones"></div>
-                </div>
-              </div>
-
-              <div class="comp-panel hidden" data-comp-panel="bars">
-                <span id="holdingsBarSubtitle" class="comp-panel-sub">Por valor actual</span>
-                <div class="holdings-bar-wrap">
-                  <canvas id="holdingsBarChart"></canvas>
                 </div>
               </div>
 
@@ -3469,7 +3461,7 @@
   <script src="auth.js?v=11"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=43"></script>
+  <script src="main.js?v=44"></script>
   <script src="markowitz.js?v=5"></script>
   <script src="analyzer.js?v=3"></script>
   <script src="topdown.js?v=4"></script>

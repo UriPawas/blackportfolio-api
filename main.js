@@ -5526,11 +5526,19 @@ function getTrackerKey() {
   return `${TRACKER_KEY_PREFIX}-${uid}`;
 }
 const PRICE_CACHE_TTL = 60 * 60 * 1000;
+// Rueda apagada anclada en el cobalto de la marca. Saturación 24-48% (la
+// serie anterior llegaba a 100%: neón que peleaba con la lámina V4). Todos
+// los tonos pasan de 3.2:1 contra blanco y de 3.6:1 contra la lámina oscura,
+// así que una sola serie sirve a los dos temas — que es lo que hace falta,
+// porque el color va horneado en el estado de los lienzos y no se repinta al
+// cambiar de tema. El orden salta por la rueda (paso de 5 sobre 14) para que
+// dos posiciones contiguas nunca queden en tonos vecinos.
 const CHART_COLORS = [
-  "#6f86ff", "#39d0ff", "#32d6a2", "#f5b84c", "#ff6b81",
-  "#9f7aea", "#f687b3", "#48bb78", "#ed8936", "#4299e1",
-  "#667eea", "#fc8181", "#68d391", "#fbd38d", "#76e4f7"
+  "#4E72BC", "#A58A40", "#9873B5", "#4893A8", "#C27E51",
+  "#7C74BE", "#4C9486", "#C36B65", "#648FAF", "#56996F",
+  "#B86F8A", "#5B9581", "#6D9155", "#AF74A5"
 ];
+const CASH_COLOR = "#7E8CA3"; // el efectivo no es una apuesta: neutro a propósito
 // Semantic gain/loss colors read from CSS tokens (--gain/--loss) so canvas
 // charts stay consistent with the rest of the UI and any future theming.
 function _cssColor(name, fallback) {
@@ -8594,7 +8602,7 @@ function _doRenderDashboard(portfolio) {
   renderAllocationCharts(positions, totalInvested, currency, cashBalance);
 }
 
-// ── Panel de composición: ponderación / Top 10 / mapa de calor (Visual 1) ──────
+// ── Panel de composición: ponderación / mapa de calor (Visual 1) ──────────────
 let _compositionMode = "donut";
 let _compositionCtx = null;
 
@@ -8606,8 +8614,6 @@ function renderCompositionPanel(which) {
   if (_compositionMode === "donut") {
     drawDonutChart(document.getElementById("portfolioDonutChart"), positions, totalInvested, currency, cashBalance);
     renderDonutLegend(positions, totalInvested, currency, cashBalance);
-  } else if (_compositionMode === "bars") {
-    drawHoldingsBarChart(document.getElementById("holdingsBarChart"), positions, currency);
   } else if (_compositionMode === "heatmap") {
     renderHoldingsTreemap(positions, currency);
   }
@@ -8666,7 +8672,7 @@ function renderSummaryTable(positions, totalInvested, currency, cashBalance) {
 
   if (cash > 0) {
     rows.push(`<tr>
-      <td data-label="Activo"><span class="pos-ticker-dot" style="background:#4ade80"></span><strong>Cash</strong></td>
+      <td data-label="Activo"><span class="pos-ticker-dot" style="background:${CASH_COLOR}"></span><strong>Cash</strong></td>
       <td data-label="Precio">—</td>
       <td data-label="Cambio">—</td>
       <td data-label="Cambio %">—</td>
@@ -8677,11 +8683,14 @@ function renderSummaryTable(positions, totalInvested, currency, cashBalance) {
   tbody.innerHTML = rows.join("");
 }
 
+// El PNG lo sirve nuestro propio API (`/api/logo/…`). Antes se pedía directo
+// al CDN del proveedor y eso le revelaba la cartera entera a un tercero cada
+// vez que alguien abría el Tracker.
 function posTickerLogoHtml(ticker, fallbackColor) {
   const sym = (ticker || "").split(".")[0];
-  const initials = (ticker || "").slice(0, 2);
+  const initials = (ticker || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase();
   return `<span class="pos-ticker-logo" style="--pos-logo-bg:${fallbackColor}">` +
-    `<img src="https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}?format=png" alt="" ` +
+    `<img src="${API_BASE_URL}/logo/${encodeURIComponent(sym)}" alt="" loading="lazy" ` +
     `onerror="this.parentElement.classList.add('pos-ticker-logo--fallback');this.remove();this.parentElement.textContent='${initials}';">` +
     `</span>`;
 }
@@ -10255,6 +10264,30 @@ function ensurePortfolioDonutInteractions(canvas) {
   });
 }
 
+// Orden único de la composición: de mayor a menor ponderación. El donut y la
+// leyenda comen de aquí, así que `data-index` señala la misma rebanada en los
+// dos — de eso depende el resaltado cruzado. Ordenar aquí es también lo que
+// deja obsoleta la pestaña «Top 10»: la lista YA empieza por las mayores.
+function _compositionEntries(positions, currency, cashBalance) {
+  const cash = cashBalance || 0;
+  const entries = positions.map((position) => ({
+    label: position.ticker,
+    ticker: position.ticker,
+    value: _donutPosValue(position, currency),
+    isCash: false,
+  }));
+  if (cash > 0) entries.push({ label: "Efectivo", ticker: null, value: cash, isCash: true });
+  entries.sort((a, b) => b.value - a.value);
+  // El color se reparte por rango, no por el orden de captura: la mayor
+  // posición se lleva siempre el cobalto de la marca. El efectivo va aparte y
+  // no consume un tono de la serie.
+  let rank = 0;
+  entries.forEach((entry) => {
+    entry.color = entry.isCash ? CASH_COLOR : CHART_COLORS[rank++ % CHART_COLORS.length];
+  });
+  return entries;
+}
+
 function drawDonutChart(canvas, positions, totalInvested, currency, cashBalance) {
   if (!canvas) return;
   canvas.style.cursor = "default";
@@ -10270,14 +10303,7 @@ function drawDonutChart(canvas, positions, totalInvested, currency, cashBalance)
   const cy = size / 2;
   const outerR = cx - 12;
   const innerR = outerR * 0.61;
-  const cash = cashBalance || 0;
-  const posVals = positions.map((position) => _donutPosValue(position, currency));
-  const entries = positions.map((position, index) => ({
-    label: position.ticker,
-    value: posVals[index],
-    color: CHART_COLORS[index % CHART_COLORS.length]
-  }));
-  if (cash > 0) entries.push({ label: "Efectivo", value: cash, color: "#4ade80" });
+  const entries = _compositionEntries(positions, currency, cashBalance);
   const grandTotal = entries.reduce((sum, entry) => sum + entry.value, 0);
   const visibleEntries = entries.filter((entry) => entry.value > 0).length;
   const gap = visibleEntries > 1 ? 0.025 : 0;
@@ -10307,42 +10333,43 @@ function _donutConcentrationNote(posVals) {
   return `<span class="donut-legend-note">Concentración ${level}: HHI ${hhi.toFixed(2)} sobre ${n} ${n === 1 ? "posición" : "posiciones"}.</span>`;
 }
 
+// La marca de la fila: el logotipo real servido por nuestro API, y si el
+// proveedor no lo tiene, las iniciales sobre el color de la rebanada. El
+// efectivo no es una empresa: lleva glifo de divisa, no logotipo.
+function _compositionMarkHtml(entry) {
+  if (entry.isCash) {
+    return `<span class="pos-ticker-logo pos-ticker-logo--fallback" style="--pos-logo-bg:${CASH_COLOR}" aria-hidden="true">$</span>`;
+  }
+  return posTickerLogoHtml(entry.ticker, entry.color);
+}
+
 function renderDonutLegend(positions, totalInvested, currency, cashBalance) {
   const legend = document.getElementById("donutLegend");
   const cash = cashBalance || 0;
   if (!positions.length && cash <= 0) { legend.innerHTML = ""; return; }
-  const posVals = positions.map((p) => _donutPosValue(p, currency));
-  const grandTotal = posVals.reduce((s, v) => s + v, 0) + cash;
+  const entries = _compositionEntries(positions, currency, cashBalance);
+  const grandTotal = entries.reduce((s, e) => s + e.value, 0);
   // La barra de cada fila se escala contra la mayor ponderación, no contra el
   // 100%: con 12 posiciones ninguna pasaría del 20% y todas las barras
-  // quedarían como muñones indistinguibles.
-  const maxVal = Math.max(...posVals, cash, 0) || 1;
-  const bar = (value) => ((value / maxVal) * 100).toFixed(1);
+  // quedarían como muñones indistinguibles. Como la lista va ordenada, la
+  // primera fila es siempre la barra llena.
+  const maxVal = entries.length ? Math.max(...entries.map((e) => e.value)) : 0;
+  const bar = (value) => (maxVal > 0 ? (value / maxVal) * 100 : 0).toFixed(1);
 
-  let rows = positions.map((pos, i) => {
-    const posTotal = posVals[i];
-    const weight = grandTotal > 0 ? (posTotal / grandTotal * 100).toFixed(1) : "0.0";
-    return `<button class="donut-legend-item" type="button" data-index="${i}" style="--dot:${CHART_COLORS[i % CHART_COLORS.length]};--w:${bar(posTotal)}%">
-      <span class="donut-legend-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>
-      <span class="donut-legend-ticker">${pos.ticker}</span>
+  const rows = entries.map((entry, i) => {
+    const weight = grandTotal > 0 ? (entry.value / grandTotal * 100).toFixed(1) : "0.0";
+    return `<button class="donut-legend-item" type="button" data-index="${i}" style="--dot:${entry.color};--w:${bar(entry.value)}%">
+      ${_compositionMarkHtml(entry)}
+      <span class="donut-legend-ticker">${entry.label}</span>
       <span class="donut-legend-track"><span class="donut-legend-fill"></span></span>
-      <span class="donut-legend-value">${formatCurrency(posTotal, currency)}</span>
+      <span class="donut-legend-value">${formatCurrency(entry.value, currency)}</span>
       <span class="donut-legend-weight">${weight}%</span>
     </button>`;
   });
-  if (cash > 0) {
-    const cashWeight = grandTotal > 0 ? (cash / grandTotal * 100).toFixed(1) : "0.0";
-    rows.push(`<button class="donut-legend-item" type="button" data-index="${positions.length}" style="--dot:#4ade80;--w:${bar(cash)}%">
-      <span class="donut-legend-dot" style="background:#4ade80"></span>
-      <span class="donut-legend-ticker">Efectivo</span>
-      <span class="donut-legend-track"><span class="donut-legend-fill"></span></span>
-      <span class="donut-legend-value">${formatCurrency(cash, currency)}</span>
-      <span class="donut-legend-weight">${cashWeight}%</span>
-    </button>`);
-  }
 
   const baseLabel = donutBase === "current" ? "valor de mercado" : "capital invertido";
-  const head = `<span class="donut-legend-label">Peso por posición · ${baseLabel}</span>`;
+  const head = `<span class="donut-legend-label">Peso por posición · ${baseLabel} · de mayor a menor</span>`;
+  const posVals = entries.filter((e) => !e.isCash).map((e) => e.value);
   legend.innerHTML = head + rows.join("") + _donutConcentrationNote(posVals);
   const canvas = document.getElementById("portfolioDonutChart");
   legend.querySelectorAll(".donut-legend-item").forEach((item) => {
@@ -10400,17 +10427,16 @@ function getTickerAssetClass(ticker) {
 }
 
 const ASSET_CLASS_COLORS = {
-  "Acciones": "#6f86ff",
-  "ETF": "#39d0ff",
-  "Cripto": "#f5b84c",
-  "Bonos": "#32d6a2",
-  "Cash": "#4ade80",
+  "Acciones": "#4E72BC",
+  "ETF": "#4893A8",
+  "Cripto": "#C27E51",
+  "Bonos": "#56996F",
+  "Cash": CASH_COLOR,
 };
 
-const ALLOC_COLORS = [
-  "#6f86ff","#39d0ff","#32d6a2","#f5b84c","#ff6b81",
-  "#9f7aea","#f687b3","#48bb78","#ed8936","#4299e1","#667eea","#fc8181"
-];
+// La asignación por clase usaba su propia copia de la serie neón; comparte la
+// serie apagada para que las dos pestañas hablen el mismo idioma de color.
+const ALLOC_COLORS = CHART_COLORS;
 
 // Región -> códigos ISO 3166-1 numéricos de los países a iluminar en el mapa.
 const GEO_REGION_IDS = {
@@ -10444,7 +10470,7 @@ function buildAllocationData(positions, totalInvested, currency, labelFn, cashBa
   }
   return Object.entries(buckets)
     .sort((a, b) => b[1] - a[1])
-    .map(([label, value], i) => ({ label, value, color: label === "Cash" ? "#4ade80" : ALLOC_COLORS[i % ALLOC_COLORS.length] }));
+    .map(([label, value], i) => ({ label, value, color: label === "Cash" ? CASH_COLOR : ALLOC_COLORS[i % ALLOC_COLORS.length] }));
 }
 
 function drawAllocationDonut(canvas, data, total, centerWord) {
@@ -10558,78 +10584,6 @@ function renderAllocationCharts(positions, totalInvested, currency, cashBalance)
     drawAllocationDonut(assetCanvas, assetData, grandTotal, "clases");
     renderAllocationLegend(document.getElementById("assetClassDonutLegend"), assetData, grandTotal);
   }
-}
-
-function drawHoldingsBarChart(canvas, positions, currency) {
-  const container = canvas.parentElement;
-  const w = container.clientWidth || 560;
-  const barH = 30;
-  const barGap = 8;
-  const padR = 56;
-  const padTop = 12;
-  const padBot = 12;
-
-  const withValue = positions.map((pos, i) => {
-    const price = getCachedPrice(pos.ticker) ?? pos.avgPrice;
-    const posCur = getPosCurrency(pos, currency);
-    const rawValue = price * pos.quantity;
-    const value = convertAmount(rawValue, posCur, currency) ?? rawValue;
-    return { ticker: pos.ticker, value, colorIndex: i };
-  }).sort((a, b) => b.value - a.value).slice(0, 10);
-
-  const totalVal = withValue.reduce((s, p) => s + p.value, 0);
-  const n = withValue.length;
-
-  if (!n || totalVal <= 0) {
-    canvas.width = 0; canvas.height = 0;
-    document.getElementById("holdingsBarSubtitle").textContent = "Agrega posiciones para ver este grafico";
-    return;
-  }
-
-  document.getElementById("holdingsBarSubtitle").textContent = "Por valor actual (estimado)";
-  const h = padTop + n * (barH + barGap) - barGap + padBot;
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
-
-  const ctx = canvas.getContext("2d");
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, h);
-
-  // Ancho dinámico del label: el ticker más largo + holgura
-  ctx.font = "bold 12px 'Libre Franklin', sans-serif";
-  const maxTickerW = withValue.reduce((m, it) => Math.max(m, ctx.measureText(it.ticker).width), 0);
-  const padL = Math.max(72, Math.ceil(maxTickerW) + 16);
-
-  const barW = w - padL - padR;
-
-  withValue.forEach((item, i) => {
-    const y = padTop + i * (barH + barGap);
-    const pct = item.value / totalVal;
-    const fillW = Math.max(3, barW * pct);
-    const color = CHART_COLORS[item.colorIndex % CHART_COLORS.length];
-
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.fillRect(padL, y, barW, barH);
-
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.82;
-    ctx.fillRect(padL, y, fillW, barH);
-    ctx.globalAlpha = 1;
-
-    ctx.fillStyle = "rgba(220,229,255,0.88)";
-    ctx.font = "bold 12px 'Libre Franklin', sans-serif";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-    ctx.fillText(item.ticker, padL - 8, y + barH / 2);
-
-    ctx.fillStyle = "rgba(220,229,255,0.62)";
-    ctx.font = "11px 'Libre Franklin', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText((pct * 100).toFixed(1) + "%", padL + barW + 6, y + barH / 2);
-  });
 }
 
 // ── #1 Contribución al retorno (attribution) ───────────────────────────────────
@@ -11916,7 +11870,7 @@ function initializeTrackerModule() {
     drawSummaryChartForMode();
   });
 
-  // Toggle de composición (Ponderación / Top 10 / Mapa de calor) — Visual 1
+  // Toggle de composición (Ponderación / Mapa de calor) — Visual 1
   document.getElementById("compositionToggle")?.addEventListener("click", (e) => {
     const btn = e.target.closest(".comp-btn");
     if (!btn) return;
@@ -11927,7 +11881,6 @@ function initializeTrackerModule() {
     if (card) card.dataset.comp = which;
     const sub = document.getElementById("compositionSub");
     if (sub) sub.textContent = which === "donut" ? "Distribución por posición"
-      : which === "bars" ? "Top 10 por valor actual"
       : "Tamaño = peso · color = cambio de hoy";
     renderCompositionPanel(which);
   });
@@ -17517,7 +17470,7 @@ function mkBtn(html, title, danger) {
         const pct = grandTotal > 0 ? posTotal / grandTotal : 0;
         return { ticker: pos.ticker, pct, color: CHART_COLORS[i % CHART_COLORS.length] };
       });
-      if (cash > 0) segs.push({ ticker: "Cash", pct: grandTotal > 0 ? cash / grandTotal : 0, color: "#4ade80" });
+      if (cash > 0) segs.push({ ticker: "Cash", pct: grandTotal > 0 ? cash / grandTotal : 0, color: CASH_COLOR });
 
       const SMALL_THRESHOLD = 0.05; // < 5% → tooltip only, no label
 
