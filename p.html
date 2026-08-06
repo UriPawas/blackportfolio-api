@@ -71,6 +71,13 @@
       const content = document.getElementById("pubContent");
       const token = new URLSearchParams(location.search).get("t");
 
+      // El nombre del portafolio, el del dueño, la divisa y los tickers los
+      // escribe otro usuario: sin escapar, un enlace compartido ejecuta script
+      // en este mismo origen (donde vive la sesión de la app).
+      function esc(s) {
+        return String(s ?? "").replace(/[&<>"']/g, c =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
       function fmt(v, cur) {
         try { return new Intl.NumberFormat("es-MX", { style: "currency", currency: cur || "USD", maximumFractionDigits: 0 }).format(v); }
         catch { return (cur || "USD") + " " + Math.round(v).toLocaleString("es-MX"); }
@@ -117,7 +124,7 @@
         const allocHtml = rows.map(r => {
           const pct = total > 0 ? (r.value / total * 100) : 0;
           return `<div class="alloc-row">
-            <span class="alloc-ticker">${r.ticker}</span>
+            <span class="alloc-ticker">${esc(r.ticker)}</span>
             <span class="alloc-bar-track"><span class="alloc-bar-fill" style="width:${pct.toFixed(1)}%"></span></span>
             <span class="alloc-pct">${pct.toFixed(1)}%</span>
           </div>`;
@@ -125,12 +132,12 @@
 
         content.innerHTML = `
           <div class="pub-card">
-            <h1 class="pub-title">${data.name || "Portafolio"}</h1>
-            <p class="pub-owner">Compartido por ${data.ownerName || "un inversor"}</p>
+            <h1 class="pub-title">${esc(data.name || "Portafolio")}</h1>
+            <p class="pub-owner">Compartido por ${esc(data.ownerName || "un inversor")}</p>
             <div class="pub-kpis">
-              <div class="pub-kpi"><span>Valor estimado</span><strong>${fmt(total, cur)}</strong></div>
+              <div class="pub-kpi"><span>Valor estimado</span><strong>${esc(fmt(total, cur))}</strong></div>
               <div class="pub-kpi"><span>Posiciones</span><strong>${positions.length}</strong></div>
-              <div class="pub-kpi"><span>Moneda</span><strong>${cur}</strong></div>
+              <div class="pub-kpi"><span>Moneda</span><strong>${esc(cur)}</strong></div>
             </div>
             <p class="pub-section-title">Composición</p>
             ${allocHtml}

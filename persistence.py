@@ -1522,6 +1522,15 @@ def submit_feedback(
 # ── Vista pública de portafolio compartido (#12) ────────────────────────────
 public_router = APIRouter(prefix="/api/public", tags=["public"])
 
+# El nombre del portafolio, el del dueño y los tickers los escribe un usuario y
+# los lee cualquier visitante del enlace. Defensa en profundidad frente a XSS:
+# aunque p.html ya escapa al pintar, la API no publica marcado en bruto.
+_SAFE_TEXT = str.maketrans({"<": "", ">": "", '"': "", "'": ""})
+
+
+def _clean(value: Any, limit: int = 80) -> str:
+    return str(value or "").translate(_SAFE_TEXT)[:limit]
+
 
 @public_router.get("/portfolio/{token}")
 @limiter.limit("60/minute")
@@ -1544,15 +1553,15 @@ def public_portfolio(request: Request, token: str, session: Session = Depends(ge
         if qty <= 0:
             continue
         positions.append({
-            "ticker": pos.get("ticker"),
+            "ticker": _clean(pos.get("ticker"), 40),
             "quantity": qty,
             "avgPrice": avg,
-            "currency": pos.get("currency") or p.get("currency") or "USD",
+            "currency": _clean(pos.get("currency") or p.get("currency") or "USD", 10),
         })
     return {
-        "name": p.get("name") or "Portafolio",
-        "currency": p.get("currency", "USD"),
-        "ownerName": (owner.display_name if owner else None) or "Un inversor",
+        "name": _clean(p.get("name")) or "Portafolio",
+        "currency": _clean(p.get("currency", "USD"), 10),
+        "ownerName": _clean(owner.display_name if owner else None) or "Un inversor",
         "positions": positions,
         "sharedAt": share.created_at.isoformat() if share.created_at else None,
     }
