@@ -15467,13 +15467,17 @@ body.light-mode .value-custom-popover input[type="date"] { color: #172033; borde
   .chart-loading::after { animation: none; }
 }
 
-/* ── Tabla de posiciones en tablet (721–1000px) ────────────────────────────
-   Abajo de 720px la tabla ya se convierte en tarjetas; arriba de 1000px cabe
-   entera. En la franja intermedia quedaban 12 columnas (~1390px) dentro de
-   ~730px: dos pantallas de scroll lateral por fila. Se ocultan las tres menos
-   accionables — la minigráfica decorativa, la fecha (visible al desplegar los
-   lotes) y el costo total (derivable de precio promedio × cantidad). */
-@media (min-width: 721px) and (max-width: 1000px) {
+/* ── Tabla de posiciones entre 721px y 1439px ──────────────────────────────
+   Abajo de 720px la tabla ya se convierte en tarjetas. El tope era 1000px,
+   pero ahí sólo se miraba el ancho de la ventana y no el de la lámina: pasado
+   1100px reaparece la barra lateral de 290px y la lámina se ENCOGE (a 1280px
+   de ventana la lámina mide 801px, menos que a 1100px, donde mide 954px). Con
+   las 12 columnas el ancho mínimo de la tabla es 953px, así que la franja que
+   necesita recorte llega hasta ~1432px de ventana; se redondea a 1439px.
+   Se ocultan las tres columnas menos accionables — la minigráfica decorativa,
+   la fecha (visible al desplegar los lotes) y el costo total (derivable de
+   precio promedio × cantidad). */
+@media (min-width: 721px) and (max-width: 1439px) {
   .tracker-table--positions > thead > tr > th.th-sparkline,
   .tracker-table--positions > thead > tr > th:nth-child(3),
   .tracker-table--positions > thead > tr > th:nth-child(8),

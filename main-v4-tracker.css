@@ -440,11 +440,20 @@
   color: var(--v4-ink-2);
   font-size: var(--v4-t-mini);
 }
-/* Cabecera fija: con 13 columnas y decenas de filas, perder los rótulos al
-   desplazarse es perder la tabla. */
+/* La cabecera NO lleva `position: sticky; top: 0`. Ninguna lámina
+   `.tracker-table-shell` tiene `max-height`, así que nunca hay scroll vertical
+   propio y la cabecera pegajosa jamás se activaba: era inerte. Y no salía
+   gratis — una cabecera sticky dentro de un contenedor con `overflow: auto`
+   infla el `scrollWidth` de la lámina (medido: 1465 px contra una tabla de
+   1261 px), lo que hacía aparecer una barra de desplazamiento horizontal
+   fantasma con ~200 px de vacío a la derecha. Si algún día la lámina gana
+   `max-height`, hay que reintroducir el sticky Y volver a medir.
+   El `static` es explícito porque la hoja base lo pone pegajoso
+   (main.css:12130) y quitarlo de aquí no bastaba. La columna de ticker
+   congelada NO se ve afectada: su regla (`.th-ticker-sticky`, más abajo)
+   tiene más especificidad y sólo usa `left`, que no infla nada. */
 #section-tracker .tracker-table thead th {
-  position: sticky;
-  top: 0;
+  position: static;
   z-index: 3;
   background: var(--v4-sunken);
   border-bottom: 1px solid var(--v4-rule);
@@ -478,6 +487,35 @@
 }
 #section-tracker .tracker-table--positions.is-compact > tbody > tr:not(.pos-lots-row) > td {
   padding-block: .15rem;
+}
+
+/* Rótulos de dos palabras ("Precio actual", "Cambio hoy", "Valor actual") que
+   pueden partirse en dos líneas. Son ellos, no las cifras, los que fijaban el
+   ancho de la columna: con `nowrap` la tabla medía 1261 px contra 1142 px de
+   lámina y se desbordaba. Partiéndolos, la tabla cabe. No es un ancho fijo:
+   si sobra espacio el motor de tablas ensancha las columnas y los rótulos
+   vuelven a una línea solos. */
+#section-tracker .tracker-table--positions > thead > tr > th {
+  white-space: normal;
+}
+
+/* Y el aire lateral baja de .7rem a .4rem SÓLO en esta tabla. Es la única con
+   12 columnas; el resto del tracker conserva el relleno normal. Medido con las
+   12 visibles: ancho mínimo 1058 px con .7rem, 953 px con .4rem, contra una
+   lámina de 960 px. Con el gráfico de 30 días oculto (el ajuste por defecto)
+   sobran ~190 px. */
+#section-tracker .tracker-table--positions > thead > tr > th,
+#section-tracker .tracker-table--positions > tbody > tr:not(.pos-lots-row) > td {
+  padding-inline: .4rem;
+}
+
+/* Fuera el suelo de 900 px que main.css:4885 puso "para la columna del
+   sparkline": con esa columna oculta (el ajuste por defecto) el suelo era
+   ficticio y obligaba a desplazarse aunque la tabla cupiera en 800 px. Una
+   tabla nunca baja de su ancho mínimo de contenido, así que ese suelo sólo
+   sobraba por encima. */
+#section-tracker .tracker-table--positions {
+  min-width: 0;
 }
 
 /* Columna de ticker congelada. Necesita fondo propio: si es transparente, el
