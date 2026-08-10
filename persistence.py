@@ -1048,6 +1048,11 @@ def twofa_migrate(
 class PortfolioWrite(BaseModel):
     portfolios: list[dict[str, Any]]
     source: str = "app"
+    # Version del snapshot que el cliente leyo en su bootstrap. Si el servidor ya
+    # avanzo (otra pestana/dispositivo guardo despues), la escritura se rechaza con
+    # 409 en vez de sobreescribir lo nuevo con una copia vieja. Las migraciones la
+    # omiten a proposito (sobreescriben de forma deliberada).
+    baseVersion: int | None = None
 
 
 router = APIRouter(prefix="/api/account", tags=["account"])
@@ -1093,6 +1098,30 @@ def replace_portfolios(
     user = upsert_user(session, token)
     checksum = portfolio_checksum(payload.portfolios)
     snapshot = session.get(PortfolioSnapshot, uid)
+
+    # Control de concurrencia: sin esto, la ultima escritura gana a ciegas y una
+    # pestana con datos viejos borra posiciones que el usuario nunca elimino.
+    # Si el checksum coincide la escritura es un no-op, asi que no hay conflicto.
+    if (
+        snapshot is not None
+        and payload.baseVersion is not None
+        and snapshot.checksum != checksum
+        and snapshot.version != payload.baseVersion
+    ):
+        raise HTTPException(status_code=409, detail="portfolio_version_conflict")
+
+    # Fail-closed: un cliente que no manda version no puede demostrar que su copia
+    # esta al dia, y escribir a ciegas es justo lo que borro posiciones. Se permite
+    # sin version solo cuando no hay nada que pisar (primer guardado), cuando la
+    # migracion sobreescribe a proposito, o cuando el guardado no cambia nada.
+    if (
+        snapshot is not None
+        and payload.baseVersion is None
+        and snapshot.checksum != checksum
+        and not payload.source.startswith("migration")
+    ):
+        raise HTTPException(status_code=409, detail="portfolio_version_required")
+
     limits = PLAN_LIMITS[normalize_plan(user.plan)]
     existing_portfolios = snapshot.data if snapshot and isinstance(snapshot.data, list) else []
     existing_count = len(existing_portfolios)

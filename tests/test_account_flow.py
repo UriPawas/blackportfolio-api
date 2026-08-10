@@ -83,6 +83,82 @@ def test_limite_de_posiciones_explorer(client):
     assert "posiciones" in r.json()["detail"].lower()
 
 
+def test_escritura_con_version_vieja_no_borra_posiciones(client):
+    """Regresión: una pestaña con datos viejos NO debe sobreescribir lo nuevo.
+
+    Reproduce la pérdida real: la pestaña A carga el portafolio, la pestaña B
+    agrega posiciones, y luego A guarda su copia vieja. Antes ganaba A y las
+    posiciones nuevas desaparecían sin que nadie las borrara.
+    """
+    client.get("/api/account/bootstrap")
+    # Pestaña A guarda el estado inicial y se queda con esa versión.
+    r = client.put("/api/account/portfolios",
+                   json={"portfolios": [{"id": "p1", "positions": [{"symbol": "SAN"}]}]})
+    version_vieja = r.json()["version"]
+
+    # Pestaña B (ya al día) compra VISA y MSFT y liquida SAN.
+    nuevas = [{"symbol": "V"}, {"symbol": "MSFT"}]
+    r = client.put("/api/account/portfolios",
+                   json={"portfolios": [{"id": "p1", "positions": nuevas}],
+                         "baseVersion": version_vieja})
+    assert r.status_code == 200, r.text
+
+    # Pestaña A guarda su copia vieja: debe rechazarse.
+    r = client.put("/api/account/portfolios",
+                   json={"portfolios": [{"id": "p1", "positions": [{"symbol": "SAN"}]}],
+                         "baseVersion": version_vieja})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "portfolio_version_conflict"
+
+    # Y lo nuevo sigue intacto en el servidor.
+    b = client.get("/api/account/bootstrap").json()
+    assert [p["symbol"] for p in b["portfolios"][0]["positions"]] == ["V", "MSFT"]
+
+
+def test_reescribir_lo_mismo_no_es_conflicto(client):
+    """Un PUT idempotente (mismo checksum) no debe fallar aunque la versión difiera."""
+    client.get("/api/account/bootstrap")
+    payload = {"portfolios": [{"id": "p1", "positions": [{"symbol": "V"}]}]}
+    client.put("/api/account/portfolios", json=payload)
+    r = client.put("/api/account/portfolios", json={**payload, "baseVersion": 999})
+    assert r.status_code == 200, r.text
+    assert r.json()["unchanged"] is True
+
+
+def test_cliente_sin_version_no_puede_sobreescribir(client):
+    """Blindaje de transicion: un cliente viejo (sin baseVersion) no puede pisar datos.
+
+    El cliente anterior al arreglo no manda version, asi que el servidor no puede
+    saber si su copia esta al dia: se rechaza en vez de escribir a ciegas.
+    """
+    client.get("/api/account/bootstrap")
+    # Primer guardado: no hay nada que pisar, se permite sin version.
+    r = client.put("/api/account/portfolios",
+                   json={"portfolios": [{"id": "p1", "positions": [{"symbol": "V"}]}]})
+    assert r.status_code == 200, r.text
+
+    # Segundo guardado con datos distintos y sin version: rechazado.
+    r = client.put("/api/account/portfolios",
+                   json={"portfolios": [{"id": "p1", "positions": [{"symbol": "SAN"}]}]})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "portfolio_version_required"
+
+    # Y no toco nada.
+    b = client.get("/api/account/bootstrap").json()
+    assert [p["symbol"] for p in b["portfolios"][0]["positions"]] == ["V"]
+
+
+def test_migracion_sin_baseversion_sigue_sobreescribiendo(client):
+    """Las migraciones omiten baseVersion a propósito: no deben romperse."""
+    client.get("/api/account/bootstrap")
+    client.put("/api/account/portfolios",
+               json={"portfolios": [{"id": "p1", "positions": [{"symbol": "SAN"}]}]})
+    r = client.put("/api/account/portfolios",
+                   json={"portfolios": [{"id": "p1", "positions": [{"symbol": "V"}]}],
+                         "source": "migration_local_override"})
+    assert r.status_code == 200, r.text
+
+
 def test_email_no_verificado_no_puede_escribir(client, auth):
     auth.token["email_verified"] = False
     client.get("/api/account/bootstrap")  # bootstrap no exige email verificado

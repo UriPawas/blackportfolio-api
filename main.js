@@ -5690,6 +5690,10 @@ let _portfolioLoaded = false;
 let _portfolioSyncAttempted = false;
 let _portfolioSaveInFlight = null;
 let _portfolioPendingSnapshot = null;
+// Versión del snapshot que ESTA pestaña leyó del servidor. Viaja en cada PUT como
+// baseVersion para que el backend rechace (409) una escritura basada en datos viejos.
+let _portfolioVersion = null;
+let _demoSaveNotified = false;
 
 function clonePortfolios(portfolios) {
   return JSON.parse(JSON.stringify(Array.isArray(portfolios) ? portfolios : []));
@@ -5811,7 +5815,18 @@ async function portfolioApiRequest(path, options = {}) {
       err.code = "email_verification_required";
       throw err;
     }
-    throw new Error(body.detail || `Error de persistencia (${response.status}).`);
+    // El snapshot del servidor avanzó respecto al que esta pestaña leyó, o esta
+    // pestaña no pudo demostrar qué versión tenía. En ambos casos hay que recargar
+    // del servidor en vez de insistir con una copia que quizá esté vieja.
+    if (response.status === 409 &&
+        (body.detail === "portfolio_version_conflict" || body.detail === "portfolio_version_required")) {
+      const err = new Error(body.detail);
+      err.code = "portfolio_version_conflict";
+      throw err;
+    }
+    const err = new Error(body.detail || `Error de persistencia (${response.status}).`);
+    err.status = response.status;
+    throw err;
   }
   return response.json();
 }
@@ -5834,10 +5849,16 @@ async function readLegacyPortfolioCandidate() {
 }
 
 async function writePortfoliosToPostgres(portfolios, source = "app") {
-  return portfolioApiRequest("/account/portfolios", {
+  const body = { portfolios, source };
+  // Las migraciones corren antes del primer bootstrap (_portfolioVersion === null)
+  // y sobreescriben a propósito: van sin guardia.
+  if (_portfolioVersion !== null) body.baseVersion = _portfolioVersion;
+  const result = await portfolioApiRequest("/account/portfolios", {
     method: "PUT",
-    body: JSON.stringify({ portfolios, source })
+    body: JSON.stringify(body)
   });
+  if (result && typeof result.version === "number") _portfolioVersion = result.version;
+  return result;
 }
 
 async function syncPortfoliosFromCloud() {
@@ -5871,6 +5892,7 @@ async function syncPortfoliosFromCloud() {
     }
 
     _portfolioMemory = clonePortfolios(verified);
+    _portfolioVersion = typeof bootstrap.portfolioVersion === "number" ? bootstrap.portfolioVersion : null;
     _portfolioLoaded = true;
     _portfolioSyncAttempted = true;
     localStorage.removeItem(getTrackerKey());
@@ -5878,6 +5900,7 @@ async function syncPortfoliosFromCloud() {
   } catch (error) {
     const fallback = legacy.local.length ? legacy.local : legacy.firestore;
     _portfolioMemory = clonePortfolios(fallback);
+    _portfolioVersion = null;
     _portfolioLoaded = false;
     _portfolioSyncAttempted = true;
     console.error("PostgreSQL portfolio sync failed; legacy data preserved.", error);
@@ -5890,8 +5913,45 @@ async function flushPortfolioSaveQueue() {
   const snapshot = _portfolioPendingSnapshot;
   _portfolioPendingSnapshot = null;
   _portfolioSaveInFlight = writePortfoliosToPostgres(snapshot)
-    .catch((error) => {
+    .catch(async (error) => {
+      // Conflicto de versión: otra pestaña/dispositivo guardó después de que ésta
+      // cargó. Descartamos NUESTRA copia vieja y recargamos la del servidor; nunca
+      // reintentamos, porque el reintento es justamente lo que borraba posiciones.
+      if (error && error.code === "portfolio_version_conflict") {
+        _portfolioPendingSnapshot = null;
+        _portfolioLoaded = false;
+        await syncPortfoliosFromCloud();
+        refreshTrackerAfterExternalChange();
+        showToast(
+          "Tu portafolio cambió en otra sesión. Recargamos los datos del servidor: vuelve a aplicar tu último cambio si no aparece.",
+          { type: "warn", duration: 10000 }
+        );
+        return;
+      }
       console.error("No se pudo guardar el portafolio en PostgreSQL.", error);
+      // Rechazo definitivo (demo de sólo lectura, límite de plan, email sin verificar):
+      // reintentar es inútil y el cambio NUNCA se va a guardar. Antes fallaba en
+      // silencio y el usuario veía en pantalla una posición que no existía en el
+      // servidor. Decimos el motivo y volvemos al estado real.
+      const permanent = error && error.status >= 400 && error.status < 500 && error.status !== 429;
+      if (permanent) {
+        _portfolioPendingSnapshot = null;
+        // La demo es un sandbox intencional: los cambios viven sólo en la sesión.
+        // Se avisa una vez y no se revierte para no romper la prueba del producto.
+        if (window.BlackPortfolioAuth?.getSession?.()?.isDemo) {
+          if (!_demoSaveNotified) {
+            _demoSaveNotified = true;
+            showToast("Cuenta demo: tus cambios no se guardan al recargar. Crea tu cuenta para conservarlos.", { type: "warn", duration: 10000 });
+          }
+          return;
+        }
+        showToast(error.message || "No se pudo guardar tu cambio.", { type: "error", duration: 10000 });
+        _portfolioLoaded = false;
+        await syncPortfoliosFromCloud();
+        refreshTrackerAfterExternalChange();
+        return;
+      }
+      showToast("No se pudo guardar tu cambio. Reintentando…", { type: "error" });
       setTimeout(() => {
         if (!_portfolioPendingSnapshot) _portfolioPendingSnapshot = clonePortfolios(_portfolioMemory);
         void flushPortfolioSaveQueue();
@@ -5904,9 +5964,25 @@ async function flushPortfolioSaveQueue() {
   await _portfolioSaveInFlight;
 }
 
+// Re-render tras recargar datos del servidor por un cambio externo (conflicto 409).
+function refreshTrackerAfterExternalChange() {
+  const listView = document.getElementById("trackerListView");
+  if (listView && !listView.classList.contains("hidden")) { renderPortfolioCards(); return; }
+  if (activePortfolioId && getPortfolios().some((p) => p.id === activePortfolioId)) renderPortfolioDashboard();
+  else if (listView) { showTrackerListView(); renderPortfolioCards(); }
+}
+
 function savePortfolios(portfolios) {
   // Blindaje P0.4: el portafolio sintético "Todos" jamás se persiste.
   const clean = (Array.isArray(portfolios) ? portfolios : []).filter((p) => p && p.id !== CONSOLIDATED_ID);
+  // Nunca persistir una copia que esta pestaña no pudo leer del servidor: si el
+  // bootstrap falló, el respaldo local puede venir vacío y esta escritura borraría
+  // TODO el portafolio en PostgreSQL.
+  if (!_portfolioLoaded) {
+    console.error("savePortfolios ignorado: el portafolio no se cargó del servidor.");
+    showToast("No se pudo guardar: aún no cargamos tu portafolio del servidor. Recarga la página.", { type: "error", duration: 9000 });
+    return;
+  }
   _portfolioMemory = clonePortfolios(clean);
   _portfolioPendingSnapshot = clonePortfolios(clean);
   void flushPortfolioSaveQueue();
