@@ -158,8 +158,10 @@ class TotpCredential(Base):
     __tablename__ = "totp_credentials"
 
     firebase_uid: Mapped[str] = mapped_column(String(128), primary_key=True)
-    secret: Mapped[str | None] = mapped_column(String(64))
-    pending_secret: Mapped[str | None] = mapped_column(String(64))
+    # Cifrados en reposo (Fernet). 255 y no 64: el texto cifrado de un secreto
+    # base32 de 32 caracteres ocupa ~140. Ver _totp_encrypt/_totp_decrypt.
+    secret: Mapped[str | None] = mapped_column(String(255))
+    pending_secret: Mapped[str | None] = mapped_column(String(255))
     enabled: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -338,7 +340,25 @@ def get_engine():
 
 
 def create_tables() -> None:
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    _widen_totp_secret_columns(engine)
+
+
+def _widen_totp_secret_columns(engine) -> None:
+    """create_all no altera columnas existentes, y el secreto TOTP cifrado ya no
+    cabe en los VARCHAR(64) originales. Idempotente; SQLite no aplica longitud."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            for column in ("secret", "pending_secret"):
+                conn.execute(text(
+                    f"ALTER TABLE totp_credentials ALTER COLUMN {column} TYPE VARCHAR(255)"
+                ))
+    except Exception as exc:
+        print(f"[2fa] no se pudo ampliar totp_credentials: {exc}", flush=True)
 
 
 def get_session():
@@ -521,6 +541,100 @@ def _b32_decode(secret: str) -> bytes | None:
 
 def _generate_totp_secret() -> str:
     return base64.b32encode(os.urandom(20)).decode("ascii").rstrip("=")
+
+
+# ── Cifrado del secreto TOTP en reposo ───────────────────────────────────────
+# El secreto TOTP es equivalente al segundo factor: quien lo lee genera códigos
+# válidos para siempre. Guardarlo en claro significa que cualquier lectura de la
+# base (o de un respaldo, que incluye esta tabla) clona el 2FA de todos.
+#
+# Clave DEDICADA, distinta de BACKUP_ENCRYPTION_KEY y de TWOFA_SECRET: filtrar
+# una no debe entregar las otras. Sin ella el servicio arranca igual y las filas
+# heredadas en claro siguen funcionando, pero no se cifra nada nuevo: se avisa
+# fuerte en el log en vez de romper el 2FA de quien ya lo tiene activo.
+_TOTP_FERNET: Any = None
+_TOTP_FERNET_READY = False
+
+
+def _totp_cipher():
+    global _TOTP_FERNET, _TOTP_FERNET_READY
+    if not _TOTP_FERNET_READY:
+        _TOTP_FERNET_READY = True
+        raw = os.environ.get("TOTP_ENCRYPTION_KEY", "").strip()
+        if raw:
+            try:
+                from cryptography.fernet import Fernet
+                _TOTP_FERNET = Fernet(raw.encode("ascii"))
+            except Exception as exc:
+                print(f"[2fa] TOTP_ENCRYPTION_KEY inválida ({exc}): los secretos "
+                      "NO se cifrarán en reposo.", flush=True)
+        else:
+            print("[2fa] TOTP_ENCRYPTION_KEY no configurada: los secretos TOTP "
+                  "NO se cifrarán en reposo.", flush=True)
+    return _TOTP_FERNET
+
+
+def _totp_encrypt(secret: str | None) -> str | None:
+    """Texto cifrado listo para guardar. Sin clave devuelve el valor tal cual."""
+    if not secret:
+        return None
+    cipher = _totp_cipher()
+    if cipher is None:
+        return secret
+    return cipher.encrypt(secret.encode("ascii")).decode("ascii")
+
+
+def _totp_decrypt(stored: str | None) -> str | None:
+    """Secreto en claro a partir de lo guardado.
+
+    Tolera las filas heredadas sin cifrar para no dejar fuera a quien ya tenía
+    2FA activo antes de esta migración: si no descifra, se asume que el valor ya
+    era el secreto en claro. Un texto cifrado con otra clave cae en esa rama y
+    falla después en _b32_decode, así que no abre ningún atajo de verificación.
+    """
+    if not stored:
+        return None
+    cipher = _totp_cipher()
+    if cipher is not None:
+        try:
+            return cipher.decrypt(stored.encode("ascii")).decode("ascii")
+        except Exception:
+            pass
+    return stored
+
+
+def _encrypt_legacy_totp_secrets() -> None:
+    """Cifra de una vez las filas que quedaron en claro. Idempotente."""
+    if _totp_cipher() is None:
+        return
+    scope = get_session()
+    session = next(scope)
+    try:
+        migrated = 0
+        for cred in session.execute(select(TotpCredential)).scalars().all():
+            changed = False
+            for field in ("secret", "pending_secret"):
+                value = getattr(cred, field)
+                if not value:
+                    continue
+                # Ya cifrado si descifra limpio; si no, es una fila heredada.
+                try:
+                    _TOTP_FERNET.decrypt(value.encode("ascii"))
+                    continue
+                except Exception:
+                    pass
+                setattr(cred, field, _totp_encrypt(value))
+                changed = True
+            if changed:
+                migrated += 1
+        if migrated:
+            session.commit()
+            print(f"[2fa] {migrated} credencial(es) TOTP cifradas en reposo.", flush=True)
+    except Exception as exc:
+        session.rollback()
+        print(f"[2fa] no se pudieron cifrar los secretos heredados: {exc}", flush=True)
+    finally:
+        session.close()
 
 
 def _hotp(secret: str, counter: int) -> str | None:
@@ -874,12 +988,12 @@ def twofa_setup(
     cred = session.get(TotpCredential, uid)
     if cred is None:
         cred = TotpCredential(
-            firebase_uid=uid, secret=None, pending_secret=secret,
+            firebase_uid=uid, secret=None, pending_secret=_totp_encrypt(secret),
             enabled=False, created_at=now, updated_at=now,
         )
         session.add(cred)
     else:
-        cred.pending_secret = secret
+        cred.pending_secret = _totp_encrypt(secret)
         cred.updated_at = now
     session.commit()
     label = token.get("email") or uid
@@ -904,7 +1018,7 @@ def twofa_verify_setup(
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.pending_secret:
         raise HTTPException(status_code=400, detail="Sin proceso de activación pendiente. Reinícialo.")
-    if not _verify_totp(cred.pending_secret, body.code):
+    if not _verify_totp(_totp_decrypt(cred.pending_secret), body.code):
         _totp_fail(uid)
         raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
     _totp_ok(uid)
@@ -934,7 +1048,7 @@ def twofa_verify(
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="2FA no está activo en esta cuenta.")
-    if _verify_totp(cred.secret, body.code):
+    if _verify_totp(_totp_decrypt(cred.secret), body.code):
         _totp_ok(uid)
         return {"valid": True, "token": issue_2fa_token(uid)}
     # Plan B: código de respaldo de un solo uso (recuperación sin autenticador).
@@ -967,7 +1081,7 @@ def twofa_disable(
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="No hay 2FA activo.")
-    if not (_verify_totp(cred.secret, body.code) or _consume_backup_code(session, uid, body.code)):
+    if not (_verify_totp(_totp_decrypt(cred.secret), body.code) or _consume_backup_code(session, uid, body.code)):
         _totp_fail(uid)
         raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
     _totp_ok(uid)
@@ -998,7 +1112,7 @@ def twofa_regenerate_backup_codes(
     cred = session.get(TotpCredential, uid)
     if not cred or not cred.enabled or not cred.secret:
         raise HTTPException(status_code=400, detail="2FA no está activo en esta cuenta.")
-    if not _verify_totp(cred.secret, body.code):
+    if not _verify_totp(_totp_decrypt(cred.secret), body.code):
         _totp_fail(uid)
         raise HTTPException(status_code=400, detail="Código incorrecto. Intenta de nuevo.")
     _totp_ok(uid)
@@ -1029,12 +1143,12 @@ def twofa_migrate(
     now = utc_now()
     if cred is None:
         cred = TotpCredential(
-            firebase_uid=uid, secret=secret, pending_secret=None,
+            firebase_uid=uid, secret=_totp_encrypt(secret), pending_secret=None,
             enabled=True, created_at=now, updated_at=now,
         )
         session.add(cred)
     else:
-        cred.secret = secret
+        cred.secret = _totp_encrypt(secret)
         cred.pending_secret = None
         cred.enabled = True
         cred.updated_at = now
@@ -1606,3 +1720,4 @@ def install_persistence(app) -> None:
     def initialize_persistence_tables():
         if DATABASE_URL:
             create_tables()
+            _encrypt_legacy_totp_secrets()

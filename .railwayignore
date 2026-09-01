@@ -1,0 +1,23 @@
+# `railway up` sube el directorio de trabajo. Nada de esto lo necesita la API en
+# Railway, y parte es sensible: la llave de la cuenta de servicio, el código de
+# respaldo de Stripe y tmp/ (que puede contener reportes con datos reales).
+*firebase-adminsdk*.json
+serviceAccount*.json
+stripe_backup_code.txt
+.env
+tmp/
+backups/
+*.bpbackup
+_dev_*
+graphify-out/
+files.zip
+.git/
+.firebase/
+.claude/
+.agents/
+.impeccable/
+Resourses/
+mobile/
+node_modules/
+__pycache__/
+.pytest_cache/
