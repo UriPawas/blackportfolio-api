@@ -49,11 +49,13 @@ jobs:
 
       # La suite corre contra SQLite temporal con Firebase y Stripe simulados:
       # no toca PostgreSQL de produccion ni ninguna credencial real.
+      # `python -m pytest`, no `pytest`: el script no antepone la raiz del repo a
+      # sys.path, y conftest.py importa `persistence` desde ahi (ModuleNotFoundError).
       - name: Correr pruebas
-        run: pytest -q
+        run: python -m pytest -q
 
       - name: Auditar dependencias
         continue-on-error: true    # informa, no bloquea
         run: |
           pip install pip-audit
-          pip-audit -r requirements.txt --progress-spinner off
+          python -m pip_audit -r requirements.txt --progress-spinner off
