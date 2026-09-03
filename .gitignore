@@ -26,3 +26,15 @@ tmp/
 graphify-out/
 files.zip
 
+# Paquetes de skills/agentes vendorizados por herramientas externas. Son de la
+# maquina, no del proyecto: se reinstalan solos y solo ensucian el diff (varios
+# MB). Las skills propias (graphify, portfolio-report-design) SI van al repo.
+.agents/
+.claude/skills/deploy-to-vercel/
+.claude/skills/vercel-*/
+.claude/skills/web-design-guidelines/
+.claude/skills/writing-guidelines/
+
+# Arneses de depuracion locales (ver project_dev_preview_harness): copias enormes
+# de la app para verla sin Firebase. Se regeneran y no deben publicarse.
+_dev_*

@@ -467,6 +467,22 @@ privacidad. Ninguno se arregla con CSS.
 | 4 | **Los buzones `privacy@` y `legal@` no existen** y están publicados en el sitio. La ley obliga a responder una solicitud ARCO en 20 días hábiles. | Marcado como hueco. Es un alias con reenvío |
 | 5 | Faltan **razón social y domicilio del responsable** (art. 16, fracciones I y II). | Marcado como hueco en `privacidad-v4.html` §1, con advertencia arriba del documento |
 | 6 | El sitio carga tipografías desde el CDN de Google, así que el navegador del visitante **revela su IP a Google**. No estaba declarado. | Declarado en el aviso v4 §7 |
+| 7 | **La merma por varianza se descontaba dos veces** en `runMonteCarlo` (main.js). El paso mensual era `exp(21·μ − ½σ²·21 + σ√21·Z)` con μ ya estimado sobre retornos **logarítmicos**: la corrección de Itô sólo corresponde si el drift viene de retornos simples. Toda la proyección salía sesgada a la baja por `exp(−σ²T/2)` — a 17 % de volatilidad, −22 % a 10 años y −35 % a 30. Se delataba solo: el modelo `bootstrap` (que suma 21 retornos log muestreados, sin corrección) daba medianas más altas con los mismos datos, y la mediana simulada contradecía al «retorno anual» que la propia pestaña publicaba. | **Corregido** (14 de agosto de 2026): `drift = mu * 21`. Verificado: con 12,480 iniciales, 300/mes, 10 años y 18.54 % anual compuesto, la mediana simulada (163,459) cuadra al 0.6 % con la anualidad cerrada (162,538) |
+| 8 | **Dinero real medido contra dinero nominal.** Con el ajuste por inflación activo, los valores finales se deflactaban pero el listón de comparación seguía siendo `initVal + aporte·meses` en nominal. «Prob. de retorno positivo» y todos los porcentajes de variación comparaban dos unidades distintas; con 500/mes a 10 años y 3.5 %, el listón salía 14.7 % más alto de lo que corresponde. | **Corregido**: `runMonteCarlo` devuelve `baseline[t]`, la curva de capital aportado deflactada con el mismo factor que las bandas, y de ahí salen el listón, la línea del lienzo y la tarjeta «Capital aportado» |
+| 9 | **Etiqueta que describía otra fórmula.** «Retorno anual esperado · Media log-normal anualizada» mostraba `exp(μ·252)−1`, que es la media **geométrica** (la que compone). La media de la log-normal es `exp(μ·252 + σ²·252/2)−1`, otra cifra. | **Corregido**: se conserva el valor (es el que corresponde) y se rotula «Retorno anual compuesto · media geométrica de la muestra» |
+
+Metodología que **se mantiene** por ser decisión y no error, documentada ahora en la ficha «ℹ» de la
+pestaña: el aporte es constante en pesos nominales (con inflación activa su poder de compra baja y
+así se contabiliza); la probabilidad de la meta se mide sólo en la fecha final, no por cruce; los
+grados de libertad del modelo t se estiman sobre curtosis **diaria** y se aplican al paso mensual,
+lo que exagera las colas por el lado conservador; y la caída máxima queda subestimada cuando hay
+aportes, porque el dinero nuevo levanta el valor y disimula la bajada. Las bandas recogen el azar
+del mercado, **no** el error de estimación de μ y σ — proyectar 30 años desde 2 de historia deja un
+margen que el cono no dibuja.
+
+Pendiente, en la pestaña **Metas** (no tocada en esta sesión): `requiredMonthlyContribution` trata
+el aporte como constante en términos **reales** mientras la simulación que calcula la probabilidad
+lo trata como constante en nominales. Las dos cifras de esa pantalla no hablan de lo mismo.
 
 Verificado y **verdadero**, por si hace falta defenderlo: los respaldos sí están cifrados
 (`Fernet` + gzip + suma de comprobación, `backup_service.py`), los códigos de respaldo sí se
@@ -474,9 +490,12 @@ guardan sólo como hash SHA-256, y el plan sí es autoritativo en el servidor.
 
 ## 12. Abierto
 
-- **Reseña de acabado y documentación formal del ciclo impeccable**: pendientes
-  (`impeccable-finish-reviewer`, `impeccable-documenter`). Requieren subagentes y el usuario debe
-  pedirlos.
+- **Reseña de acabado de la landing** (6 de agosto de 2026): primera pasada independiente
+  `PARTIAL`. Se sustituyeron el degradado y las series rojo/verde decorativas del mapa de cobertura
+  por una superficie plana con escala cobalto/neutra, y se capturaron el primer viewport de escritorio
+  y el hero móvil (`tmp/landing-redesign-desktop-hero-final.png`,
+  `tmp/landing-redesign-desktop-coverage-final.png`, `tmp/landing-redesign-mobile-final.png`).
+  Segunda lectura independiente: `PASS`; no quedan hallazgos materiales abiertos.
 - **`landing-v4` no está publicada.** Cuando se apruebe: sustituir `index.html` y `login.html`,
   revisar la CSP (Google Fonts ya está permitido; `images.pexels.com` no se usa en runtime porque
   las fotos están descargadas en `assets/landing-v4/`), y borrar los prototipos v2 y v3 si ya no
