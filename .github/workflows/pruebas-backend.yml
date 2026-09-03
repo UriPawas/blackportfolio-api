@@ -1,0 +1,59 @@
+name: Pruebas del backend
+
+# Railway despliega la API en cuanto llega un cambio de servidor a master, sin
+# consultar a GitHub Actions: no puede bloquear el despliegue. Este workflow
+# existe para que un fallo sea VISIBLE de inmediato (correo + marca roja en el
+# commit) y se pueda revertir en minutos, en vez de descubrirlo en produccion.
+
+# Las rutas van repetidas a proposito: GitHub Actions no admite anclas YAML.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'api.py'
+      - 'persistence.py'
+      - 'backup_service.py'
+      - 'restore_service.py'
+      - 'requirements*.txt'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/pruebas-backend.yml'
+  pull_request:
+    paths:
+      - 'api.py'
+      - 'persistence.py'
+      - 'backup_service.py'
+      - 'restore_service.py'
+      - 'requirements*.txt'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/pruebas-backend.yml'
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      # La suite corre contra SQLite temporal con Firebase y Stripe simulados:
+      # no toca PostgreSQL de produccion ni ninguna credencial real.
+      - name: Correr pruebas
+        run: pytest -q
+
+      - name: Auditar dependencias
+        continue-on-error: true    # informa, no bloquea
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --progress-spinner off

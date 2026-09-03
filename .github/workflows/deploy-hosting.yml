@@ -1,0 +1,94 @@
+name: Desplegar frontend (Firebase Hosting)
+
+# El frontend se publica SOLO desde aqui. Nunca `firebase deploy` desde una
+# maquina: eso fue lo que dejo el sitio sirviendo un arbol de trabajo que no
+# correspondia a ningun commit, y 2180 objetos de .git al publico.
+#
+# El backend NO se despliega aqui: Railway tiene su propia integracion con
+# GitHub sobre esta misma rama, limitada a los archivos de servidor
+# (watchPatterns). Un push que solo toque el frontend no reconstruye la API.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'api.py'
+      - 'persistence.py'
+      - 'backup_service.py'
+      - 'restore_service.py'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'mobile/**'
+      - '**/*.md'
+  workflow_dispatch:        # permite relanzar a mano desde la pestana Actions
+
+concurrency:
+  group: hosting-produccion
+  cancel-in-progress: false   # nunca abortar un despliegue a medias
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar firebase-tools
+        run: npm install --no-save firebase-tools@15.18.0
+
+      # Guardia de regresion. firebase.json tenia "**/.*", que solo excluye
+      # ficheros cuyo NOMBRE empieza por punto — en ".git/HEAD" el basename es
+      # "HEAD", asi que el repositorio entero se publicaba. Si alguien vuelve a
+      # aflojar el ignore, el despliegue se detiene aqui y no en produccion.
+      - name: Verificar que no se publique .git ni artefactos internos
+        run: |
+          node -e '
+            const ig = require("./firebase.json").hosting.ignore || [];
+            const exigidos = [
+              ".git/**", "**/.git/**", "**/.*/**",
+              "graphify-out/**", ".pytest_cache/**",
+              "**/*firebase-adminsdk*.json", "**/serviceAccount*.json", "**/*.txt"
+            ];
+            const faltan = exigidos.filter(p => !ig.includes(p));
+            if (faltan.length) {
+              console.error("ABORTADO: a firebase.json le faltan patrones de ignore obligatorios:");
+              faltan.forEach(p => console.error("  " + p));
+              console.error("Sin ellos Hosting publica el repositorio git entero.");
+              process.exit(1);
+            }
+            console.log("OK: el ignore de firebase.json excluye .git y artefactos internos");
+          '
+
+      - name: Publicar en produccion
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+        run: |
+          set -euo pipefail
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npx firebase-tools deploy --only hosting --project portify-6467f \
+            --non-interactive \
+            --message "${GITHUB_SHA::7} — ${GITHUB_REF_NAME} (GitHub Actions)"
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      # Comprueba contra el sitio real que lo publicado es lo de este commit y
+      # que .git no quedo expuesto. Si algo falla, se ve aqui y no en un audit
+      # tres semanas despues.
+      - name: Verificar el sitio publicado
+        run: |
+          set -euo pipefail
+          sleep 10
+          for ruta in /.git/HEAD /.git/config /graphify-out/graph.json; do
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' "https://portify-6467f.web.app$ruta")
+            if [ "$codigo" = "200" ]; then
+              echo "FALLO: https://portify-6467f.web.app$ruta sigue accesible (HTTP 200)"
+              exit 1
+            fi
+            echo "  $ruta -> $codigo (correcto)"
+          done
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' https://portify-6467f.web.app/index.html)
+          [ "$codigo" = "200" ] || { echo "FALLO: el sitio no responde ($codigo)"; exit 1; }
+          echo "Sitio publicado y verificado."

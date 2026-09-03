@@ -1,38 +1,52 @@
-name: Update Ticker Prices
+name: Actualizar precios de tickers
+
+# Corre semanalmente, actualiza tickers.json / tickers-data.js y hace commit.
+#
+# Ya NO despliega por su cuenta. Antes terminaba con un `firebase deploy` propio,
+# lo que creaba una segunda via de publicacion a produccion — y como corria sobre
+# `master`, habria publicado la rama equivocada. Ahora solo hace push: el push a
+# master dispara `deploy-hosting.yml`, que es la unica via de despliegue y la que
+# lleva los guardias.
+#
+# Llevaba 12 ejecuciones fallidas seguidas desde el 2026-06-15 porque el
+# GITHUB_TOKEN no tenia permiso de escritura. De ahi el bloque `permissions`.
 
 on:
   schedule:
-    - cron: '0 8 * * 1'   # Lunes 8am UTC (cada semana)
-  workflow_dispatch:        # Permite correrlo manualmente desde GitHub
+    - cron: '0 8 * * 1'   # lunes 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write         # sin esto el push falla con 403
 
 jobs:
-  update:
+  actualizar:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Instalar dependencias
         run: pip install requests
 
-      - name: Run update_tickers.py
+      - name: Actualizar tickers
         run: python update_tickers.py
 
-      - name: Commit updated tickers if changed
+      # Sin "[skip ci]": justamente queremos que el push dispare el despliegue.
+      - name: Hacer commit si hubo cambios
         run: |
-          git config user.name "github-actions[bot]"
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add tickers.json tickers-data.js
-          git diff --cached --quiet && echo "No changes" || git commit -m "chore: update ticker prices [skip ci]"
-          git push
-
-      - name: Deploy to Firebase Hosting
-        run: |
-          npm install -g firebase-tools
-          firebase deploy --only hosting --token ${{ secrets.FIREBASE_TOKEN }} --project portify-6467f
+          if git diff --cached --quiet; then
+            echo "Sin cambios en los tickers; no se publica nada."
+          else
+            git commit -m "chore(tickers): actualiza precios semanales"
+            git push
+            echo "Cambios publicados; deploy-hosting.yml se encargara del despliegue."
+          fi

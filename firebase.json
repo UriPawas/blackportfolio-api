@@ -38,33 +38,77 @@
       "app-mercados-v4.html",
       "app-topdown-v4.html",
       "app-ajustes-v4.html",
-      "_dev_*"
+      "_dev_*",
+      "**/.*/**",
+      ".git/**",
+      "**/.git/**",
+      ".github/**",
+      ".pytest_cache/**",
+      ".agents/**",
+      ".impeccable/**",
+      ".firebase/**",
+      "graphify-out/**",
+      "node_modules/**",
+      "**/node_modules/**"
     ],
     "headers": [
       {
         "source": "/tv-heatmap.html",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" },
-          { "key": "X-Content-Type-Options", "value": "nosniff" },
-          { "key": "Content-Security-Policy", "value": "default-src 'self' https://*.tradingview.com; script-src 'self' 'unsafe-inline' https://s3.tradingview.com https://www.tradingview.com; style-src 'self' 'unsafe-inline' https://*.tradingview.com; connect-src 'self' https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https:; frame-src https://*.tradingview.com; object-src 'none';" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self' https://*.tradingview.com; script-src 'self' 'unsafe-inline' https://s3.tradingview.com https://www.tradingview.com; style-src 'self' 'unsafe-inline' https://*.tradingview.com; connect-src 'self' https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https:; frame-src https://*.tradingview.com; object-src 'none';"
+          }
         ]
       },
       {
         "source": "**",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" },
-          { "key": "X-Content-Type-Options", "value": "nosniff" },
-          { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-          { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), camera=()" },
-          { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://unpkg.com https://cdn.jsdelivr.net https://browser.sentry-cdn.com; worker-src blob: 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://blackportfolio-api-production.up.railway.app https://*.ingest.sentry.io https://*.ingest.us.sentry.io; img-src 'self' data: https:; frame-src 'self' https:; object-src 'none'; base-uri 'self'" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "geolocation=(), microphone=(), camera=()"
+          },
+          {
+            "key": "Strict-Transport-Security",
+            "value": "max-age=31536000; includeSubDomains"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://unpkg.com https://cdn.jsdelivr.net https://browser.sentry-cdn.com; worker-src blob: 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://blackportfolio-api-production.up.railway.app https://*.ingest.sentry.io https://*.ingest.us.sentry.io; img-src 'self' data: https:; frame-src 'self' https:; object-src 'none'; base-uri 'self'"
+          }
         ]
       },
       {
         "source": "**/*.@(js|css)",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
         ]
       }
     ]

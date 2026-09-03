@@ -29,6 +29,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Despliegue — regla dura
+
+**Nunca despliegues desde esta máquina.** No ejecutes `firebase deploy` ni `railway up`, ni siquiera "solo esta vez" o para "probar rápido". La única vía de publicación es GitHub.
+
+Cuando el usuario diga que despliegue, el procedimiento completo es:
+
+1. `git add` de lo que corresponda y commit en la rama de trabajo.
+2. Llevar el cambio a `master` (`git merge` o fast-forward; `master` es la rama de producción).
+3. `git push origin master`.
+4. Verificar que los workflows pasaron: `gh run list --limit 5` y `gh run watch <id>`.
+5. Confirmar contra el sitio real antes de decir que quedó.
+
+A partir del push, GitHub se encarga:
+
+| Qué | Cómo se publica | Se dispara con |
+|---|---|---|
+| Frontend (Firebase Hosting) | `.github/workflows/deploy-hosting.yml` | push a `master` que toque archivos del sitio |
+| Backend (Railway) | Integración nativa de Railway con GitHub | push a `master` que toque `api.py`, `persistence.py`, `requirements.txt`, `Procfile`, `tests/**`… (ver `watchPatterns` del servicio) |
+| Pruebas del backend | `.github/workflows/pruebas-backend.yml` | igual que el backend |
+
+**Por qué esta regla existe.** Durante meses se desplegó con `firebase deploy` y `railway up` desde el disco local. El resultado: el frontend en producción no correspondía a ningún commit (existía solo dentro de Hosting), `master` se quedó 25 commits atrás mientras Railway seguía apuntándole, y el sitio publicó 2 180 objetos del repositorio git al internet público. Nada de eso es visible desde la máquina que despliega; todo es obvio cuando el despliegue sale de un checkout limpio.
+
+**Corolarios que no se negocian:**
+
+- No aflojes el `ignore` de `firebase.json`. `"**/.*"` **no** excluye el contenido de un directorio oculto: en `.git/HEAD` el basename es `HEAD`. Por eso hacen falta `.git/**` y `**/.*/**`. El workflow aborta si faltan.
+- Si algo se despliega, tiene que estar commiteado antes. Un árbol de trabajo sucio no se publica.
+- La etiqueta `produccion/frontend-2026-09-01` marca el estado verificado byte a byte que servía Hosting el 2026-09-01. Es el punto de retorno si un despliegue sale mal.
+
+---
+
 ## Project Overview
 
 **BlackPortfolio Landing** — landing page and protected dashboard for an investment portfolio platform. Vanilla HTML/CSS/JS frontend + Python FastAPI backend.
