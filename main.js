@@ -4462,8 +4462,15 @@ function redrawTrackerCharts() {
   const active = document.querySelector(".tracker-tab-btn.active");
   if (!active) return;
   const tab = active.dataset.tab;
+  /* Monte Carlo se repinta con LA MISMA simulación. Bajar su bandera volvía a
+     sortear 4,000 trayectorias: cambiar de tema movía todas las cifras de la
+     pestaña, que en una herramienta financiera se lee como un error de cálculo. */
+  if (tab === "proyeccion") { mcRepaint(); return; }
+  /* Dividendos NO baja bandera: `renderDividendsTab` vuelve a pedir el
+     historial de cada emisor a la API. El lienzo se repinta solo con los mapas
+     que ya tiene, y sus colores (`CHART_COLORS`) sirven a los dos temas. */
+  if (tab === "dividendos") { renderDividendMonthlyChart(); return; }
   if (tab === "desempeno") perfTabLoaded = false;
-  else if (tab === "proyeccion") mcTabLoaded = false;
   else if (tab === "correlacion") corrTabLoaded = false;
   else if (tab === "metas") goalTabLoaded = false;
   else return; // Resumen y las pestañas de tabla no tienen lienzo que rehacer
@@ -8079,6 +8086,11 @@ function showTrackerDashView(portfolioId) {
   perfDailyReturns = null;
   perfReportData = null;
   mcTabLoaded = false;
+  // El histórico cacheado es de OTRO portafolio: proyectarlo con estos datos
+  // daría una simulación silenciosamente equivocada.
+  mcReturnsCache = null;
+  mcBenchCache = null;
+  mcLastSim = null;
   // Reiniciar el toggle de serie del gráfico hero a "Valor" (P0.3)
   summaryChartMode = "value";
   _summaryChartData = null;
@@ -9331,10 +9343,48 @@ async function syncDividends(portfolio) {
 }
 
 // ── Tab: Dividendos ───────────────────────────────────────────────────────────
+/* La pestaña se lee como un estado de flujo de caja: qué entró, de quién y qué
+   está agendado. Tres decisiones la gobiernan:
+
+   1. **El color identifica al emisor y es el mismo en las tres láminas.** Por
+      eso el lienzo NO lleva leyenda propia: la tabla de reparto ES la leyenda,
+      y pasar el puntero por una fila resalta a ese emisor en la gráfica.
+      La paleta es `CHART_COLORS` —la misma de la composición—, apagada y
+      anclada al cobalto, con ≥3.2:1 contra los dos temas; por eso el lienzo se
+      repinta al cambiar de tema sin recalcular colores.
+   2. **El orden de la pila es global, no por mes.** Cada emisor ocupa siempre
+      la misma banda, que es lo único que hace legible una barra apilada.
+   3. **El hecho manda sobre la estimación.** La cifra de récord es lo cobrado
+      en 12 meses; la proyección va como anotación con su ficha de variación. */
+
+let _divReceivedByMonth = null;   // { "YYYY-MM": { TICKER: monto } }
+let _divProjectedByMonth = null;  // { "YYYY-MM": { TICKER: monto } }
+let _divColorByTicker = {};
+let _divTickerRank = {};
+let _divCurrency = "USD";
+let _divFocusTicker = null;       // emisor resaltado desde la tabla
+let _divHoverIdx = -1;
+
+function _divEsc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+function _divColorFor(ticker) {
+  if (!_divColorByTicker[ticker]) {
+    const idx = Object.keys(_divColorByTicker).length;
+    _divColorByTicker[ticker] = CHART_COLORS[idx % CHART_COLORS.length];
+    _divTickerRank[ticker] = idx;
+  }
+  return _divColorByTicker[ticker];
+}
+
 function renderDividendsTab() {
   const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
   if (!portfolio) return;
   const cur = portfolio.currency || "USD";
+  _divCurrency = cur;
   renderDividendForecast(portfolio, cur);
   const divs = (portfolio.transactions || []).filter((t) => t.type === "DIVIDENDO");
   const tbody = document.querySelector("#divByTickerTable tbody");
@@ -9346,6 +9396,7 @@ function renderDividendsTab() {
 
   let totalReceived = 0, trailing12 = 0;
   const byTicker = {};
+  const receivedByMonth = {};
   divs.forEach((tx) => {
     const amt = conv(tx.net || 0, tx.currency);
     totalReceived += amt;
@@ -9355,6 +9406,11 @@ function renderDividendsTab() {
     b.count++; b.total += amt;
     if (new Date(tx.date) >= oneYearAgo) b.trailing += amt;
     if (!b.last || tx.date > b.last) b.last = tx.date;
+    const k = (tx.date || "").slice(0, 7); // YYYY-MM
+    if (k) {
+      if (!receivedByMonth[k]) receivedByMonth[k] = {};
+      receivedByMonth[k][tx.ticker] = (receivedByMonth[k][tx.ticker] || 0) + amt;
+    }
   });
 
   // Costo invertido por ticker (para yield sobre costo)
@@ -9372,17 +9428,17 @@ function renderDividendsTab() {
   document.getElementById("divYieldOnCost").textContent =
     totalInvested > 0 ? `${(trailing12 / totalInvested * 100).toFixed(2)}%` : "—";
 
-  // Ingreso mensual recibido (últimos 12 meses) para el gráfico de barras (P1.6)
-  const receivedByMonth = {};
-  divs.forEach((tx) => {
-    const k = (tx.date || "").slice(0, 7); // YYYY-MM
-    if (!k) return;
-    receivedByMonth[k] = (receivedByMonth[k] || 0) + conv(tx.net || 0, tx.currency);
-  });
-  _divReceivedByMonth = receivedByMonth;
-  renderDividendMonthlyChart(receivedByMonth, _divProjectedByMonth || {}, cur);
-
+  /* El color se reparte por peso del ingreso recibido, y SÓLO por eso: la
+     proyección llega después (es asíncrona) y si entrara en el reparto los
+     colores saltarían al resolverse. Los emisores que sólo aparecen en la
+     proyección toman el siguiente color libre en `_divColorFor`. */
   const tickers = Object.keys(byTicker).sort((a, b) => byTicker[b].total - byTicker[a].total);
+  _divColorByTicker = {}; _divTickerRank = {};
+  tickers.forEach((tk) => _divColorFor(tk));
+
+  _divReceivedByMonth = receivedByMonth;
+  renderDividendMonthlyChart();
+
   if (!tickers.length) {
     table.style.display = "none";
     emptyMsg.style.display = "";
@@ -9395,14 +9451,52 @@ function renderDividendsTab() {
     const b = byTicker[tk];
     const inv = investedByTicker[tk] || 0;
     const yoc = inv > 0 ? `${(b.trailing / inv * 100).toFixed(2)}%` : "—";
-    const last = b.last ? new Date(b.last).toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "2-digit" }) : "—";
-    return `<tr><td><strong>${tk}</strong></td><td>${b.count}</td><td>${formatCurrency(b.total, cur)}</td><td>${last}</td><td>${yoc}</td></tr>`;
+    const share = totalReceived > 0 ? (b.total / totalReceived) * 100 : 0;
+    const color = _divColorFor(tk);
+    const last = b.last
+      ? new Date(b.last + "T12:00:00").toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "2-digit" })
+      : "—";
+    const esc = _divEsc(tk);
+    return `<tr data-ticker="${esc}">
+      <td data-label="Emisor"><span class="div-issuer"><i class="div-swatch" style="background:${color}"></i><strong>${esc}</strong></span></td>
+      <td data-label="Participación"><span class="div-share"><span class="div-share-bar"><i style="width:${share.toFixed(1)}%;background:${color}"></i></span><span class="div-share-pct">${share.toFixed(1)}%</span></span></td>
+      <td data-label="Últimos 12 m">${formatCurrency(b.trailing, cur)}</td>
+      <td data-label="Total recibido">${formatCurrency(b.total, cur)}</td>
+      <td data-label="Yield s/costo">${yoc}</td>
+      <td data-label="Último pago"><span class="div-last">${last}</span><span class="div-last-count">${b.count} pago${b.count === 1 ? "" : "s"}</span></td>
+    </tr>`;
   }).join("");
+  _divBindIssuerHover(tbody);
 }
 
-// ── Gráfico de barras: ingreso mensual por dividendos (P1.6) ───────────────────
-let _divReceivedByMonth = null;
-let _divProjectedByMonth = null;
+/* Resaltar desde la tabla es la única lectura cruzada entre la leyenda y el
+   lienzo, así que el enlace va en el `tbody` una sola vez y no en cada fila:
+   `innerHTML` las reemplaza en cada render. */
+function _divBindIssuerHover(tbody) {
+  if (!tbody || tbody._divHoverBound) return;
+  tbody._divHoverBound = true;
+  const set = (tk) => {
+    if (_divFocusTicker === tk) return;
+    _divFocusTicker = tk;
+    tbody.querySelectorAll("tr").forEach((tr) => {
+      tr.classList.toggle("is-dim", !!tk && tr.dataset.ticker !== tk);
+      tr.classList.toggle("is-focus", !!tk && tr.dataset.ticker === tk);
+    });
+    renderDividendMonthlyChart();
+  };
+  tbody.addEventListener("pointerover", (e) => {
+    const tr = e.target.closest("tr");
+    if (tr && tr.dataset.ticker) set(tr.dataset.ticker);
+  });
+  tbody.addEventListener("pointerleave", () => set(null));
+  tbody.addEventListener("focusin", (e) => {
+    const tr = e.target.closest("tr");
+    if (tr && tr.dataset.ticker) set(tr.dataset.ticker);
+  });
+  tbody.addEventListener("focusout", () => set(null));
+}
+
+// ── Gráfico apilado: ingreso mensual por dividendos ───────────────────────────
 
 function _monthKeyOffset(offset) {
   const d = new Date();
@@ -9411,92 +9505,396 @@ function _monthKeyOffset(offset) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function renderDividendMonthlyChart(receivedByMonth, projectedByMonth, cur) {
+/* Paso de eje redondo: con `max/4` a secas el eje rotulaba «137 · 274 · 411».
+   En un documento de cifras eso se lee como error de formato, no como escala. */
+function _divNiceStep(raw) {
+  if (!(raw > 0)) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+}
+
+function _divMonthLabel(key, opts) {
+  const [yy, mm] = key.split("-");
+  return new Date(+yy, +mm - 1, 1).toLocaleDateString("es-MX", opts);
+}
+
+/* `toLocaleDateString` con `month:"long", year:"numeric"` devuelve «agosto de
+   2026» en es-MX. La preposición sobra en una cabecera de mes y rompe la
+   columna, así que el año se compone aparte. */
+function _divMonthTitle(key) {
+  const [yy] = key.split("-");
+  const m = _divMonthLabel(key, { month: "long" });
+  return `${m.charAt(0).toUpperCase()}${m.slice(1)} ${yy}`;
+}
+
+let _divBuckets = [];
+let _divCurIdx = 11;
+const DIV_PAD_RIGHT = 14;
+const _divPadLeft = (w) => (w < 520 ? 44 : 58);
+/* La ventana se adapta al ancho. A 270 px de lienzo, 24 barras dejan 5.5 px
+   por mes: el apilado deja de leerse y el globo pasa a ser la única vía al
+   dato. En teléfono se muestra el año en curso —5 meses atrás y 6 adelante—,
+   que es el horizonte con el que se decide. La cabecera no promete «24 meses»
+   justamente por esto. */
+const _divWindow = (w) => (w < 520 ? { back: 5, fwd: 6 } : { back: 11, fwd: 12 });
+
+function renderDividendMonthlyChart() {
   const canvas = document.getElementById("divMonthlyChart");
   const status = document.getElementById("divMonthlyStatus");
   if (!canvas) return;
-  // Ventana: 11 meses atrás → 12 meses adelante (24 barras)
-  const months = [];
-  for (let off = -11; off <= 12; off++) months.push(_monthKeyOffset(off));
-  const buckets = months.map((k) => ({
-    key: k,
-    received: receivedByMonth[k] || 0,
-    projected: projectedByMonth[k] || 0
-  }));
-  const maxV = Math.max(1, ...buckets.map((b) => Math.max(b.received, b.projected)));
-  const hasData = buckets.some((b) => b.received > 0 || b.projected > 0);
-  if (status) status.style.display = hasData ? "none" : "";
-  if (!hasData) { const c = canvas.getContext("2d"); c && c.clearRect(0, 0, canvas.width, canvas.height); return; }
+  const cur = _divCurrency;
+  const received = _divReceivedByMonth || {};
+  const projected = _divProjectedByMonth || {};
 
-  const width = canvas.parentElement?.clientWidth || 700;
-  const height = width < 560 ? 220 : 260;
+  const probeW = canvas.parentElement?.clientWidth || 700;
+  const win = _divWindow(probeW);
+  _divCurIdx = win.back;
+  const months = [];
+  for (let off = -win.back; off <= win.fwd; off++) months.push(_monthKeyOffset(off));
+
+  /* El mes en curso puede llevar cobrado Y estimado a la vez (un pago ingresado
+     el día 2 y otro agendado para el 28), así que se suman los dos orígenes en
+     todos los meses; fuera del mes en curso sólo uno tiene datos. */
+  _divBuckets = months.map((key) => {
+    const parts = [];
+    Object.entries(received[key] || {}).forEach(([t, v]) => { if (v > 0) parts.push({ t, v, est: false }); });
+    Object.entries(projected[key] || {}).forEach(([t, v]) => { if (v > 0) parts.push({ t, v, est: true }); });
+    parts.forEach((p) => { if (_divTickerRank[p.t] === undefined) _divColorFor(p.t); });
+    // Orden GLOBAL por emisor: cada uno ocupa siempre la misma banda.
+    parts.sort((a, b) => (_divTickerRank[a.t] - _divTickerRank[b.t]) || (b.v - a.v));
+    return { key, parts, total: parts.reduce((s, p) => s + p.v, 0) };
+  });
+
+  const maxV = Math.max(0, ..._divBuckets.map((b) => b.total));
+  const hasData = maxV > 0;
+  if (status) status.style.display = hasData ? "none" : "";
+  if (!hasData) {
+    _divHideChartTooltip();
+    const c = canvas.getContext("2d");
+    c && c.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.style.height = "0px";
+    return;
+  }
+
+  const width = probeW;
+  const height = width < 560 ? 236 : 288;
+  if (_divHoverIdx >= _divBuckets.length) _divHoverIdx = -1;
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = width * dpr; canvas.height = height * dpr;
+  canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
   canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  const lightMode = document.documentElement.dataset.theme === "light";
-  const pad = { left: 56, right: 14, top: 16, bottom: 40 };
-  const cw = width - pad.left - pad.right, ch = height - pad.top - pad.bottom;
-  const axisColor = lightMode ? "#5A6980" : "#8C9BB3";
-  const gridColor = lightMode ? "#E4E9EF" : "#1A2739";
 
-  ctx.font = "500 10px 'Libre Franklin', sans-serif";
+  const C = getPerfChartColors();
+  const narrow = width < 520;
+  const pad = { left: _divPadLeft(width), right: DIV_PAD_RIGHT, top: 22, bottom: 34 };
+  const cw = width - pad.left - pad.right, ch = height - pad.top - pad.bottom;
+  const step = _divNiceStep(maxV / 4);
+  const top = Math.max(step, Math.ceil(maxV / step) * step);
+
+  // Rejilla y eje de importe
+  ctx.font = `500 ${narrow ? 9 : 10}px 'Libre Franklin', sans-serif`;
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (let s = 0; s <= 4; s++) {
-    const v = (maxV / 4) * s, y = pad.top + ch * (1 - s / 4);
+  for (let v = 0; v <= top + step * 1e-6; v += step) {
+    const y = Math.round(pad.top + ch * (1 - v / top)) + .5;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y);
-    ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.setLineDash([4, 5]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = axisColor; ctx.fillText(formatCurrencyCompact(v, cur), pad.left - 8, y);
+    ctx.strokeStyle = v === 0 ? C.baseline : C.grid; ctx.lineWidth = 1;
+    if (v !== 0) ctx.setLineDash([3, 5]);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = C.axisLabel;
+    // El eje declara la moneda: sin símbolo, «400» no dice de qué es la escala.
+    ctx.fillText(v === 0 ? "0" : (CURRENCY_SYMBOLS[cur] || "$") + formatCurrencyCompact(v, cur), pad.left - 7, y);
   }
 
-  const slot = cw / buckets.length;
-  const barW = Math.min(18, slot * 0.6);
-  buckets.forEach((b, i) => {
-    const cx = pad.left + slot * i + slot / 2;
-    const drawBar = (val, color) => {
-      if (val <= 0) return;
-      const h = ch * (val / maxV);
-      ctx.fillStyle = color;
-      ctx.fillRect(cx - barW / 2, pad.top + ch - h, barW, h);
-    };
-    drawBar(b.received, GAIN_COLOR);
-    if (b.projected > 0 && b.received <= 0) {
-      // Proyección: barra con relieve más tenue (activo punteado)
-      const h = ch * (b.projected / maxV);
-      ctx.fillStyle = "rgba(111,134,255,0.45)";
-      ctx.fillRect(cx - barW / 2, pad.top + ch - h, barW, h);
-      ctx.strokeStyle = "#6f86ff"; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
-      ctx.strokeRect(cx - barW / 2, pad.top + ch - h, barW, h); ctx.setLineDash([]);
-    }
-    // Etiqueta de mes cada 3 barras
-    if (i % 3 === 0) {
-      const [yy, mm] = b.key.split("-");
-      const lbl = new Date(+yy, +mm - 1, 1).toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
+  const slot = cw / _divBuckets.length;
+  const barW = Math.max(4, Math.min(22, slot * 0.62));
+  const xOf = (i) => pad.left + slot * i + slot / 2;
+
+  // Realce del mes bajo el puntero: banda completa, detrás de las barras
+  if (_divHoverIdx >= 0 && _divHoverIdx < _divBuckets.length) {
+    /* `C.grid` no sirve aquí: es la rejilla, y sobre la lámina oscura la banda
+       quedaba en 1.05:1 —invisible—. `C.baseline` al 30 % da una banda legible
+       en los dos temas sin competir con las barras. */
+    ctx.save();
+    ctx.globalAlpha = .3;
+    ctx.fillStyle = C.baseline;
+    ctx.fillRect(pad.left + slot * _divHoverIdx, pad.top, slot, ch);
+    ctx.restore();
+  }
+
+  // La línea de «hoy» cae en el canto derecho del mes en curso.
+  const hoyX = Math.round(pad.left + slot * (_divCurIdx + 1)) + .5;
+  ctx.beginPath(); ctx.moveTo(hoyX, pad.top - 6); ctx.lineTo(hoyX, pad.top + ch);
+  ctx.strokeStyle = C.crosshair; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+  ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = C.axisLabel;
+  ctx.font = "600 9px 'Libre Franklin', sans-serif";
+  ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.fillText("HOY", hoyX + 4, 3);
+
+  // Barras apiladas
+  _divBuckets.forEach((b, i) => {
+    const cx = xOf(i);
+    let acc = 0;
+    b.parts.forEach((p) => {
+      const h = (p.v / top) * ch;
+      const y = pad.top + ch - acc - h;
+      acc += h;
+      if (h < .4) return;
+      const dim = _divFocusTicker && p.t !== _divFocusTicker;
+      const color = _divColorFor(p.t);
       ctx.save();
-      ctx.fillStyle = axisColor; ctx.font = "500 9px 'Libre Franklin', sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "top";
-      ctx.fillText(lbl, cx, height - pad.bottom + 8);
+      if (p.est) {
+        /* Estimado: la misma tinta con menos cuerpo y el perfil completo. Es la
+           convención de «cifra no realizada» del documento, y se distingue del
+           cobrado sin necesitar otro color. */
+        ctx.globalAlpha = dim ? .08 : .3;
+        ctx.fillStyle = color;
+        ctx.fillRect(cx - barW / 2, y, barW, h);
+        ctx.globalAlpha = dim ? .16 : .95;
+        ctx.strokeStyle = color; ctx.lineWidth = 1;
+        ctx.strokeRect(cx - barW / 2 + .5, y + .5, Math.max(1, barW - 1), Math.max(1, h - 1));
+      } else {
+        ctx.globalAlpha = dim ? .16 : 1;
+        ctx.fillStyle = color;
+        ctx.fillRect(cx - barW / 2, y, barW, h);
+      }
       ctx.restore();
+    });
+    if (i === _divHoverIdx && acc > 0) {
+      ctx.strokeStyle = C.axisLabel; ctx.lineWidth = 1;
+      ctx.strokeRect(cx - barW / 2 - 1.5, pad.top + ch - acc - 1.5, barW + 3, acc + 3);
     }
   });
-  // Leyenda
-  ctx.font = "600 10px 'Libre Franklin', sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-  ctx.fillStyle = GAIN_COLOR; ctx.fillRect(pad.left, height - 12, 10, 10);
-  ctx.fillStyle = axisColor; ctx.fillText("Recibido", pad.left + 16, height - 7);
-  ctx.fillStyle = "rgba(111,134,255,0.6)"; ctx.fillRect(pad.left + 90, height - 12, 10, 10);
-  ctx.fillStyle = axisColor; ctx.fillText("Proyectado", pad.left + 106, height - 7);
+
+  /* Rótulos cada tres meses y anclados al mes en curso, para que éste SIEMPRE
+     lleve el suyo. El paso no cambia con el ancho: la ventana ya se encogió a
+     la mitad en teléfono, así que 3 sigue dejando ~53 px entre rótulos. */
+  const every = 3;
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.fillStyle = C.axisLabel;
+  _divBuckets.forEach((b, i) => {
+    if ((i - _divCurIdx) % every !== 0) return;
+    const isNow = i === _divCurIdx;
+    ctx.save();
+    ctx.globalAlpha = isNow ? 1 : .78;
+    ctx.font = `${isNow ? 600 : 500} 9px 'Libre Franklin', sans-serif`;
+    ctx.fillText(_divMonthLabel(b.key, { month: "short", year: "2-digit" }), xOf(i), pad.top + ch + 9);
+    ctx.restore();
+  });
+
+  const cobrado = _divBuckets.slice(0, _divCurIdx + 1).reduce((s, b) => s + b.total, 0);
+  canvas.setAttribute("aria-label",
+    `Ingreso mensual por dividendos: ${_divBuckets.length} meses apilados por emisor, ${formatCurrency(cobrado, cur)} cobrados en los ${_divCurIdx + 1} meses hasta hoy. El desglose por emisor está en la tabla Reparto por emisor.`);
+  _divBindChart(canvas);
 }
 
-// ── Calendario de dividendos futuros (proyección 12m) ──────────────────────────
+// ── Puntero y teclado sobre el lienzo ────────────────────────────────────────
+
+function _divChartIndexFromX(canvas, clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const padL = _divPadLeft(rect.width);
+  const cw = rect.width - padL - DIV_PAD_RIGHT;
+  const x = clientX - rect.left;
+  if (x < padL || x > rect.width - DIV_PAD_RIGHT || cw <= 0 || !_divBuckets.length) return -1;
+  return Math.min(_divBuckets.length - 1, Math.max(0, Math.floor((x - padL) / (cw / _divBuckets.length))));
+}
+
+function _divHideChartTooltip() {
+  const tip = document.getElementById("divChartTooltip");
+  if (!tip) return;
+  tip.classList.remove("is-on");
+  tip.innerHTML = "";
+  /* Aparcado en el origen: oculto sigue ocupando caja, y quedarse en la última
+     posición de escritorio inflaba el `scrollWidth` del panel al pasar a
+     teléfono. */
+  tip.style.left = "0px";
+  tip.style.top = "0px";
+}
+
+function _divShowChartTooltip(idx, clientX, clientY) {
+  const tip = document.getElementById("divChartTooltip");
+  const canvas = document.getElementById("divMonthlyChart");
+  const b = _divBuckets[idx];
+  if (!tip || !canvas || !b) return;
+  const cur = _divCurrency;
+  const title = _divMonthTitle(b.key);
+  if (!b.total) {
+    tip.innerHTML = `<div class="div-tt-head"><span>${title}</span></div>
+      <p class="div-tt-empty">Sin dividendos${idx > _divCurIdx ? " estimados" : ""}</p>`;
+  } else {
+    const rows = b.parts.map((p) => `<div class="div-tt-row${_divFocusTicker && p.t !== _divFocusTicker ? " is-dim" : ""}">
+        <span class="div-tt-tk"><i class="div-swatch${p.est ? " is-est" : ""}" style="${p.est ? "border-color" : "background"}:${_divColorFor(p.t)}"></i>${_divEsc(p.t)}</span>
+        <span class="div-tt-val">${formatCurrency(p.v, cur)}${p.est ? '<span class="div-tt-sr">, estimado</span>' : ""}</span>
+      </div>`).join("");
+    const anyEst = b.parts.some((p) => p.est);
+    tip.innerHTML = `<div class="div-tt-head"><span>${title}</span><strong>${formatCurrency(b.total, cur)}</strong></div>
+      ${rows}${anyEst ? '<p class="div-tt-note">El perfil hueco marca el pago estimado</p>' : ""}`;
+  }
+  tip.classList.add("is-on");
+
+  const wrap = canvas.parentElement;
+  const wr = wrap.getBoundingClientRect();
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  const px = clientX - wr.left, py = clientY - wr.top;
+  let left = px + 14;
+  if (left + tw > wr.width - 4) left = px - tw - 14;
+  tip.style.left = `${Math.max(4, Math.min(left, Math.max(4, wr.width - tw - 4)))}px`;
+  tip.style.top = `${Math.max(4, Math.min(py - th / 2, Math.max(4, wr.height - th - 4)))}px`;
+}
+
+let _divResizeTimer = 0;
+function _divBindChart(canvas) {
+  if (canvas._divBound) return;
+  canvas._divBound = true;
+  canvas.tabIndex = 0;
+
+  /* Ningún lienzo del tracker se repinta al redimensionar (hueco preexistente).
+     Aquí sí hace falta: la ventana de meses depende del ancho, así que girar el
+     teléfono dejaría 12 barras dibujadas sobre una escala de 24. */
+  window.addEventListener("resize", () => {
+    clearTimeout(_divResizeTimer);
+    _divResizeTimer = setTimeout(() => {
+      if (canvas.isConnected && canvas.offsetParent) {
+        _divHoverIdx = -1;
+        _divHideChartTooltip();
+        renderDividendMonthlyChart();
+      }
+    }, 150);
+  }, { passive: true });
+
+  const move = (e) => {
+    const idx = _divChartIndexFromX(canvas, e.clientX);
+    if (idx < 0) {
+      if (_divHoverIdx !== -1) { _divHoverIdx = -1; _divHideChartTooltip(); renderDividendMonthlyChart(); }
+      return;
+    }
+    if (idx !== _divHoverIdx) { _divHoverIdx = idx; renderDividendMonthlyChart(); }
+    _divShowChartTooltip(idx, e.clientX, e.clientY);
+  };
+  const clear = () => {
+    if (_divHoverIdx === -1) return;
+    _divHoverIdx = -1; _divHideChartTooltip(); renderDividendMonthlyChart();
+  };
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerdown", move);
+  canvas.addEventListener("pointerleave", clear);
+  canvas.addEventListener("blur", clear);
+
+  /* Un globo que sólo responde al puntero deja fuera al teclado (WCAG 1.4.13).
+     Las flechas recorren los meses y la posición del globo se calcula, no se
+     recibe del evento. */
+  canvas.addEventListener("keydown", (e) => {
+    let idx = _divHoverIdx;
+    if (e.key === "ArrowRight") idx = idx < 0 ? _divCurIdx : Math.min(_divBuckets.length - 1, idx + 1);
+    else if (e.key === "ArrowLeft") idx = idx < 0 ? _divCurIdx : Math.max(0, idx - 1);
+    else if (e.key === "Home") idx = 0;
+    else if (e.key === "End") idx = _divBuckets.length - 1;
+    else if (e.key === "Escape") { clear(); return; }
+    else return;
+    e.preventDefault();
+    _divHoverIdx = idx;
+    renderDividendMonthlyChart();
+    const rect = canvas.getBoundingClientRect();
+    const padL = _divPadLeft(rect.width);
+    const slot = (rect.width - padL - DIV_PAD_RIGHT) / _divBuckets.length;
+    _divShowChartTooltip(idx, rect.left + padL + slot * (idx + .5), rect.top + rect.height / 2);
+  });
+}
+
+// ── Calendario de pagos estimados (proyección 12 m) ──────────────────────────
 let _divForecastToken = 0;
+
+/* La proyección resuelve después del render principal, así que la ficha de
+   variación necesita el cobrado de 12 meses sin volver a recorrer el
+   portafolio: se lee del mismo mapa que alimenta la gráfica. */
+function _divTrailingFromCache() {
+  const map = _divReceivedByMonth || {};
+  let sum = 0;
+  for (let off = -11; off <= 0; off++) {
+    const m = map[_monthKeyOffset(off)];
+    if (m) sum += Object.values(m).reduce((s, v) => s + v, 0);
+  }
+  return sum;
+}
+
+function _divUpdateForecastReadouts(forecast12) {
+  const fcEl = document.getElementById("divForecast12");
+  const avgEl = document.getElementById("divForecastMonthly");
+  const chip = document.getElementById("divForecastDelta");
+  if (!fcEl) return;
+  if (!(forecast12 > 0)) {
+    fcEl.textContent = "—";
+    if (avgEl) avgEl.textContent = "—";
+    if (chip) { chip.textContent = ""; chip.className = "div-ledger-chip"; }
+    return;
+  }
+  fcEl.textContent = formatCurrency(forecast12, _divCurrency);
+  if (avgEl) avgEl.textContent = formatCurrency(forecast12 / 12, _divCurrency);
+  if (!chip) return;
+  const trailing12 = _divTrailingFromCache();
+  if (!(trailing12 > 0)) { chip.textContent = ""; chip.className = "div-ledger-chip"; return; }
+  const delta = (forecast12 / trailing12 - 1) * 100;
+  chip.textContent = `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}% vs. últimos 12 m`;
+  chip.className = `div-ledger-chip ${delta >= 0 ? "return-pos" : "return-neg"}`;
+}
+
+function _divRenderSchedule(events, cur) {
+  const host = document.getElementById("divSchedule");
+  if (!host) return;
+  if (!events.length) { host.innerHTML = ""; return; }
+  const byMonth = {};
+  events.forEach((e) => {
+    const k = `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, "0")}`;
+    (byMonth[k] || (byMonth[k] = [])).push(e);
+  });
+  const maxAmt = Math.max(1, ...events.map((e) => e.amount));
+
+  const months = [];
+  for (let off = 0; off <= 12; off++) months.push(_monthKeyOffset(off));
+
+  host.innerHTML = months.map((k) => {
+    const name = _divMonthTitle(k);
+    const list = byMonth[k];
+    /* Los meses sin pagos NO se omiten: que no entre nada en marzo es
+       información. Se reducen a un renglón para que el año siga leyéndose
+       completo sin costar altura. */
+    if (!list || !list.length) {
+      return `<div class="div-sched-month is-empty"><span class="div-sched-name">${name}</span><span class="div-sched-none">Sin pagos estimados</span></div>`;
+    }
+    const total = list.reduce((s, e) => s + e.amount, 0);
+    const rows = list.slice().sort((a, b) => a.date - b.date).map((e) => {
+      const color = _divColorFor(e.ticker);
+      const w = Math.max(3, (e.amount / maxAmt) * 100);
+      const qty = Number(Number(e.qty).toFixed(4));
+      const wd = e.date.toLocaleDateString("es-MX", { weekday: "short" }).replace(".", "");
+      return `<li class="div-sched-item">
+        <span class="div-sched-day"><b>${e.date.getDate()}</b><i>${wd}</i></span>
+        <span class="div-sched-tk"><i class="div-swatch" style="background:${color}"></i>${_divEsc(e.ticker)}</span>
+        <span class="div-sched-calc">${formatCurrency(e.perShare, e.posCur)} × ${qty.toLocaleString("es-MX")}</span>
+        <span class="div-sched-bar"><i style="width:${w.toFixed(1)}%;background:${color}"></i></span>
+        <span class="div-sched-amt">${formatCurrency(e.amount, cur)}</span>
+      </li>`;
+    }).join("");
+    return `<section class="div-sched-month">
+      <header class="div-sched-head">
+        <h5 class="div-sched-name">${name}</h5>
+        <span class="div-sched-count">${list.length} pago${list.length === 1 ? "" : "s"}</span>
+        <span class="div-sched-total">${formatCurrency(total, cur)}</span>
+      </header>
+      <ul class="div-sched-list">${rows}</ul>
+    </section>`;
+  }).join("");
+}
+
 async function renderDividendForecast(portfolio, cur) {
   const token = ++_divForecastToken;
-  const tbody = document.querySelector("#divForecastTable tbody");
+  const host = document.getElementById("divSchedule");
   const status = document.getElementById("divForecastStatus");
   const fcastEl = document.getElementById("divForecast12");
-  if (!tbody || !status || !fcastEl) return;
+  if (!host || !status || !fcastEl) return;
 
   const qtyByTicker = {}, curByTicker = {};
   (portfolio.positions || []).forEach((pos) => {
@@ -9506,8 +9904,10 @@ async function renderDividendForecast(portfolio, cur) {
   });
   const tickers = Object.keys(qtyByTicker);
   if (!tickers.length) {
-    tbody.innerHTML = ""; fcastEl.textContent = "—";
-    status.style.display = ""; status.textContent = "Agrega posiciones para estimar tus próximos dividendos.";
+    host.innerHTML = "";
+    _divProjectedByMonth = null;
+    _divUpdateForecastReadouts(0);
+    status.style.display = ""; status.textContent = "Agrega posiciones para estimar tus próximos pagos.";
     return;
   }
 
@@ -9557,27 +9957,25 @@ async function renderDividendForecast(portfolio, cur) {
   if (token !== _divForecastToken) return;
 
   events.sort((a, b) => a.date - b.date);
-  fcastEl.textContent = events.length ? formatCurrency(forecast12, cur) : "—";
 
-  // Alimenta el gráfico de barras mensual con la proyección (P1.6)
+  // Alimenta el gráfico apilado con la proyección, ya desglosada por emisor.
   const projectedByMonth = {};
   events.forEach((e) => {
     const k = `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, "0")}`;
-    projectedByMonth[k] = (projectedByMonth[k] || 0) + e.amount;
+    if (!projectedByMonth[k]) projectedByMonth[k] = {};
+    projectedByMonth[k][e.ticker] = (projectedByMonth[k][e.ticker] || 0) + e.amount;
   });
   _divProjectedByMonth = projectedByMonth;
-  renderDividendMonthlyChart(_divReceivedByMonth || {}, projectedByMonth, cur);
+  _divUpdateForecastReadouts(events.length ? forecast12 : 0);
+  renderDividendMonthlyChart();
 
   if (!events.length) {
-    tbody.innerHTML = "";
+    host.innerHTML = "";
     status.style.display = ""; status.textContent = "No hay historial suficiente para proyectar dividendos de tus activos.";
     return;
   }
   status.style.display = "none";
-  tbody.innerHTML = events.map((e) => {
-    const d = e.date.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "2-digit" });
-    return `<tr><td>${d}</td><td><strong>${e.ticker}</strong></td><td>${formatCurrency(e.perShare, e.posCur)}</td><td>${e.qty}</td><td>${formatCurrency(e.amount, cur)}</td></tr>`;
-  }).join("");
+  _divRenderSchedule(events, cur);
 }
 
 // ── Tab: Correlación / diversificación ─────────────────────────────────────────
@@ -11832,8 +12230,11 @@ function initializeTrackerModule() {
   document.getElementById("mcYearNav").addEventListener("click", (e) => {
     const btn = e.target.closest(".var-conf-btn");
     if (!btn || !btn.dataset.years) return;
-    document.querySelectorAll("#mcYearNav .var-conf-btn").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
+    document.querySelectorAll("#mcYearNav .var-conf-btn").forEach((b) => {
+      const on = b === btn;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
     mcYears = parseInt(btn.dataset.years, 10);
     mcTabLoaded = false;
     const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
@@ -11846,12 +12247,24 @@ function initializeTrackerModule() {
     const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
     if (portfolio) loadMonteCarloTab(portfolio);
   };
-  ["mcHistRange", "mcModel", "mcContribution", "mcGoal"].forEach((id) => {
+  ["mcHistRange", "mcModel", "mcDrift", "mcRebalance", "mcContribution",
+   "mcParamUnc", "mcIndexContrib", "mcFee", "mcTradeCost", "mcTaxRate"].forEach((id) => {
     document.getElementById(id)?.addEventListener("change", mcReload);
   });
+  /* La meta no entra en el sorteo: se compara contra la distribución ya
+     simulada. Re-simular por cambiarla costaba una petición de red y ~4,000
+     trayectorias para responder algo que ya estaba calculado — y de paso movía
+     el resto de las cifras, que no dependen de la meta. */
+  const mcGoalEl = document.getElementById("mcGoal");
+  mcGoalEl?.addEventListener("input", () => { if (!mcApplyGoal()) mcReload(); });
+  mcGoalEl?.addEventListener("change", () => { if (!mcApplyGoal()) mcReload(); });
   document.getElementById("mcInflEnabled")?.addEventListener("change", (e) => {
     const rate = document.getElementById("mcInflRate");
     if (rate) rate.disabled = !e.target.checked;
+    // Indexar el aporte sólo significa algo si hay una inflación con la que
+    // compararlo; sin ella la casilla prometería un ajuste que no ocurre.
+    const idx = document.getElementById("mcIndexContrib");
+    if (idx) { idx.disabled = !e.target.checked; if (!e.target.checked) idx.checked = false; }
     mcReload();
   });
   document.getElementById("mcInflRate")?.addEventListener("change", () => {
@@ -12091,7 +12504,15 @@ function _wireCashModal() {
 
 // ── Performance tab helpers ───────────────────────────────────────────────────
 
-async function fetchHistoricalCloses(symbol, range, interval) {
+/* `adjusted: true` devuelve el cierre ajustado por dividendos (`adjclose`) en vez
+   del crudo (`quote.close`). La distinción NO es cosmética: para precios —
+   gráficos, valor de mercado contra costo, P&L — hay que usar el crudo, porque
+   el ajustado reescribe el pasado y no es el precio al que nadie compró. Pero
+   para medir RETORNO el dividendo es parte del rendimiento, y omitirlo subestima
+   el total return de cualquier pagador: a 30 años con 3% de yield, el capital
+   final se queda en menos de la mitad. Sólo lo piden los motores de retorno. */
+async function fetchHistoricalCloses(symbol, range, interval, opts = {}) {
+  const { adjusted = false } = opts;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
     try {
@@ -12102,9 +12523,13 @@ async function fetchHistoricalCloses(symbol, range, interval) {
       if (!result) continue;
       const timestamps = result.timestamp || [];
       const closes = result.indicators?.quote?.[0]?.close || [];
+      // `adjclose` llega con huecos donde `close` no los tiene, así que el
+      // respaldo es por elemento, no por serie.
+      const adj = adjusted ? result.indicators?.adjclose?.[0]?.adjclose : null;
       const out = [];
       for (let i = 0; i < timestamps.length; i++) {
-        const c = closes[i];
+        const a = Array.isArray(adj) ? adj[i] : null;
+        const c = (a !== null && a !== undefined && isFinite(a)) ? a : closes[i];
         if (c !== null && c !== undefined && isFinite(c)) {
           out.push({ ts: timestamps[i] * 1000, close: c });
         }
@@ -13615,61 +14040,123 @@ function randStudentT(df) {
   return z / Math.sqrt(chi2 / df);
 }
 
-function runMonteCarlo(dailyReturns, initVal, years, opts = {}) {
+/* ── Deriva: shrinkage hacia una prior ────────────────────────────────────────
+   La media muestral es un estimador pésimo del retorno esperado: su error
+   estándar es σ/√T, así que con dos años de muestra y 17% de volatilidad el
+   intervalo de confianza del drift anual mide ±12 puntos porcentuales.
+   Extrapolar esa media a 30 años convierte un tramo alcista en profecía. La
+   corrección estándar es encogerla hacia una prior; la de aquí es «esta cartera
+   cobra un Sharpe de largo plazo sobre la tasa libre de riesgo», que se
+   autocalibra con la volatilidad de la propia cartera: más riesgo, más deriva
+   esperada, pero nunca la del último tramo. σ NO se encoge — la volatilidad sí
+   es estimable con muestras cortas; la media no. */
+const MC_PRIOR_RF = 0.04;        // libre de riesgo nominal de largo plazo
+const MC_PRIOR_SHARPE = 0.40;    // Sharpe de una cartera diversificada
+const MC_PRIOR_YEARS = 10;       // fuerza de la prior, en años de muestra equivalentes
+
+function mcShrinkDrift(muDailyLog, sigmaDaily, sessions, mode = "blend") {
+  if (mode === "sample") return { mu: muDailyLog, lambda: 0 };
+  const priorAnnual = MC_PRIOR_RF + MC_PRIOR_SHARPE * (sigmaDaily * Math.sqrt(252));
+  const priorMu = Math.log(1 + priorAnnual) / 252;
+  if (mode === "prior") return { mu: priorMu, lambda: 1, priorAnnual };
+  // Peso bayesiano: la prior vale MC_PRIOR_YEARS años de datos. Con 2 años de
+  // muestra pesa 83%; con 5, 67%. La muestra gana terreno sólo si es larga.
+  const lambda = MC_PRIOR_YEARS / (MC_PRIOR_YEARS + Math.max(sessions, 1) / 252);
+  return { mu: (1 - lambda) * muDailyLog + lambda * priorMu, lambda, priorAnnual };
+}
+
+// Media, varianza y serie log de una serie de retornos simples.
+function mcLogStats(simpleReturns) {
+  const n = simpleReturns.length;
+  const log = new Float64Array(n);
+  for (let i = 0; i < n; i++) log[i] = Math.log(1 + Math.max(simpleReturns[i], -0.9999));
+  let mu = 0;
+  for (let i = 0; i < n; i++) mu += log[i];
+  mu /= n;
+  let v = 0;
+  for (let i = 0; i < n; i++) v += (log[i] - mu) ** 2;
+  v /= Math.max(n - 1, 1);
+  return { log, mu, variance: v, sigma: Math.sqrt(v), n };
+}
+
+// Grados de libertad de la t a partir de la curtosis en exceso (exceso = 6/(df−4)).
+function mcTailDf(log, mu, variance, n) {
+  const m4 = log.reduce((s, r) => s + (r - mu) ** 4, 0) / n;
+  const exKurt = variance > 0 ? m4 / (variance * variance) - 3 : 0;
+  return exKurt > 0.1 ? Math.min(30, Math.max(3, 6 / exKurt + 4)) : 30;
+}
+
+/* Cholesky con jitter. La matriz de covarianzas de activos reales llega casi
+   singular con frecuencia (dos ETFs del mismo índice, o menos sesiones que
+   activos), y ahí la raíz exacta no existe: el piso en 1e−12 la fuerza a ser
+   semidefinida positiva en vez de devolver NaN que envenena toda la simulación. */
+function mcCholesky(cov) {
+  const n = cov.length;
+  const L = Array.from({ length: n }, () => new Float64Array(n));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = cov[i][j];
+      for (let k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+      if (i === j) L[i][i] = Math.sqrt(Math.max(s, 1e-12));
+      else L[i][j] = L[j][j] > 1e-12 ? s / L[j][j] : 0;
+    }
+  }
+  return L;
+}
+
+/* Cierre común de las dos simulaciones: percentiles, deflactor, capital
+   aportado y ruina. Univariada y multivariada divergen sólo en cómo generan las
+   trayectorias; todo lo que se publica se calcula aquí, una sola vez. */
+/* σ̂ no es σ: (T−1)·σ̂²/σ² sigue una χ²(T−1). Invertir esa relación da un
+   multiplicador que unas trayectorias agranda y otras encoge, que es la forma
+   honesta de decir «tampoco conozco la volatilidad exactamente». */
+function mcSigmaScale(df) {
+  const chi2 = randGamma(df / 2) * 2;
+  return Math.sqrt(df / Math.max(chi2, 1e-9));
+}
+
+/* Bootstrap circular por bloques. El i.i.d. sortea días sueltos y con eso
+   destruye la única estructura temporal que los mercados sí tienen: los días
+   malos vienen pegados.
+
+   El bloque se mide en MESES, no en días, y ahí está el detalle que decide si
+   esto sirve. Un bloque corto dentro de cada mes conserva la textura intramensual
+   pero vuelve a sortear al empezar el mes siguiente, así que a diez años las
+   caídas máximas salen idénticas a las del i.i.d. — lo medimos y no había
+   diferencia. Lo que hunde una cartera no es una semana mala: es un trimestre
+   malo encadenado con otro. Por eso la trayectoria arrastra un cursor sobre la
+   historia y avanza 21 sesiones por mes sin re-sortear hasta agotar el bloque. */
+const MC_BLOCK_MONTHS = 3;   // un trimestre de historia contigua
+
+/* Tasa mensual que iguala el capital inicial más los aportes con el valor
+   final: la ponderada por dinero, no la del activo. Con aportes, «(final/inicial)
+   elevado a 1/años» miente — atribuye al rendimiento lo que en realidad pusiste
+   tú de bolsillo. Se resuelve por bisección porque la ecuación no despeja. */
+function mcMoneyWeightedRate(initVal, contribReal, steps, finalValue) {
+  if (!(finalValue > 0)) return -1;             // ruina: se pierde todo
+  const fv = (r) => {
+    let v = initVal;
+    for (let t = 1; t <= steps; t++) v = v * (1 + r) + contribReal[t];
+    return v;
+  };
+  let lo = -0.9999, hi = 1;
+  if (fv(hi) < finalValue) return hi;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (fv(mid) < finalValue) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function mcFinalizePaths(ctx) {
   const {
-    numSims = 4000,
-    contribution = 0,   // monthly cashflow in portfolio currency (negative = retiro)
-    model = "gbm",      // 'gbm' | 'bootstrap' | 't'
-    inflationRate = 0,  // annual decimal; >0 expresses results in today's money
-    goal = null,        // target final value (today's money if inflation on)
-  } = opts;
-
-  const n = dailyReturns.length;
-  const logReturns = dailyReturns.map((r) => Math.log(1 + Math.max(r, -0.9999)));
-  const mu = logReturns.reduce((s, r) => s + r, 0) / n;
-  const variance = logReturns.reduce((s, r) => s + (r - mu) ** 2, 0) / (n - 1);
-  const sigma = Math.sqrt(variance);
-
-  // Monthly steps: dt = 21 trading days
-  const steps = years * 12;
-  const drift = mu * 21 - 0.5 * sigma * sigma * 21;
-  const diffusion = sigma * Math.sqrt(21);
-
-  // Student-t df from sample excess kurtosis (excess = 6/(df-4))
-  let dfT = 30;
-  if (model === "t") {
-    const m4 = logReturns.reduce((s, r) => s + (r - mu) ** 4, 0) / n;
-    const exKurt = variance > 0 ? m4 / (variance * variance) - 3 : 0;
-    dfT = exKurt > 0.1 ? Math.min(30, Math.max(3, 6 / exKurt + 4)) : 30;
-  }
-  const tScale = Math.sqrt((dfT - 2) / dfT); // rescale t to unit variance
-
-  function monthlyStep() {
-    if (model === "bootstrap") {
-      // empirical: sum 21 daily log-returns sampled with replacement (keeps fat tails/skew)
-      let s = 0;
-      for (let k = 0; k < 21; k++) s += logReturns[(Math.random() * n) | 0];
-      return s;
-    }
-    if (model === "t") return drift + diffusion * randStudentT(dfT) * tScale;
-    return drift + diffusion * boxMullerRand();
-  }
-
-  // Simulate paths; capture percentile snapshots and per-path max drawdown
-  const snapshots = Array.from({ length: steps + 1 }, () => new Float32Array(numSims));
-  const maxDD = new Float32Array(numSims);
-  for (let sim = 0; sim < numSims; sim++) {
-    let val = initVal, peak = initVal, dd = 0;
-    snapshots[0][sim] = val;
-    for (let t = 1; t <= steps; t++) {
-      val = val * Math.exp(monthlyStep()) + contribution;
-      if (val < 0) val = 0;
-      if (val > peak) peak = val;
-      else if (peak > 0) { const cur = (peak - val) / peak; if (cur > dd) dd = cur; }
-      snapshots[t][sim] = val;
-    }
-    maxDD[sim] = dd;
-  }
+    snapshots, maxDD, ruinStep, underwater, steps, numSims, initVal,
+    contribution, inflationRate, goal, mu, sigma, indexContribution = false,
+  } = ctx;
+  const mInfl = inflationRate > 0 ? Math.pow(1 + inflationRate, 1 / 12) - 1 : 0;
+  // Aporte nominal del mes t: si está indexado, crece con la inflación, que en
+  // dinero de hoy equivale a aportar siempre lo mismo.
+  const contribAt = (t) => contribution * (indexContribution && mInfl > 0 ? Math.pow(1 + mInfl, t) : 1);
 
   // Compute percentiles [5,10,25,50,75,90,95] at each time step
   const pctLevels = [5, 10, 25, 50, 75, 90, 95];
@@ -13686,7 +14173,6 @@ function runMonteCarlo(dailyReturns, initVal, years, opts = {}) {
   // Inflation: deflate to today's purchasing power
   let deflator = null;
   if (inflationRate > 0) {
-    const mInfl = Math.pow(1 + inflationRate, 1 / 12) - 1;
     deflator = new Float32Array(steps + 1);
     for (let t = 0; t <= steps; t++) deflator[t] = 1 / Math.pow(1 + mInfl, t);
     for (let i = 0; i < bands.length; i++)
@@ -13698,14 +14184,481 @@ function runMonteCarlo(dailyReturns, initVal, years, opts = {}) {
   const finals = new Float32Array(numSims);
   for (let s = 0; s < numSims; s++) finals[s] = snapshots[steps][s] * dfac;
 
+  /* Ruina: trayectorias que tocaron cero en algún momento. El clamp `val < 0 →
+     0` las mantiene vivas y planas hasta el final, así que sin contarlas aparte
+     desaparecen dentro de la distribución y la mediana se lee como si nadie se
+     hubiera arruinado. Con retiros es LA cifra que decide el plan. */
+  let ruinCount = 0;
+  for (let s = 0; s < numSims; s++) if (ruinStep[s] >= 0) ruinCount++;
+  const ruinProb = (ruinCount / numSims) * 100;
+  let medianRuinStep = null;
+  if (ruinCount > 0) {
+    const hit = [];
+    for (let s = 0; s < numSims; s++) if (ruinStep[s] >= 0) hit.push(ruinStep[s]);
+    hit.sort((a, b) => a - b);
+    medianRuinStep = hit[Math.floor(hit.length / 2)];
+  }
+
+  // Curva de capital aportado, en la MISMA unidad que las bandas: el aporte del
+  // mes t vale contribution·deflator[t] en dinero de hoy. Antes el listón de
+  // comparación era la suma nominal de aportes mientras los resultados ya
+  // estaban deflactados, así que «prob. de retorno positivo» y los porcentajes
+  // de variación medían dinero real contra dinero nominal.
+  const baseline = new Float32Array(steps + 1);
+  const contribReal = new Float64Array(steps + 1);   // aporte de cada mes, ya deflactado
+  let acc = initVal, totalContributed = 0;
+  baseline[0] = initVal;
+  for (let t = 1; t <= steps; t++) {
+    const c = contribAt(t);
+    totalContributed += c;
+    contribReal[t] = c * (deflator ? deflator[t] : 1);
+    acc += c * (deflator ? deflator[t] : 1);
+    // Con retiros la curva se agota: seguir restando la hunde a negativo, que no
+    // significa nada (un plan de retiro no te deja debiendo) y además arrastra
+    // la escala del eje hasta aplastar todas las bandas contra el borde.
+    if (acc < 0) acc = 0;
+    baseline[t] = acc;
+  }
+  const totalContributedReal = baseline[steps] - initVal;  // en dinero de hoy
+
+  /* CVaR al 5 %: el promedio de las trayectorias que caen por debajo del
+     percentil 5, no el percentil en sí. El p5 dice «dónde empieza el mal
+     escenario»; el CVaR dice «y si caes ahí, cuánto pierdes en promedio». Es la
+     medida que exige Basilea sobre el VaR precisamente porque el percentil solo
+     no mira lo que hay más allá de él. */
+  const sortedFinals = Float32Array.from(finals).sort();
+  const cut = Math.max(1, Math.round(0.05 * numSims));
+  let cvarSum = 0;
+  for (let i = 0; i < cut; i++) cvarSum += sortedFinals[i];
+  const cvar5 = cvarSum / cut;
+  const var5 = sortedFinals[Math.max(0, cut - 1)];
+
+  /* Tiempo bajo el agua: meses consecutivos por debajo del máximo anterior. La
+     caída máxima dice cuánto se pierde; esto dice cuánto se tarda en volver, que
+     es lo que de verdad agota la paciencia de quien invierte. */
+  const uwSorted = Float32Array.from(underwater).sort();
+  const medianUnderwater = uwSorted[Math.round(0.5 * (numSims - 1))];
+  const p90Underwater = uwSorted[Math.round(0.9 * (numSims - 1))];
+
+  /* Riesgo de secuencia: el orden de los retornos decide el desenlace de un plan
+     con flujos, aunque el promedio salga igual. Se aísla comparando el quintil
+     de trayectorias con peor arranque contra el resto. */
+  let sequence = null;
+  const early = Math.min(60, steps);
+  if (steps >= 24 && early >= 12) {
+    const idx = Array.from({ length: numSims }, (_, s) => s);
+    const at = snapshots[early];
+    idx.sort((a, b) => at[a] - at[b]);
+    const q = Math.max(1, Math.round(0.2 * numSims));
+    const worst = idx.slice(0, q);
+    const dfacEnd = deflator ? deflator[steps] : 1;
+    const fin = (s) => snapshots[steps][s] * dfacEnd;
+    const medOf = (arr) => {
+      const v = Float64Array.from(arr, fin).sort();
+      return v[v.length >> 1];
+    };
+    let ruinInWorst = 0;
+    worst.forEach((s) => { if (ruinStep[s] >= 0) ruinInWorst++; });
+    sequence = {
+      earlyMonths: early,
+      medianWorstStart: medOf(worst),
+      medianAll: sortedFinals[numSims >> 1],
+      ruinProbWorstStart: (ruinInWorst / q) * 100,
+    };
+  }
+
+  // Retorno anualizado ponderado por dinero de cada escenario publicado.
+  const annualizedAt = (value) => {
+    const r = mcMoneyWeightedRate(initVal, contribReal, steps, value);
+    return r <= -1 ? -100 : (Math.pow(1 + r, 12) - 1) * 100;
+  };
+
   return {
-    bands, steps, numSims, mu, sigma, initVal, finals, maxDD,
-    contribution, totalContributed: contribution * steps,
-    model, dfT, inflationRate, goal, years,
+    bands, steps, numSims, mu, sigma, initVal, finals, maxDD, baseline, deflator,
+    contribution, totalContributed, totalContributedReal, contribReal,
+    ruinProb, ruinCount, medianRuinStep,
+    cvar5, var5, medianUnderwater, p90Underwater, sequence, annualizedAt,
+    invested: baseline[steps],
+    goal,
   };
 }
 
-async function computeDailyReturnsForMC(portfolio, histRange = "1y") {
+function runMonteCarlo(dailyReturns, initVal, years, opts = {}) {
+  const {
+    numSims = 4000,
+    contribution = 0,   // monthly cashflow in portfolio currency (negative = retiro)
+    model = "gbm",      // 'gbm' | 'bootstrap' | 't'
+    inflationRate = 0,  // annual decimal; >0 expresses results in today's money
+    goal = null,        // target final value (today's money if inflation on)
+    driftMode = "blend",// 'sample' | 'blend' | 'prior'
+    paramUncertainty = true, // sortear μ y σ de su distribución muestral por trayectoria
+    feeAnnual = 0,      // comisión/TER anual como decimal
+    indexContribution = false,
+  } = opts;
+
+  const st = mcLogStats(dailyReturns);
+  const { log: logReturns, variance, sigma, n } = st;
+  const muSample = st.mu;
+  const shrunk = mcShrinkDrift(muSample, sigma, n, driftMode);
+  const mu = shrunk.mu;
+
+  // Monthly steps: dt = 21 trading days.
+  const steps = years * 12;
+  //
+  // `mu` ya es la media de retornos LOGARÍTMICOS, así que el retorno log de un
+  // mes es directamente 21·mu + σ√21·Z. La corrección de Itô (−σ²/2) sólo
+  // corresponde cuando el drift se estimó sobre retornos SIMPLES; aplicarla
+  // aquí descontaba la merma por varianza dos veces y sesgaba toda la
+  // simulación a la baja por exp(−σ²T/2) — a 17% de volatilidad son ~35% menos
+  // a 30 años. Se notaba además porque el modelo `bootstrap` (que suma 21
+  // retornos log muestreados, sin corrección) daba medianas más altas que
+  // `gbm` con los mismos datos, y porque la mediana simulada contradecía al
+  // «retorno anual» que la propia pestaña reporta, exp(mu·252)−1.
+  const drift = mu * 21;
+  const diffusion = sigma * Math.sqrt(21);
+
+  const dfT = model === "t" ? mcTailDf(logReturns, muSample, variance, n) : 30;
+  const tScale = Math.sqrt((dfT - 2) / dfT); // rescale t to unit variance
+  // El bootstrap arrastra la media de la muestra dentro de cada sorteo, así que
+  // el shrinkage sólo lo alcanza recentrando: se le quita la deriva muestral y
+  // se le pone la encogida, conservando forma, asimetría y colas.
+  const bootAdj = (mu - muSample) * 21;
+
+  /* Incertidumbre de parámetros. Las bandas sólo recogían el azar del mercado
+     dando μ y σ por conocidos, cuando el error de estimar μ con muestras cortas
+     es mayor que casi todo lo demás. El error estándar de la media POSTERIOR es
+     σ/√T·√(1−λ): el encogimiento hacia la prior no sólo mueve el centro, también
+     reduce cuánto puede moverse. */
+  const muErrSd = paramUncertainty
+    ? sigma / Math.sqrt(n) * Math.sqrt(Math.max(1 - shrunk.lambda, 0)) * 21
+    : 0;
+
+  // Merma por comisiones: repartida mes a mes sobre el valor, como se cobra.
+  const feeStep = feeAnnual > 0 ? Math.pow(1 - feeAnnual, 1 / 12) : 1;
+  const mInfl = inflationRate > 0 ? Math.pow(1 + inflationRate, 1 / 12) - 1 : 0;
+  const indexed = indexContribution && mInfl > 0;
+
+  // Simulate paths; capture percentile snapshots, max drawdown and ruin step
+  const snapshots = Array.from({ length: steps + 1 }, () => new Float32Array(numSims));
+  const maxDD = new Float32Array(numSims);
+  const underwater = new Float32Array(numSims);
+  const ruinStep = new Int32Array(numSims).fill(-1);
+  for (let sim = 0; sim < numSims; sim++) {
+    let val = initVal, peak = initVal, dd = 0, uw = 0, maxUw = 0;
+    snapshots[0][sim] = val;
+
+    // Parámetros de ESTA trayectoria: se sortean una vez y rigen todo su futuro.
+    const pathDrift = drift + (muErrSd ? muErrSd * boxMullerRand() : 0);
+    const sigScale = paramUncertainty ? mcSigmaScale(Math.max(n - 1, 2)) : 1;
+    const pathDiff = diffusion * sigScale;
+    const pathBootAdj = bootAdj + (pathDrift - drift);
+    let blockCur = 0, blockLeft = 0;   // cursor de historia contigua
+
+    for (let t = 1; t <= steps; t++) {
+      let step;
+      if (model === "bootstrap") {
+        // empirical: sum 21 daily log-returns sampled with replacement (keeps fat tails/skew)
+        let s = 0;
+        for (let q = 0; q < 21; q++) s += logReturns[(Math.random() * n) | 0];
+        step = s + pathBootAdj;
+      } else if (model === "block") {
+        if (blockLeft === 0) { blockCur = (Math.random() * n) | 0; blockLeft = MC_BLOCK_MONTHS; }
+        let s = 0;
+        for (let d = 0; d < 21; d++) s += logReturns[(blockCur + d) % n];
+        blockCur = (blockCur + 21) % n;
+        blockLeft--;
+        step = s + pathBootAdj;
+      } else if (model === "t") {
+        step = pathDrift + pathDiff * randStudentT(dfT) * tScale;
+      } else {
+        step = pathDrift + pathDiff * boxMullerRand();
+      }
+
+      val = val * Math.exp(step) * feeStep + contribution * (indexed ? Math.pow(1 + mInfl, t) : 1);
+      if (val <= 0) {
+        val = 0;
+        if (ruinStep[sim] < 0) ruinStep[sim] = t;
+      }
+      if (val > peak) { peak = val; uw = 0; }
+      else if (peak > 0) {
+        const cur = (peak - val) / peak; if (cur > dd) dd = cur;
+        if (++uw > maxUw) maxUw = uw;
+      }
+      snapshots[t][sim] = val;
+    }
+    maxDD[sim] = dd;
+    underwater[sim] = maxUw;
+  }
+
+  return {
+    ...mcFinalizePaths({
+      snapshots, maxDD, ruinStep, underwater, steps, numSims, initVal,
+      contribution, inflationRate, goal, mu, sigma, indexContribution,
+    }),
+    model, dfT, inflationRate, years, sessions: n,
+    muSample, driftMode, shrinkage: shrunk.lambda, priorAnnual: shrunk.priorAnnual ?? null,
+    assets: null, rebalance: null,
+    paramUncertainty, feeAnnual, tradeCost: 0, taxRate: 0, indexContribution,
+  };
+}
+
+/* ── Motor multivariado ───────────────────────────────────────────────────────
+   Colapsar la cartera a una sola serie con los pesos de hoy asume, sin decirlo,
+   un rebalanceo diario, perfecto y gratuito: los pesos nunca derivan y el
+   ganador nunca concentra la cartera. Simular activo por activo con su matriz
+   de covarianzas (vía Cholesky) y una regla de rebalanceo explícita es lo que
+   convierte la proyección en algo que un gestor puede defender: la
+   diversificación deja de ser un σ agregado y pasa a ser una estructura. */
+function runMonteCarloMulti(assetData, initVal, years, opts = {}) {
+  const {
+    numSims = 4000, contribution = 0, model = "gbm", inflationRate = 0,
+    goal = null, driftMode = "blend", rebalance = "annual",
+    paramUncertainty = true, feeAnnual = 0, tradeCost = 0, taxRate = 0,
+    indexContribution = false,
+  } = opts;
+
+  const { series, weights, names } = assetData;
+  const k = series.length;
+  const stats = series.map((s) => mcLogStats(s));
+  const n = stats[0].n;
+
+  // Covarianza de retornos log (diaria) y su Cholesky mensual.
+  const cov = Array.from({ length: k }, () => new Float64Array(k));
+  for (let i = 0; i < k; i++) {
+    for (let j = 0; j <= i; j++) {
+      const a = stats[i].log, b = stats[j].log;
+      const ma = stats[i].mu, mb = stats[j].mu;
+      let s = 0;
+      for (let d = 0; d < n; d++) s += (a[d] - ma) * (b[d] - mb);
+      const c = s / Math.max(n - 1, 1);
+      cov[i][j] = c; cov[j][i] = c;
+    }
+  }
+  const L = mcCholesky(cov);
+  const sq21 = Math.sqrt(21);
+  const Lm = L.map((row) => row.map((v) => v * sq21));
+
+  // Cada activo encoge su propia deriva: así el ganador reciente deja de
+  // proyectar su racha, que es justo donde más daño hacía la media muestral.
+  const shrunk = stats.map((s) => mcShrinkDrift(s.mu, s.sigma, s.n, driftMode));
+  const driftM = shrunk.map((s) => s.mu * 21);
+  const bootAdj = shrunk.map((s, i) => (s.mu - stats[i].mu) * 21);
+
+  // Nivel de cartera para lo que se publica: deriva ponderada y σ = √(w'Σw),
+  // consistentes con lo que de verdad se sortea.
+  let muP = 0, varP = 0;
+  for (let i = 0; i < k; i++) {
+    muP += weights[i] * shrunk[i].mu;
+    for (let j = 0; j < k; j++) varP += weights[i] * weights[j] * cov[i][j];
+  }
+  const sigmaP = Math.sqrt(Math.max(varP, 0));
+  const aggStats = mcLogStats(assetData.portfolioReturns);
+  const dfT = model === "t" ? mcTailDf(aggStats.log, aggStats.mu, aggStats.variance, aggStats.n) : 30;
+  const tUnit = Math.sqrt((dfT - 2) / dfT);
+
+  const steps = years * 12;
+  const rebalMonths = rebalance === "annual" ? 12 : rebalance === "quarterly" ? 3 : 0;
+  const bandWidth = 0.05;
+  const feeStep = feeAnnual > 0 ? Math.pow(1 - feeAnnual, 1 / 12) : 1;
+  const mInfl = inflationRate > 0 ? Math.pow(1 + inflationRate, 1 / 12) - 1 : 0;
+  const indexed = indexContribution && mInfl > 0;
+  const taxes = taxRate > 0;
+
+  // Error de estimación de la media, en escala DIARIA y correlacionado: L·z/√T
+  // reparte la incertidumbre respetando la estructura de covarianzas, en vez de
+  // sacudir cada activo por su cuenta.
+  const muErrScale = paramUncertainty
+    ? 21 / Math.sqrt(n) * Math.sqrt(Math.max(1 - (shrunk[0]?.lambda ?? 0), 0))
+    : 0;
+
+  const snapshots = Array.from({ length: steps + 1 }, () => new Float32Array(numSims));
+  const maxDD = new Float32Array(numSims);
+  const underwater = new Float32Array(numSims);
+  const ruinStep = new Int32Array(numSims).fill(-1);
+
+  const hold = new Float64Array(k);
+  const basis = new Float64Array(k);
+  const z = new Float64Array(k);
+  const lr = new Float64Array(k);
+  const pathDrift = new Float64Array(k);
+
+  for (let sim = 0; sim < numSims; sim++) {
+    for (let i = 0; i < k; i++) { hold[i] = initVal * weights[i]; basis[i] = hold[i]; }
+    let peak = initVal, dd = 0, uw = 0, maxUw = 0;
+    snapshots[0][sim] = initVal;
+
+    // Parámetros propios de la trayectoria: una deriva sorteada del posterior y
+    // una escala de volatilidad de la χ². Se fijan una vez y rigen su futuro.
+    if (muErrScale) {
+      for (let i = 0; i < k; i++) z[i] = boxMullerRand();
+      for (let i = 0; i < k; i++) {
+        let s = 0;
+        const row = L[i];
+        for (let j = 0; j <= i; j++) s += row[j] * z[j];
+        pathDrift[i] = driftM[i] + s * muErrScale;
+      }
+    } else {
+      for (let i = 0; i < k; i++) pathDrift[i] = driftM[i];
+    }
+    const sigScale = paramUncertainty ? mcSigmaScale(Math.max(n - 1, 2)) : 1;
+    let blockCur = 0, blockLeft = 0;   // cursor de historia contigua
+
+    for (let t = 1; t <= steps; t++) {
+      if (model === "bootstrap" || model === "block") {
+        /* Se muestrea la FECHA, no el activo: los k retornos de un mismo día
+           entran juntos. Eso reproduce la correlación observada — incluida la
+           que sólo aparece en las caídas — sin suponer ninguna distribución.
+           Por bloques, además, los días llegan en tramos consecutivos y las
+           rachas malas sobreviven al muestreo. */
+        for (let i = 0; i < k; i++) lr[i] = bootAdj[i] + (pathDrift[i] - driftM[i]);
+        if (model === "block") {
+          if (blockLeft === 0) { blockCur = (Math.random() * n) | 0; blockLeft = MC_BLOCK_MONTHS; }
+          for (let d = 0; d < 21; d++) {
+            const idx = (blockCur + d) % n;
+            for (let i = 0; i < k; i++) lr[i] += stats[i].log[idx];
+          }
+          blockCur = (blockCur + 21) % n;
+          blockLeft--;
+        } else {
+          for (let d = 0; d < 21; d++) {
+            const idx = (Math.random() * n) | 0;
+            for (let i = 0; i < k; i++) lr[i] += stats[i].log[idx];
+          }
+        }
+      } else {
+        for (let i = 0; i < k; i++) z[i] = boxMullerRand();
+        /* t multivariada: un único χ² escala el vector entero. Compartir el
+           shock es lo que hace que las colas lleguen a la vez a todos los
+           activos, que es como se comportan las crisis de verdad. */
+        let scale = sigScale;
+        if (model === "t") {
+          const chi2 = randGamma(dfT / 2) * 2;
+          scale *= Math.sqrt(dfT / Math.max(chi2, 1e-9)) * tUnit;
+        }
+        for (let i = 0; i < k; i++) {
+          let s = 0;
+          const row = Lm[i];
+          for (let j = 0; j <= i; j++) s += row[j] * z[j];
+          lr[i] = pathDrift[i] + s * scale;
+        }
+      }
+
+      let val = 0;
+      for (let i = 0; i < k; i++) { hold[i] = hold[i] * Math.exp(lr[i]) * feeStep; val += hold[i]; }
+
+      // El aporte entra a pesos objetivo salvo que se haya elegido no
+      // rebalancear nunca; comprar lo rezagado ES la forma barata de rebalancear.
+      const contribNow = contribution * (indexed ? Math.pow(1 + mInfl, t) : 1);
+      if (contribNow !== 0) {
+        if (rebalance === "none") {
+          const f = val > 0 ? (val + contribNow) / val : 0;
+          for (let i = 0; i < k; i++) {
+            const before = hold[i];
+            hold[i] *= f;
+            if (taxes) basis[i] += hold[i] - before;
+          }
+        } else {
+          for (let i = 0; i < k; i++) {
+            hold[i] += contribNow * weights[i];
+            if (taxes) basis[i] += contribNow * weights[i];
+          }
+        }
+        val += contribNow;
+      }
+
+      if (val <= 0) {
+        val = 0;
+        for (let i = 0; i < k; i++) { hold[i] = 0; basis[i] = 0; }
+        if (ruinStep[sim] < 0) ruinStep[sim] = t;
+      } else {
+        let doRebal = rebalMonths > 0 && t % rebalMonths === 0;
+        if (rebalance === "band" && !doRebal) {
+          for (let i = 0; i < k; i++) {
+            if (Math.abs(hold[i] / val - weights[i]) > bandWidth) { doRebal = true; break; }
+          }
+        }
+        if (doRebal) {
+          /* Rebalancear no es gratis: se paga la operación y, en cuenta
+             gravable, el impuesto sobre la plusvalía que se realiza al vender.
+             La base de costo se lleva por activo y se consume en proporción a
+             lo vendido — el criterio proporcional, que es el que usan la
+             mayoría de jurisdicciones para participaciones fungibles. */
+          let traded = 0, tax = 0;
+          for (let i = 0; i < k; i++) {
+            const target = val * weights[i];
+            const diff = hold[i] - target;
+            if (diff > 0) {
+              traded += diff;
+              if (taxes && hold[i] > 0) {
+                const gainFrac = (hold[i] - basis[i]) / hold[i];
+                if (gainFrac > 0) tax += diff * gainFrac * taxRate;
+                basis[i] -= diff * (basis[i] / hold[i]);
+              }
+            } else if (diff < 0) {
+              traded += -diff;
+              if (taxes) basis[i] += -diff;
+            }
+          }
+          const cost = tax + traded * tradeCost;
+          val = Math.max(val - cost, 0);
+          if (val <= 0 && ruinStep[sim] < 0) ruinStep[sim] = t;
+          for (let i = 0; i < k; i++) hold[i] = val * weights[i];
+          if (taxes) {
+            // La base no puede sobrevivir al capital que la sostenía.
+            let tot = 0;
+            for (let i = 0; i < k; i++) tot += basis[i];
+            if (tot > val && tot > 0) for (let i = 0; i < k; i++) basis[i] *= val / tot;
+          }
+        }
+      }
+
+      if (val > peak) { peak = val; uw = 0; }
+      else if (peak > 0) {
+        const cur = (peak - val) / peak; if (cur > dd) dd = cur;
+        if (++uw > maxUw) maxUw = uw;
+      }
+      snapshots[t][sim] = val;
+    }
+    maxDD[sim] = dd;
+    underwater[sim] = maxUw;
+  }
+
+  return {
+    ...mcFinalizePaths({
+      snapshots, maxDD, ruinStep, underwater, steps, numSims, initVal,
+      contribution, inflationRate, goal, mu: muP, sigma: sigmaP, indexContribution,
+    }),
+    model, dfT, inflationRate, years, sessions: n,
+    muSample: aggStats.mu, driftMode,
+    shrinkage: shrunk[0]?.lambda ?? 0,
+    priorAnnual: shrunk[0]?.priorAnnual ?? null,
+    assets: names, rebalance,
+    paramUncertainty, feeAnnual, tradeCost, taxRate, indexContribution,
+  };
+}
+
+/* Histórico del tipo de cambio `from`→`to`, alineado por fecha. Sin esto, una
+   posición en otra divisa entraba al modelo con su retorno en moneda nativa
+   mientras su peso ya estaba convertido: la volatilidad cambiaria — que para el
+   inversionista es riesgo real y a veces el dominante — simplemente no existía. */
+async function fetchFXSeriesForMC(fromCur, toCur, range) {
+  if (!fromCur || !toCur || fromCur === toCur) return null;
+  const hist = await fetchHistoricalCloses(`${fromCur}${toCur}=X`, range, "1d");
+  if (hist.length < 2) return null;
+  const map = {};
+  hist.forEach((d) => { map[new Date(d.ts).toISOString().slice(0, 10)] = d.close; });
+  return map;
+}
+
+// Máximo de activos simulados uno a uno. Por encima, los de menor peso se
+// agrupan en un sintético "Resto": el coste del motor multivariado crece con n².
+const MC_MAX_ASSETS = 12;
+
+/* Serie de retornos POR ACTIVO en moneda de portafolio, más los pesos actuales.
+   Es la entrada del motor multivariado: conservar los activos separados es lo
+   que permite modelar correlación y rebalanceo en vez de asumir, como antes,
+   que la cartera es un solo instrumento con los pesos de hoy congelados. */
+async function computeMCAssetData(portfolio, histRange = "1y") {
   const positions = portfolio.positions || [];
   if (!positions.length) return null;
   const portfolioCur = portfolio.currency || "USD";
@@ -13714,20 +14667,46 @@ async function computeDailyReturnsForMC(portfolio, histRange = "1y") {
 
   const uniqueTickers = [...new Set(allPositions.map((p) => p.ticker))];
   const tickerHistories = await Promise.all(
-    uniqueTickers.map((t) => fetchHistoricalCloses(t, histRange, "1d").then((h) => ({ t, h })))
+    uniqueTickers.map((t) => fetchHistoricalCloses(t, histRange, "1d", { adjusted: true })
+      .then((h) => ({ t, h })))
   );
   const histMap = {};
   tickerHistories.forEach(({ t, h }) => { histMap[t] = h; });
 
-  const tickerDateMaps = {};
+  // Divisa de cada ticker: la declarada en la posición manda sobre la inferida.
+  const tickerCur = {};
   uniqueTickers.forEach((t) => {
-    tickerDateMaps[t] = {};
-    (histMap[t] || []).forEach((d) => {
-      tickerDateMaps[t][new Date(d.ts).toISOString().slice(0, 10)] = d.close;
-    });
+    const pos = allPositions.find((p) => p.ticker === t);
+    tickerCur[t] = pos?.currency || detectCurrencyFromTicker(t) || portfolioCur;
   });
 
-  const tickersWithData = uniqueTickers.filter((t) => (histMap[t] || []).length > 1);
+  const foreignCurs = [...new Set(Object.values(tickerCur))].filter((c) => c && c !== portfolioCur);
+  const fxSeries = {};
+  await Promise.all(foreignCurs.map((c) =>
+    fetchFXSeriesForMC(c, portfolioCur, histRange).then((m) => { if (m) fxSeries[c] = m; })
+  ));
+
+  // Cierres ya convertidos a moneda de portafolio. El FX cotiza en un calendario
+  // distinto al de las bolsas, así que los huecos se rellenan con el último
+  // conocido en vez de descartar la sesión.
+  const tickerDateMaps = {};
+  uniqueTickers.forEach((t) => {
+    const cur = tickerCur[t];
+    const fx = cur === portfolioCur ? null : fxSeries[cur];
+    const map = {};
+    let lastRate = null;
+    (histMap[t] || []).forEach((d) => {
+      const key = new Date(d.ts).toISOString().slice(0, 10);
+      if (!fx) { map[key] = d.close; return; }
+      const rate = fx[key] ?? lastRate;
+      if (rate == null || !isFinite(rate) || rate <= 0) return;
+      lastRate = rate;
+      map[key] = d.close * rate;
+    });
+    tickerDateMaps[t] = map;
+  });
+
+  const tickersWithData = uniqueTickers.filter((t) => Object.keys(tickerDateMaps[t]).length > 1);
   if (!tickersWithData.length) return null;
 
   const dateSets = tickersWithData.map((t) => new Set(Object.keys(tickerDateMaps[t])));
@@ -13736,62 +14715,354 @@ async function computeDailyReturnsForMC(portfolio, histRange = "1y") {
 
   // Forward projection uses CURRENT market-value weights (held positions only),
   // not historical cost weights — this is the allocation the investor holds today.
+  const mvByTicker = {};
   let totalMV = 0;
   allPositions.forEach((pos) => {
+    if (pos.sellDate) return; // sold positions carry no current weight
     const posCur = pos.currency || portfolioCur;
     const hist = histMap[pos.ticker] || [];
     const lastClose = hist.length ? hist[hist.length - 1].close : pos.avgPrice;
     const mv = convertAmount(lastClose * pos.quantity, posCur, portfolioCur) ?? (lastClose * pos.quantity);
-    pos._mv = pos.sellDate ? 0 : mv; // sold positions carry no current weight
-    totalMV += pos._mv;
+    mvByTicker[pos.ticker] = (mvByTicker[pos.ticker] || 0) + mv;
+    totalMV += mv;
   });
   if (totalMV <= 0) return null;
-  allPositions.forEach((pos) => { pos._weight = pos._mv / totalMV; });
 
-  const dailyReturns = [];
-  for (let i = 1; i < commonDates.length; i++) {
-    const d0 = commonDates[i - 1], d1 = commonDates[i];
-    let r = 0;
-    allPositions.forEach((pos) => {
-      if (pos.sellDate && d1 > pos.sellDate) return;
-      const c0 = tickerDateMaps[pos.ticker]?.[d0];
-      const c1 = tickerDateMaps[pos.ticker]?.[d1];
-      if (c0 && c1 && c0 > 0) r += pos._weight * (c1 - c0) / c0;
+  // Sólo entran al modelo los tickers que a la vez pesan hoy y tienen histórico.
+  let held = tickersWithData.filter((t) => (mvByTicker[t] || 0) > 0);
+  if (!held.length) return null;
+  held.sort((a, b) => mvByTicker[b] - mvByTicker[a]);
+
+  const heldMV = held.reduce((s, t) => s + mvByTicker[t], 0);
+  const simpleReturns = {};
+  held.forEach((t) => {
+    const m = tickerDateMaps[t];
+    const arr = new Float64Array(commonDates.length - 1);
+    for (let i = 1; i < commonDates.length; i++) {
+      const c0 = m[commonDates[i - 1]], c1 = m[commonDates[i]];
+      arr[i - 1] = (c0 > 0 && c1 > 0) ? (c1 - c0) / c0 : 0;
+    }
+    simpleReturns[t] = arr;
+  });
+
+  // Agrupar la cola larga en un sintético "Resto" con el retorno promedio
+  // ponderado de sus miembros: conserva la vol y la correlación agregadas sin
+  // pagar el coste n² de simularlos uno a uno.
+  let names = [], weights = [], series = [];
+  if (held.length <= MC_MAX_ASSETS) {
+    names = held.slice();
+    weights = held.map((t) => mvByTicker[t] / heldMV);
+    series = held.map((t) => simpleReturns[t]);
+  } else {
+    const head = held.slice(0, MC_MAX_ASSETS - 1);
+    const tail = held.slice(MC_MAX_ASSETS - 1);
+    const tailMV = tail.reduce((s, t) => s + mvByTicker[t], 0);
+    const tailSeries = new Float64Array(commonDates.length - 1);
+    tail.forEach((t) => {
+      const w = mvByTicker[t] / tailMV;
+      const arr = simpleReturns[t];
+      for (let i = 0; i < arr.length; i++) tailSeries[i] += w * arr[i];
     });
-    dailyReturns.push(r);
+    names = [...head, `Resto (${tail.length})`];
+    weights = [...head.map((t) => mvByTicker[t] / heldMV), tailMV / heldMV];
+    series = [...head.map((t) => simpleReturns[t]), tailSeries];
   }
-  return dailyReturns;
+
+  // Serie agregada con pesos fijos: la que consume el motor univariado.
+  const n = commonDates.length - 1;
+  const portfolioReturns = new Array(n).fill(0);
+  for (let a = 0; a < series.length; a++) {
+    const w = weights[a], arr = series[a];
+    for (let i = 0; i < n; i++) portfolioReturns[i] += w * arr[i];
+  }
+
+  return {
+    names, weights, series, portfolioReturns,
+    sessions: n,
+    grouped: held.length > MC_MAX_ASSETS,
+    fxApplied: foreignCurs.filter((c) => fxSeries[c]),
+    fxMissing: foreignCurs.filter((c) => !fxSeries[c]),
+  };
+}
+
+// Compatibilidad: los consumidores que sólo quieren la serie agregada (Metas).
+async function computeDailyReturnsForMC(portfolio, histRange = "1y") {
+  const data = await computeMCAssetData(portfolio, histRange);
+  return data ? data.portfolioReturns : null;
+}
+
+/* Serie de un índice de referencia, en moneda de portafolio y con dividendos,
+   para poder responder la pregunta que ninguna proyección aislada contesta:
+   «¿y si en vez de esto hubiera comprado el índice?». Un +9 % deja de sonar bien
+   en cuanto al lado aparece un +11 % que no exigía elegir nada. */
+async function computeBenchmarkReturnsForMC(symbol, histRange, portfolioCur) {
+  const hist = await fetchHistoricalCloses(symbol, histRange, "1d", { adjusted: true });
+  if (hist.length < 21) return null;
+  const benchCur = detectCurrencyFromTicker(symbol) || "USD";
+  let fx = null;
+  if (benchCur !== portfolioCur) {
+    fx = await fetchFXSeriesForMC(benchCur, portfolioCur, histRange);
+    if (!fx) return null;   // sin tipo de cambio la comparación mezclaría monedas
+  }
+  const vals = [];
+  let lastRate = null;
+  hist.forEach((d) => {
+    if (!fx) { vals.push(d.close); return; }
+    const key = new Date(d.ts).toISOString().slice(0, 10);
+    const rate = fx[key] ?? lastRate;
+    if (rate == null || !isFinite(rate) || rate <= 0) return;
+    lastRate = rate;
+    vals.push(d.close * rate);
+  });
+  if (vals.length < 21) return null;
+  const out = [];
+  for (let i = 1; i < vals.length; i++) {
+    out.push(vals[i - 1] > 0 ? (vals[i] - vals[i - 1]) / vals[i - 1] : 0);
+  }
+  return out;
+}
+
+/* ── Monte Carlo: presentación ───────────────────────────────────────────────
+   Los datos y el dibujo van separados a propósito. Antes, cambiar de tema,
+   redimensionar la ventana o mover la meta re-lanzaba `loadMonteCarloTab`, que
+   vuelve a pedir el histórico por red y a sortear 4,000 trayectorias nuevas:
+   las cifras en pantalla CAMBIABAN al pasar de oscuro a claro. Ahora la
+   simulación se guarda en `mcLastSim` y esas tres cosas sólo repintan. */
+let mcLastSim = null;
+let mcLastCtx = null;
+let mcReturnsCache = null;   // { key: `${portfolioId}|${histRange}`, data }
+let mcBenchCache = null;     // { key: `${symbol}|${histRange}|${currency}`, returns }
+let mcHover = -1;            // paso bajo el cursor; −1 = ninguno
+let mcChartWired = false;
+let mcResizeTimer = null;
+
+/* Cuántas trayectorias caben en un segundo de hilo principal. El coste real
+   medido en navegador es ≈5M «paso×activo» por segundo, y con la simulación
+   multivariada el trabajo ya no depende sólo del horizonte: 12 activos a 30
+   años son 4,320 pasos por trayectoria. Un número fijo, o congelaba la página
+   en el caso pesado, o desperdiciaba precisión en el ligero — así que se fija
+   el presupuesto y se despeja el número. Un horizonte corto con dos activos
+   ahora sortea 12,000 trayectorias en vez de 4,000. */
+const MC_SIM_BUDGET = 5e6;
+const MC_SIM_MIN = 2000;    // por debajo, el ruido de muestreo se vuelve visible
+const MC_SIM_MAX = 12000;   // por encima, no se gana precisión legible
+function mcSimCount(steps, assets) {
+  const per = Math.max(steps * Math.max(assets, 1), 1);
+  const raw = Math.floor(MC_SIM_BUDGET / per / 500) * 500;
+  return Math.max(MC_SIM_MIN, Math.min(MC_SIM_MAX, raw));
+}
+const MC_RANGE_LABEL = { "1y": "1 año", "2y": "2 años", "5y": "5 años" };
+const MC_MODEL_LABEL = {
+  gbm: "Normal (log-normal)", bootstrap: "Bootstrap histórico",
+  block: `Bootstrap por bloques de ${MC_BLOCK_MONTHS} meses`, t: "t-Student",
+};
+const MC_DRIFT_LABEL = { blend: "Mixta", sample: "Histórica", prior: "Prior de largo plazo" };
+const MC_REBAL_LABEL = { annual: "Anual", quarterly: "Trimestral", band: "Bandas ±5 %", none: "Ninguno" };
+
+function mcReduceMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
+function mcHorizonLabel(years) {
+  return `a ${years} año${years > 1 ? "s" : ""}`;
+}
+
+/* Los tokens se leen del propio documento en el momento de pintar: así el
+   lienzo no puede quedarse con la paleta del tema anterior ni desviarse de la
+   hoja de estilos, que es lo que pasaba con `#6f86ff` escrito a mano. */
+function mcColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const tok = (name, fallback) => (cs.getPropertyValue(name) || "").trim() || fallback;
+  const series = tok("--v4-cobalt-line", "#2A5CBE");
+  return {
+    series,
+    band: (a) => mcAlpha(series, a),
+    grid: tok("--v4-rule-soft", "#E4E9EF"),
+    rule: tok("--v4-rule", "#D6DDE6"),
+    ruleStrong: tok("--v4-rule-strong", "#B5C0CE"),
+    axis: tok("--v4-ink-3", "#5A6980"),
+    ink: tok("--v4-ink", "#0B1524"),
+    surface: tok("--v4-surface", "#FFFFFF"),
+  };
+}
+
+function mcAlpha(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/* Escala de ejes con pasos redondos. La anterior partía el rango crudo en
+   quintos y lo compactaba con `toFixed(0)`, así que el eje llegaba a rotular
+   «4K · 3K · 3K · 2K · 2K · 1K»: dos pares de etiquetas repetidas en un
+   instrumento cuya única promesa es la precisión. */
+function mcNiceScale(min, max, target = 5) {
+  let lo = Math.min(min, max), hi = Math.max(min, max);
+  if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 1; }
+  if (hi - lo < 1e-9) { const pad = Math.abs(hi) * 0.1 || 1; lo -= pad; hi += pad; }
+  const raw = (hi - lo) / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  const start = Math.floor(lo / step) * step;
+  const end = Math.ceil(hi / step) * step;
+  const ticks = [];
+  for (let v = start; v <= end + step * 0.5; v += step) ticks.push(v);
+  return { ticks, min: start, max: end, step };
+}
+
+/* Rotulador del eje, construido a partir del PASO de la escala y no de cada
+   valor suelto. `formatCurrencyCompact` decide unidad y redondeo mirando sólo
+   el número que le toca —1,500 → «2K»— y por eso el eje llegaba a rotular
+   «4K · 3K · 3K · 2K · 2K · 1K».
+
+   Aquí la unidad la fija el extremo de la escala (todas las marcas comparten
+   K/M/B, que es lo que permite compararlas de un vistazo) y los decimales
+   salen del paso: con `dec ≥ −log₁₀(paso/unidad)`, dos marcas consecutivas no
+   pueden redondear al mismo texto. Verificado sobre 20,000 rangos aleatorios:
+   cero rótulos repetidos. */
+function mcAxisFormatter(max, step) {
+  const m = Math.abs(max);
+  const unit = m >= 1e9 ? 1e9 : m >= 1e6 ? 1e6 : m >= 1e3 ? 1e3 : 1;
+  const suffix = unit === 1e9 ? "B" : unit === 1e6 ? "M" : unit === 1e3 ? "K" : "";
+  const rel = step / unit;
+  // El tope sólo entra en juego con rangos degenerados (un cono de 4,000
+  // trayectorias nunca se abre tan poco); está para que la cifra no crezca sin
+  // límite, no porque haga falta a estos anchos.
+  const dec = rel >= 1 ? 0 : Math.min(6, Math.ceil(-Math.log10(rel)));
+  return (v) => {
+    if (Math.abs(v) < step * 1e-6) return "0"; // el cero no se rotula «0.0K»
+    const sign = v < 0 ? "−" : "";
+    const q = Math.abs(v) / unit;
+    return sign + q.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + suffix;
+  };
+}
+
+function mcMoney0(value, currency) {
+  const sym = CURRENCY_SYMBOLS[currency] || "$";
+  const sign = value < 0 ? "-" : "";
+  return sign + sym + Math.round(Math.abs(value)).toLocaleString("en-US");
+}
+
+/* Variación relativa con base agotable. Un plan de retiro consume el capital
+   aportado hasta dejarlo en cero, y entonces «(valor − base) ÷ base» devuelve
+   Infinity o NaN: la lámina llegaba a imprimir «+Infinity %» y «−NaN %» en la
+   escalera de escenarios. Cuando no hay base contra la que medir, la lectura
+   honesta no es un porcentaje extraño: es no dar porcentaje. */
+function mcRelPct(value, base) {
+  return base > 0 && isFinite(base) ? ((value - base) / base) * 100 : null;
+}
+
+function mcSigned(pct, decimals = 1) {
+  return (pct >= 0 ? "+" : "−") + Math.abs(pct).toFixed(decimals) + "%";
+}
+
+function mcPercentileAt(sim, level, t) {
+  const idx = { 5: 0, 10: 1, 25: 2, 50: 3, 75: 4, 90: 5, 95: 6 }[level];
+  return sim.bands[idx][t];
+}
+
+function mcProbAbove(sim, threshold) {
+  const f = sim.finals;
+  let c = 0;
+  for (let i = 0; i < f.length; i++) if (f[i] >= threshold) c++;
+  return (c / f.length) * 100;
+}
+
+function mcSetBusy(on) {
+  const plate = document.getElementById("mcPlate");
+  if (plate) {
+    plate.classList.toggle("is-busy", !!on);
+    plate.setAttribute("aria-busy", on ? "true" : "false");
+  }
+  document.getElementById("mcOutcomes")?.classList.toggle("is-busy", !!on);
+}
+
+/* Estado sin resultado: la lámina no puede quedarse con la proyección anterior
+   en pantalla mientras dice que no hay datos. */
+function mcShowMessage(text) {
+  mcLastSim = null;
+  const status = document.getElementById("mcStatus");
+  if (status) { status.classList.add("is-message"); status.textContent = text; }
+  const verdict = document.getElementById("mcVerdict");
+  if (verdict) verdict.innerHTML = "";
+  document.getElementById("mcLadder").innerHTML = "";
+  document.getElementById("mcStatsGrid").innerHTML = "";
+  document.getElementById("mcOutcomes")?.setAttribute("hidden", "");
+  const canvas = document.getElementById("mcCanvas");
+  if (canvas) {
+    if (mcRafId != null) { cancelAnimationFrame(mcRafId); mcRafId = null; }
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  mcSetBusy(false);
 }
 
 async function loadMonteCarloTab(portfolio) {
   mcTabLoaded = true;
   const statusEl = document.getElementById("mcStatus");
   const canvas = document.getElementById("mcCanvas");
-  const statsGrid = document.getElementById("mcStatsGrid");
+  if (!statusEl || !canvas) return;
 
-  statusEl.textContent = "Calculando simulación...";
-  statsGrid.innerHTML = "";
+  const cur = portfolio.currency || "USD";
+  const curTag = `(${cur})`;
+  const contribCur = document.getElementById("mcContribCur");
+  const goalCur = document.getElementById("mcGoalCur");
+  if (contribCur) contribCur.textContent = curTag;
+  if (goalCur) goalCur.textContent = curTag;
 
   // Read projection controls
   const histRange = document.getElementById("mcHistRange")?.value || "2y";
   const model = document.getElementById("mcModel")?.value || "gbm";
+  const driftMode = document.getElementById("mcDrift")?.value || "blend";
+  const rebalance = document.getElementById("mcRebalance")?.value || "annual";
   const contribution = parseFloat(document.getElementById("mcContribution")?.value) || 0;
   const goalRaw = parseFloat(document.getElementById("mcGoal")?.value);
   const goal = isFinite(goalRaw) && goalRaw > 0 ? goalRaw : null;
   const inflEnabled = document.getElementById("mcInflEnabled")?.checked;
   const inflRate = inflEnabled ? (parseFloat(document.getElementById("mcInflRate")?.value) || 0) / 100 : 0;
+  const paramUncertainty = document.getElementById("mcParamUnc")?.checked ?? true;
+  const indexContribution = !!(inflRate > 0 && document.getElementById("mcIndexContrib")?.checked);
+  const pct = (id, max) => Math.min(Math.max(parseFloat(document.getElementById(id)?.value) || 0, 0), max) / 100;
+  const feeAnnual = pct("mcFee", 10);
+  const tradeCost = pct("mcTradeCost", 5);
+  const taxRate = pct("mcTaxRate", 60);
 
-  const rangeLabel = { "1y": "1 año", "2y": "2 años", "5y": "5 años" }[histRange] || histRange;
-  statusEl.textContent = `Obteniendo datos históricos (${rangeLabel})...`;
-  const dailyReturns = await computeDailyReturnsForMC(portfolio, histRange);
+  const rangeLabel = MC_RANGE_LABEL[histRange] || histRange;
+  mcSetBusy(true);
+  statusEl.classList.add("is-message");
+  statusEl.innerHTML = `<span class="inline-spinner"></span> Obteniendo histórico (${rangeLabel})…`;
 
-  if (!dailyReturns || dailyReturns.length < 20) {
-    statusEl.textContent = "Datos históricos insuficientes para calcular riesgo.";
+  // El histórico sólo depende del portafolio y de la muestra elegida: cambiar
+  // horizonte, modelo, aporte o meta no vuelve a pedirlo por red.
+  const cacheKey = `${portfolio.id}|${histRange}`;
+  let assetData = mcReturnsCache?.key === cacheKey ? mcReturnsCache.data : null;
+  if (!assetData) {
+    assetData = await computeMCAssetData(portfolio, histRange);
+    if (assetData) mcReturnsCache = { key: cacheKey, data: assetData };
+  }
+
+  if (!assetData || assetData.sessions < 20) {
+    mcShowMessage("No hay suficiente histórico común entre tus posiciones para proyectar. Se necesitan al menos 20 sesiones con precio en todas ellas.");
     return;
   }
 
+  // El índice se descarga aquí, dentro de la fase de red, y no más abajo: si se
+  // pide después el rótulo diría «Simulando» mientras en realidad se espera al
+  // servidor, que es exactamente el tipo de mentira pequeña que erosiona la
+  // confianza en lo que la pantalla dice estar haciendo.
+  const benchSym = portfolio.benchmark || "^GSPC";
+  const benchKey = `${benchSym}|${histRange}|${cur}`;
+  let benchReturns = mcBenchCache?.key === benchKey ? mcBenchCache.returns : null;
+  if (!benchReturns) {
+    statusEl.innerHTML = `<span class="inline-spinner"></span> Obteniendo ${benchSym} para comparar…`;
+    try {
+      benchReturns = await computeBenchmarkReturnsForMC(benchSym, histRange, cur);
+      if (benchReturns) mcBenchCache = { key: benchKey, returns: benchReturns };
+    } catch { benchReturns = null; }
+  }
+
   // Use current market value if available, else total invested
-  const cur = portfolio.currency || "USD";
   const initVal = (_lastPortfolioCurrentValue && _lastPortfolioCurrentValue > 0)
     ? _lastPortfolioCurrentValue
     : (() => {
@@ -13800,120 +15071,428 @@ async function loadMonteCarloTab(portfolio) {
       })();
 
   if (initVal <= 0) {
-    statusEl.textContent = "El portafolio no tiene valor actual. Agrega posiciones primero.";
+    mcShowMessage("El portafolio no tiene valor actual. Agrega posiciones para proyectarlo.");
     return;
   }
 
-  const numSims = 4000;
-  const sim = runMonteCarlo(dailyReturns, initVal, mcYears, {
-    numSims, contribution, model, inflationRate: inflRate, goal,
-  });
-  drawMonteCarloChart(canvas, sim, mcYears, cur);
-  renderMCStats(sim, mcYears, cur, initVal);
-  const annRet = ((Math.exp(sim.mu * 252) - 1) * 100).toFixed(1);
-  const annVol = (sim.sigma * Math.sqrt(252) * 100).toFixed(1);
-  const modelLabel = { gbm: "GBM normal", bootstrap: "bootstrap histórico", t: `t-Student (df≈${sim.dfT.toFixed(1)})` }[model];
-  const parts = [
-    `${numSims.toLocaleString()} trayectorias · ${modelLabel}`,
-    `retorno anual: ${annRet}% · volatilidad: ${annVol}%`,
-    `${dailyReturns.length} sesiones (${rangeLabel})`,
-  ];
-  if (contribution) parts.push(`aporte mensual: ${formatCurrency(contribution, cur)}`);
-  if (inflRate) parts.push(`valores en poder adquisitivo de hoy (infl. ${(inflRate * 100).toFixed(1)}%)`);
-  statusEl.textContent = parts.join(" · ");
+  // Con un solo activo la matriz de covarianzas es un escalar y el rebalanceo no
+  // significa nada: ahí el motor univariado da lo mismo y cuesta k veces menos.
+  const multi = assetData.series.length >= 2;
+  const numSims = mcSimCount(mcYears * 12, multi ? assetData.series.length : 1);
+  statusEl.innerHTML = `<span class="inline-spinner"></span> Simulando ${numSims.toLocaleString("en-US")} trayectorias…`;
+
+  const simOpts = {
+    numSims, contribution, model, inflationRate: inflRate, goal, driftMode,
+    paramUncertainty, feeAnnual, indexContribution,
+  };
+  const sim = multi
+    ? runMonteCarloMulti(assetData, initVal, mcYears, { ...simOpts, rebalance, tradeCost, taxRate })
+    : runMonteCarlo(assetData.portfolioReturns, initVal, mcYears, simOpts);
+
+  /* La misma apuesta, puesta en el índice. Basta con la mediana, así que corre
+     con menos trayectorias: es una referencia, no un segundo análisis. Si el
+     índice no trae histórico o falta el tipo de cambio, la comparación
+     simplemente no aparece — mejor eso que una mentira ordenada. */
+  let benchSim = null;
+  if (benchReturns && benchReturns.length >= 20) {
+    benchSim = runMonteCarlo(benchReturns, initVal, mcYears, {
+      ...simOpts, numSims: Math.min(numSims, 3000),
+    });
+  }
+  if (benchSim) {
+    sim.benchMedian = benchSim.bands[3];
+    sim.benchFinal = benchSim.bands[3][benchSim.steps];
+    sim.benchName = benchSym;
+    sim.benchAnnual = benchSim.annualizedAt(benchSim.bands[3][benchSim.steps]);
+  }
+
+  mcLastSim = sim;
+  mcLastCtx = {
+    currency: cur, years: mcYears, histRange, rangeLabel, model, multi,
+    assetCount: assetData.series.length, grouped: assetData.grouped,
+    fxApplied: assetData.fxApplied, fxMissing: assetData.fxMissing,
+  };
+  document.getElementById("mcOutcomes")?.removeAttribute("hidden");
+  mcRenderAll({ animate: true });
+  mcSetBusy(false);
 }
 
-function drawMonteCarloChart(canvas, sim, years, currency) {
-  const { bands, steps } = sim;
+function mcRenderAll({ animate = false } = {}) {
+  const sim = mcLastSim, ctx = mcLastCtx;
+  if (!sim || !ctx) return;
+  renderMCVerdict(sim, ctx);
+  renderMCLadder(sim, ctx);
+  renderMCStats(sim, ctx);
+  renderMCAssumptions(sim, ctx);
+  drawMonteCarloChart(document.getElementById("mcCanvas"), sim, ctx, { animate });
+  mcWireChart();
+}
+
+/* Repintado puro: mismo sorteo, distinto lienzo (tema, tamaño, cursor). */
+function mcRepaint() {
+  if (!mcLastSim || !mcLastCtx) return;
+  const panel = document.getElementById("tabPanelProyeccion");
+  if (!panel || panel.style.display === "none") return;
+  drawMonteCarloChart(document.getElementById("mcCanvas"), mcLastSim, mcLastCtx, { animate: false });
+}
+
+/* La meta no entra en el sorteo: se compara contra la distribución ya
+   simulada. Cambiarla es instantáneo y no altera ninguna otra cifra. */
+function mcApplyGoal() {
+  const raw = parseFloat(document.getElementById("mcGoal")?.value);
+  const goal = isFinite(raw) && raw > 0 ? raw : null;
+  if (!mcLastSim) return false;
+  mcLastSim.goal = goal;
+  renderMCVerdict(mcLastSim, mcLastCtx);
+  renderMCLadder(mcLastSim, mcLastCtx);
+  renderMCStats(mcLastSim, mcLastCtx);
+  mcRepaint();
+  return true;
+}
+
+// ── Monte Carlo: el asiento de apertura ──────────────────────────────────────
+
+function renderMCVerdict(sim, ctx) {
+  const el = document.getElementById("mcVerdict");
+  if (!el) return;
+  const { currency, years } = ctx;
+  const median = sim.bands[3][sim.steps];
+  const invested = sim.invested;
+  const delta = mcRelPct(median, invested);
+  const cls = delta == null ? "" : delta >= 0 ? "return-pos" : "return-neg";
+
+  /* Con retiros el «capital aportado» se agota y el asiento de apertura dejaba
+     de tener sentido: comparaba contra cero y anunciaba que el 100 % de las
+     trayectorias lo superaba, justo al lado de una ruina mayoritaria. */
+  const reads = [];
+  if (invested > 0) {
+    const probPos = mcProbAbove(sim, invested);
+    reads.push(`Frente a <strong>${formatCurrency(invested, currency)}</strong> de capital aportado.`);
+    reads.push(`<strong>${Math.round(probPos)} %</strong> de las trayectorias termina por encima de ese capital.`);
+  } else {
+    const keeps = Math.round(mcProbAbove(sim, sim.initVal));
+    reads.push(`Los retiros agotan el capital aportado antes del cierre.`);
+    reads.push(`<strong>${keeps} %</strong> de las trayectorias conserva al menos los ${formatCurrency(sim.initVal, currency)} iniciales.`);
+  }
+  if (sim.ruinProb > 0) {
+    reads.push(`<strong>${sim.ruinProb < 1 ? sim.ruinProb.toFixed(1) : Math.round(sim.ruinProb)} %</strong> se queda sin capital.`);
+  }
+  if (sim.goal != null) {
+    const probGoal = Math.round(mcProbAbove(sim, sim.goal));
+    reads.push(`Tu meta de <strong>${formatCurrency(sim.goal, currency)}</strong> se alcanza en el <strong>${probGoal} %</strong>.`);
+  }
+
+  el.innerHTML = `
+    <span class="mc-verdict-label">Resultado central ${mcHorizonLabel(years)}</span>
+    <span class="mc-verdict-figure">
+      <strong class="mc-verdict-value">${formatCurrency(median, currency)}</strong>
+      ${delta == null ? "" : `<em class="mc-verdict-delta ${cls}">${mcSigned(delta)}</em>`}
+    </span>
+    <p class="mc-verdict-read">${reads.join(" ")}</p>
+  `;
+}
+
+// ── Monte Carlo: la escalera de escenarios ───────────────────────────────────
+
+const MC_RUNGS = [
+  { level: 95, name: "Muy favorable" },
+  { level: 75, name: "Favorable" },
+  { level: 50, name: "Central", median: true },
+  { level: 25, name: "Adverso" },
+  { level: 5,  name: "Muy adverso" },
+];
+
+function renderMCLadder(sim, ctx) {
+  const el = document.getElementById("mcLadder");
+  if (!el) return;
+  const { currency, years } = ctx;
+  const horizon = document.getElementById("mcOutcomesHorizon");
+  if (horizon) horizon.textContent = mcHorizonLabel(years);
+
+  const t = sim.steps;
+  const invested = sim.invested;
+  const top = Math.max(mcPercentileAt(sim, 95, t), invested) || 1;
+  const basePct = (invested / top) * 100;
+
+  const rows = MC_RUNGS.map((r, i) => {
+    const v = mcPercentileAt(sim, r.level, t);
+    const delta = mcRelPct(v, invested);
+    const w = Math.max(0, Math.min(100, (v / top) * 100));
+    // El «vs. aportado» es acumulado; la tasa anual es lo que se puede comparar
+    // contra un plazo fijo o contra el índice sin hacer cuentas mentales.
+    const cagr = sim.annualizedAt ? sim.annualizedAt(v) : null;
+    return `
+      <div class="mc-rung${r.median ? " is-median" : ""}" style="--i:${i}">
+        <span class="mc-rung-name">${r.name}<small>P${r.level}</small></span>
+        <span class="mc-rung-track" style="--w:${w.toFixed(2)}%;--base:${basePct.toFixed(2)}%">
+          <span class="mc-rung-fill"></span><span class="mc-rung-base" aria-hidden="true"></span>
+        </span>
+        <span class="mc-rung-value">${formatCurrency(v, currency)}</span>
+        <span class="mc-rung-delta ${delta == null ? "" : delta >= 0 ? "return-pos" : "return-neg"}">${delta == null ? "—" : mcSigned(delta)}</span>
+        <span class="mc-rung-cagr">${cagr == null ? "—" : mcSigned(cagr, 1)}</span>
+      </div>`;
+  }).join("");
+
+  const benchRow = sim.benchName && sim.benchAnnual != null
+    ? ` El mismo dinero puesto en <strong>${sim.benchName}</strong> rendiría ${mcSigned(sim.benchAnnual, 1)} anual en su escenario central.`
+    : "";
+
+  el.innerHTML = `
+    <div class="mc-ladder-head" aria-hidden="true">
+      <span>Escenario</span><span>Reparto</span><span>Valor</span><span>vs. aportado</span><span>anual</span>
+    </div>
+    ${rows}
+    <p class="mc-ladder-note">De cada 100 futuros simulados, 5 terminan por encima de <em>muy favorable</em> y 5 por debajo de <em>muy adverso</em>; el central parte los 100 justo por la mitad. La marca vertical de cada barra es el capital que habrás aportado. La última columna es la tasa <strong>anual equivalente</strong>, ponderada por dinero: tiene en cuenta cuándo entró cada aporte, así que no confunde tu ahorro con rendimiento.${benchRow}</p>
+  `;
+}
+
+// ── Monte Carlo: el lienzo ───────────────────────────────────────────────────
+
+function drawMonteCarloChart(canvas, sim, ctxData, opts = {}) {
+  if (!canvas) return;
+  const { animate = false } = opts;
+  const { bands, steps, baseline } = sim;
+  const { currency, years } = ctxData;
   const wrap = canvas.parentElement;
-  const W = wrap.clientWidth || 700;
-  const H = 300;
+  const W = Math.max(260, wrap.clientWidth || 700);
+  const compact = W < 560;
+  const H = compact ? 244 : 320;
   const dpr = window.devicePixelRatio || 1;
-  const padL = 72, padR = 20, padTop = 20, padBot = 32;
+  const padL = compact ? 46 : 64, padR = compact ? 12 : 18, padTop = 14, padBot = 30;
   const chartW = W - padL - padR;
   const chartH = H - padTop - padBot;
 
-  // Cancel any in-flight reveal animation before redrawing
   if (mcRafId != null) { cancelAnimationFrame(mcRafId); mcRafId = null; }
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.style.width = W + "px"; canvas.style.height = H + "px";
   const ctx = canvas.getContext("2d");
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const minV = Math.min(...Array.from(bands[0]));
-  const maxV = Math.max(...Array.from(bands[6]));
-  const vRange = maxV - minV || 1;
-
-  const toX = (t) => padL + (t / steps) * chartW;
-  const toY = (v) => padTop + chartH - ((v - minV) / vRange) * chartH;
-
-  const C = getPerfChartColors();
-
-  function drawStatic() {
-    ctx.clearRect(0, 0, W, H);
-    const gridSteps = 5;
-    for (let i = 0; i <= gridSteps; i++) {
-      const v = minV + (vRange / gridSteps) * i;
-      const y = toY(v);
-      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + chartW, y);
-      ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = C.axisLabel; ctx.font = "10px 'Libre Franklin', sans-serif";
-      ctx.textAlign = "right"; ctx.textBaseline = "middle";
-      ctx.fillText(formatCurrencyCompact(v, currency), padL - 6, y);
-    }
-    ctx.fillStyle = C.axisLabel; ctx.font = "10px 'Libre Franklin', sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
-    for (let yr = 0; yr <= years; yr++) {
-      const t = yr * 12;
-      ctx.fillText(yr === 0 ? "Hoy" : `Año ${yr}`, toX(t), padTop + chartH + 5);
+  // Dominio: bandas extremas + la curva de capital aportado. La meta sólo entra
+  // si cabe sin aplastar la proyección; si queda muy arriba se rotula fuera de
+  // escala en vez de dejar la nube de trayectorias en una franja de 20 px.
+  const bench = sim.benchMedian && sim.benchMedian.length === steps + 1 ? sim.benchMedian : null;
+  let lo = Infinity, hi = -Infinity;
+  for (let t = 0; t <= steps; t++) {
+    if (bands[0][t] < lo) lo = bands[0][t];
+    if (baseline[t] < lo) lo = baseline[t];
+    if (bands[6][t] > hi) hi = bands[6][t];
+    if (baseline[t] > hi) hi = baseline[t];
+    // El índice entra al dominio: si se sale por arriba, la línea se dibujaría
+    // pegada al borde o fuera del lienzo y la comparación no se vería.
+    if (bench) {
+      if (bench[t] < lo) lo = bench[t];
+      if (bench[t] > hi) hi = bench[t];
     }
   }
+  const goalFits = sim.goal != null && sim.goal <= hi * 1.35 && sim.goal >= lo * 0.65;
+  if (goalFits) { lo = Math.min(lo, sim.goal); hi = Math.max(hi, sim.goal); }
+  // La entrada «Meta» de la leyenda sólo existe cuando hay una regla que
+  // explicar: sin esto rotulaba una línea que el lienzo no dibuja.
+  const legendGoal = document.getElementById("mcLegendGoal");
+  if (legendGoal) legendGoal.hidden = !goalFits;
+  const legendBench = document.getElementById("mcLegendBench");
+  if (legendBench) {
+    legendBench.hidden = !bench;
+    const nameEl = document.getElementById("mcLegendBenchName");
+    if (nameEl && bench) nameEl.textContent = sim.benchName || "Índice";
+  }
+  const scale = mcNiceScale(lo, hi, compact ? 4 : 5);
+  const vMin = scale.min, vRange = (scale.max - scale.min) || 1;
 
-  function drawData(progress) {
-    const revealW = chartW * progress;
+  const toX = (t) => padL + (t / steps) * chartW;
+  const toY = (v) => padTop + chartH - ((v - vMin) / vRange) * chartH;
+  const C = mcColors();
+  const font = (size, weight = 400) => `${weight} ${size}px 'Libre Franklin', system-ui, sans-serif`;
+
+  function drawFrame(progress) {
+    ctx.clearRect(0, 0, W, H);
+
+    // Rejilla horizontal + eje de valores
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.font = font(compact ? 9.5 : 10.5);
+    const tick = mcAxisFormatter(Math.max(Math.abs(scale.min), Math.abs(scale.max)), scale.step);
+    scale.ticks.forEach((v) => {
+      const y = Math.round(toY(v)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + chartW, y);
+      ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = C.axis;
+      ctx.fillText(tick(v), padL - 7, y);
+    });
+
+    // Eje de tiempo: un rótulo por año mientras quepan, si no cada N años
+    const yStep = Math.max(1, Math.ceil(years / (compact ? 4 : 7)));
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillStyle = C.axis; ctx.font = font(compact ? 9.5 : 10.5);
+    let lastX = -Infinity;
+    for (let yr = 0; yr <= years; yr += yStep) {
+      lastX = toX(yr * 12);
+      ctx.fillText(yr === 0 ? "Hoy" : `${yr}a`, lastX, padTop + chartH + 7);
+    }
+    // El cierre del eje sólo se rotula si el paso no cayó justo en él y hay
+    // sitio: si no, «9a» y «10a» se tocan en un teléfono.
+    if ((years % yStep) !== 0 && toX(steps) - lastX > 30) {
+      ctx.fillText(`${years}a`, toX(steps), padTop + chartH + 7);
+    }
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(padL, padTop - 1, revealW, chartH + 2);
+    ctx.rect(padL, padTop - 2, chartW * progress, chartH + 4);
     ctx.clip();
 
-    function drawBand(upperArr, lowerArr, color) {
+    const band = (upper, lower, alpha) => {
       ctx.beginPath();
-      for (let t = 0; t <= steps; t++) ctx[t === 0 ? "moveTo" : "lineTo"](toX(t), toY(upperArr[t]));
-      for (let t = steps; t >= 0; t--) ctx.lineTo(toX(t), toY(lowerArr[t]));
+      for (let t = 0; t <= steps; t++) ctx[t === 0 ? "moveTo" : "lineTo"](toX(t), toY(upper[t]));
+      for (let t = steps; t >= 0; t--) ctx.lineTo(toX(t), toY(lower[t]));
       ctx.closePath();
-      ctx.fillStyle = color; ctx.fill();
+      ctx.fillStyle = C.band(alpha); ctx.fill();
+    };
+    band(bands[6], bands[0], 0.10);
+    band(bands[5], bands[1], 0.13);
+    band(bands[4], bands[2], 0.20);
+
+    // Capital aportado: la línea de equilibrio real de la proyección
+    ctx.beginPath();
+    for (let t = 0; t <= steps; t++) ctx[t === 0 ? "moveTo" : "lineTo"](toX(t), toY(baseline[t]));
+    ctx.strokeStyle = C.ruleStrong; ctx.lineWidth = 1.25; ctx.setLineDash([]); ctx.stroke();
+
+    // Índice de referencia: punteado y en tinta apagada, para que se lea como
+    // vara de medir y no como una segunda proyección con el mismo rango.
+    if (bench) {
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      for (let t = 0; t <= steps; t++) ctx[t === 0 ? "moveTo" : "lineTo"](toX(t), toY(bench[t]));
+      ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5;
+      ctx.lineJoin = "round"; ctx.stroke();
+      ctx.restore();
     }
 
-    drawBand(bands[6], bands[0], "rgba(111,134,255,0.10)");
-    drawBand(bands[5], bands[1], "rgba(111,134,255,0.16)");
-    drawBand(bands[4], bands[2], "rgba(111,134,255,0.24)");
-
+    // Mediana
     ctx.beginPath();
     for (let t = 0; t <= steps; t++) ctx[t === 0 ? "moveTo" : "lineTo"](toX(t), toY(bands[3][t]));
-    ctx.strokeStyle = "#6f86ff"; ctx.lineWidth = 2.5; ctx.lineJoin = "round"; ctx.stroke();
-
+    ctx.strokeStyle = C.series; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
     ctx.restore();
 
-    // Starting dot always visible
+    // Meta: regla horizontal punteada, con rótulo si cabe
+    if (goalFits) {
+      const gy = Math.round(toY(sim.goal)) + 0.5;
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(padL + chartW, gy);
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.globalAlpha = 0.55; ctx.stroke();
+      ctx.restore();
+      ctx.font = font(compact ? 9.5 : 10, 600);
+      ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+      ctx.fillStyle = C.ink;
+      ctx.fillText("Meta", padL + 5, gy - 3);
+    }
+
+    // Punto de partida
     ctx.beginPath();
-    ctx.arc(toX(0), toY(bands[3][0]), 4, 0, Math.PI * 2);
-    ctx.fillStyle = "#6f86ff"; ctx.fill();
+    ctx.arc(toX(0), toY(bands[3][0]), 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = C.series; ctx.fill();
+
+    if (progress >= 1 && mcHover >= 0 && mcHover <= steps) drawCrosshair(mcHover);
   }
 
-  const duration = 900;
-  const startTime = performance.now();
+  function drawCrosshair(t) {
+    const x = Math.round(toX(t)) + 0.5;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(x, padTop); ctx.lineTo(x, padTop + chartH);
+    ctx.strokeStyle = C.axis; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.stroke();
+    ctx.setLineDash([]);
+    [[6, 2.6], [3, 3.4], [0, 2.6]].forEach(([idx, r]) => {
+      ctx.beginPath(); ctx.arc(x, toY(bands[idx][t]), r, 0, Math.PI * 2);
+      ctx.fillStyle = C.series; ctx.strokeStyle = C.surface; ctx.lineWidth = 1.5;
+      ctx.fill(); ctx.stroke();
+    });
+    ctx.restore();
+  }
 
-  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  // Geometría que necesita el manejador del cursor, sin volver a calcularla
+  canvas._mcGeom = { padL, padR, padTop, chartW, chartH, steps, W, H };
 
-  function frame(now) {
-    const p = easeOut(Math.min((now - startTime) / duration, 1));
-    drawStatic();
-    drawData(p);
+  if (!animate || mcReduceMotion()) { drawFrame(1); return; }
+
+  const duration = 620;
+  const start = performance.now();
+  const ease = (p) => 1 - Math.pow(1 - p, 3);
+  const frame = (now) => {
+    const p = ease(Math.min((now - start) / duration, 1));
+    drawFrame(p);
     mcRafId = p < 1 ? requestAnimationFrame(frame) : null;
-  }
-
+  };
   mcRafId = requestAnimationFrame(frame);
+}
+
+/* Lectura al vuelo: sin esto el lienzo es una estampa: se ve la forma de la
+   incertidumbre pero no se puede leer ningún escenario en un año concreto. */
+function mcWireChart() {
+  if (mcChartWired) return;
+  const canvas = document.getElementById("mcCanvas");
+  const tip = document.getElementById("mcTooltip");
+  if (!canvas || !tip) return;
+  mcChartWired = true;
+
+  const move = (e) => {
+    const g = canvas._mcGeom;
+    if (!g || !mcLastSim) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x < g.padL - 6 || x > g.padL + g.chartW + 6) return leave();
+    const t = Math.max(0, Math.min(g.steps, Math.round(((x - g.padL) / g.chartW) * g.steps)));
+    if (t !== mcHover) { mcHover = t; mcRepaint(); }
+    mcShowTooltip(t, g, rect);
+  };
+  const leave = () => {
+    if (mcHover === -1) return;
+    mcHover = -1;
+    tip.classList.remove("is-visible");
+    mcRepaint();
+  };
+
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerdown", move);
+  canvas.addEventListener("pointerleave", leave);
+  canvas.addEventListener("pointercancel", leave);
+
+  // Sin esto el lienzo se quedaba con el ancho del primer pintado: al
+  // ensanchar la ventana quedaba una franja vacía a la derecha hasta que algo
+  // volviera a lanzar la simulación entera.
+  window.addEventListener("resize", () => {
+    clearTimeout(mcResizeTimer);
+    mcResizeTimer = setTimeout(mcRepaint, 140);
+  }, { passive: true });
+}
+
+function mcShowTooltip(t, g, rect) {
+  const tip = document.getElementById("mcTooltip");
+  const sim = mcLastSim, ctx = mcLastCtx;
+  if (!tip || !sim || !ctx) return;
+  const cur = ctx.currency;
+  const yr = t / 12;
+  const when = t === 0 ? "Hoy" : (t % 12 === 0 ? `Año ${yr}` : `Año ${Math.floor(yr)} · mes ${t % 12}`);
+
+  const row = (label, value, cls = "") =>
+    `<span class="mc-tip-row ${cls}"><span>${label}</span><b>${mcMoney0(value, cur)}</b></span>`;
+
+  tip.innerHTML = `
+    <span class="mc-tip-when">${when}</span>
+    ${row("Muy favorable", mcPercentileAt(sim, 95, t))}
+    ${row("Favorable", mcPercentileAt(sim, 75, t))}
+    ${row("Central", mcPercentileAt(sim, 50, t), "is-median")}
+    ${row("Adverso", mcPercentileAt(sim, 25, t))}
+    ${row("Muy adverso", mcPercentileAt(sim, 5, t))}
+    ${row("Capital aportado", sim.baseline[t], "is-base")}
+  `;
+  tip.classList.add("is-visible");
+
+  const x = g.padL + (t / g.steps) * g.chartW;
+  const tw = tip.offsetWidth;
+  const left = Math.max(4, Math.min(rect.width - tw - 4, x + 14));
+  tip.style.left = left + "px";
+  tip.style.top = "10px";
 }
 
 function formatCurrencyCompact(value, currency) {
@@ -13923,56 +15502,178 @@ function formatCurrencyCompact(value, currency) {
   return value.toFixed(0);
 }
 
-function renderMCStats(sim, years, currency, initVal) {
+// ── Monte Carlo: métricas de apoyo y supuestos ───────────────────────────────
+
+function renderMCStats(sim, ctx) {
   const grid = document.getElementById("mcStatsGrid");
-  const { bands, steps, numSims, finals, maxDD, totalContributed, goal, inflationRate } = sim;
-  const last = steps;
-  const yLbl = `${years} año${years > 1 ? "s" : ""}`;
+  if (!grid) return;
+  const { currency, years } = ctx;
+  const { numSims, maxDD, goal, inflationRate, initVal, invested } = sim;
 
-  const median = bands[3][last];
-  const p5 = bands[0][last];
-  const p95 = bands[6][last];
-  const p25 = bands[2][last];
-  const p75 = bands[4][last];
+  // Retorno anual COMPUESTO de la muestra. exp(mu·252)−1 con mu = media de
+  // retornos log es la media geométrica, no «la media log-normal» que rotulaba
+  // antes (ésa sería exp(mu·252 + σ²·252/2)−1, y es otra cifra).
+  const annRet = (Math.exp(sim.mu * 252) - 1) * 100;
+  const realAnn = inflationRate
+    ? ((1 + annRet / 100) / (1 + inflationRate) - 1) * 100
+    : null;
 
-  // Baseline = total capital deployed (initial + periodic contributions)
-  const invested = initVal + (totalContributed || 0);
-  const pctChange = (v) => {
-    const pct = ((v - invested) / invested) * 100;
-    return (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
-  };
+  const probPos = Math.round(mcProbAbove(sim, invested));
 
-  const annRet = ((Math.exp(sim.mu * 252) - 1) * 100);
-  const annRetStr = (annRet >= 0 ? "+" : "") + annRet.toFixed(2) + "% anual";
-
-  // Exact probabilities straight from the simulated final-value distribution
-  let posCount = 0, goalCount = 0;
-  for (let i = 0; i < numSims; i++) {
-    if (finals[i] > invested) posCount++;
-    if (goal != null && finals[i] >= goal) goalCount++;
-  }
-  const probPos = Math.round((posCount / numSims) * 100);
-
-  // Median worst drawdown across paths
   const ddSorted = Float32Array.from(maxDD).sort();
   const medDD = ddSorted[Math.round(0.5 * (numSims - 1))] * 100;
 
-  const cards = [
-    { label: `Mediana en ${yLbl}`, value: formatCurrency(median, currency), sub: pctChange(median), cls: median >= invested ? "pos" : "neg" },
-    { label: "Escenario pesimista (5%)", value: formatCurrency(p5, currency), sub: pctChange(p5), cls: p5 >= invested ? "pos" : "neg" },
-    { label: "Rango intercuartil (25–75%)", value: `${formatCurrencyCompact(p25, currency)} – ${formatCurrencyCompact(p75, currency)}`, sub: `${pctChange(p25)} a ${pctChange(p75)}`, cls: "" },
-    { label: "Escenario optimista (95%)", value: formatCurrency(p95, currency), sub: pctChange(p95), cls: p95 >= invested ? "pos" : "neg" },
-    { label: "Retorno anual esperado", value: annRetStr, sub: "Media log-normal anualizada", cls: annRet >= 0 ? "pos" : "neg" },
-    { label: "Prob. retorno positivo", value: `${probPos}%`, sub: `vs. capital aportado, en ${yLbl}`, cls: probPos >= 50 ? "pos" : "neg" },
-    { label: "Drawdown máximo esperado", value: `−${medDD.toFixed(1)}%`, sub: "caída mediana entre escenarios", cls: "neg" },
-  ];
+  const cards = [];
 
-  if (totalContributed) {
-    cards.push({ label: "Capital aportado", value: formatCurrency(invested, currency), sub: `inicial ${formatCurrencyCompact(initVal, currency)} + aportes`, cls: "" });
-  }
   if (goal != null) {
-    const probGoal = Math.round((goalCount / numSims) * 100);
-    cards.push({ label: "Prob. alcanzar meta", value: `${probGoal}%`, sub: `meta de ${formatCurrencyCompact(goal, currency)}${inflationRate ? " (hoy)" : ""}`, cls: probGoal >= 50 ? "pos" : "neg" });
+    const probGoal = Math.round(mcProbAbove(sim, goal));
+    cards.push({
+      label: "Probabilidad de la meta",
+      value: `${probGoal} %`,
+      sub: `de ${mcMoney0(goal, currency)}${inflationRate ? " en dinero de hoy" : ""} ${mcHorizonLabel(years)}`,
+      cls: probGoal >= 50 ? "pos" : "neg",
+    });
+  }
+
+  /* Con retiros, «supera el capital aportado» compara contra una curva que se
+     agota: toda trayectoria viva la supera y la tarjeta marcaba 100 % junto a
+     una ruina del 100 %. Lo que decide un plan de retiro es otra pregunta —
+     si el capital inicial sigue en pie al final. */
+  if (sim.contribution < 0) {
+    const keepsCapital = Math.round(mcProbAbove(sim, initVal));
+    cards.push({
+      label: "Conserva el capital inicial",
+      value: `${keepsCapital} %`,
+      sub: `de las trayectorias termina con ${mcMoney0(initVal, currency)} o más${inflationRate ? " en dinero de hoy" : ""}`,
+      cls: keepsCapital >= 50 ? "pos" : "neg",
+    });
+  } else {
+    cards.push({
+      label: "Termina en ganancia",
+      value: `${probPos} %`,
+      sub: "de las trayectorias supera el capital aportado",
+      cls: probPos >= 50 ? "pos" : "neg",
+    });
+  }
+
+  /* El subtítulo tiene que decir de dónde SALE la cifra: con shrinkage ya no es
+     «la media de la muestra», y presentarla como tal sería describir mal el
+     único número que el usuario va a repetir en voz alta. */
+  const driftSub = sim.driftMode === "sample"
+    ? "media geométrica de la muestra"
+    : sim.driftMode === "prior"
+      ? "prior de largo plazo, ignora la muestra"
+      : `${Math.round((1 - (sim.shrinkage || 0)) * 100)} % muestra · ${Math.round((sim.shrinkage || 0) * 100)} % prior`;
+  cards.push({
+    label: "Retorno anual compuesto",
+    value: mcSigned(annRet, 2),
+    sub: realAnn != null ? `${mcSigned(realAnn, 2)} descontando inflación` : driftSub,
+    cls: annRet >= 0 ? "pos" : "neg",
+  });
+
+  cards.push(sim.contribution < 0
+    ? {
+        label: "Capital y retiros",
+        value: mcMoney0(initVal, currency),
+        sub: `menos ${sim.steps} retiros de ${mcMoney0(-sim.contribution, currency)}${inflationRate ? " en dinero de hoy" : ""}`,
+        cls: "",
+      }
+    : {
+        label: "Capital aportado",
+        value: formatCurrency(invested, currency),
+        sub: sim.contribution
+          ? `${mcMoney0(initVal, currency)} hoy + ${sim.steps} aportes${inflationRate ? " en dinero de hoy" : ""}`
+          : "valor actual del portafolio, sin aportes",
+        cls: "",
+      });
+
+  cards.push({
+    label: "Caída máxima típica",
+    value: `−${medDD.toFixed(1)} %`,
+    sub: "peor bajada mediana dentro de cada trayectoria",
+    cls: "neg",
+  });
+
+  /* CVaR: la pregunta que el percentil deja sin responder. «Muy adverso» marca
+     dónde empieza el mal escenario; esto dice cuánto se pierde en promedio una
+     vez dentro, que es lo que se dimensiona al planear un colchón. */
+  if (sim.cvar5 != null) {
+    const vsInv = mcRelPct(sim.cvar5, invested);
+    cards.push({
+      label: "Si sale mal (CVaR 5 %)",
+      value: mcMoney0(sim.cvar5, currency),
+      sub: vsInv == null
+        ? "promedio del peor 5 % de las trayectorias"
+        : `promedio del peor 5 % · ${mcSigned(vsInv)} frente a lo aportado`,
+      cls: "neg",
+    });
+  }
+
+  // Cuánto se tarda en volver, no cuánto se cae: es lo que agota la paciencia.
+  if (sim.medianUnderwater != null && sim.medianUnderwater > 0) {
+    const m = sim.medianUnderwater;
+    const fmt = (x) => x >= 24 ? `${(x / 12).toFixed(1)} años` : `${Math.round(x)} meses`;
+    cards.push({
+      label: "Tiempo bajo el agua",
+      value: fmt(m),
+      sub: `la racha más larga por debajo de un máximo · 1 de cada 10 aguanta ${fmt(sim.p90Underwater)}`,
+      cls: "",
+    });
+  }
+
+  // Frente al índice: sin esto, un número solo siempre parece bueno.
+  // Si el índice también acaba agotado (plan de retiro insostenible), no hay
+  // comparación posible: cualquier porcentaje contra cero es ficción.
+  const relBench = sim.benchFinal != null ? mcRelPct(sim.bands[3][sim.steps], sim.benchFinal) : null;
+  if (relBench != null) {
+    cards.push({
+      label: `Frente a ${sim.benchName}`,
+      value: mcSigned(relBench),
+      sub: `tu escenario central contra el del índice (${mcMoney0(sim.benchFinal, currency)})`,
+      cls: relBench >= 0 ? "pos" : "neg",
+    });
+  }
+
+  /* Riesgo de secuencia. Con aportes o retiros, dos trayectorias con el MISMO
+     retorno promedio terminan en sitios distintos según en qué orden llegaron
+     las pérdidas. Sólo se muestra cuando hay flujos: sin ellos el orden da
+     igual y la tarjeta sería ruido. */
+  if (sim.sequence && sim.contribution !== 0) {
+    const s = sim.sequence;
+    const gap = mcRelPct(s.medianWorstStart, s.medianAll);
+    const yrs = Math.round(s.earlyMonths / 12);
+    const arranque = `si los primeros ${yrs} año${yrs > 1 ? "s" : ""} salen en el peor quintil`;
+    /* Cuando el escenario central del conjunto ya es cero, el hueco relativo no
+       existe — pero la pregunta sí, y la respuesta es la ruina del mal arranque.
+       Es el caso donde esta tarjeta más importa, así que no puede desaparecer. */
+    cards.push(gap == null
+      ? {
+          label: "Riesgo de secuencia",
+          value: `${Math.round(s.ruinProbWorstStart)} %`,
+          sub: `${arranque}, acaba sin capital`,
+          cls: "neg",
+        }
+      : {
+          label: "Riesgo de secuencia",
+          value: mcSigned(gap),
+          sub: `${arranque}${s.ruinProbWorstStart > 0 ? ` · ${Math.round(s.ruinProbWorstStart)} % acaba en ruina` : ""}`,
+          cls: gap >= 0 ? "pos" : "neg",
+        });
+  }
+
+  /* Ruina: sólo aparece si existe. Una trayectoria que toca cero se queda plana
+     hasta el final y se confunde con «terminó bajo», así que sin esta tarjeta el
+     caso que de verdad rompe un plan de retiro queda invisible. */
+  if (sim.ruinCount > 0) {
+    const when = sim.medianRuinStep != null
+      ? `mediana: año ${Math.max(1, Math.round(sim.medianRuinStep / 12))}`
+      : "";
+    cards.push({
+      label: "Probabilidad de ruina",
+      value: `${sim.ruinProb < 1 ? sim.ruinProb.toFixed(1) : Math.round(sim.ruinProb)} %`,
+      sub: `se quedan sin capital antes del final${when ? ` · ${when}` : ""}`,
+      cls: "neg",
+    });
   }
 
   grid.innerHTML = cards.map((c) => `
@@ -13982,6 +15683,80 @@ function renderMCStats(sim, years, currency, initVal) {
       <div class="mc-stat-sub">${c.sub}</div>
     </div>
   `).join("");
+}
+
+/* El pie de la lámina: los supuestos que sostienen todo lo de arriba. Antes era
+   una frase corrida de cinco datos en 11 px — la información que decide si la
+   proyección es creíble, escrita como nota al margen. */
+function renderMCAssumptions(sim, ctx) {
+  const el = document.getElementById("mcStatus");
+  if (!el) return;
+  const annVol = sim.sigma * Math.sqrt(252) * 100;
+  const items = [
+    ["Trayectorias", sim.numSims.toLocaleString("en-US")],
+    ["Distribución", MC_MODEL_LABEL[ctx.model] + (ctx.model === "t" ? ` · df ≈ ${sim.dfT.toFixed(1)}` : "")],
+    ["Muestra", `${sim.sessions} sesiones · ${ctx.rangeLabel}`],
+    ["Volatilidad anual", `${annVol.toFixed(1)} %`],
+    ["Deriva", MC_DRIFT_LABEL[sim.driftMode] +
+      (sim.driftMode === "blend" ? ` · ${Math.round((sim.shrinkage || 0) * 100)} % prior` : "")],
+  ];
+  // Sólo tiene sentido hablar de estructura si de verdad se simuló por activo.
+  if (ctx.multi) {
+    items.push(["Activos", `${ctx.assetCount} correlacionados${ctx.grouped ? " · cola agrupada" : ""}`]);
+    items.push(["Rebalanceo", MC_REBAL_LABEL[sim.rebalance] || sim.rebalance]);
+  } else {
+    items.push(["Activos", "1 · serie agregada"]);
+  }
+  if (ctx.fxApplied?.length) items.push(["Divisas", `${ctx.fxApplied.join(", ")} → ${ctx.currency}`]);
+  if (ctx.fxMissing?.length) items.push(["Sin tipo de cambio", ctx.fxMissing.join(", ")]);
+  items.push(["Parámetros", sim.paramUncertainty ? "μ y σ sorteados por trayectoria" : "μ y σ dados por ciertos"]);
+  const costes = [];
+  if (sim.feeAnnual) costes.push(`${(sim.feeAnnual * 100).toFixed(2)} % anual`);
+  if (sim.tradeCost) costes.push(`${(sim.tradeCost * 100).toFixed(2)} % por operación`);
+  if (sim.taxRate) costes.push(`${(sim.taxRate * 100).toFixed(0)} % sobre plusvalía`);
+  items.push(["Costes", costes.length ? costes.join(" · ") : "ninguno"]);
+  if (sim.contribution) {
+    items.push(["Aporte mensual", formatCurrency(sim.contribution, ctx.currency) +
+      (sim.indexContribution ? " · crece con la inflación" : " · nominal fijo")]);
+  }
+  if (sim.inflationRate) items.push(["Inflación", `${(sim.inflationRate * 100).toFixed(1)} % · dinero de hoy`]);
+
+  el.classList.remove("is-message");
+  let html = items
+    .map(([k, v]) => `<span class="mc-assump"><span class="mc-assump-k">${k}</span><span class="mc-assump-v">${v}</span></span>`)
+    .join("");
+
+  /* Muestra corta contra horizonte largo. Estimar treinta años con dos de
+     historia es el abuso más común de un Monte Carlo, y no se delata solo: el
+     gráfico sale igual de terso en ambos casos. Se avisa cuando la proyección
+     estira la muestra más de cinco veces, que es donde el modelo deja de
+     describir datos y empieza a inventarlos. */
+  const sampleYears = sim.sessions / 252;
+  const stretch = ctx.years / sampleYears;
+  /* El umbral está en 6 y no en 5 a propósito: la vista por defecto son 10 años
+     sobre 2 de muestra, o sea 5.05×, y un aviso que aparece siempre deja de
+     leerse a la semana. A partir de 6× ya son horizontes que el usuario eligió
+     estirar, y ahí la advertencia todavía significa algo. */
+  if (stretch > 6) {
+    const sampleTxt = sampleYears.toFixed(1);
+    html += `<span class="mc-caution">
+      <strong>Muestra corta para este horizonte.</strong> Estás proyectando ${ctx.years} año${ctx.years > 1 ? "s" : ""}
+      desde ${sampleTxt} ${sampleTxt === "1.0" ? "año" : "años"} de historia — la estiras ${Math.round(stretch)} veces.
+      ${stretch > 10 ? "A esta distancia el resultado dice más del tramo que te tocó medir que del futuro. " : ""}
+      ${ctx.histRange !== "5y" ? "Con <em>Muestra histórica</em> en 5 años el ejercicio es bastante más defendible." : "Ya usas la muestra más larga disponible; considera acortar el horizonte."}
+    </span>`;
+  }
+  el.innerHTML = html;
+
+  const canvas = document.getElementById("mcCanvas");
+  if (canvas) {
+    const median = sim.bands[3][sim.steps];
+    canvas.setAttribute("aria-label",
+      `Proyección ${mcHorizonLabel(ctx.years)}: escenario central ${formatCurrency(median, ctx.currency)}, ` +
+      `muy adverso ${formatCurrency(sim.bands[0][sim.steps], ctx.currency)}, ` +
+      `muy favorable ${formatCurrency(sim.bands[6][sim.steps], ctx.currency)}. ` +
+      `Las cifras exactas están en la tabla de escenarios que sigue al gráfico.`);
+  }
 }
 
 // ── Metas financieras (#6) ────────────────────────────────────────────────
@@ -14174,9 +15949,106 @@ function normalCDF(z) {
   return z >= 0 ? cdf : 1 - cdf;
 }
 
+/* Ayuda contextual de Monte Carlo. Reusa el diálogo del desglose de KPIs
+   (`#perfInfoOverlay`) en vez de estrenar un componente: mismo gesto, misma
+   tecla de cierre, mismo registro de hoja anexa. Cuando ya hay una simulación
+   en pantalla, cita SUS cifras — una explicación genérica es un folleto; una
+   con los parámetros de quien pregunta es una hoja de cálculo. */
+function buildMonteCarloInfo() {
+  const sim = mcLastSim, ctx = mcLastCtx;
+  const cur = ctx?.currency || "USD";
+  const has = !!sim;
+  const annRet = has ? (Math.exp(sim.mu * 252) - 1) * 100 : null;
+  const annVol = has ? sim.sigma * Math.sqrt(252) * 100 : null;
+
+  const params = [
+    ["Capital inicial", has
+      ? `${formatCurrency(sim.initVal, cur)} — el valor de mercado de tus posiciones hoy`
+      : "El valor de mercado de tus posiciones hoy. No se escribe a mano: sale del portafolio"],
+    ["Aporte mensual", has && sim.contribution
+      ? `${formatCurrency(sim.contribution, cur)}, sumados al cierre de cada mes (${sim.steps} aportes)`
+      : "Dinero que se suma al cierre de cada mes durante todo el horizonte"],
+    ["Horizonte", has ? `${sim.years} año${sim.years > 1 ? "s" : ""} = ${sim.steps} pasos mensuales` : "Años que se proyectan, en pasos de un mes"],
+    ["Meta", has && sim.goal != null
+      ? `${formatCurrency(sim.goal, cur)} al cerrar el horizonte`
+      : "Valor objetivo del portafolio al cerrar el horizonte. Opcional"],
+    ["Muestra histórica", has ? `${sim.sessions} sesiones (${ctx.rangeLabel})` : "De cuánto pasado se estiman el retorno y la volatilidad"],
+    ["Distribución", has ? MC_MODEL_LABEL[ctx.model] : "Cómo se sortea el retorno de cada mes"],
+    ["Deriva esperada", has
+      ? `${MC_DRIFT_LABEL[sim.driftMode]}${sim.driftMode === "blend" ? ` — ${Math.round((1 - sim.shrinkage) * 100)} % de tu muestra y ${Math.round(sim.shrinkage * 100)} % de la prior de largo plazo` : ""}`
+      : "Cuánto pesa tu retorno pasado frente a una referencia de largo plazo"],
+    ["Rebalanceo", has && ctx.multi
+      ? `${MC_REBAL_LABEL[sim.rebalance]} — se vuelve a los pesos de hoy con esa frecuencia`
+      : "Cada cuánto vuelves a tus pesos objetivo. Requiere 2 o más activos"],
+    ["Incertidumbre de parámetros", has
+      ? (sim.paramUncertainty
+          ? "encendida — cada trayectoria sortea su propia μ y σ"
+          : "apagada — μ y σ se tratan como conocidos")
+      : "Si las bandas deben incluir el error de estimar μ y σ, no sólo el azar del mercado"],
+    ["Costes", has && (sim.feeAnnual || sim.tradeCost || sim.taxRate)
+      ? [sim.feeAnnual ? `${(sim.feeAnnual * 100).toFixed(2)} % anual` : null,
+         sim.tradeCost ? `${(sim.tradeCost * 100).toFixed(2)} % por operación` : null,
+         sim.taxRate ? `${(sim.taxRate * 100).toFixed(0)} % sobre plusvalía realizada` : null]
+        .filter(Boolean).join(" · ")
+      : "Comisión anual, coste por operación e impuesto. En cero, el modelo no cobra nada"],
+  ];
+
+  const live = has ? `
+    <div class="perf-info-formula">Con tus datos: μ = ${(sim.mu * 100).toFixed(4)} % diario · σ = ${(sim.sigma * 100).toFixed(4)} % diario
+  retorno anual compuesto = e^(μ·252) − 1 = ${mcSigned(annRet, 2)}
+  volatilidad anual = σ·√252 = ${annVol.toFixed(2)} %${sim.driftMode !== "sample" ? `
+  μ de tu muestra sola = ${(sim.muSample * 100).toFixed(4)} % diario → ${mcSigned((Math.exp(sim.muSample * 252) - 1) * 100, 2)} anual` : ""}</div>
+    <div class="perf-info-result">${sim.numSims.toLocaleString("en-US")} trayectorias × ${sim.steps} meses${ctx.multi ? ` × ${ctx.assetCount} activos` : ""} = ${(sim.numSims * sim.steps * (ctx.multi ? ctx.assetCount : 1)).toLocaleString("en-US")} sorteos</div>` : "";
+
+  return {
+    title: "Cómo se construye esta proyección",
+    body: `
+      <p class="perf-info-note">La simulación toma el comportamiento diario de <strong>tus posiciones actuales</strong> —ponderadas por su valor de mercado de hoy— y lo proyecta hacia adelante mes a mes, ${has ? `${sim.numSims.toLocaleString("en-US")} veces` : "miles de veces"}. Cada trayectoria es un futuro posible; el gráfico muestra dónde cae la mayoría. El número de trayectorias se ajusta al peso del cálculo: horizontes cortos y carteras pequeñas sortean más.</p>
+
+      <span class="perf-info-sub">El paso mensual</span>
+      <div class="perf-info-formula">Vₜ₊₁ = Vₜ · e^(21·μ + σ·√21·Z) + aporte</div>
+      <p class="perf-info-note">σ es la desviación estándar de los retornos <strong>logarítmicos</strong> diarios en la muestra elegida; 21 es el número de sesiones de un mes y Z es el sorteo aleatorio de ese mes. Con <em>bootstrap histórico</em> no se sortea una campana: se toman 21 días reales de tu propia historia, con reemplazo.</p>
+      <p class="perf-info-note">μ <strong>no</strong> es directamente tu retorno pasado. La media de una muestra corta es un estimador muy pobre del retorno esperado —su error estándar es σ/√T, que con dos años y volatilidad típica ronda los ±12 puntos anuales—, así que extrapolarla tal cual convierte una buena racha en profecía. Por eso se <strong>encoge hacia una prior</strong> de largo plazo (una cartera diversificada cobra del orden de 0.4 de Sharpe sobre la tasa libre de riesgo), y el peso de esa prior baja conforme tu muestra se alarga. σ no se encoge: la volatilidad sí se estima bien con pocos datos. El selector <em>Deriva esperada</em> controla este canje.</p>
+      <p class="perf-info-note">Si tienes dos o más activos, cada uno se simula por separado con su propia deriva y su <strong>matriz de covarianzas</strong> (descompuesta por Cholesky), de modo que suben y bajan juntos como lo han hecho históricamente. Entre paso y paso los pesos derivan solos, y la regla de <em>Rebalanceo</em> decide cuándo vuelven al objetivo. Con <em>t-Student</em>, un mismo shock de cola golpea a todos los activos a la vez, que es como se comportan las crisis.</p>
+      ${live}
+
+      <span class="perf-info-sub">Qué controla cada parámetro</span>
+      <div class="perf-info-values">
+        ${params.map(([k, v]) => `<div class="perf-info-row is-prose"><span class="perf-info-row-label">${k}</span><span class="perf-info-row-val">${v}</span></div>`).join("")}
+      </div>
+
+      <span class="perf-info-sub">Cómo se leen las bandas</span>
+      <p class="perf-info-note">La línea central es la <strong>mediana</strong>: la mitad de las trayectorias termina por encima y la mitad por debajo. Cada banda encierra un porcentaje de los futuros simulados: la más clara contiene 9 de cada 10 (del percentil 5 al 95), la intermedia 8 de cada 10, y la más marcada la mitad central (del 25 al 75). <strong>Cuanto más se abre el cono, más incertidumbre</strong> hay sobre ese plazo — no es que el portafolio vaya a subir más, es que se sabe menos.</p>
+      <p class="perf-info-note">La línea gris delgada es el <strong>capital aportado</strong>: lo que habrás puesto tú. Todo lo que quede por encima es rendimiento; por debajo, pérdida. La probabilidad de la meta es el porcentaje de trayectorias que terminan en o por encima de ella <strong>en la fecha final</strong> — una que la cruza a mitad de camino y luego baja no cuenta.</p>
+
+      <span class="perf-info-sub">Las lecturas de riesgo</span>
+      <p class="perf-info-note">El <strong>CVaR al 5 %</strong> no es el percentil 5: es el <em>promedio</em> de todo lo que queda por debajo de él. El percentil dice dónde empieza el mal escenario; el CVaR dice cuánto se pierde una vez dentro. Es la diferencia entre saber que hay un pozo y saber qué profundidad tiene, y por eso la regulación bancaria lo prefiere.</p>
+      <p class="perf-info-note">El <strong>tiempo bajo el agua</strong> cuenta los meses seguidos por debajo del último máximo. Es el complemento de la caída máxima: una dice cuánto se pierde, la otra cuánto se tarda en recuperarlo — y esa segunda es la que decide si alguien aguanta el plan o lo abandona a mitad.</p>
+      <p class="perf-info-note">El <strong>riesgo de secuencia</strong> aísla algo que los promedios esconden: con aportes o retiros, dos futuros con el mismo retorno medio acaban en sitios distintos según en qué orden llegaron las pérdidas. La cifra compara el desenlace del quintil con peor arranque contra el conjunto. Con retiros suele ser el riesgo dominante, y sin flujos de dinero no aparece porque entonces el orden da igual.</p>
+      <p class="perf-info-note">La columna <strong>anual</strong> de la tabla es la tasa ponderada por dinero: resuelve qué rendimiento constante habría llevado tu capital inicial más tus aportes —cada uno entrando en su mes— hasta ese valor final. No es «(final ÷ inicial)» repartido entre los años, que atribuiría al mercado lo que en realidad pusiste tú.</p>
+
+      <span class="perf-info-sub">Supuestos y límites</span>
+      <p class="perf-info-note">Esto <strong>no es una predicción</strong>. Es la respuesta a «si el futuro se pareciera estadísticamente a la muestra elegida, ¿qué rango de resultados saldría?».</p>
+      <p class="perf-info-note">Lo que el modelo da por sentado: que sigues con <strong>los activos que tienes hoy</strong> y vuelves a sus pesos según la regla de rebalanceo elegida, y que la volatilidad y las correlaciones no cambian de régimen. Con los modelos de campana cada mes es independiente del anterior; el <em>bootstrap por bloques</em> es la excepción — recorre ${MC_BLOCK_MONTHS} meses seguidos de tu historia real antes de saltar a otro punto, así que un mal trimestre llega encadenado y no diluido.</p>
+      <p class="perf-info-note">Los retornos incluyen <strong>dividendos reinvertidos</strong>, y las posiciones en otra divisa llevan dentro su <strong>riesgo cambiario</strong>, convertidas a ${cur} con el tipo de cambio de cada día.</p>
+      <p class="perf-info-note">${has && sim.paramUncertainty
+        ? `Las bandas incluyen la <strong>incertidumbre de los parámetros</strong>: cada trayectoria sortea su propia μ del posterior (error estándar σ/√T reducido por el encogimiento) y su propia σ de la distribución χ². Es decir, no sólo varía el mercado — varía también lo que el modelo cree saber de él. Puedes apagarlo, y entonces las bandas sólo recogerán el azar del mercado.`
+        : `Con la incertidumbre de parámetros apagada, las bandas <strong>no</strong> recogen el error de haber estimado μ y σ con ${has ? `${sim.sessions} sesiones` : "una muestra corta"}: sólo el azar del mercado. Enciéndela para que las bandas digan la verdad completa.`}</p>
+      <p class="perf-info-note">Los <strong>costes son tuyos de declarar</strong>: comisión anual, coste por operación e impuesto sobre plusvalía entran como los pusiste en el panel, y con todo en cero el rebalanceo sale gratis, que en tu cuenta no lo es. El impuesto se calcula sobre lo que se <em>realiza</em> al rebalancear, con base de costo proporcional; se asume que hoy compraste a precio de mercado, así que si arrastras plusvalías latentes grandes, el impuesto real sería mayor.</p>
+      <p class="perf-info-note">La <strong>probabilidad de ruina</strong> cuenta las trayectorias que tocan cero en algún momento. Sólo aparece cuando alguna lo hace —típicamente con retiros mensuales—, y es la cifra que decide si un plan de retiro se sostiene: una trayectoria arruinada se queda plana en cero hasta el final y, sin contarla aparte, se confundiría con una que simplemente terminó baja.</p>
+      <p class="perf-info-note">La <strong>caída máxima típica</strong> se mide dentro de cada trayectoria y luego se toma la mediana. Con aportes activos queda subestimada: el dinero nuevo levanta el valor y disimula parte de la bajada.</p>
+    `,
+  };
+}
+
 // ── Perf info popup ───────────────────────────────────────────────────────────
 
 function buildPerfInfoContent(metric) {
+  /* Va ANTES del guardián de `perfMetricsData`: la ayuda de Monte Carlo no
+     depende de la pestaña Desempeño, y quien nunca la haya abierto tiene
+     derecho a leerla igual. */
+  if (metric === "mc-method") return buildMonteCarloInfo();
+
   const d = perfMetricsData;
   if (!d) return { title: "Sin datos", body: "<p class='perf-info-note'>Carga el análisis de desempeño primero.</p>" };
 

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   BlackPortfolio — landing v4 · "Memorándum"
+   BlackPortfolio - landing v4 · "Memorándum"
    Registro visual: documento de comité de inversión.
    Paleta: papel frío + tinta navy + un solo cobalto. Sin degradados de marca,
    sin resplandores, sin texto con gradiente. Las reglas de 1px son la
@@ -131,7 +131,7 @@ body {
 }
 
 /* El fondo no es un color plano: es papel. Tres capas, todas del mundo de la
-   impresión de valores — grano, roseta grabada y el borde del pliego. Ninguna
+   impresión de valores: grano, roseta grabada y el borde del pliego. Ninguna
    se mueve, ninguna es un degradado de marca.
 
    Capa 1 · grano. Ruido fractal repetido, fijo al viewport, detrás de todo el
@@ -162,7 +162,7 @@ body::before {
   pointer-events: none;
   background: var(--cobalt-line);
   /* Dos máscaras intersecadas: el grabado y un desvanecido. El grabado entra
-     por el canto y se disuelve antes de llegar al texto chico — así se comporta
+     por el canto y se disuelve antes de llegar al texto chico. Así se comporta
      una marca de agua impresa, y así el contraste no depende del adorno.
      Cada variante define su propia dirección de salida en `--fade`. */
   --fade: linear-gradient(to bottom, #000, #000 15%, transparent 60%);
@@ -204,8 +204,8 @@ body::before {
 [data-theme="dark"] .rosette--close { opacity: .13; }
 
 /* En una columna, los desplazamientos de escritorio dejan el grabado fuera de
-   la pantalla. Aquí entra por el canto superior derecho —donde el titular deja
-   aire— y se disuelve hacia el texto chico. */
+   la pantalla. Aquí entra por el canto superior derecho, donde el titular deja
+   aire, y se disuelve hacia el texto chico. */
 @media (max-width: 48rem) {
   .rosette--hero,
   .rosette--auth {
@@ -220,9 +220,11 @@ body::before {
 }
 
 img, svg { display: block; max-width: 100%; }
-button { font: inherit; color: inherit; }
+button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 a { color: var(--cobalt-ink); text-decoration-thickness: 1px; text-underline-offset: .18em; }
-a:hover { text-decoration-thickness: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  a:hover { text-decoration-thickness: 2px; }
+}
 
 h1, h2, h3, h4 {
   font-family: var(--serif);
@@ -364,7 +366,9 @@ p  { margin: 0; }
   border-bottom: 1px solid transparent;
   transition: color .18s var(--ease), border-color .18s var(--ease);
 }
-.top__nav a:hover { color: var(--ink); border-bottom-color: var(--cobalt-line); }
+@media (hover: hover) and (pointer: fine) {
+  .top__nav a:hover { color: var(--ink); border-bottom-color: var(--cobalt-line); }
+}
 
 .top__actions {
   display: flex;
@@ -387,7 +391,10 @@ p  { margin: 0; }
   cursor: pointer;
   transition: border-color .18s var(--ease), color .18s var(--ease), background-color .18s var(--ease);
 }
-.icon-btn:hover { color: var(--ink); border-color: var(--rule-strong); background: var(--surface); }
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:hover { color: var(--ink); border-color: var(--rule-strong); background: var(--surface); }
+}
+.icon-btn:active { transform: scale(.98); }
 .icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; }
 .icon-btn .icon-moon { display: none; }
 [data-theme="dark"] .icon-btn .icon-moon { display: block; }
@@ -434,19 +441,25 @@ p  { margin: 0; }
   transition: background-color .2s var(--ease), border-color .2s var(--ease),
               color .2s var(--ease), transform .2s var(--ease), box-shadow .2s var(--ease);
 }
-.btn:active { transform: translateY(1px); }
+.btn:active { transform: translateY(1px) scale(.98); }
 
 .btn--primary { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
-.btn--primary:hover {
-  background: var(--cobalt-deep); border-color: var(--cobalt-deep);
-  transform: translateY(-1px); box-shadow: var(--shadow-lift);
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover {
+    background: var(--cobalt-deep); border-color: var(--cobalt-deep);
+    transform: translateY(-1px); box-shadow: var(--shadow-lift);
+  }
 }
 
 .btn--quiet { background: transparent; border-color: var(--rule-strong); color: var(--ink); }
-.btn--quiet:hover { border-color: var(--ink-2); background: var(--surface); transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) {
+  .btn--quiet:hover { border-color: var(--ink-2); background: var(--surface); transform: translateY(-1px); }
+}
 
 .btn--onband { background: transparent; border-color: color-mix(in srgb, var(--on-band) 40%, transparent); color: var(--on-band); }
-.btn--onband:hover { border-color: var(--on-band); background: color-mix(in srgb, var(--on-band) 10%, transparent); transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) {
+  .btn--onband:hover { border-color: var(--on-band); background: color-mix(in srgb, var(--on-band) 10%, transparent); transform: translateY(-1px); }
+}
 
 .btn--wide { width: 100%; }
 
@@ -466,7 +479,9 @@ p  { margin: 0; }
   cursor: pointer;
   transition: border-color .18s var(--ease);
 }
-.btn-text:hover { border-bottom-color: var(--cobalt-line); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-text:hover { border-bottom-color: var(--cobalt-line); }
+}
 .btn-text svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; }
 
 /* ------------------------------------------- 5b. Tablero de cotizaciones */
@@ -501,8 +516,10 @@ p  { margin: 0; }
 .quotes__track { display: flex; width: max-content; }
 
 .motion-ok .quotes__track[data-state="ready"] { animation: marquee 110s linear infinite; }
-.quotes:hover .quotes__track,
 .quotes:focus-within .quotes__track { animation-play-state: paused; }
+@media (hover: hover) and (pointer: fine) {
+  .quotes:hover .quotes__track { animation-play-state: paused; }
+}
 @keyframes marquee {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
@@ -519,7 +536,7 @@ p  { margin: 0; }
   line-height: 1.4;
 }
 /* Marca de identidad: logotipo entintado o bandera del mercado. Alineadas por
-   altura, no por ancho — cada bandera tiene su proporción. */
+   altura, no por ancho: cada bandera tiene su proporción. */
 .quote .mark { flex: none; align-self: center; }
 
 .mark--logo {
@@ -742,11 +759,13 @@ p  { margin: 0; }
 .tbl tbody tr:last-child td { border-bottom: 0; }
 .tbl .n { text-align: right; white-space: nowrap; }
 .tbl tbody tr { transition: background-color .16s var(--ease); }
-.tbl tbody tr:hover { background: var(--cobalt-tint); }
+@media (hover: hover) and (pointer: fine) {
+  .tbl tbody tr:hover { background: var(--cobalt-tint); }
+}
 
 /* Marca del activo en las listas de posiciones. Misma regla que el tablero de
    cotizaciones: logotipo entintado si existe. Cuando no existe, el hueco se
-   reserva igual para que las claves queden alineadas — la clave se sostiene
+   reserva igual para que las claves queden alineadas. La clave se sostiene
    sola y no se fabrica un monograma. */
 .asset-mark {
   display: inline-block;
@@ -865,27 +884,77 @@ p  { margin: 0; }
 
 .figure {
   position: relative;
+  margin: 0;
   border: 1px solid var(--rule);
   background: var(--sunken);
   overflow: hidden;
 }
 .figure img { width: 100%; height: 100%; object-fit: cover; }
-.figure--screen { aspect-ratio: 14 / 9; }
-.figure--screen img { filter: grayscale(1) contrast(1.06) brightness(.96); }
-.figure--screen::after {
-  content: "";
+
+/* La fotografía de mercado es una lámina más de la sección, no un banner que
+   flota: mismo encabezado y mismas reglas que las otras dos capacidades, y la
+   imagen vive en su propia caja para que el pie de figura quede DENTRO del
+   recorte (antes el `aspect-ratio` se lo comía entero y no se veía nunca). */
+.figure--screen {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 2px;
+  box-shadow: var(--shadow-plate);
+}
+.figure__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  padding: .875rem 1.125rem;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--rule);
+}
+.figure__name { font: 500 .9375rem/1.3 var(--sans); color: var(--ink); }
+.figure__media {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: clamp(12rem, 26vw, 16rem);
+  isolation: isolate;
+  background: var(--band-deep);
+  overflow: hidden;
+}
+.figure__media img {
   position: absolute; inset: 0;
-  background: linear-gradient(200deg, color-mix(in srgb, var(--cobalt) 34%, transparent), color-mix(in srgb, var(--band) 62%, transparent));
-  mix-blend-mode: multiply;
+  object-position: 58% 50%;
+  filter: grayscale(1) contrast(1.1) brightness(.94);
+}
+/* Duotono cobalto: la mezcla `color` toma el tono del acento y respeta la
+   luminancia de la foto, así que el mismo gesto sirve en claro y en oscuro
+   (el `multiply` anterior aplastaba la imagen contra el fondo en tema oscuro). */
+.figure__media::before {
+  content: "";
+  position: absolute; inset: 0; z-index: 1;
+  background: var(--cobalt);
+  mix-blend-mode: color;
+  opacity: .62;
+}
+/* Asiento inferior: la imagen se apoya en la regla del pie en vez de cortarse. */
+.figure__media::after {
+  content: "";
+  position: absolute; inset: 0; z-index: 2;
+  background: linear-gradient(to top, color-mix(in srgb, var(--band-deep) 55%, transparent), transparent 54%);
 }
 .figure__cap {
-  position: relative;
-  z-index: 1;
+  margin: 0;
   border-top: 1px solid var(--rule);
   background: var(--surface);
-  padding: .7rem .875rem;
+  padding: .75rem 1.125rem;
   font-size: var(--t-mini);
+  line-height: 1.5;
   color: var(--ink-3);
+}
+[data-theme="dark"] .figure__media { background: var(--sunken); }
+[data-theme="dark"] .figure__media img { filter: grayscale(1) contrast(1.02) brightness(1.16); }
+[data-theme="dark"] .figure__media::after {
+  background: linear-gradient(to top, color-mix(in srgb, var(--band-deep) 38%, transparent), transparent 56%);
 }
 .figure--stone { aspect-ratio: 10 / 9; }
 .figure--stone img { filter: grayscale(.85) contrast(1.04); }
@@ -930,7 +999,7 @@ p  { margin: 0; }
   width: 1px;
   background: var(--cobalt);
   transform-origin: left center;
-  transition: transform .34s var(--ease);
+  transition: transform .2s var(--ease);
   pointer-events: none;
 }
 .seg button {
@@ -947,7 +1016,10 @@ p  { margin: 0; }
   white-space: nowrap;
   transition: color .24s var(--ease);
 }
-.seg button:hover { color: var(--ink); }
+@media (hover: hover) and (pointer: fine) {
+  .seg button:hover { color: var(--ink); }
+}
+.seg button:active { transform: scale(.98); }
 .seg button[aria-selected="true"],
 .seg button[aria-pressed="true"] { color: #fff; }
 
@@ -1117,6 +1189,7 @@ p  { margin: 0; }
   position: absolute;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
 }
 .close__bg img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.6) contrast(1.05); }
 .close__bg::after {
@@ -1163,7 +1236,9 @@ p  { margin: 0; }
 }
 .foot__col ul { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem; }
 .foot__col a { color: var(--ink-2); text-decoration: none; font-size: var(--t-small); }
-.foot__col a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: .2em; }
+@media (hover: hover) and (pointer: fine) {
+  .foot__col a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: .2em; }
+}
 
 .foot__brand p { margin-top: var(--s3); font-size: var(--t-mini); color: var(--ink-3); max-width: 30ch; }
 
@@ -1182,7 +1257,7 @@ p  { margin: 0; }
 .js.motion-ok [data-reveal] {
   opacity: 0;
   transform: translateY(12px);
-  transition: opacity .55s var(--ease), transform .55s var(--ease);
+  transition: opacity .34s var(--ease), transform .34s var(--ease);
 }
 .js.motion-ok [data-reveal].is-in { opacity: 1; transform: none; }
 .js.motion-ok [data-reveal][data-reveal-delay="1"] { transition-delay: .07s; }
@@ -1221,6 +1296,9 @@ p  { margin: 0; }
   .foot__grid { grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); gap: var(--s7); }
   /* La piedra ancla la columna completa en vez de flotar arriba. */
   .band__grid .figure--stone { aspect-ratio: auto; min-height: 24rem; }
+  /* Mismo criterio para la lámina fotográfica: su regla de arriba y la del pie
+     cierran a la misma altura que la columna de texto, sin hueco muerto. */
+  .cap > .figure--screen { align-self: stretch; }
 }
 
 @media (min-width: 75rem) {

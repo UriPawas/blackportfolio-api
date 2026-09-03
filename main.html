@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="main-v4-markets.css?v=3">
   <link rel="stylesheet" href="main-v4-markowitz.css?v=3">
   <link rel="stylesheet" href="main-v4-topdown.css?v=5">
-  <link rel="stylesheet" href="main-v4-tracker.css?v=11">
+  <link rel="stylesheet" href="main-v4-tracker.css?v=26">
   <script>
     /* Sesión 1 del cascarón V4: refleja el tema real (localStorage
        "blackportfolio-theme", el mismo que usa main.js) en data-theme antes
@@ -928,67 +928,157 @@
 
           <!-- ── Tab: Proyección Monte Carlo ─────────────────────────────── -->
           <div class="tracker-tab-panel" id="tabPanelProyeccion" style="display:none">
-            <div class="dashboard-card">
-              <div class="card-header">
-                <h3>Simulación Monte Carlo</h3>
-                <div class="mc-year-nav" id="mcYearNav">
-                  <button class="var-conf-btn" type="button" data-years="1">1 año</button>
-                  <button class="var-conf-btn" type="button" data-years="3">3 años</button>
-                  <button class="var-conf-btn" type="button" data-years="5">5 años</button>
-                  <button class="var-conf-btn active" type="button" data-years="10">10 años</button>
-                  <button class="var-conf-btn" type="button" data-years="20">20 años</button>
-                  <button class="var-conf-btn" type="button" data-years="30">30 años</button>
+            <div class="dashboard-card mc-plate" id="mcPlate">
+              <div class="card-header mc-header">
+                <div class="mc-header-title">
+                  <h3>Simulación Monte Carlo</h3>
+                  <button class="perf-info-btn mc-method-btn" type="button" data-metric="mc-method"
+                          title="Cómo funciona esta simulación" aria-label="Cómo funciona esta simulación">ℹ</button>
+                </div>
+                <div class="mc-year-nav" id="mcYearNav" role="group" aria-label="Horizonte de la proyección">
+                  <button class="var-conf-btn" type="button" data-years="1" aria-pressed="false">1 año</button>
+                  <button class="var-conf-btn" type="button" data-years="3" aria-pressed="false">3 años</button>
+                  <button class="var-conf-btn" type="button" data-years="5" aria-pressed="false">5 años</button>
+                  <button class="var-conf-btn active" type="button" data-years="10" aria-pressed="true">10 años</button>
+                  <button class="var-conf-btn" type="button" data-years="20" aria-pressed="false">20 años</button>
+                  <button class="var-conf-btn" type="button" data-years="30" aria-pressed="false">30 años</button>
                 </div>
               </div>
 
+              <!-- El asiento de apertura: la lectura principal de la proyección -->
+              <div class="mc-verdict" id="mcVerdict" aria-live="polite"></div>
+
+              <!-- Los supuestos que el usuario controla -->
               <div class="mc-controls" id="mcControls">
-                <div class="mc-ctrl">
-                  <label for="mcContribution">Aporte mensual</label>
-                  <input id="mcContribution" type="number" step="any" value="0" placeholder="0" autocomplete="off">
+                <div class="mc-ctrl-group">
+                  <span class="mc-group-label" id="mcGroupCapital">Tu capital</span>
+                  <div class="mc-ctrl">
+                    <label for="mcContribution">Aporte mensual <span class="mc-ctrl-unit" id="mcContribCur"></span></label>
+                    <input id="mcContribution" type="number" step="any" value="0" placeholder="0" autocomplete="off"
+                           inputmode="decimal" aria-describedby="mcContributionHint">
+                    <span class="mc-ctrl-hint" id="mcContributionHint">Se suma al cierre de cada mes</span>
+                    <label class="mc-check" for="mcIndexContrib"><input id="mcIndexContrib" type="checkbox" disabled> Crece con la inflación</label>
+                  </div>
+                  <div class="mc-ctrl">
+                    <label for="mcGoal">Meta al final <span class="mc-ctrl-unit" id="mcGoalCur"></span></label>
+                    <input id="mcGoal" type="number" step="any" value="" placeholder="Sin meta" autocomplete="off"
+                           inputmode="decimal" aria-describedby="mcGoalHint">
+                    <span class="mc-ctrl-hint" id="mcGoalHint">Valor objetivo al cerrar el horizonte</span>
+                  </div>
                 </div>
-                <div class="mc-ctrl">
-                  <label for="mcGoal">Meta objetivo</label>
-                  <input id="mcGoal" type="number" step="any" value="" placeholder="—" autocomplete="off">
+                <div class="mc-ctrl-group">
+                  <span class="mc-group-label" id="mcGroupModel">Modelo</span>
+                  <div class="mc-ctrl">
+                    <label for="mcHistRange">Muestra histórica</label>
+                    <select id="mcHistRange" aria-describedby="mcHistRangeHint">
+                      <option value="1y">1 año</option>
+                      <option value="2y" selected>2 años</option>
+                      <option value="5y">5 años</option>
+                    </select>
+                    <span class="mc-ctrl-hint" id="mcHistRangeHint">De aquí salen retorno y volatilidad</span>
+                  </div>
+                  <div class="mc-ctrl">
+                    <label for="mcModel">Distribución</label>
+                    <select id="mcModel" aria-describedby="mcModelHint">
+                      <option value="gbm" selected>Normal · log-normal</option>
+                      <option value="bootstrap">Bootstrap histórico</option>
+                      <option value="block">Bootstrap por bloques</option>
+                      <option value="t">t-Student · colas pesadas</option>
+                    </select>
+                    <span class="mc-ctrl-hint" id="mcModelHint">Cómo se sortea cada mes</span>
+                  </div>
+                  <div class="mc-ctrl">
+                    <label for="mcDrift">Deriva esperada</label>
+                    <select id="mcDrift" aria-describedby="mcDriftHint">
+                      <option value="blend" selected>Mixta · muestra + prior</option>
+                      <option value="sample">Histórica · sólo muestra</option>
+                      <option value="prior">Conservadora · sólo prior</option>
+                    </select>
+                    <span class="mc-ctrl-hint" id="mcDriftHint">Cuánto confiar en el retorno pasado</span>
+                  </div>
+                  <div class="mc-ctrl">
+                    <label for="mcRebalance">Rebalanceo</label>
+                    <select id="mcRebalance" aria-describedby="mcRebalanceHint">
+                      <option value="annual" selected>Anual</option>
+                      <option value="quarterly">Trimestral</option>
+                      <option value="band">Por bandas · ±5 %</option>
+                      <option value="none">Ninguno · dejar derivar</option>
+                    </select>
+                    <span class="mc-ctrl-hint" id="mcRebalanceHint">Cómo vuelves a tus pesos objetivo</span>
+                  </div>
+                  <div class="mc-ctrl mc-ctrl-infl">
+                    <label class="mc-check" for="mcInflEnabled"><input id="mcInflEnabled" type="checkbox"> Ajustar por inflación</label>
+                    <div class="mc-infl-row">
+                      <input id="mcInflRate" type="number" step="0.1" min="0" max="50" value="3.5" disabled
+                             inputmode="decimal" aria-label="Inflación anual estimada, en por ciento">
+                      <span class="mc-infl-pct">% anual</span>
+                    </div>
+                    <span class="mc-ctrl-hint" id="mcInflHint">Resultados en dinero de hoy</span>
+                  </div>
+                  <div class="mc-ctrl">
+                    <label class="mc-check" for="mcParamUnc"><input id="mcParamUnc" type="checkbox" checked> Incertidumbre de parámetros</label>
+                    <span class="mc-ctrl-hint" id="mcParamUncHint">Reconoce que μ y σ se estimaron, no se conocen. Ensancha las bandas</span>
+                  </div>
                 </div>
-                <div class="mc-ctrl">
-                  <label for="mcHistRange">Histórico</label>
-                  <select id="mcHistRange">
-                    <option value="1y">1 año</option>
-                    <option value="2y" selected>2 años</option>
-                    <option value="5y">5 años</option>
-                  </select>
-                </div>
-                <div class="mc-ctrl">
-                  <label for="mcModel">Modelo de retornos</label>
-                  <select id="mcModel">
-                    <option value="gbm" selected>GBM · Normal</option>
-                    <option value="bootstrap">Bootstrap histórico</option>
-                    <option value="t">t-Student · colas pesadas</option>
-                  </select>
-                </div>
-                <div class="mc-ctrl mc-ctrl-infl">
-                  <label class="mc-check"><input id="mcInflEnabled" type="checkbox"> Ajustar por inflación</label>
-                  <div class="mc-infl-row">
-                    <input id="mcInflRate" type="number" step="0.1" min="0" max="50" value="3.5" disabled>
-                    <span class="mc-infl-pct">% anual</span>
+                <div class="mc-ctrl-group">
+                  <span class="mc-group-label" id="mcGroupCostes">Costes</span>
+                  <div class="mc-ctrl">
+                    <label for="mcFee">Comisión anual</label>
+                    <div class="mc-infl-row">
+                      <input id="mcFee" type="number" step="0.01" min="0" max="10" value="0"
+                             inputmode="decimal" aria-describedby="mcFeeHint">
+                      <span class="mc-infl-pct">% anual</span>
+                    </div>
+                    <span class="mc-ctrl-hint" id="mcFeeHint">TER del fondo o comisión de custodia</span>
+                  </div>
+                  <div class="mc-ctrl">
+                    <label for="mcTradeCost">Coste por operación</label>
+                    <div class="mc-infl-row">
+                      <input id="mcTradeCost" type="number" step="0.01" min="0" max="5" value="0"
+                             inputmode="decimal" aria-describedby="mcTradeCostHint">
+                      <span class="mc-infl-pct">% del importe</span>
+                    </div>
+                    <span class="mc-ctrl-hint" id="mcTradeCostHint">Comisión y horquilla al rebalancear</span>
+                  </div>
+                  <div class="mc-ctrl">
+                    <label for="mcTaxRate">Impuesto sobre plusvalía</label>
+                    <div class="mc-infl-row">
+                      <input id="mcTaxRate" type="number" step="1" min="0" max="60" value="0"
+                             inputmode="decimal" aria-describedby="mcTaxRateHint">
+                      <span class="mc-infl-pct">% de la ganancia</span>
+                    </div>
+                    <span class="mc-ctrl-hint" id="mcTaxRateHint">Se paga sobre lo realizado al rebalancear</span>
                   </div>
                 </div>
               </div>
 
-              <div class="mc-legend" id="mcLegend">
-                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:rgba(111,134,255,0.15);border:1px solid rgba(111,134,255,0.25)"></span>5% – 95%</span>
-                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:rgba(111,134,255,0.28)"></span>10% – 90%</span>
-                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:rgba(111,134,255,0.42)"></span>25% – 75%</span>
-                <span class="mc-legend-item"><span class="mc-legend-swatch" style="background:#6f86ff;height:3px"></span>Mediana</span>
+              <div class="mc-chart-block" id="mcChartBlock">
+                <div class="mc-legend" id="mcLegend">
+                  <span class="mc-legend-title">Bandas de probabilidad</span>
+                  <span class="mc-legend-item"><span class="mc-legend-swatch mc-sw-b90"></span>5 – 95 %</span>
+                  <span class="mc-legend-item"><span class="mc-legend-swatch mc-sw-b80"></span>10 – 90 %</span>
+                  <span class="mc-legend-item"><span class="mc-legend-swatch mc-sw-b50"></span>25 – 75 %</span>
+                  <span class="mc-legend-item"><span class="mc-legend-swatch mc-sw-median"></span>Mediana</span>
+                  <span class="mc-legend-item"><span class="mc-legend-swatch mc-sw-base"></span>Capital aportado</span>
+                  <span class="mc-legend-item" id="mcLegendBench" hidden><span class="mc-legend-swatch mc-sw-bench"></span><span id="mcLegendBenchName">Índice</span></span>
+                  <span class="mc-legend-item" id="mcLegendGoal" hidden><span class="mc-legend-swatch mc-sw-goal"></span>Meta</span>
+                </div>
+                <div class="mc-chart-wrap">
+                  <canvas id="mcCanvas" role="img" aria-label="Proyección Monte Carlo del portafolio"></canvas>
+                  <div class="mc-tooltip" id="mcTooltip" aria-hidden="true"></div>
+                </div>
               </div>
-
-              <div class="mc-chart-wrap">
-                <canvas id="mcCanvas"></canvas>
-              </div>
-              <div id="mcStatus" class="perf-chart-status"></div>
+              <div id="mcStatus" class="perf-chart-status mc-assumptions"></div>
             </div>
 
-            <div class="mc-stats-grid" id="mcStatsGrid"></div>
+            <div class="dashboard-card mc-outcomes" id="mcOutcomes">
+              <div class="card-header">
+                <h3>Escenarios <span id="mcOutcomesHorizon"></span></h3>
+                <span>Cada trayectoria simulada es un futuro posible; estas cinco lecturas resumen todas.</span>
+              </div>
+              <div class="mc-ladder" id="mcLadder"></div>
+              <div class="mc-stats-grid" id="mcStatsGrid"></div>
+            </div>
           </div>
 
           <!-- ── Tab: Metas ───────────────────────────────────────────────── -->
@@ -1060,30 +1150,61 @@
 
           <!-- ── Tab: Dividendos ──────────────────────────────────────────── -->
           <div class="tracker-tab-panel" id="tabPanelDividendos" style="display:none">
-            <div class="tracker-kpi-grid">
-              <div class="summary-item"><span>Dividendos recibidos</span><strong id="divTotalReceived">—</strong></div>
-              <div class="summary-item"><span>Yield sobre costo (12m)</span><strong id="divYieldOnCost">—</strong></div>
-              <div class="summary-item"><span>Activos que pagan</span><strong id="divPayerCount">0</strong></div>
-              <div class="summary-item"><span>Últimos 12 meses</span><strong id="divTrailing12">—</strong></div>
-              <div class="summary-item">
-                <div class="kpi-info-wrap">
-                  <button class="kpi-info-btn" aria-label="Información">?</button>
-                  <span class="kpi-tooltip">Estimación del ingreso por dividendos de los próximos 12 meses, proyectando la frecuencia y el monto histórico de cada activo sobre tu cantidad actual de acciones.</span>
+
+            <!-- Registro de flujo: un asiento (lo cobrado) y cinco anotaciones -->
+            <div class="div-ledger">
+              <section class="div-ledger-group">
+                <h4 class="div-ledger-head">Cobrado</h4>
+                <div class="div-ledger-row div-ledger-row--lead">
+                  <span>Últimos 12 meses</span><strong id="divTrailing12">—</strong>
                 </div>
-                <span>Ingreso proyectado (12m)</span><strong id="divForecast12">—</strong>
-              </div>
+                <div class="div-ledger-row">
+                  <span>Total histórico</span><strong id="divTotalReceived">—</strong>
+                </div>
+              </section>
+              <section class="div-ledger-group">
+                <h4 class="div-ledger-head">Cartera</h4>
+                <div class="div-ledger-row">
+                  <span>Activos que pagan</span><strong id="divPayerCount">0</strong>
+                </div>
+                <div class="div-ledger-row">
+                  <span>Yield sobre costo (12 m)</span><strong id="divYieldOnCost">—</strong>
+                </div>
+              </section>
+              <section class="div-ledger-group">
+                <h4 class="div-ledger-head">Estimado</h4>
+                <div class="div-ledger-row div-ledger-row--fc">
+                  <span>Próximos 12 meses</span>
+                  <div class="kpi-info-wrap div-ledger-info">
+                    <button class="kpi-info-btn" type="button" aria-label="Cómo se estima el ingreso proyectado">?</button>
+                    <span class="kpi-tooltip">Estimación del ingreso por dividendos de los próximos 12 meses, proyectando la frecuencia y el monto histórico de cada activo sobre tu cantidad actual de acciones.</span>
+                  </div>
+                  <strong id="divForecast12">—</strong>
+                  <em id="divForecastDelta" class="div-ledger-chip"></em>
+                </div>
+                <div class="div-ledger-row">
+                  <span>Promedio mensual</span><strong id="divForecastMonthly">—</strong>
+                </div>
+              </section>
             </div>
+
             <div class="dashboard-card">
-              <div class="card-header"><h3>Ingreso mensual por dividendos</h3><span>Recibido (últimos 12m) y proyectado (próximos 12m)</span></div>
-              <div class="div-bars-wrap"><canvas id="divMonthlyChart" aria-label="Dividendos por mes"></canvas></div>
+              <div class="card-header">
+                <h3>Ingreso mensual por dividendos</h3>
+                <span>Apilado por emisor. A la izquierda de <em>hoy</em>, lo cobrado; a la derecha, lo estimado</span>
+              </div>
+              <div class="div-bars-wrap">
+                <canvas id="divMonthlyChart" role="img" aria-label="Ingreso mensual por dividendos, apilado por emisor"></canvas>
+                <div id="divChartTooltip" class="div-chart-tooltip" role="status"></div>
+              </div>
               <div id="divMonthlyStatus" class="perf-chart-status">Aún no hay dividendos para graficar.</div>
             </div>
 
             <div class="dashboard-card">
-              <div class="card-header"><h3>Ingreso por dividendos por activo</h3><span>Convertido a la moneda del portafolio</span></div>
+              <div class="card-header"><h3>Reparto por emisor</h3><span>Convertido a la moneda del portafolio · el color enlaza cada emisor con la gráfica</span></div>
               <div class="tracker-table-wrap">
-                <table class="tracker-table" id="divByTickerTable">
-                  <thead><tr><th>Ticker</th><th>Pagos</th><th>Total recibido</th><th>Último pago</th><th>Yield s/costo</th></tr></thead>
+                <table class="tracker-table div-issuer-table" id="divByTickerTable">
+                  <thead><tr><th>Emisor</th><th>Participación</th><th>Últimos 12 m</th><th>Total recibido</th><th>Yield s/costo</th><th>Último pago</th></tr></thead>
                   <tbody></tbody>
                 </table>
               </div>
@@ -1091,13 +1212,8 @@
             </div>
 
             <div class="dashboard-card">
-              <div class="card-header"><h3>Calendario de dividendos futuros</h3><span>Próximos 12 meses · estimado</span></div>
-              <div class="tracker-table-wrap">
-                <table class="tracker-table" id="divForecastTable">
-                  <thead><tr><th>Fecha estimada</th><th>Ticker</th><th>Por acción</th><th>Acciones</th><th>Pago estimado</th></tr></thead>
-                  <tbody></tbody>
-                </table>
-              </div>
+              <div class="card-header"><h3>Calendario de pagos estimados</h3><span>Próximos 12 meses</span></div>
+              <div id="divSchedule" class="div-schedule"></div>
               <div id="divForecastStatus" class="perf-chart-status">Abre esta pestaña con precios actualizados para estimar tus próximos pagos.</div>
             </div>
           </div>
@@ -3369,7 +3485,7 @@
   </div>
 
   <!-- Perf metric info popup -->
-  <div id="perfInfoOverlay" class="perf-info-overlay hidden" role="dialog" aria-modal="true">
+  <div id="perfInfoOverlay" class="perf-info-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="perfInfoTitle">
     <div class="perf-info-popup">
       <div class="perf-info-popup-header">
         <span id="perfInfoTitle" class="perf-info-popup-title"></span>
@@ -3461,7 +3577,7 @@
   <script src="auth.js?v=11"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="main.js?v=45"></script>
+  <script src="main.js?v=50"></script>
   <script src="markowitz.js?v=5"></script>
   <script src="analyzer.js?v=3"></script>
   <script src="topdown.js?v=4"></script>

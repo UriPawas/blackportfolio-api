@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BlackPortfolio — un solo estado de cartera para todo lo que tienes</title>
+  <title>BlackPortfolio - análisis de portafolios para decisiones de cartera</title>
   <meta name="description" content="Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo en una misma lectura: peso real, riesgo medido y rendimiento comparado contra su índice. Monitoreo y análisis, no asesoría financiera personalizada.">
   <meta name="color-scheme" content="light dark">
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="apple-touch-icon" href="favicon.svg">
-  <meta name="theme-color" content="#0B1524">
+  <meta name="theme-color" content="#F1F4F8">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
@@ -44,7 +44,6 @@
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         root.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
       } catch (e) { /* almacenamiento bloqueado: se queda en claro */ }
-      root.classList.add('js');
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         root.classList.add('motion-ok');
       }
@@ -80,7 +79,7 @@
   </div>
 
   <div class="drawer" id="drawer" data-open="false">
-    <div class="shell">
+    <nav class="shell" aria-label="Navegación móvil">
       <a class="drawer__link" href="#capacidades">Capacidades</a>
       <a class="drawer__link" href="#vista-previa">Vista previa</a>
       <a class="drawer__link" href="#seguridad">Seguridad</a>
@@ -89,7 +88,7 @@
         <a class="btn btn--quiet btn--wide" href="login.html">Iniciar sesión</a>
         <a class="btn btn--primary btn--wide" href="registro.html">Abrir cuenta</a>
       </div>
-    </div>
+    </nav>
   </div>
 </header>
 
@@ -97,11 +96,11 @@
   <p class="quotes__label" id="quotesLabel">Mercados</p>
   <div class="quotes__viewport">
     <div class="quotes__track" id="quotesTrack" data-state="loading" aria-live="off">
-      <span class="quote"><span class="quote__sym">S&amp;P 500</span><span class="quote__px">—</span></span>
-      <span class="quote"><span class="quote__sym">Nasdaq</span><span class="quote__px">—</span></span>
-      <span class="quote"><span class="quote__sym">BTC/USD</span><span class="quote__px">—</span></span>
-      <span class="quote"><span class="quote__sym">EUR/USD</span><span class="quote__px">—</span></span>
-      <span class="quote"><span class="quote__sym">Gold</span><span class="quote__px">—</span></span>
+      <span class="quote"><span class="quote__sym">S&amp;P 500</span><span class="quote__px">N/D</span></span>
+      <span class="quote"><span class="quote__sym">Nasdaq</span><span class="quote__px">N/D</span></span>
+      <span class="quote"><span class="quote__sym">BTC/USD</span><span class="quote__px">N/D</span></span>
+      <span class="quote"><span class="quote__sym">EUR/USD</span><span class="quote__px">N/D</span></span>
+      <span class="quote"><span class="quote__sym">Gold</span><span class="quote__px">N/D</span></span>
     </div>
   </div>
 </section>
@@ -113,21 +112,14 @@
     <span class="rosette rosette--hero" aria-hidden="true"></span>
     <div class="shell spread">
       <div class="hero__copy">
-        <h1>Un solo estado de cartera para todo lo que tienes.</h1>
+        <h1>Tu cartera, con lectura institucional.</h1>
         <p class="lede hero__lede">
-          Acciones, ETFs, FIBRAs, cripto, renta fija y efectivo en una misma lectura:
-          peso real, riesgo medido y rendimiento comparado contra su índice. Y un reporte
-          que puedes enviar sin editarlo.
+          Convierte tus posiciones multiactivo en riesgo, rendimiento y reportes que puedes defender.
         </p>
         <div class="hero__actions">
           <a class="btn btn--primary" href="registro.html">Abrir cuenta</a>
           <a class="btn btn--quiet" href="#vista-previa">Ver la cartera de muestra</a>
         </div>
-        <p class="hero__source">
-          <span><b>Precios:</b> Yahoo Finance y CoinGecko</span>
-          <span><b>Acceso:</b> beta por invitación</span>
-          <span><b>Reporte:</b> PDF en es · en · fr</span>
-        </p>
       </div>
 
       <div class="hero__plate">
@@ -212,8 +204,8 @@
                 <td class="col-opt"><span class="chip">Efectivo</span></td>
                 <td class="n">8.2 %</td>
                 <td class="n" data-usd="18800">18,800</td>
-                <td class="n">—</td>
-                <td class="n col-opt">—</td>
+                <td class="n">N/D</td>
+                <td class="n col-opt">N/D</td>
               </tr>
             </tbody>
           </table>
@@ -252,7 +244,7 @@
         </div>
         <div class="facts__item">
           <dt>Cifrado en tránsito</dt>
-          <dd>TLS de extremo a extremo. Tu plan se decide en la base de datos, no en el cliente.</dd>
+          <dd>TLS para el transporte de datos. Tu plan se decide en la base de datos, no en el cliente.</dd>
         </div>
         <div class="facts__item">
           <dt>Seis clases de activo</dt>
@@ -280,7 +272,7 @@
           <h2>Seis clases de activo en la misma tabla.</h2>
           <p>
             Registras posición, costo y moneda. La plataforma resuelve el precio, el peso real
-            y lo que cada línea aportó al total — sin que tengas que mantener una fórmula ni
+            y lo que cada línea aportó al total, sin que tengas que mantener una fórmula ni
             cuadrar dos hojas que ya no coinciden.
           </p>
           <dl class="spec">
@@ -291,10 +283,16 @@
             <div><dt>Efectivo</dt><dd>Por divisa, con tipo de cambio de referencia visible.</dd></div>
           </dl>
         </div>
-        <figure class="figure figure--screen" data-reveal data-reveal-delay="1" style="margin:0">
-          <img src="assets/landing-v4/pantalla-mercado.jpg"
-               alt="Tablero de datos de mercado en blanco y negro con tasas y variaciones por instrumento."
-               width="1400" height="900" loading="lazy" decoding="async">
+        <figure class="figure figure--screen" data-reveal data-reveal-delay="1">
+          <div class="figure__head">
+            <span class="figure__name">Datos de mercado</span>
+            <span class="stamp">Referencia</span>
+          </div>
+          <div class="figure__media">
+            <img src="assets/landing-v4/pantalla-mercado.jpg"
+                 alt="Tablero de datos de mercado con tasas y variaciones por instrumento."
+                 width="1400" height="900" loading="lazy" decoding="async">
+          </div>
           <figcaption class="figure__cap">
             Los precios no se capturan a mano: llegan de Yahoo Finance y CoinGecko cada vez que abres la cartera.
           </figcaption>
@@ -390,9 +388,9 @@
       <div class="preview__controls" data-reveal data-reveal-delay="1">
         <div class="seg" id="segVista" role="tablist" aria-label="Vista de la cartera">
           <span class="seg__thumb" aria-hidden="true"></span>
-          <button type="button" role="tab" aria-selected="true"  data-view="asignacion" aria-controls="vistaPanel">Asignación</button>
-          <button type="button" role="tab" aria-selected="false" data-view="riesgo"     aria-controls="vistaPanel">Riesgo</button>
-          <button type="button" role="tab" aria-selected="false" data-view="benchmark"  aria-controls="vistaPanel">Benchmark</button>
+          <button id="tabAsignacion" type="button" role="tab" aria-selected="true"  data-view="asignacion" aria-controls="vistaPanel">Asignación</button>
+          <button id="tabRiesgo" type="button" role="tab" aria-selected="false" data-view="riesgo"     aria-controls="vistaPanel">Riesgo</button>
+          <button id="tabBenchmark" type="button" role="tab" aria-selected="false" data-view="benchmark"  aria-controls="vistaPanel">Benchmark</button>
         </div>
         <span class="seg-lab">
           Moneda:
@@ -402,7 +400,7 @@
         </span>
       </div>
 
-      <div class="view" id="vistaPanel" role="tabpanel" aria-live="polite" data-reveal data-reveal-delay="2">
+      <div class="view" id="vistaPanel" role="tabpanel" aria-live="polite" aria-labelledby="tabAsignacion" data-reveal data-reveal-delay="2">
         <div class="view__main">
           <div class="view__head">
             <div>
@@ -440,7 +438,7 @@
         <h2>Los protocolos, sin adjetivos.</h2>
         <p class="lede" style="margin-top: var(--s4)">
           Esta es la lista completa de lo que hay hoy. Si algo no aparece aquí, es porque
-          todavía no existe — no porque se nos haya olvidado escribirlo.
+          todavía no existe. No porque se nos haya olvidado escribirlo.
         </p>
 
         <dl class="spec" style="margin-top: var(--s6)">

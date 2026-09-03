@@ -1,5 +1,5 @@
 /* ==========================================================================
-   BlackPortfolio — landing v4
+   BlackPortfolio - landing v4
    Tema (claro/oscuro), menú móvil, controles segmentados, moneda de
    presentación y las tres vistas de la cartera de muestra.
    Sin dependencias. Todo el contenido crítico ya existe en el HTML; este
@@ -10,6 +10,7 @@
   'use strict';
 
   var root = document.documentElement;
+  root.classList.add('js');
   var FX = 17.40;                     // MXN por USD, referencia de la muestra
   var state = { currency: 'USD', view: 'asignacion' };
 
@@ -30,6 +31,8 @@
       window.setTimeout(function () { root.classList.remove('is-theming'); }, 340);
     }
     root.setAttribute('data-theme', theme);
+    var themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.setAttribute('content', theme === 'dark' ? '#0A1220' : '#F1F4F8');
     try { localStorage.setItem('bp-theme', theme); } catch (e) { /* sin almacenamiento */ }
 
     var dark = theme === 'dark';
@@ -123,8 +126,12 @@
       b.tabIndex = b.getAttribute(attr) === 'true' ? 0 : -1;
       b.addEventListener('click', function () { select(b, false); });
       b.addEventListener('keydown', function (e) {
-        var next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : -1;
-        if (next < 0 || next >= buttons.length) return;
+        var next = -1;
+        if (e.key === 'ArrowRight') next = (i + 1) % buttons.length;
+        if (e.key === 'ArrowLeft') next = (i - 1 + buttons.length) % buttons.length;
+        if (e.key === 'Home') next = 0;
+        if (e.key === 'End') next = buttons.length - 1;
+        if (next < 0) return;
         e.preventDefault();
         select(buttons[next], true);
       });
@@ -137,9 +144,12 @@
   wireSeg(document.getElementById('segMoneda'), function (btn) { setCurrency(btn.dataset.currency); });
   wireSeg(document.getElementById('segVista'), function (btn) { setView(btn.dataset.view); });
 
-  window.addEventListener('resize', function () {
-    document.querySelectorAll('.seg').forEach(function (s) { moveThumb(s, true); });
-  });
+  if ('ResizeObserver' in window) {
+    var resizeObserver = new ResizeObserver(function (entries) {
+      entries.forEach(function (entry) { moveThumb(entry.target, true); });
+    });
+    document.querySelectorAll('.seg').forEach(function (s) { resizeObserver.observe(s); });
+  }
 
   /* ----------------------------------------------------- 4. Moneda       */
 
@@ -374,7 +384,7 @@
 
   function tablaBenchmark() {
     var filas = [
-      ['Cartera de muestra', '+11.4 %', '—'],
+      ['Cartera de muestra', '+11.4 %', 'N/D'],
       ['S&amp;P 500', '+9.8 %', '+1.6 pp'],
       ['Cartera 60/40', '+7.2 %', '+4.2 pp']
     ];
@@ -430,6 +440,9 @@
 
   function setView(name) {
     state.view = name;
+    var panel = document.getElementById('vistaPanel');
+    var tab = document.querySelector('#segVista button[data-view="' + name + '"]');
+    if (panel && tab) panel.setAttribute('aria-labelledby', tab.id);
     renderView();
   }
 
@@ -437,13 +450,13 @@
 
   /* Mismos símbolos y misma fuente de precios que la landing en producción
      (`initTickerBar` en app.js). Sin logos ni banderas: en este registro una
-     cotización es texto — clave, precio, variación. */
+     cotización es texto: clave, precio, variación. */
   /* La marca de cada cotización sigue una sola regla: logotipo propio si
      existe, y si no, la bandera del mercado donde cotiza. Los pares de divisas
      llevan las dos banderas, base y contraparte. Nada se inventa: Microsoft y
      Nasdaq no tienen logo en Simple Icons (lo retiraron por política de marca),
      así que caen a la bandera de su mercado. Los archivos están en
-     assets/landing-v4/marks/ — sin CDN en tiempo de ejecución. */
+     assets/landing-v4/marks/, sin CDN en tiempo de ejecución. */
   var QUOTES = [
     { symbol: '^GSPC',    label: 'S&P 500',    flag: 'us' },
     { symbol: '^DJI',     label: 'Dow Jones',  flag: 'us' },
@@ -503,11 +516,11 @@
   function quoteItem(q, price, change, tick) {
     var cls = Math.abs(change) < 0.005 ? 'is-flat' : change > 0 ? 'is-up' : 'is-down';
     var mark = Math.abs(change) < 0.005 ? '·' : change > 0 ? '▲' : '▼';
-    var chg = price == null ? '—' : mark + ' ' + Math.abs(change).toFixed(2) + ' %';
+    var chg = price == null ? 'N/D' : mark + ' ' + Math.abs(change).toFixed(2) + ' %';
     return '<span class="quote' + (tick ? ' ' + tick : '') + '">' +
              quoteMark(q) +
              '<span class="quote__sym">' + q.label + '</span>' +
-             '<span class="quote__px">' + (price == null ? '—' : fmtQuote(price, q)) + '</span>' +
+             '<span class="quote__px">' + (price == null ? 'N/D' : fmtQuote(price, q)) + '</span>' +
              '<span class="quote__chg ' + cls + '">' + chg + '</span>' +
            '</span>';
   }
