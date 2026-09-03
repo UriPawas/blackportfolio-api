@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "875656821131",
+    "project_id": "portify-6467f",
+    "storage_bucket": "portify-6467f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:875656821131:android:8de8aa2f4a3c0cb266978e",
+        "android_client_info": {
+          "package_name": "ai.blackportfolio.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "875656821131-aon60f26qtdp643kun0np4j8c0uhpjoq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "ai.blackportfolio.mobile",
+            "certificate_hash": "efaeddc9baf0e6dded4aaebeb4027d07296a49db"
+          }
+        },
+        {
+          "client_id": "875656821131-89dra5djfobbfqrslq64uobp1k02uuhn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6gv0pULHnlC73RjDqTm5bQX0AmyaRydI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "875656821131-89dra5djfobbfqrslq64uobp1k02uuhn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
