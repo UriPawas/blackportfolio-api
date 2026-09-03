@@ -14709,10 +14709,6 @@ async function computeMCAssetData(portfolio, histRange = "1y") {
   const tickersWithData = uniqueTickers.filter((t) => Object.keys(tickerDateMaps[t]).length > 1);
   if (!tickersWithData.length) return null;
 
-  const dateSets = tickersWithData.map((t) => new Set(Object.keys(tickerDateMaps[t])));
-  const commonDates = [...dateSets[0]].filter((d) => dateSets.every((s) => s.has(d))).sort();
-  if (commonDates.length < 20) return null;
-
   // Forward projection uses CURRENT market-value weights (held positions only),
   // not historical cost weights — this is the allocation the investor holds today.
   const mvByTicker = {};
@@ -14732,6 +14728,29 @@ async function computeMCAssetData(portfolio, histRange = "1y") {
   let held = tickersWithData.filter((t) => (mvByTicker[t] || 0) > 0);
   if (!held.length) return null;
   held.sort((a, b) => mvByTicker[b] - mvByTicker[a]);
+
+  /* La ventana común se calcula SÓLO sobre lo que se va a simular. Antes entraban
+     también los tickers ya vendidos, y como la muestra es la intersección de
+     fechas, una posición cerrada hace tiempo — que no aporta un gramo de peso a
+     la proyección — podía recortarle años de historia a todas las demás. Y era
+     invisible: el chip de activos sólo lista las que pesan hoy. */
+  const dateSets = held.map((t) => new Set(Object.keys(tickerDateMaps[t])));
+  const commonDates = [...dateSets[0]].filter((d) => dateSets.every((s) => s.has(d))).sort();
+  if (commonDates.length < 20) return null;
+
+  /* Quién capa la ventana. Como la muestra es la intersección, manda el activo
+     que empezó a cotizar más tarde — pero sólo se le puede señalar si lo hace con
+     margen sobre el siguiente. Si tres salieron a bolsa el mismo trimestre,
+     quitar uno no devuelve ni un día, y nombrarlo sería mandar al usuario a
+     tocar una posición para nada. */
+  const startsAt = {};
+  held.forEach((t) => { startsAt[t] = Object.keys(tickerDateMaps[t]).sort()[0]; });
+  const byStart = held.slice().sort((x, y) => startsAt[y].localeCompare(startsAt[x]));
+  let limitedBy = null;
+  if (byStart.length > 1) {
+    const gapDays = (Date.parse(startsAt[byStart[0]]) - Date.parse(startsAt[byStart[1]])) / 86400000;
+    if (gapDays > 30) limitedBy = byStart[0];
+  }
 
   const heldMV = held.reduce((s, t) => s + mvByTicker[t], 0);
   const simpleReturns = {};
@@ -14779,6 +14798,9 @@ async function computeMCAssetData(portfolio, histRange = "1y") {
   return {
     names, weights, series, portfolioReturns,
     sessions: n,
+    windowStart: commonDates[0],
+    windowEnd: commonDates[commonDates.length - 1],
+    limitedBy, limitedFrom: limitedBy ? startsAt[limitedBy] : null,
     grouped: held.length > MC_MAX_ASSETS,
     fxApplied: foreignCurs.filter((c) => fxSeries[c]),
     fxMissing: foreignCurs.filter((c) => !fxSeries[c]),
@@ -14852,6 +14874,17 @@ function mcSimCount(steps, assets) {
   return Math.max(MC_SIM_MIN, Math.min(MC_SIM_MAX, raw));
 }
 const MC_RANGE_LABEL = { "1y": "1 año", "2y": "2 años", "5y": "5 años" };
+const MC_REQ_YEARS = { "1y": 1, "2y": 2, "5y": 5 };
+
+// «mar 2024» a partir de un ISO. En UTC: las fechas de la muestra son claves de
+// calendario, no instantes, y en zonas al oeste de Greenwich un `new Date(iso)`
+// local las retrasa un día — bastante para cambiarles el mes.
+function mcMonthLabel(iso) {
+  if (!iso) return "—";
+  return new Date(`${iso}T00:00:00Z`)
+    .toLocaleDateString("es-MX", { month: "short", year: "numeric", timeZone: "UTC" })
+    .replace(".", "");
+}
 const MC_MODEL_LABEL = {
   gbm: "Normal (log-normal)", bootstrap: "Bootstrap histórico",
   block: `Bootstrap por bloques de ${MC_BLOCK_MONTHS} meses`, t: "t-Student",
@@ -15111,6 +15144,8 @@ async function loadMonteCarloTab(portfolio) {
     currency: cur, years: mcYears, histRange, rangeLabel, model, multi,
     assetCount: assetData.series.length, grouped: assetData.grouped,
     fxApplied: assetData.fxApplied, fxMissing: assetData.fxMissing,
+    windowStart: assetData.windowStart, windowEnd: assetData.windowEnd,
+    limitedBy: assetData.limitedBy, limitedFrom: assetData.limitedFrom,
   };
   document.getElementById("mcOutcomes")?.removeAttribute("hidden");
   mcRenderAll({ animate: true });
@@ -15692,10 +15727,24 @@ function renderMCAssumptions(sim, ctx) {
   const el = document.getElementById("mcStatus");
   if (!el) return;
   const annVol = sim.sigma * Math.sqrt(252) * 100;
+
+  /* La muestra se reporta por lo que SALIÓ, no por lo que se pidió. Antes aquí
+     iban juntos `sim.sessions` — un hecho — y `ctx.rangeLabel` — la etiqueta del
+     desplegable —, así que la tira podía leer «618 sesiones · 5 años» mientras el
+     aviso de al lado decía «2.5 años de historia». Ambos ciertos, contradictorios
+     a la vista, y el usuario sin manera de saber cuál manda. */
+  const sampleYears = sim.sessions / 252;
+  const reqYears = MC_REQ_YEARS[ctx.histRange] || null;
+  const capped = reqYears ? sampleYears < reqYears * 0.9 : false;
+  const culpable = capped && ctx.limitedBy ? ctx.limitedBy : null;
+
   const items = [
     ["Trayectorias", sim.numSims.toLocaleString("en-US")],
     ["Distribución", MC_MODEL_LABEL[ctx.model] + (ctx.model === "t" ? ` · df ≈ ${sim.dfT.toFixed(1)}` : "")],
-    ["Muestra", `${sim.sessions} sesiones · ${ctx.rangeLabel}`],
+    ["Muestra", `${sim.sessions.toLocaleString("en-US")} sesiones · ${mcMonthLabel(ctx.windowStart)} → ${mcMonthLabel(ctx.windowEnd)}`],
+    // Sin la fecha: es la misma que ya abre el chip de Muestra, y repetirla en la
+    // celda de al lado gasta una columna de la tira para no decir nada nuevo.
+    ...(culpable ? [["Limita la muestra", _divEsc(culpable)]] : []),
     ["Volatilidad anual", `${annVol.toFixed(1)} %`],
     ["Deriva", MC_DRIFT_LABEL[sim.driftMode] +
       (sim.driftMode === "blend" ? ` · ${Math.round((sim.shrinkage || 0) * 100)} % prior` : "")],
@@ -15731,7 +15780,6 @@ function renderMCAssumptions(sim, ctx) {
      gráfico sale igual de terso en ambos casos. Se avisa cuando la proyección
      estira la muestra más de cinco veces, que es donde el modelo deja de
      describir datos y empieza a inventarlos. */
-  const sampleYears = sim.sessions / 252;
   const stretch = ctx.years / sampleYears;
   /* El umbral está en 6 y no en 5 a propósito: la vista por defecto son 10 años
      sobre 2 de muestra, o sea 5.05×, y un aviso que aparece siempre deja de
@@ -15743,7 +15791,11 @@ function renderMCAssumptions(sim, ctx) {
       <strong>Muestra corta para este horizonte.</strong> Estás proyectando ${ctx.years} año${ctx.years > 1 ? "s" : ""}
       desde ${sampleTxt} ${sampleTxt === "1.0" ? "año" : "años"} de historia — la estiras ${Math.round(stretch)} veces.
       ${stretch > 10 ? "A esta distancia el resultado dice más del tramo que te tocó medir que del futuro. " : ""}
-      ${ctx.histRange !== "5y" ? "Con <em>Muestra histórica</em> en 5 años el ejercicio es bastante más defendible." : "Ya usas la muestra más larga disponible; considera acortar el horizonte."}
+      ${culpable
+        ? `Subir <em>Muestra histórica</em> no serviría de nada: la ventana la fija <strong>${_divEsc(culpable)}</strong>, que no cotiza desde antes de ${mcMonthLabel(ctx.limitedFrom)}. Lo que sí está en tu mano es acortar el horizonte.`
+        : ctx.histRange !== "5y"
+          ? "Con <em>Muestra histórica</em> en 5 años el ejercicio es bastante más defendible."
+          : "Ya usas la muestra más larga disponible; considera acortar el horizonte."}
     </span>`;
   }
   el.innerHTML = html;
@@ -15972,7 +16024,7 @@ function buildMonteCarloInfo() {
     ["Meta", has && sim.goal != null
       ? `${formatCurrency(sim.goal, cur)} al cerrar el horizonte`
       : "Valor objetivo del portafolio al cerrar el horizonte. Opcional"],
-    ["Muestra histórica", has ? `${sim.sessions} sesiones (${ctx.rangeLabel})` : "De cuánto pasado se estiman el retorno y la volatilidad"],
+    ["Muestra histórica", has ? `${sim.sessions.toLocaleString("en-US")} sesiones (${mcMonthLabel(ctx.windowStart)} → ${mcMonthLabel(ctx.windowEnd)})` : "De cuánto pasado se estiman el retorno y la volatilidad"],
     ["Distribución", has ? MC_MODEL_LABEL[ctx.model] : "Cómo se sortea el retorno de cada mes"],
     ["Deriva esperada", has
       ? `${MC_DRIFT_LABEL[sim.driftMode]}${sim.driftMode === "blend" ? ` — ${Math.round((1 - sim.shrinkage) * 100)} % de tu muestra y ${Math.round(sim.shrinkage * 100)} % de la prior de largo plazo` : ""}`
