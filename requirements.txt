@@ -10,5 +10,5 @@ pandas==2.2.3
 SQLAlchemy>=2.0,<3
 psycopg[binary]>=3.2,<4
 firebase-admin>=6.5,<8
-cryptography>=42,<47
+cryptography>=50.0.1,<51
 sentry-sdk[fastapi]>=2.0,<3
