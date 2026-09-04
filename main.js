@@ -19910,12 +19910,25 @@ function mkBtn(html, title, danger) {
     const user = window.BlackPortfolioAuth.firebaseAuth.currentUser;
     if (!user) throw new Error("No autenticado.");
     const token = await user.getIdToken();
+    // El portal expone historial de facturación y cancelación: el backend lo
+    // protege con el segundo factor, así que hay que mandar su token.
+    const twofa = localStorage.getItem("bp-2fa-token");
     const response = await fetch(`${API_BASE_URL}/billing/stripe/portal`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` }
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(twofa ? { "X-2FA-Token": twofa } : {})
+      }
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.detail || "No se pudo abrir Stripe.");
+    if (!response.ok) {
+      // Sin esto el usuario veía el código interno "2fa_required" como mensaje.
+      const MENSAJES = {
+        "2fa_required": "Vuelve a iniciar sesión y verifica tu código de dos factores para gestionar tu suscripción.",
+        beta_closed: "Tu cuenta no tiene acceso activo a la beta."
+      };
+      throw new Error(MENSAJES[body.detail] || body.detail || "No se pudo abrir Stripe.");
+    }
     window.location.href = body.url;
   }
 
@@ -19940,9 +19953,17 @@ function mkBtn(html, title, danger) {
     const isGranted  = !isActive && !isFree && !session.isDemo;
     const STATUS_LABELS = { canceled: "Cancelada", past_due: "Pago pendiente" };
 
+    // Cancelar en el portal de Stripe no corta el servicio: deja la suscripción
+    // "active" hasta el fin del periodo. Decir solo "Activo" hacía que el
+    // usuario creyera que la cancelación no se aplicó (o que le van a cobrar).
+    const endsSoon = isActive && session.cancelAtPeriodEnd;
+
     if (billingStatus) {
       let html;
-      if (isActive)          html = '<span style="color:var(--success)">● Activo</span>';
+      // El punto lleva el color; el texto va con el del tema porque --warning no
+      // se redefine en modo claro y el ambar sobre fondo blanco no se lee.
+      if (endsSoon)          html = '<span style="color:var(--warning, #ffb547)">●</span> Activo · se cancela al final del periodo';
+      else if (isActive)     html = '<span style="color:var(--success)">● Activo</span>';
       else if (session.isDemo) html = '<span style="color:var(--success)">● Demo · acceso completo</span>';
       else if (isGranted)    html = '<span style="color:var(--accent, #6f86ff)">● Acceso beta</span>';
       else if (isFree)       html = "Plan gratuito";
@@ -19959,8 +19980,13 @@ function mkBtn(html, title, danger) {
       const next = session.billingCurrentPeriodEnd
         ? new Date(Number(session.billingCurrentPeriodEnd) * 1000)
         : null;
-      renewalDate.textContent = next
+      const fecha = next
         ? next.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
+        : null;
+      // La misma fecha significa cosas opuestas segun si la suscripcion sigue o
+      // se cancela: nombrarla evita la llamada de "por que me van a cobrar".
+      renewalDate.textContent = fecha
+        ? (endsSoon ? `Termina el ${fecha}` : fecha)
         : (session.isDemo || isGranted) ? "Sin vencimiento" : "—";
     }
 

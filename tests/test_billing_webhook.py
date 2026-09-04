@@ -63,6 +63,23 @@ def _plan_in_db(uid: str) -> str:
         return user.plan if user else None
 
 
+def _profile(uid: str) -> dict:
+    persistence.get_engine()
+    with persistence._session_factory() as s:
+        user = s.get(persistence.AppUser, uid)
+        return dict(user.profile_data or {}) if user else {}
+
+
+def _set_profile(uid: str, **campos):
+    persistence.get_engine()
+    with persistence._session_factory() as s:
+        user = s.get(persistence.AppUser, uid)
+        perfil = dict(user.profile_data or {})
+        perfil.update(campos)
+        user.profile_data = perfil
+        s.commit()
+
+
 def _seed_user(client):
     """Crea el AppUser vía bootstrap (sin 2FA todavía)."""
     r = client.get("/api/account/bootstrap")
@@ -157,23 +174,35 @@ def test_subscription_cancelada_degrada(client):
 
 # ── /confirm verifica server-side la sesión (Stripe.retrieve simulado) ──────────
 
+def _mock_stripe(monkeypatch, *, checkout=None, subscription=None):
+    """Simula checkout.Session.retrieve y Subscription.retrieve."""
+    ses = {
+        "payment_status": "paid",
+        "client_reference_id": "user_pay",
+        "customer": "cus_test_123",
+        "subscription": "sub_test_123",
+        "metadata": {"plan": "Advisor Pro", "billing_cycle": "monthly"},
+    }
+    ses.update(checkout or {})
+    sub = {"id": "sub_test_123", "status": "active",
+           "current_period_end": 1800000000, "cancel_at_period_end": False}
+    sub.update(subscription or {})
+    monkeypatch.setattr(api.stripe.checkout.Session, "retrieve",
+                        staticmethod(lambda *a, **k: ses))
+    monkeypatch.setattr(api.stripe, "Subscription",
+                        type("S", (), {"retrieve": staticmethod(lambda *a, **k: sub)}))
+    return ses, sub
+
+
 def test_confirm_eleva_plan(client, monkeypatch):
     _seed_user(client)
-
-    def fake_retrieve(session_id, **kwargs):
-        return {
-            "payment_status": "paid",
-            "client_reference_id": "user_pay",
-            "customer": "cus_test_123",
-            "subscription": "sub_test_123",
-            "metadata": {"plan": "Advisor Pro", "billing_cycle": "monthly"},
-        }
-
-    monkeypatch.setattr(api.stripe.checkout.Session, "retrieve", staticmethod(fake_retrieve))
+    _mock_stripe(monkeypatch)
     r = client.post("/api/billing/stripe/confirm", json={"sessionId": "cs_test_abc"})
     assert r.status_code == 200, r.text
     assert r.json()["plan"] == "Advisor Pro"
     assert _plan_in_db("user_pay") == "Advisor Pro"
+    # La fecha de renovacion queda fijada al confirmar, no un mes despues.
+    assert _profile("user_pay")["billingCurrentPeriodEnd"] == 1800000000
 
 
 def test_confirm_sesion_de_otro_usuario_rechazada(client, monkeypatch):

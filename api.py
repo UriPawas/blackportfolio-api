@@ -23,6 +23,8 @@ import string
 import stripe
 import time as _time_module
 from urllib.parse import quote
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from backup_service import start_backup_scheduler
 
 # ── Import perezoso de librerías pesadas (pandas/numpy/yfinance ≈250 MB) ───────
@@ -2656,6 +2658,69 @@ def report_photo(request: Request, photo_id: int, size: str = "large"):
 
 
 # ── Stripe ───────────────────────────────────────────────────────────────────
+
+# Estados en los que Stripe considera que la suscripción sigue dando derecho al
+# plan. "past_due" entra a propósito: el cobro falló pero Stripe aún reintenta y
+# quitarle el plan a alguien que está a media reintento es la peor experiencia
+# posible. Cuando de verdad se acaba, llega subscription.deleted.
+_LIVE_SUBSCRIPTION_STATES = {"active", "trialing", "past_due"}
+
+
+def _has_live_subscription(user) -> bool:
+    """¿La cuenta ya tiene una suscripción de Stripe vigente?
+
+    Se consulta a Stripe, no al perfil: el perfil puede ir por detrás si un
+    webhook se perdió, y de eso depende que no cobremos dos veces.
+    """
+    profile = user.profile_data or {}
+    sub_id = profile.get("stripeSubscriptionId")
+    if not sub_id or not stripe.api_key:
+        return False
+    try:
+        sub = _to_plain(stripe.Subscription.retrieve(sub_id))
+    except Exception:  # noqa: BLE001
+        # Esto es una protección contra el doble cobro, no un control de acceso:
+        # si Stripe no contesta, dejar comprar es mejor que dejar a un cliente
+        # sin poder pagar. El duplicado, si lo hubiera, se resuelve reembolsando.
+        return False
+    return sub.get("status") in _LIVE_SUBSCRIPTION_STATES
+
+
+# Eventos que mueven dinero o entitlement: si llegan sin una cuenta a la que
+# aplicarlos, alguien pagó y no recibió su plan. No pueden pasar en silencio.
+_BILLING_EVENTS_THAT_NEED_A_USER = {
+    "checkout.session.completed",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+    "invoice.paid",
+    "invoice.payment_failed",
+}
+
+
+def _user_by_stripe_customer(session, customer_id: str):
+    """Cuenta dueña de un customer de Stripe.
+
+    Antes esto traía TODAS las filas de app_users a memoria y las recorría en
+    Python en cada webhook sin uid. La consulta filtra en la base y funciona
+    igual en PostgreSQL (->>) que en SQLite (json_extract).
+    """
+    if not customer_id:
+        return None
+    try:
+        return session.execute(
+            select(AppUser).where(
+                AppUser.profile_data["stripeCustomerId"].as_string() == customer_id
+            ).limit(1)
+        ).scalars().first()
+    except Exception as exc:  # noqa: BLE001 — dialecto sin soporte de JSON path
+        logger.warning("Búsqueda por stripeCustomerId falló (%s); se recorre la tabla.", exc)
+        session.rollback()
+        for candidate in session.execute(select(AppUser)).scalars():
+            if (candidate.profile_data or {}).get("stripeCustomerId") == customer_id:
+                return candidate
+        return None
+
+
 @app.post("/api/billing/stripe/webhook")
 async def stripe_webhook(request: Request, session=Depends(get_session)):
     if not STRIPE_WEBHOOK_SECRET:
@@ -2674,53 +2739,95 @@ async def stripe_webhook(request: Request, session=Depends(get_session)):
         return {"received": True, "duplicate": True}
 
     event_type = event["type"]
+    # `event` es un StripeObject, no un dict: no tiene .get() (ver stripe>=8).
+    try:
+        event_created = int(event["created"] or 0)
+    except Exception:
+        event_created = 0
     obj = _to_plain(event["data"]["object"])
     metadata = obj.get("metadata") or {}
     uid = metadata.get("uid") or obj.get("client_reference_id")
     customer_id = obj.get("customer")
     user = session.get(AppUser, uid) if uid else None
     if user is None and customer_id:
-        for candidate in session.query(AppUser).all():
-            if (candidate.profile_data or {}).get("stripeCustomerId") == customer_id:
-                user = candidate
-                uid = candidate.firebase_uid
-                break
+        user = _user_by_stripe_customer(session, customer_id)
+        if user is not None:
+            uid = user.firebase_uid
 
     if user is not None:
         profile = dict(user.profile_data or {})
         if customer_id:
             profile["stripeCustomerId"] = customer_id
-        if event_type == "checkout.session.completed":
-            plan = normalize_plan(metadata.get("plan"))
-            # "no_payment_required" = checkout liquidado con cupón 100% off (beta).
-            if obj.get("payment_status") in ("paid", "no_payment_required") and plan != "Explorer":
-                user.plan = plan
+
+        # Stripe NO garantiza el orden de entrega. Sin este freno, un
+        # "subscription.updated" viejo que llega tarde revierte el estado al de
+        # hace horas: el usuario paga y se queda degradado sin motivo visible.
+        # Se compara contra el último evento aplicado a ESTA cuenta.
+        stale = event_created and event_created < (profile.get("billingEventAt") or 0)
+        if stale:
+            logger.info("Webhook %s (%s) ignorado por llegar fuera de orden.", event_id, event_type)
+        else:
+            profile["billingEventAt"] = event_created or profile.get("billingEventAt")
+
+            if event_type == "checkout.session.completed":
+                plan = normalize_plan(metadata.get("plan"))
+                # "no_payment_required" = checkout liquidado con cupón 100% off.
+                if obj.get("payment_status") in ("paid", "no_payment_required") and plan != "Explorer":
+                    user.plan = plan
+                    profile.update({
+                        "stripeSubscriptionId": obj.get("subscription"),
+                        "billingStatus": "active",
+                        "billingCycle": metadata.get("billing_cycle", "monthly"),
+                    })
+            elif event_type == "customer.subscription.updated":
+                status = obj.get("status") or "unknown"
                 profile.update({
-                    "stripeSubscriptionId": obj.get("subscription"),
-                    "billingStatus": "active",
-                    "billingCycle": metadata.get("billing_cycle", "monthly"),
+                    "stripeSubscriptionId": obj.get("id"),
+                    "billingStatus": status,
+                    "billingCurrentPeriodEnd": obj.get("current_period_end"),
+                    # El portal de Stripe permite cancelar al final del periodo:
+                    # la suscripción sigue "active" pero ya tiene fecha de fin.
+                    # Sin esto la app decía "Activo" y el usuario no se enteraba.
+                    "cancelAtPeriodEnd": bool(obj.get("cancel_at_period_end")),
                 })
-        elif event_type == "customer.subscription.updated":
-            status = obj.get("status") or "unknown"
-            profile.update({
-                "stripeSubscriptionId": obj.get("id"),
-                "billingStatus": status,
-                "billingCurrentPeriodEnd": obj.get("current_period_end"),
-            })
-            plan = normalize_plan(metadata.get("plan"))
-            if status in {"active", "trialing"}:
-                user.plan = plan
-            elif status in {"canceled", "unpaid", "incomplete_expired"}:
+                if status in {"active", "trialing"}:
+                    # El plan sale del metadata de la suscripción. Si el evento
+                    # llega sin él (suscripción tocada desde el panel de Stripe,
+                    # creada fuera del flujo normal), normalize_plan devolvería
+                    # "Explorer" y DEGRADARÍA a un cliente que está pagando. Sin
+                    # plan en el evento no se toca el que ya tiene.
+                    if metadata.get("plan"):
+                        user.plan = normalize_plan(metadata["plan"])
+                elif status in {"canceled", "unpaid", "incomplete_expired"}:
+                    user.plan = "Explorer"
+            elif event_type == "customer.subscription.deleted":
                 user.plan = "Explorer"
-        elif event_type == "customer.subscription.deleted":
-            user.plan = "Explorer"
-            profile.update({"billingStatus": "canceled", "stripeSubscriptionId": obj.get("id")})
-        elif event_type == "invoice.payment_failed":
-            profile["billingStatus"] = "past_due"
-        elif event_type == "invoice.paid":
-            profile["billingStatus"] = "active"
+                profile.update({
+                    "billingStatus": "canceled",
+                    "stripeSubscriptionId": obj.get("id"),
+                    "cancelAtPeriodEnd": False,
+                })
+            elif event_type == "invoice.payment_failed":
+                profile["billingStatus"] = "past_due"
+            elif event_type == "invoice.paid":
+                profile["billingStatus"] = "active"
+
         user.profile_data = profile
         user.last_seen_at = utc_now()
+    elif event_type in _BILLING_EVENTS_THAT_NEED_A_USER:
+        # Un cobro sin cuenta a la que aplicarlo: el usuario pagó y no recibe su
+        # plan. Antes se registraba el evento y ahí moría. Hay que enterarse.
+        logger.error("Webhook %s (%s) sin usuario: uid=%s customer=%s",
+                     event_id, event_type, uid, customer_id)
+        if _SENTRY_DSN:
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_message(
+                    f"Stripe {event_type} sin usuario (uid={uid}, customer={customer_id})",
+                    level="error",
+                )
+            except Exception:
+                pass
 
     session.add(BillingEvent(
         stripe_event_id=event_id,
@@ -2728,7 +2835,13 @@ async def stripe_webhook(request: Request, session=Depends(get_session)):
         firebase_uid=uid,
         created_at=utc_now(),
     ))
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # Dos entregas del mismo evento a la vez: la clave primaria de
+        # billing_events las serializa. La que pierde no reintenta nada.
+        session.rollback()
+        return {"received": True, "duplicate": True}
     return {"received": True}
 
 
@@ -2740,7 +2853,7 @@ class CheckoutRequest(BaseModel):
 async def stripe_create_session(
     request: Request,
     body: CheckoutRequest,
-    token: dict = Depends(verify_firebase_user),
+    token: dict = Depends(require_2fa),
     db_session=Depends(get_session),
 ):
     plan = normalize_plan(body.plan)
@@ -2753,6 +2866,17 @@ async def stripe_create_session(
     try:
         user = upsert_user(db_session, token)
         db_session.commit()
+
+        # Un segundo checkout sobre una suscripción vigente deja al usuario con
+        # DOS suscripciones y dos cobros al mes. El cambio de plan se hace en el
+        # portal de Stripe, que prorratea; aquí se corta antes de cobrar de más.
+        if _has_live_subscription(user):
+            raise HTTPException(
+                status_code=409,
+                detail=("Ya tienes una suscripción activa. Cambia de plan desde "
+                        "Ajustes → Gestionar suscripción para no pagar dos veces."),
+            )
+
         prices = PLAN_PRICES[plan]
         amount = prices["yearly"] if body.billingCycle == "yearly" else prices["monthly"]
         interval = "year" if body.billingCycle == "yearly" else "month"
@@ -2784,6 +2908,8 @@ async def stripe_create_session(
 
         checkout_session = stripe.checkout.Session.create(**params)
         return {"url": checkout_session.url}
+    except HTTPException:
+        raise  # el 409 de suscripción duplicada no es un fallo interno
     except stripe.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
     except Exception as e:
@@ -2797,7 +2923,7 @@ class StripeConfirmRequest(BaseModel):
 def stripe_confirm(
     request: Request,
     body: StripeConfirmRequest,
-    token: dict = Depends(verify_firebase_user),
+    token: dict = Depends(require_2fa),
     session=Depends(get_session),
 ):
     """Verifica server-side la sesión de Stripe y fija el plan del usuario en Postgres.
@@ -2820,15 +2946,44 @@ def stripe_confirm(
     if plan not in PLAN_PRICES or plan == "Explorer":
         raise HTTPException(status_code=400, detail="Plan no válido en la sesión de pago.")
 
+    # Una sesión de checkout conserva payment_status="paid" PARA SIEMPRE. Sin
+    # esta comprobación, quien cancelara su suscripción recuperaba el plan de
+    # pago gratis con solo volver a abrir success.html?session_id=… (la URL
+    # sigue en su historial). El entitlement lo manda la suscripción viva, no
+    # el recibo de un cobro que ya pasó.
+    subscription_id = checkout.get("subscription")
+    period_end = None
+    cancel_at_period_end = False
+    verificada = False
+    if subscription_id:
+        try:
+            sub = _to_plain(stripe.Subscription.retrieve(subscription_id))
+        except stripe.StripeError as e:
+            raise HTTPException(status_code=400, detail=str(e.user_message or e))
+        if sub.get("status") not in _LIVE_SUBSCRIPTION_STATES:
+            raise HTTPException(
+                status_code=409,
+                detail="Esta suscripción ya no está vigente. Reactívala desde Ajustes.",
+            )
+        period_end = sub.get("current_period_end")
+        cancel_at_period_end = bool(sub.get("cancel_at_period_end"))
+        verificada = True
+
     user = upsert_user(session, token)
     user.plan = plan
     profile = dict(user.profile_data or {})
     profile.update({
         "stripeCustomerId": checkout.get("customer"),
-        "stripeSubscriptionId": checkout.get("subscription"),
+        "stripeSubscriptionId": subscription_id,
         "billingStatus": "active",
         "billingCycle": (checkout.get("metadata") or {}).get("billing_cycle", "monthly"),
     })
+    # Sin esto, la fecha de renovación quedaba en "—" hasta que Stripe mandara
+    # el primer subscription.updated, que puede tardar un mes.
+    if verificada:
+        profile["cancelAtPeriodEnd"] = cancel_at_period_end
+        if period_end is not None:
+            profile["billingCurrentPeriodEnd"] = period_end
     user.profile_data = profile
     session.add(SecurityActivity(
         firebase_uid=uid, event="plan_activated",
@@ -2840,7 +2995,7 @@ def stripe_confirm(
 
 @app.post("/api/billing/stripe/portal")
 def stripe_customer_portal(
-    token: dict = Depends(verify_firebase_user),
+    token: dict = Depends(require_2fa),
     session=Depends(get_session),
 ):
     user = upsert_user(session, token)

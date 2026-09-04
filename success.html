@@ -38,6 +38,16 @@
       background:rgba(111,134,255,0.15); color:#6f86ff;
       border:1px solid rgba(111,134,255,0.3);
     }
+    /* El color del texto sale de --text: --warning no se redefine en el tema
+       claro y el ámbar sobre tarjeta blanca queda ilegible. El ámbar se queda
+       en el fondo y el borde, que sí funcionan en ambos temas. */
+    .confirm-notice {
+      margin:1rem 0 0; padding:0.75rem 1rem; border-radius:8px;
+      font-size:0.88rem; line-height:1.5; text-align:left;
+      background:rgba(255,181,71,0.12); color:var(--text, #f5f7fb);
+      border:1px solid rgba(255,181,71,0.45);
+    }
+    .confirm-notice[hidden] { display:none; }
   </style>
 </head>
 <body>
@@ -50,6 +60,7 @@
     <span class="badge">PAGO CONFIRMADO</span>
     <h1>¡Suscripción activada!</h1>
     <p>Tu plan <span class="plan-badge" id="activePlan">BlackPortfolio</span> está activo. Ya puedes acceder a todas las funciones incluidas en tu suscripción.</p>
+    <p class="confirm-notice" id="confirmNotice" hidden></p>
     <div class="success-actions">
       <a class="button primary" href="main.html">Ir al dashboard →</a>
       <a class="button secondary" href="index.html">Volver a la landing</a>
@@ -74,15 +85,24 @@
         const planEl = document.getElementById("activePlan");
         let plan = auth?.getSession()?.selectedPlan || "BlackPortfolio";
         let confirmed = false;
+        let detalle = "";
 
         // Confirma el pago server-side (Railway) y fija el plan en Postgres.
         const sessionId = new URLSearchParams(location.search).get("session_id");
         if (sessionId) {
           try {
             const idToken = await user.getIdToken();
+            // El backend exige el segundo factor en facturación: sin esta
+            // cabecera, una cuenta con 2FA activo recibe 403 justo después de
+            // pagar y se queda sin plan.
+            const twofa = localStorage.getItem("bp-2fa-token");
             const res = await fetch(`${API_BASE}/api/billing/stripe/confirm`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${idToken}`,
+                ...(twofa ? { "X-2FA-Token": twofa } : {})
+              },
               body: JSON.stringify({ sessionId })
             });
             if (res.ok) {
@@ -92,12 +112,25 @@
                 auth?.setPlan?.(data.plan);
                 confirmed = true;
               }
+            } else {
+              // Un cobro cobrado que no se pudo confirmar no puede quedar en un
+              // "pendiente" mudo: el webhook de Stripe aplica el plan de todas
+              // formas, y hay que decirle al usuario qué hacer si no aparece.
+              const err = await res.json().catch(() => ({}));
+              detalle = err.detail || "";
             }
           } catch (_) {}
         }
 
         if (confirmed) auth?.markCheckoutReady?.();
         if (planEl) planEl.textContent = confirmed ? plan : "Confirmación pendiente";
+        const avisoEl = document.getElementById("confirmNotice");
+        if (avisoEl && !confirmed && sessionId) {
+          avisoEl.textContent = detalle
+            ? detalle
+            : "Tu pago se registró. Si el plan no aparece en unos minutos, vuelve a entrar a la app o escríbenos.";
+          avisoEl.hidden = false;
+        }
       });
     })();
   </script>

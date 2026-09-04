@@ -163,6 +163,7 @@
       billingStatus: extra.billingStatus || null,
       billingCycle: extra.billingCycle || null,
       billingCurrentPeriodEnd: extra.billingCurrentPeriodEnd || null,
+      cancelAtPeriodEnd: extra.cancelAtPeriodEnd === true,
       createdAt: extra.createdAt || new Date().toISOString(),
       isGoogle,
       photoURL: isGoogle ? user.photoURL : null,

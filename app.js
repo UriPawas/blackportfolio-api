@@ -110,14 +110,28 @@ async function startStripeCheckout({ plan, billingCycle }) {
   const firebaseUser = window.BlackPortfolioAuth.firebaseAuth.currentUser;
   if (!firebaseUser) throw new Error("Tu sesion expiro. Inicia sesion nuevamente.");
   const idToken = await firebaseUser.getIdToken();
+  // El backend exige el segundo factor en facturación: sin esta cabecera, una
+  // cuenta con 2FA activo no puede ni contratar ni gestionar su suscripción.
+  const twofa = localStorage.getItem("bp-2fa-token");
   const res = await fetch(`${RAILWAY_API}/api/billing/stripe/create-checkout-session`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+      ...(twofa ? { "X-2FA-Token": twofa } : {})
+    },
     body: JSON.stringify({ plan, billingCycle })
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Error al iniciar el pago");
+    // El backend responde con códigos internos en estos dos casos; sin traducir
+    // el usuario veía literalmente "2fa_required" en la pantalla de pago.
+    const MENSAJES = {
+      "2fa_required": "Verifica tu código de dos factores e inténtalo de nuevo.",
+      beta_closed: "Tu cuenta aún no tiene acceso a la beta. Canjea tu código de invitación antes de contratar un plan.",
+      email_verification_required: "Confirma tu correo antes de contratar un plan. Revisa tu bandeja de entrada."
+    };
+    throw new Error(MENSAJES[err.detail] || err.detail || "Error al iniciar el pago");
   }
   const data = await res.json();
   window.location.href = data.url;
