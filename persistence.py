@@ -790,6 +790,15 @@ def is_beta_allowed(session: Session, email: str | None) -> bool:
     return session.get(BetaAllowlist, em) is not None
 
 
+def _enforce_2fa(session: Session, token: dict[str, Any], x_2fa_token: str | None) -> None:
+    """Si la cuenta tiene 2FA activo, exige un token de sesión 2FA válido.
+    Las cuentas sin 2FA pasan sin fricción."""
+    cred = session.get(TotpCredential, token["uid"])
+    if cred and cred.enabled:
+        if not verify_2fa_token(x_2fa_token or "", token["uid"]):
+            raise HTTPException(status_code=403, detail="2fa_required")
+
+
 def require_2fa(
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),
@@ -798,12 +807,25 @@ def require_2fa(
     """Como verify_firebase_user, pero si la cuenta tiene 2FA activo exige además
     un token de sesión 2FA válido. Cuentas sin 2FA pasan sin fricción. Además, si
     la beta está cerrada, exige que el correo esté en la allowlist."""
-    cred = session.get(TotpCredential, token["uid"])
-    if cred and cred.enabled:
-        if not verify_2fa_token(x_2fa_token or "", token["uid"]):
-            raise HTTPException(status_code=403, detail="2fa_required")
+    _enforce_2fa(session, token, x_2fa_token)
     if not is_beta_allowed(session, token.get("email")):
         raise HTTPException(status_code=403, detail="beta_closed")
+    return token
+
+
+def require_2fa_billing(
+    token: dict[str, Any] = Depends(verify_firebase_user),
+    session: Session = Depends(get_session),
+    x_2fa_token: str | None = Header(default=None, alias="X-2FA-Token"),
+) -> dict[str, Any]:
+    """El segundo factor SIN el gate de beta cerrada, para las rutas de cobro.
+
+    Contratar es una vía de entrada legítima, así que no puede depender de estar
+    ya en la allowlist. Y al revés importa todavía más: quien perdiera el acceso
+    a la beta con una suscripción viva tiene que poder entrar al portal de Stripe
+    a cancelarla; bloquearlo ahí lo dejaría pagando sin forma de parar.
+    """
+    _enforce_2fa(session, token, x_2fa_token)
     return token
 
 

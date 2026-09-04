@@ -240,3 +240,26 @@ def test_el_webhook_no_pide_segundo_factor(client):
     r = _send_event(client, _checkout_event("evt_sin_2fa", "user_pay", "Investor"))
     assert r.status_code == 200, r.text
     assert _plan_in_db("user_pay") == "Investor"
+
+
+def test_la_beta_cerrada_no_impide_pagar_ni_cancelar(client, monkeypatch):
+    """Contratar es una via de entrada, no un privilegio de quien ya esta dentro.
+
+    Y al reves importa mas: quien pierda el acceso a la beta con una suscripcion
+    viva tiene que poder entrar al portal a cancelarla.
+    """
+    _seed_user(client)
+    monkeypatch.setattr(persistence, "BETA_CLOSED", True)
+
+    # La app si queda cerrada para este correo...
+    r = client.get("/api/account/bootstrap")
+    assert r.status_code == 403 and r.json()["detail"] == "beta_closed"
+
+    # ...pero el cobro no: pasa el guardia y falla mas adelante, en Stripe.
+    for ruta, cuerpo in (
+        ("/api/billing/stripe/portal", None),
+        ("/api/billing/stripe/create-checkout-session",
+         {"plan": "Investor", "billingCycle": "monthly"}),
+    ):
+        r = client.post(ruta, json=cuerpo)
+        assert r.status_code != 403, f"{ruta} -> {r.status_code} {r.text}"

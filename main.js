@@ -19924,8 +19924,7 @@ function mkBtn(html, title, danger) {
     if (!response.ok) {
       // Sin esto el usuario veía el código interno "2fa_required" como mensaje.
       const MENSAJES = {
-        "2fa_required": "Vuelve a iniciar sesión y verifica tu código de dos factores para gestionar tu suscripción.",
-        beta_closed: "Tu cuenta no tiene acceso activo a la beta."
+        "2fa_required": "Vuelve a iniciar sesión y verifica tu código de dos factores para gestionar tu suscripción."
       };
       throw new Error(MENSAJES[body.detail] || body.detail || "No se pudo abrir Stripe.");
     }

@@ -11,6 +11,7 @@ from persistence import (
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
     BetaAllowlist, BetaCode, BETA_CLOSED, redeem_beta_code,
     normalize_plan, require_plan, current_plan, upsert_user, utc_now, limiter, purge_user,
+    require_2fa_billing,
     UserAlert, UserNotification, AnalyticsEvent,
     current_ai_user, consume_ai_quota, ai_cache_get, ai_cache_put, ensure_writable_account,
 )
@@ -2853,7 +2854,7 @@ class CheckoutRequest(BaseModel):
 async def stripe_create_session(
     request: Request,
     body: CheckoutRequest,
-    token: dict = Depends(require_2fa),
+    token: dict = Depends(require_2fa_billing),
     db_session=Depends(get_session),
 ):
     plan = normalize_plan(body.plan)
@@ -2923,7 +2924,7 @@ class StripeConfirmRequest(BaseModel):
 def stripe_confirm(
     request: Request,
     body: StripeConfirmRequest,
-    token: dict = Depends(require_2fa),
+    token: dict = Depends(require_2fa_billing),
     session=Depends(get_session),
 ):
     """Verifica server-side la sesión de Stripe y fija el plan del usuario en Postgres.
@@ -2995,7 +2996,7 @@ def stripe_confirm(
 
 @app.post("/api/billing/stripe/portal")
 def stripe_customer_portal(
-    token: dict = Depends(require_2fa),
+    token: dict = Depends(require_2fa_billing),
     session=Depends(get_session),
 ):
     user = upsert_user(session, token)

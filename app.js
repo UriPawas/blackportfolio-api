@@ -124,12 +124,10 @@ async function startStripeCheckout({ plan, billingCycle }) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    // El backend responde con códigos internos en estos dos casos; sin traducir
-    // el usuario veía literalmente "2fa_required" en la pantalla de pago.
+    // El backend responde con un código interno; sin traducir, el usuario veía
+    // literalmente "2fa_required" en la pantalla de pago.
     const MENSAJES = {
-      "2fa_required": "Verifica tu código de dos factores e inténtalo de nuevo.",
-      beta_closed: "Tu cuenta aún no tiene acceso a la beta. Canjea tu código de invitación antes de contratar un plan.",
-      email_verification_required: "Confirma tu correo antes de contratar un plan. Revisa tu bandeja de entrada."
+      "2fa_required": "Vuelve a iniciar sesión y verifica tu código de dos factores para contratar."
     };
     throw new Error(MENSAJES[err.detail] || err.detail || "Error al iniciar el pago");
   }
