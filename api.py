@@ -22,6 +22,7 @@ import secrets
 import string
 import stripe
 import time as _time_module
+from urllib.parse import quote
 from backup_service import start_backup_scheduler
 
 # ── Import perezoso de librerías pesadas (pandas/numpy/yfinance ≈250 MB) ───────
@@ -739,12 +740,88 @@ def _price_for_ticker(symbol: str):
     p, _ = _price_and_prev_for_ticker(symbol)
     return p
 
+
+# ── Cotización en vivo, con pre y post mercado ────────────────────────────────
+# El precio NO puede salir de los cierres diarios. Yahoo publica la vela diaria
+# de hoy con close=null hasta bien entrada la noche, así que tomar el último
+# cierre diario devolvía el cierre de AYER como precio de hoy: el Tracker
+# mostraba MSFT en 496.82 cuando cerró en 510.12 y cotizaba a 509.40 en el
+# after-hours. El error iba de -3% a +2.6% según el ticker, y arrastraba a
+# "Cambio hoy", "Valor actual", "Retorno" y "vs Bench.".
+#
+# El chart v8 con includePrePost sí trae el estado real en 1.3 KB:
+#   regularMarketPrice        precio de la sesión regular (o su cierre)
+#   fulldayPrice              último negociado INCLUYENDO pre/post mercado
+#   regularMarketChangePercent  variación de la sesión regular
+# El cierre previo se deriva de esos dos últimos porque `previousClose` no viene
+# con granularidad diaria; `chartPreviousClose` queda de respaldo.
+#
+# Se usa `fulldayPrice` y no la última vela de 1 min: en papeles poco líquidos
+# una sola operación fuera de horario se aleja varios puntos del mercado (ASR
+# imprimió 263.65 con la acción en 257.03). Yahoo ya filtra eso en fulldayPrice,
+# y es además el número que el usuario ve en la página de Yahoo.
+_QUOTE_CACHE = _TTLCache(maxsize=400, ttl=45)   # 45 s — cotización en vivo
+_ALL_CACHES.append(_QUOTE_CACHE)
+
+_YF_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
+
+
+def _quote_from_chart(symbol: str):
+    """(precio, cierre_previo) desde el chart de Yahoo, con pre/post mercado.
+
+    Devuelve (None, None) si Yahoo no responde o el símbolo no existe, para que
+    el llamador caiga a yfinance.
+    """
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        return None, None
+    cached = _QUOTE_CACHE.get(sym)
+    if cached is not None:
+        return cached
+
+    try:
+        res = _HTTP_SESSION.get(
+            _YF_CHART_URL + quote(sym, safe=""),
+            params={"range": "1d", "interval": "1d", "includePrePost": "true"},
+            timeout=(3, 8),
+        )
+        if res.status_code != 200:
+            return None, None
+        meta = ((res.json().get("chart") or {}).get("result") or [{}])[0].get("meta") or {}
+    except Exception:
+        return None, None
+
+    regular = meta.get("regularMarketPrice")
+    extended = meta.get("fulldayPrice")
+    price = extended if _valid_price(extended) else regular
+    if not _valid_price(price):
+        return None, None
+
+    # `chartPreviousClose` es el cierre publicado, exacto. Derivarlo del cambio
+    # porcentual funciona igual de bien pero arrastra ruido de coma flotante
+    # (496.82012524713423 en vez de 496.82), así que queda de último recurso.
+    prev = meta.get("previousClose")
+    if not _valid_price(prev):
+        prev = meta.get("chartPreviousClose")
+    if not _valid_price(prev):
+        pct = meta.get("regularMarketChangePercent")
+        if _valid_price(regular) and isinstance(pct, (int, float)) and pct == pct and pct > -100:
+            prev = regular / (1 + pct / 100)
+
+    out = (float(price), float(prev) if _valid_price(prev) else None)
+    _QUOTE_CACHE.set(sym, out)
+    return out
+
+
 def _price_and_prev_for_ticker(symbol: str):
     """Return (price, prev_close) as floats, or (None, None) on failure."""
     if _is_crypto(symbol):
         p, prev = _crypto_price_and_prev(symbol)
         if p is not None:
             return p, prev
+    p, prev = _quote_from_chart(symbol)
+    if p is not None:
+        return p, prev
     try:
         t = yf.Ticker(symbol)
         fast = t.fast_info
@@ -779,7 +856,11 @@ def price(request: Request, symbol: str):
 @limiter.limit("30/minute")
 def prices_batch(request: Request, symbols: str):
     """Batch price fetch. Returns {sym: {price, prev}} with previousClose when available."""
-    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    # Tope de símbolos: sin él, una lista de miles de tickers se convierte en una
+    # sola petición carísima contra Yahoo y retiene un hilo del pool.
+    symbol_list = list(dict.fromkeys(
+        s.strip().upper() for s in symbols.split(",") if s.strip()
+    ))[:60]
     if not symbol_list:
         return {}
     result = {}
@@ -794,7 +875,20 @@ def prices_batch(request: Request, symbols: str):
     if not trad_syms:
         return result
 
-    symbol_list = trad_syms  # continue with Yahoo Finance for the rest
+    # Cotización en vivo (incluye pre/post mercado). Una petición por símbolo,
+    # en paralelo y con caché de 45 s: Yahoo no ofrece un endpoint por lotes que
+    # devuelva el precio extendido sin credenciales.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(8, len(trad_syms))) as pool:
+        for sym, (p, prev) in zip(trad_syms, pool.map(_quote_from_chart, trad_syms)):
+            if p is not None:
+                result[sym] = {"price": p, "prev": prev}
+
+    symbol_list = [s for s in trad_syms if s not in result]
+    if not symbol_list:
+        return result
+
+    # Respaldo para lo que Yahoo no cotizó en vivo: cierres diarios.
     try:
         df = yf.download(symbol_list, period="5d", interval="1d",
                          auto_adjust=True, progress=False, threads=True)
