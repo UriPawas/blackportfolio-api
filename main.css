@@ -2856,6 +2856,7 @@ body.light-mode .seas-neg { color: #d93a52; }
 #dividendError.hidden,
 #editPortfolioModal.hidden,
 #positionNoteModal.hidden,
+#splitNoticeBar.hidden,
 #positionsTableShell.hidden {
   display: none;
 }

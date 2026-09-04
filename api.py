@@ -102,6 +102,7 @@ _NEWS_CACHE           = _TTLCache(maxsize=100, ttl=900)   # 15 min
 _REPORT_IMG_META      = _TTLCache(maxsize=40,  ttl=86400) # 24 h — id/autor/color
 _REPORT_IMG_BYTES     = _TTLCache(maxsize=12,  ttl=3600)  # 1 h  — JPEG del reporte
 _BINANCE_PRICE_CACHE  = _TTLCache(maxsize=200, ttl=30)    # 30 s  — precios crypto
+_SPLITS_CACHE         = _TTLCache(maxsize=200, ttl=21600) # 6 h   — eventos de split
 _TICKER_LOGO_CACHE    = _TTLCache(maxsize=300, ttl=86400) # 24 h  — URL de logo
 # PNG del logo. Un logo pesa 3-15 KB, así que 150 caben en ~1.5 MB: barato
 # comparado con dejar que cada fila del Tracker salga a internet por su cuenta.
@@ -110,7 +111,7 @@ _LOGO_BYTES_CACHE     = _TTLCache(maxsize=150, ttl=86400) # 24 h  — PNG de log
 _ALL_CACHES = [
     _CHART_CACHE, _SEASONALITY_CACHE_V2, _CALENDAR_CACHE_V2, _TIIE_CACHE_V2,
     _SEARCH_CACHE, _INFO_CACHE, _FINANCIALS_CACHE, _HOLDINGS_CACHE,
-    _DIVIDENDS_CACHE, _NEWS_CACHE, _BINANCE_PRICE_CACHE,
+    _DIVIDENDS_CACHE, _NEWS_CACHE, _BINANCE_PRICE_CACHE, _SPLITS_CACHE,
     _REPORT_IMG_META, _REPORT_IMG_BYTES, _TICKER_LOGO_CACHE,
     _LOGO_BYTES_CACHE,
 ]
@@ -2093,6 +2094,61 @@ def intraday_chart(request: Request, symbol: str, period: str = "1D"):
         "closes": closes,
         "volumes": volumes,
     }
+
+@app.get("/api/splits/{symbol}")
+@limiter.limit("30/minute")
+def splits(request: Request, symbol: str):
+    """Eventos de split de un ticker, del mas antiguo al mas reciente.
+
+    Existe porque el Tracker guarda cantidad y precio promedio como numeros
+    fijos: cuando el emisor parte la accion 4:1, el precio de mercado se divide
+    entre cuatro pero la cantidad guardada no cambia, y la posicion pierde el
+    75% de su valor en pantalla para siempre. El cliente compara esta lista
+    contra la fecha de compra y OFRECE el ajuste; nunca lo aplica solo.
+
+    Yahoo publica los splits en el mismo chart que ya se usa para precios, asi
+    que esto no agrega una dependencia nueva.
+    """
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        raise HTTPException(status_code=400, detail="Simbolo requerido.")
+    cached = _SPLITS_CACHE.get(sym)
+    if cached is not None:
+        return cached
+
+    out = {"symbol": sym, "splits": []}
+    try:
+        url = (f"{_YF_CHART_URL}{quote(sym, safe='')}"
+               f"?range=10y&interval=1d&events=split")
+        from datetime import datetime as _dt, timezone as _tz
+        res = _HTTP_SESSION.get(url, timeout=8)
+        if res.status_code == 200:
+            result = (res.json().get("chart") or {}).get("result") or []
+            events = (result[0].get("events") or {}) if result else {}
+            for raw in (events.get("splits") or {}).values():
+                try:
+                    num = float(raw.get("numerator") or 0)
+                    den = float(raw.get("denominator") or 0)
+                    ts = int(raw.get("date") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if num <= 0 or den <= 0 or ts <= 0:
+                    continue
+                # ratio > 1 = split (mas acciones, menos precio);
+                # ratio < 1 = split inverso.
+                out["splits"].append({
+                    "date": _dt.fromtimestamp(ts, tz=_tz.utc).strftime("%Y-%m-%d"),
+                    "ratio": num / den,
+                    "label": raw.get("splitRatio") or f"{num:g}:{den:g}",
+                })
+            out["splits"].sort(key=lambda e: e["date"])
+    except Exception:
+        # Sin datos se devuelve la lista vacia: el aviso es una mejora, no un
+        # requisito para que el Tracker funcione.
+        pass
+    _SPLITS_CACHE.set(sym, out)
+    return out
+
 
 @app.get("/api/dividends/{symbol}")
 @limiter.limit("30/minute")

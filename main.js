@@ -5527,6 +5527,59 @@ document.getElementById("companyInfoButton")?.addEventListener("click", toggleCo
 const TRACKER_KEY_PREFIX = "blackportfolio-tracker-portfolios";
 const PRICE_CACHE_KEY = "blackportfolio-price-cache-v2";
 
+// ── Saneado de texto del usuario (P0.1) ───────────────────────────────────────
+// Dos capas, a propósito:
+//
+// 1. `escHtml` escapa al PINTAR. Es la corrección real: el nombre del portafolio,
+//    el ticker y la nota se concatenan en `innerHTML` en decenas de sitios y
+//    cualquiera de ellos basta para inyectar. Escapar también las comillas es lo
+//    que cierra la fuga por atributo (`title="…"`, `data-…="…"`).
+// 2. `sanitizePortfoliosInPlace` quita `<` y `>` al LEER del servidor y al
+//    guardar. Es la red de seguridad: neutraliza los datos que ya estén
+//    envenenados en PostgreSQL en cuanto la pestaña los carga, y cubre cualquier
+//    sitio de render que se nos escape hoy o que alguien agregue mañana.
+//    Sólo se quitan esos dos caracteres —no comillas ni acentos— para no
+//    mutilar nombres legítimos como `Cartera de mamá "largo plazo"`.
+//
+// El vector que esto cierra no es auto-infligido: el portafolio importado se
+// bautiza con el NOMBRE DEL ARCHIVO CSV, y la zona de importación acepta
+// arrastrar y soltar. Un archivo recibido por correo alcanzaba para robar el
+// token de 2FA de `localStorage`.
+const _HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+function escHtml(value) {
+  return String(value == null ? "" : value).replace(/[&<>"']/g, (c) => _HTML_ESCAPES[c]);
+}
+
+// Campos de texto libre y su tope de longitud. El tope evita que un nombre de
+// 1 MB reviente el layout (y acompaña al límite que ahora aplica el backend).
+const _SANITIZE_LIMITS = { name: 120, description: 500, ticker: 40, note: 2000, type: 20, id: 64 };
+
+function _stripMarkup(value, limit) {
+  if (typeof value !== "string") return value;
+  const clean = value.replace(/[<>]/g, "");
+  return limit && clean.length > limit ? clean.slice(0, limit) : clean;
+}
+
+function sanitizePortfoliosInPlace(portfolios) {
+  if (!Array.isArray(portfolios)) return portfolios;
+  for (const p of portfolios) {
+    if (!p || typeof p !== "object") continue;
+    p.name = _stripMarkup(p.name, _SANITIZE_LIMITS.name);
+    p.description = _stripMarkup(p.description, _SANITIZE_LIMITS.description);
+    for (const pos of (Array.isArray(p.positions) ? p.positions : [])) {
+      if (!pos || typeof pos !== "object") continue;
+      pos.ticker = _stripMarkup(pos.ticker, _SANITIZE_LIMITS.ticker);
+      if (pos.note !== undefined) pos.note = _stripMarkup(pos.note, _SANITIZE_LIMITS.note);
+    }
+    for (const tx of (Array.isArray(p.transactions) ? p.transactions : [])) {
+      if (!tx || typeof tx !== "object") continue;
+      tx.ticker = _stripMarkup(tx.ticker, _SANITIZE_LIMITS.ticker);
+      tx.type = _stripMarkup(tx.type, _SANITIZE_LIMITS.type);
+    }
+  }
+  return portfolios;
+}
+
 function getTrackerKey() {
   const session = window.BlackPortfolioAuth.getSession();
   const uid = session?.id || "anonymous";
@@ -5898,7 +5951,9 @@ async function syncPortfoliosFromCloud() {
       throw new Error("La verificacion de migracion no coincide.");
     }
 
-    _portfolioMemory = clonePortfolios(verified);
+    // Saneado DESPUÉS de verificar la migración: la verificación compara el
+    // JSON tal cual viajó, y limpiarlo antes la haría fallar sin motivo.
+    _portfolioMemory = sanitizePortfoliosInPlace(clonePortfolios(verified));
     _portfolioVersion = typeof bootstrap.portfolioVersion === "number" ? bootstrap.portfolioVersion : null;
     _portfolioLoaded = true;
     _portfolioSyncAttempted = true;
@@ -5906,7 +5961,7 @@ async function syncPortfoliosFromCloud() {
     return previous !== JSON.stringify(_portfolioMemory);
   } catch (error) {
     const fallback = legacy.local.length ? legacy.local : legacy.firestore;
-    _portfolioMemory = clonePortfolios(fallback);
+    _portfolioMemory = sanitizePortfoliosInPlace(clonePortfolios(fallback));
     _portfolioVersion = null;
     _portfolioLoaded = false;
     _portfolioSyncAttempted = true;
@@ -5990,6 +6045,7 @@ function savePortfolios(portfolios) {
     showToast("No se pudo guardar: aún no cargamos tu portafolio del servidor. Recarga la página.", { type: "error", duration: 9000 });
     return;
   }
+  sanitizePortfoliosInPlace(clean);
   _portfolioMemory = clonePortfolios(clean);
   _portfolioPendingSnapshot = clonePortfolios(clean);
   void flushPortfolioSaveQueue();
@@ -6004,7 +6060,7 @@ function recordTransaction(portfolio, type, ticker, quantity, price, commissionP
   const commCost = price * quantity * (commissionPercent / 100);
   const gross = price * quantity;
   const net = type === "COMPRA" ? gross + commCost : gross - commCost;
-  portfolio.transactions.unshift({
+  const tx = {
     id: generateId(),
     date: (opts && opts.date) || new Date().toISOString(),
     type,
@@ -6015,7 +6071,16 @@ function recordTransaction(portfolio, type, ticker, quantity, price, commissionP
     commCost,
     net,
     currency: currency || "USD"
-  });
+  };
+  // P0.5: cuánto efectivo movió DE VERDAD esta transacción, en la divisa del
+  // portafolio y con signo. Sin este dato la reversa (editar o borrar) tenía que
+  // adivinarla, y como el descuento en la compra va topado por el saldo
+  // disponible, la adivinanza no coincidía: el saldo derivaba hacia arriba en
+  // cada ciclo. Las transacciones viejas no lo traen y siguen usando el cálculo
+  // de antes (`txCashEffect`), así que nada de lo ya guardado cambia.
+  if (opts && Number.isFinite(opts.cashApplied)) tx.cashApplied = opts.cashApplied;
+  portfolio.transactions.unshift(tx);
+  return tx;
 }
 
 // ── Portfolio Export ──────────────────────────────────────────────────────────
@@ -6180,7 +6245,8 @@ function importPositionsCSV(file) {
           id: generateId(),
           date: p.purchaseDate ? new Date(p.purchaseDate + "T12:00:00").toISOString() : new Date().toISOString(),
           type: "COMPRA", ticker: p.ticker, quantity: p.quantity, price: p.avgPrice,
-          commissionPercent: p.commissionPercent || 0, commCost: comm, net: total, currency: p.currency
+          commissionPercent: p.commissionPercent || 0, commCost: comm, net: total, currency: p.currency,
+          cashApplied: 0   // P0.5: la importación no toca la caja, y borrarlas tampoco debe
         };
       }).sort((a, b) => b.date.localeCompare(a.date));
       const baseName = file.name.replace(/\.csv$/i, "").trim() || "Importado";
@@ -6649,8 +6715,8 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
 
   const benchSym = portfolio.benchmark && portfolio.benchmark !== "none" ? portfolio.benchmark : null;
   const [histArr, benchHist] = await Promise.all([
-    Promise.all(tickers.map(t => fetchHistoricalCloses(t, range, interval).then(h => ({ t, h })))),
-    benchSym ? fetchHistoricalCloses(benchSym, range, interval) : Promise.resolve([]),
+    Promise.all(tickers.map(t => fetchHistoricalCloses(t, range, interval, ADJ).then(h => ({ t, h })))),
+    benchSym ? fetchHistoricalCloses(benchSym, range, interval, ADJ) : Promise.resolve([]),
   ]);
 
   const dateMap = {}, sortedDates = {};
@@ -6723,11 +6789,19 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
     } catch (_) {}
   }));
 
-  // ── Serie de retornos ponderados por costo dentro de [start,end] ──────────
+  // ── Serie de retornos ponderados por VALOR dentro de [start,end] (P0.3) ───
+  // El peso por costo era fijo para todo el periodo: no derivaba con el precio y,
+  // al vender, el peso liberado no se repartía entre las posiciones restantes.
+  // Ahora cada día pondera por el valor de mercado de la víspera, igual que la
+  // pestaña de Desempeño, para que el reporte y la app digan lo mismo.
   const activeInWindow = allLots.filter(l => (l.purchaseDate || "0000-00-00") <= endStr && (!l.sellDate || l.sellDate >= startStr));
-  let totalAllCost = 0;
-  activeInWindow.forEach(l => { const c = convertAmount((l.avgPrice || 0) * l.quantity, l.currency, currency) ?? ((l.avgPrice || 0) * l.quantity); l._cost = c; totalAllCost += c; });
-  activeInWindow.forEach(l => { l._weight = totalAllCost > 0 ? l._cost / totalAllCost : 0; });
+  const _lotValueOn = (lot, date) => {
+    const close = priceAsOf(lot.ticker, date);
+    if (!Number.isFinite(close) || close <= 0) return null;
+    const qty = Number(lot.quantity) || 0;
+    if (qty <= 0) return null;
+    return convertAmount(close * qty, lot.currency, currency);
+  };
 
   const tickersWithData = tickers.filter(t => (sortedDates[t] || []).filter(d => d >= startStr && d <= endStr).length > 1);
   let windowDates = [];
@@ -6746,12 +6820,18 @@ async function computeHistoricalReport(portfolio, startStr, endStr) {
   for (let i = 1; i < windowDates.length; i++) {
     const d0 = windowDates[i - 1], d1 = windowDates[i];
     let r = 0;
+    let baseValue = 0;
+    const legs = [];
     activeInWindow.forEach(l => {
-      const act = (l.purchaseDate || "0000-00-00") <= d1 && (!l.sellDate || d1 <= l.sellDate);
-      if (!act) return;
-      const c0 = priceAsOf(l.ticker, d0), c1 = priceAsOf(l.ticker, d1);
-      if (c0 && c1 && c0 > 0) r += l._weight * (c1 - c0) / c0;
+      // Tenida en LAS DOS fechas: entrar a media ventana no es un retorno.
+      const held = (d) => (l.purchaseDate || "0000-00-00") <= d && (!l.sellDate || d <= l.sellDate);
+      if (!held(d0) || !held(d1)) return;
+      const v0 = _lotValueOn(l, d0), v1 = _lotValueOn(l, d1);
+      if (v0 === null || v1 === null || v0 <= 0) return;
+      baseValue += v0;
+      legs.push({ v0, ret: v1 / v0 - 1 });
     });
+    if (baseValue > 0) for (const leg of legs) r += (leg.v0 / baseValue) * leg.ret;
     dailyReturns.push(r);
     cum = (1 + cum / 100) * (1 + r) * 100 - 100;
     // `date` (MM-DD) se conserva por compatibilidad; `iso` es la fecha completa
@@ -7398,15 +7478,15 @@ function renderTransactionsTab() {
     const isCash = tx.type === "DEPOSITO" || tx.type === "RETIRO";
     return `${monthHeaderHtml}<tr>
       <td data-label="Fecha">${date}</td>
-      <td data-label="Tipo"><span class="tx-badge ${typeClass}">${tx.type}</span></td>
-      <td data-label="Activo"><strong>${isCash ? "Efectivo" : tx.ticker}</strong></td>
-      <td data-label="Cantidad">${isCash ? "—" : tx.quantity}</td>
+      <td data-label="Tipo"><span class="tx-badge ${typeClass}">${escHtml(tx.type)}</span></td>
+      <td data-label="Activo"><strong>${isCash ? "Efectivo" : escHtml(tx.ticker)}</strong></td>
+      <td data-label="Cantidad">${isCash ? "—" : escHtml(tx.quantity)}</td>
       <td data-label="Precio">${isCash ? "—" : sym + tx.price.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
       <td data-label="Comisión">${isCash ? "—" : sym + tx.commCost.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ` (${tx.commissionPercent.toFixed(2)}%)`}</td>
       <td data-label="Total"><strong>${sym}${tx.net.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
       <td data-label="Acciones" class="tx-actions-cell">
-        <button type="button" class="tx-action-btn" onclick="openEditTxModal('${tx.id}')" title="Editar" aria-label="Editar">✎</button>
-        <button type="button" class="tx-action-btn tx-action-del" onclick="confirmDeleteTx('${tx.id}')" title="Eliminar" aria-label="Eliminar">🗑</button>
+        <button type="button" class="tx-action-btn" data-tx-edit="${escHtml(tx.id)}" title="Editar" aria-label="Editar">✎</button>
+        <button type="button" class="tx-action-btn tx-action-del" data-tx-del="${escHtml(tx.id)}" title="Eliminar" aria-label="Eliminar">🗑</button>
       </td>
     </tr>`;
   }).join("");
@@ -7421,6 +7501,18 @@ function renderTransactionsTab() {
     _txVisibleCount += TX_PAGE_SIZE;
     renderTransactionsTab();
   });
+
+  // Editar/eliminar por delegación. Antes iba en un `onclick` con el id
+  // interpolado dentro de comillas simples: un id con comilla ejecutaba código.
+  if (!tbody.dataset.txActionsBound) {
+    tbody.dataset.txActionsBound = "1";
+    tbody.addEventListener("click", (e) => {
+      const edit = e.target.closest("[data-tx-edit]");
+      if (edit) { openEditTxModal(edit.dataset.txEdit); return; }
+      const del = e.target.closest("[data-tx-del]");
+      if (del) confirmDeleteTx(del.dataset.txDel);
+    });
+  }
   _updateTableOverflowHint(shell);
 
   renderClosedTradesTab(portfolio);
@@ -7529,7 +7621,7 @@ function renderClosedTradesTab(portfolio) {
       <div class="cts-item"><span>Retorno realizado</span><strong class="${totalRetPct != null && totalRetPct >= 0 ? "return-pos" : "return-neg"}">${totalRetPct != null ? (totalRetPct >= 0 ? "+" : "") + totalRetPct.toFixed(2) + "%" : "—"}</strong></div>
       <div class="cts-item"><span>Tasa de acierto</span><strong>${winRate.toFixed(0)}% <small class="cts-days">(${winners}/${trades.length})</small></strong></div>
       <div class="cts-item"><span>Tenencia prom.</span><strong>${_fmtHolding(avgHold)}</strong></div>
-      <div class="cts-item"><span>Mejor operación</span><strong class="return-pos">${best && best.pnlPct != null ? best.ticker + " +" + best.pnlPct.toFixed(1) + "%" : "—"}</strong></div>`;
+      <div class="cts-item"><span>Mejor operación</span><strong class="return-pos">${best && best.pnlPct != null ? escHtml(best.ticker) + " +" + best.pnlPct.toFixed(1) + "%" : "—"}</strong></div>`;
   }
 
   body.innerHTML = trades.map((t) => {
@@ -7539,7 +7631,7 @@ function renderClosedTradesTab(portfolio) {
     const sellD = t.sellDate ? new Date(t.sellDate + "T12:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
     const qtyStr = t.qty.toLocaleString("es-MX", { maximumFractionDigits: 6 });
     return `<tr>
-      <td data-label="Ticker"><strong>${t.ticker}</strong></td>
+      <td data-label="Ticker"><strong>${escHtml(t.ticker)}</strong></td>
       <td data-label="Compra">${buyD}</td>
       <td data-label="Venta">${sellD}</td>
       <td data-label="Tenencia"><span class="cts-days">${_fmtHolding(t.holdingDays)}</span></td>
@@ -7572,12 +7664,20 @@ function clearTxFilters() {
 // para la porción importada por CSV que no tiene transacción asociada.
 
 // Efecto neto de una transacción sobre el efectivo, en moneda del portafolio.
-function txCashEffect(tx, portfolioCur) {
+// Efecto teórico de una transacción sobre la caja, en la divisa del portafolio.
+function _txIdealCashEffect(tx, portfolioCur) {
   const cur = tx.currency || portfolioCur;
   const net = tx.net || 0;
   const conv = cur !== portfolioCur ? (convertAmount(net, cur, portfolioCur) ?? net) : net;
   const sign = (tx.type === "COMPRA" || tx.type === "RETIRO") ? -1 : 1; // VENTA/DIVIDENDO/DEPOSITO suman
   return sign * conv;
+}
+
+// Efecto REAL: el registrado al crearla si existe (P0.5), y si no —transacción
+// anterior a este cambio— el teórico, que es exactamente lo que se usaba antes.
+function txCashEffect(tx, portfolioCur) {
+  if (tx && Number.isFinite(tx.cashApplied)) return tx.cashApplied;
+  return _txIdealCashEffect(tx, portfolioCur);
 }
 
 // Porción de una posición NO representada en el historial de transacciones
@@ -7706,10 +7806,22 @@ function applyTxMutation(portfolio, oldTx, newTx) {
   const baselines = {};
   affected.forEach((tk) => { baselines[tk] = captureTickerBaseline(portfolio, tk); });
 
-  // Ajuste de efectivo por el delta del efecto de la transacción (nunca negativo,
-  // igual que el resto de la app).
-  const cashDelta = (newTx ? txCashEffect(newTx, portfolioCur) : 0) - txCashEffect(oldTx, portfolioCur);
-  portfolio.cashBalance = Math.max(0, (portfolio.cashBalance || 0) + cashDelta);
+  // Ajuste de efectivo en dos pasos (P0.5). Antes era un solo delta con
+  // `Math.max(0, …)`: el piso en cero hacía que editar o borrar NO devolviera lo
+  // que la transacción se había llevado, así que el saldo no se podía deshacer.
+  //   1. Se revierte el efecto EXACTO que tuvo la transacción vieja.
+  //   2. Se aplica el de la nueva con la misma regla que al crearla: una compra
+  //      sólo consume el efectivo disponible; el resto es aportación externa.
+  // El saldo puede quedar negativo al revertir un ingreso ya gastado — y eso es
+  // información correcta (sobregiro), no un error que convenga esconder en cero.
+  let cash = (portfolio.cashBalance || 0) - txCashEffect(oldTx, portfolioCur);
+  if (newTx) {
+    const ideal = _txIdealCashEffect(newTx, portfolioCur);
+    const applied = ideal < 0 ? -Math.min(-ideal, Math.max(0, cash)) : ideal;
+    newTx.cashApplied = applied;
+    cash += applied;
+  }
+  portfolio.cashBalance = Math.abs(cash) < 1e-9 ? 0 : cash;
 
   // Mutar el arreglo de transacciones.
   const i = portfolio.transactions.findIndex((t) => t.id === oldTx.id);
@@ -7880,9 +7992,73 @@ function calcPositionTotals(pos) {
   return { invested, comm, iva, total: invested + comm + iva };
 }
 
+// ── Tipos de cambio con memoria (P0.2) ───────────────────────────────────────
+// La caché de precios caduca en una hora; cuando el par FX caducaba y la
+// petición fallaba, `getCachedExchangeRate` devolvía null y las ~40 llamadas a
+// `convertAmount(...) ?? cantidad` sumaban la cifra SIN convertir: pesos dentro
+// de un total en dólares. Corregir 40 sitios uno por uno era el parche caro y
+// frágil; la corrección buena es que casi nunca falte el tipo de cambio:
+//
+//   1. cotización en vivo (`MXNUSD=X`),
+//   2. el par inverso ya cacheado (`USDMXN=X` → 1/tasa),
+//   3. el último tipo de cambio conocido, que se guarda SIN caducidad.
+//
+// Un tipo de cambio de ayer se equivoca por décimas; asumir 1:1 se equivoca por
+// un factor de 18. Sólo cuando no existe ninguna de las tres —usuario nuevo y
+// sin red— se devuelve null, y ahí los agregados excluyen la posición y lo dicen.
+const FX_STORE_KEY = "bp-fx-last-known-v1";
+const FX_STALE_MS = 36 * 60 * 60 * 1000;   // más de día y medio: vale decirlo
+let _fxMem = null;
+let _fxStalePairs = new Set();
+
+function _fxLoadStore() {
+  if (_fxMem) return _fxMem;
+  try { _fxMem = JSON.parse(localStorage.getItem(FX_STORE_KEY)) || {}; }
+  catch { _fxMem = {}; }
+  return _fxMem;
+}
+
+function _fxRemember(from, to, rate) {
+  const store = _fxLoadStore();
+  const key = `${from}${to}`;
+  const prev = store[key];
+  // Sólo se escribe a disco cuando la tasa cambia de verdad: esta función corre
+  // una vez por posición y por pintado, y no vale un `setItem` cada vez.
+  if (prev && Math.abs(prev.rate - rate) / rate < 1e-6) return;
+  store[key] = { rate, ts: Date.now() };
+  try { localStorage.setItem(FX_STORE_KEY, JSON.stringify(store)); } catch {}
+}
+
+function _fxFromStore(from, to) {
+  const store = _fxLoadStore();
+  const direct = store[`${from}${to}`];
+  if (direct && isFinite(direct.rate) && direct.rate > 0) return direct;
+  const back = store[`${to}${from}`];
+  if (back && isFinite(back.rate) && back.rate > 0) return { rate: 1 / back.rate, ts: back.ts };
+  return null;
+}
+
 function getCachedExchangeRate(from, to) {
   if (from === to) return 1;
-  return getCachedPrice(`${from}${to}=X`);
+  const live = getCachedPrice(`${from}${to}=X`);
+  if (live !== null && isFinite(live) && live > 0) { _fxRemember(from, to, live); return live; }
+  const inverse = getCachedPrice(`${to}${from}=X`);
+  if (inverse !== null && isFinite(inverse) && inverse > 0) {
+    const rate = 1 / inverse;
+    _fxRemember(from, to, rate);
+    return rate;
+  }
+  const stored = _fxFromStore(from, to);
+  if (stored) {
+    if (Date.now() - stored.ts > FX_STALE_MS) _fxStalePairs.add(`${from}→${to}`);
+    return stored.rate;
+  }
+  return null;
+}
+
+function _fxStaleNote() {
+  if (!_fxStalePairs.size) return "";
+  return `Tipo de cambio de referencia (no del día) en ${[..._fxStalePairs].join(", ")}`;
 }
 
 // ── Equivalencia del portafolio en otra moneda (no altera el valor real) ──
@@ -7909,7 +8085,31 @@ function populateDashAltCurrencySelect(portfolioCurrency) {
 function convertAmount(amount, fromCurrency, toCurrency) {
   if (fromCurrency === toCurrency) return amount;
   const rate = getCachedExchangeRate(fromCurrency, toCurrency);
-  return rate !== null ? amount * rate : null;
+  return rate !== null && isFinite(rate) ? amount * rate : null;
+}
+
+// ── Divisas que faltaron en el último cálculo (P0.2) ─────────────────────────
+// `convertAmount` siempre supo devolver null; el problema era que TODOS los
+// llamadores hacían `?? cantidadSinConvertir` y sumaban pesos como si fueran
+// dólares. Ahora los agregados excluyen la posición que no se puede convertir
+// —igual que ya hacían con las que no tienen precio— y anotan aquí el par que
+// faltó para poder decirlo en pantalla. Un portafolio de una sola divisa nunca
+// entra por aquí: `convertAmount` devuelve la cantidad tal cual.
+let _fxMissingPairs = new Set();
+
+function _noteFxMissing(from, to) {
+  if (from && to && from !== to) _fxMissingPairs.add(`${from}→${to}`);
+}
+
+function _resetFxMissing() {
+  _fxMissingPairs = new Set();
+  _fxStalePairs = new Set();
+}
+
+function _fxMissingNote() {
+  if (!_fxMissingPairs.size) return "";
+  const pairs = [..._fxMissingPairs].join(", ");
+  return `Sin tipo de cambio ${pairs}: se excluyen esas posiciones`;
 }
 
 function formatDashExchangeRate(fromCurrency, toCurrency) {
@@ -7979,7 +8179,11 @@ function reconstructRealizedPnL(portfolio) {
       const costOfSold = avgCost * (tx.quantity || 0);
       const proceeds = tx.net || 0;
       const pnlInTxCur = proceeds - costOfSold;
-      total += txCur !== portfolioCur ? (convertAmount(pnlInTxCur, txCur, portfolioCur) ?? pnlInTxCur) : pnlInTxCur;
+      // P0.2: si falta el tipo de cambio, la venta NO se cuenta a 1:1 —
+      // se excluye y se anota, para que la cifra se muestre como incompleta.
+      const pnlConverted = convertAmount(pnlInTxCur, txCur, portfolioCur);
+      if (pnlConverted === null) _noteFxMissing(txCur, portfolioCur);
+      else total += pnlConverted;
       cb.totalCost = Math.max(0, cb.totalCost - costOfSold);
       cb.qty = Math.max(0, cb.qty - (tx.quantity || 0));
     }
@@ -7993,18 +8197,23 @@ function computePortfolioSnapshot(portfolio) {
   const positions = portfolio.positions || [];
   const currency = portfolio.currency || "USD";
   let totalCurrentValue = 0, totalCostPriced = 0, prevValue = 0, hasAnyPrice = false;
+  let fxSkipped = 0;
   positions.forEach((pos) => {
     const price = getCachedPrice(pos.ticker);
     if (price === null) return;
     const posCur = getPosCurrency(pos, currency);
     const qty = pos.quantity || 0;
+    // P0.2: una posición que no se puede convertir se excluye del agregado,
+    // igual que una sin precio. Nunca se suma en su divisa original.
+    const value = convertAmount(price * qty, posCur, currency);
+    const cost = convertAmount(calcPositionTotals(pos).total, posCur, currency);
+    if (value === null || cost === null) { fxSkipped++; _noteFxMissing(posCur, currency); return; }
     hasAnyPrice = true;
-    totalCurrentValue += convertAmount(price * qty, posCur, currency) ?? (price * qty);
-    const cost = calcPositionTotals(pos).total;
-    totalCostPriced += convertAmount(cost, posCur, currency) ?? cost;
+    totalCurrentValue += value;
+    totalCostPriced += cost;
     const prev = getCachedPrev(pos.ticker);
-    const pv = (prev !== null ? prev : price) * qty;
-    prevValue += convertAmount(pv, posCur, currency) ?? pv;
+    const pv = convertAmount((prev !== null ? prev : price) * qty, posCur, currency);
+    prevValue += pv !== null ? pv : value;
   });
   const cashBalance = portfolio.cashBalance || 0;
   // Fuente única de verdad: el P/L realizado se reconstruye siempre desde las transacciones
@@ -8020,21 +8229,24 @@ function computePortfolioSnapshot(portfolio) {
   const dayChangePct = dayChangeAmt !== null && prevValue > 0 ? dayChangeAmt / prevValue * 100 : null;
   return {
     currency, currentValue, hasAnyPrice, returnAmt, returnPct,
-    dayChangeAmt, dayChangePct, positionCount: positions.length,
+    dayChangeAmt, dayChangePct, positionCount: positions.length, fxSkipped,
   };
 }
 
 function calcPortfolioTotals(positions, portfolioCurrency) {
-  let totalInvested = 0, totalComm = 0, totalIva = 0;
+  let totalInvested = 0, totalComm = 0, totalIva = 0, fxSkipped = 0;
   const pCur = portfolioCurrency || "USD";
   (positions || []).forEach((pos) => {
     const t = calcPositionTotals(pos);
     const posCur = getPosCurrency(pos, pCur);
-    totalInvested += convertAmount(t.total, posCur, pCur) ?? t.total;
-    totalComm += convertAmount(t.comm, posCur, pCur) ?? t.comm;
-    totalIva += convertAmount(t.iva, posCur, pCur) ?? t.iva;
+    // P0.2: sin tipo de cambio la posición no entra al total invertido.
+    const total = convertAmount(t.total, posCur, pCur);
+    if (total === null) { fxSkipped++; _noteFxMissing(posCur, pCur); return; }
+    totalInvested += total;
+    totalComm += convertAmount(t.comm, posCur, pCur) ?? 0;
+    totalIva += convertAmount(t.iva, posCur, pCur) ?? 0;
   });
-  return { totalInvested, totalComm, totalIva };
+  return { totalInvested, totalComm, totalIva, fxSkipped };
 }
 
 function showTrackerListView() {
@@ -8176,6 +8388,7 @@ function renderPortfolioCards() {
   }
 
   emptyMsg.classList.add("hidden");
+  _resetFxMissing();
   grid.innerHTML = portfolios.map((p) => {
     const date = new Date(p.createdAt).toLocaleDateString("es-MX", {
       day: "2-digit", month: "short", year: "numeric"
@@ -8197,8 +8410,8 @@ function renderPortfolioCards() {
     return `
       <button class="portfolio-card" type="button" data-portfolio-id="${p.id}">
         <div class="portfolio-card-header">
-          <h3>${p.name}</h3>
-          <span role="button" class="portfolio-card-delete" data-delete-id="${p.id}" data-delete-name="${p.name}" title="Eliminar portafolio" tabindex="0">
+          <h3>${escHtml(p.name)}</h3>
+          <span role="button" class="portfolio-card-delete" data-delete-id="${escHtml(p.id)}" data-delete-name="${escHtml(p.name)}" title="Eliminar portafolio" tabindex="0">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </span>
         </div>
@@ -8209,8 +8422,9 @@ function renderPortfolioCards() {
         <div class="portfolio-card-stats">
           <span class="pc-stat">Retorno ${retHtml}</span>
           <span class="pc-stat">${snap.positionCount} ${snap.positionCount === 1 ? "posición" : "posiciones"}</span>
-          <span class="pc-curr">${currLabel}</span>
+          <span class="pc-curr">${escHtml(currLabel)}</span>
         </div>
+        ${snap.fxSkipped ? `<div class="portfolio-card-fxwarn" title="${escHtml(_fxMissingNote())}">⚠ ${snap.fxSkipped} posición(es) sin tipo de cambio: excluidas del valor</div>` : ""}
         <div class="portfolio-card-footer">
           <span class="portfolio-card-date">Creado ${date}</span>
           <span class="portfolio-card-cta">Ver portafolio →</span>
@@ -8385,13 +8599,25 @@ async function renderPortfolioDashboard() {
   }
   _doRenderDashboard(portfolio);
 
+  // Splits pendientes (P0.4). No bloquea el pintado: el aviso aparece cuando
+  // Yahoo contesta y, si no contesta, el Tracker funciona igual que siempre.
+  void checkPositionSplits(portfolio);
+
   const portfolioCur = portfolio.currency || "USD";
   const needsFx = (portfolio.positions || []).some(p => getPosCurrency(p, portfolioCur) !== portfolioCur);
-  const fxNote = needsFx ? " · tipos de cambio aplicados" : "";
+  // P0.2: un tipo de cambio que no llegó ya no se disimula. Se dice cuál falta,
+  // porque el usuario ve posiciones excluidas del total y merece saber por qué.
+  const fxMissing = _fxMissingNote();
+  const fxNote = fxMissing ? "" : (needsFx ? " · tipos de cambio aplicados" : "");
   if (failed.length === tickers.length) {
     setDashPriceStatus("No se pudieron obtener precios. Intenta de nuevo en un momento.", "error");
+  } else if (fxMissing) {
+    const sinDatos = failed.length ? ` · sin datos para: ${failed.join(", ")}` : "";
+    setDashPriceStatus(`${fxMissing}${sinDatos}`, "warn");
   } else if (failed.length) {
     setDashPriceStatus(`Precios actualizados${fxNote}. Sin datos para: ${failed.join(", ")}`, "warn");
+  } else if (_fxStaleNote()) {
+    setDashPriceStatus(_fxStaleNote(), "warn");
   } else {
     const now = new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
     setDashPriceStatus(`Precios actualizados${fxNote} · ${now}`, "ok");
@@ -8530,6 +8756,9 @@ function flashKpi(el, isPositive) {
 function _doRenderDashboard(portfolio) {
   const positions = portfolio.positions || [];
   const currency = portfolio.currency || "USD";
+  // El registro de divisas faltantes se rearma en cada pintado: si el tipo de
+  // cambio ya llegó, el aviso desaparece solo (P0.2).
+  _resetFxMissing();
   const { totalInvested, totalComm, totalIva } = calcPortfolioTotals(positions, currency);
 
   let totalCurrentValue = 0;
@@ -8537,18 +8766,29 @@ function _doRenderDashboard(portfolio) {
   let prevValue = 0;
   let hasAnyPrice = false;
   let pricedCount = 0;
+  let fxSkippedCount = 0;
   positions.forEach((pos) => {
     const price = getCachedPrice(pos.ticker);
     const posCur = getPosCurrency(pos, currency);
     if (price !== null) {
+      const qty = pos.quantity || 0;
+      // P0.2: sin tipo de cambio la posición se excluye del valor y del costo.
+      // Antes se sumaba en su divisa original: una posición en MXN entraba a un
+      // portafolio en USD 1:1 e inflaba el patrimonio ~18×, sin ningún aviso.
+      const value = convertAmount(price * qty, posCur, currency);
+      const cost = convertAmount(calcPositionTotals(pos).total, posCur, currency);
+      if (value === null || cost === null) {
+        fxSkippedCount++;
+        _noteFxMissing(posCur, currency);
+        return;
+      }
       hasAnyPrice = true;
       pricedCount++;
-      const qty = pos.quantity || 0;
-      totalCurrentValue += convertAmount(price * qty, posCur, currency) ?? (price * qty);
-      totalCostPriced += convertAmount(calcPositionTotals(pos).total, posCur, currency) ?? calcPositionTotals(pos).total;
+      totalCurrentValue += value;
+      totalCostPriced += cost;
       const prev = getCachedPrev(pos.ticker);
-      const pv = (prev !== null ? prev : price) * qty;
-      prevValue += convertAmount(pv, posCur, currency) ?? pv;
+      const pv = convertAmount((prev !== null ? prev : price) * qty, posCur, currency);
+      prevValue += pv !== null ? pv : value;
     }
   });
 
@@ -8567,24 +8807,36 @@ function _doRenderDashboard(portfolio) {
     ? (returnAmt / returnCostBasis * 100)
     : null;
 
-  document.getElementById("dashPortfolioName").textContent = portfolio.name;
+  document.getElementById("dashPortfolioName").textContent = portfolio.name || "";
   document.getElementById("dashTotalInvested").textContent = formatCurrency(totalInvested, currency);
   document.getElementById("dashPositionCount").textContent = positions.length;
   document.getElementById("dashTotalCommissions").textContent = formatCurrency(totalComm, currency);
   document.getElementById("dashTotalIva").textContent = formatCurrency(totalIva, currency);
   document.getElementById("dashBenchmark").textContent = BENCHMARKS[portfolio.benchmark] || "—";
 
-  // Efectivo disponible en el portafolio (L1.10)
+  // Efectivo disponible en el portafolio (L1.10). Puede quedar negativo tras
+  // revertir un ingreso ya gastado (P0.5): se marca como sobregiro en vez de
+  // esconderlo en cero, que era lo que impedía deshacer un movimiento.
   const cashEl = document.getElementById("dashCashBalance");
-  if (cashEl) cashEl.textContent = formatCurrency(cashBalance, currency);
+  if (cashEl) {
+    cashEl.textContent = formatCurrency(cashBalance, currency);
+    cashEl.classList.toggle("return-neg", cashBalance < 0);
+    cashEl.title = cashBalance < 0
+      ? "Saldo negativo: las salidas de efectivo registradas superan a las entradas."
+      : "";
+  }
 
-  // Aviso de alcance: valor y retorno excluyen posiciones sin precio (L1.7)
+  // Aviso de alcance: valor y retorno excluyen posiciones sin precio (L1.7) y
+  // las que no se pudieron convertir de divisa (P0.2). Se distinguen porque la
+  // causa —y lo que el usuario puede hacer— es distinta.
   const investedNoteEl = document.getElementById("dashInvestedNote");
   if (investedNoteEl) {
-    const unpriced = positions.length - pricedCount;
-    investedNoteEl.textContent = (positions.length && unpriced > 0)
-      ? `Valor y retorno excluyen ${unpriced} sin precio`
-      : "";
+    const unpriced = positions.length - pricedCount - fxSkippedCount;
+    const notes = [];
+    if (positions.length && unpriced > 0) notes.push(`${unpriced} sin precio`);
+    if (fxSkippedCount > 0) notes.push(`${fxSkippedCount} sin tipo de cambio`);
+    investedNoteEl.textContent = notes.length ? `Valor y retorno excluyen ${notes.join(" y ")}` : "";
+    investedNoteEl.title = fxSkippedCount > 0 ? _fxMissingNote() : "";
   }
 
   const cvEl = document.getElementById("dashCurrentValue");
@@ -8733,24 +8985,28 @@ function renderSummaryTable(positions, totalInvested, currency, cashBalance) {
     let posValueCell = "—";
 
     if (price !== null) {
-      const priceConverted = convertAmount(price, posCur, currency) ?? price;
-      priceCell = formatCurrency(priceConverted, currency);
-      const posValueRaw = convertAmount(price * pos.quantity, posCur, currency) ?? (price * pos.quantity);
-      posValueCell = formatCurrency(posValueRaw, currency);
+      // P0.2: sin tipo de cambio la celda dice `—`, no una cifra sin convertir.
+      const priceConverted = convertAmount(price, posCur, currency);
+      const posValueRaw = convertAmount(price * (pos.quantity || 0), posCur, currency);
+      const fxMiss = `<span class="muted-val" title="Falta el tipo de cambio ${escHtml(posCur)}→${escHtml(currency)}">—</span>`;
+      priceCell = priceConverted !== null ? formatCurrency(priceConverted, currency) : fxMiss;
+      posValueCell = posValueRaw !== null ? formatCurrency(posValueRaw, currency) : fxMiss;
 
       if (prev !== null && prev > 0) {
         const dailyChangeRaw = price - prev;
         const dailyChangePct = dailyChangeRaw / prev * 100;
-        const dailyChangeConverted = convertAmount(dailyChangeRaw * pos.quantity, posCur, currency) ?? (dailyChangeRaw * pos.quantity);
+        const dailyChangeConverted = convertAmount(dailyChangeRaw * (pos.quantity || 0), posCur, currency);
         const cls = dailyChangeRaw >= 0 ? "return-pos" : "return-neg";
         const sign = dailyChangeRaw >= 0 ? "+" : "";
-        changeAbsCell = `<span class="${cls}">${sign}${formatCurrency(dailyChangeConverted, currency)}</span>`;
+        changeAbsCell = dailyChangeConverted !== null
+          ? `<span class="${cls}">${sign}${formatCurrency(dailyChangeConverted, currency)}</span>`
+          : fxMiss;
         changePctCell = `<span class="${cls}">${sign}${dailyChangePct.toFixed(2)}%</span>`;
       }
     }
 
     return `<tr>
-      <td data-label="Activo"><span class="pos-ticker-dot" style="background:${color}"></span>${pos.ticker}${currTag}</td>
+      <td data-label="Activo"><span class="pos-ticker-dot" style="background:${color}"></span>${escHtml(pos.ticker)}${currTag}</td>
       <td data-label="Precio">${priceCell}</td>
       <td data-label="Cambio">${changeAbsCell}</td>
       <td data-label="Cambio %">${changePctCell}</td>
@@ -8831,7 +9087,7 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
   _markSortIndicators(".tracker-table--positions [data-sort]", "sort", posSort);
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--muted)">Sin posiciones que coincidan con "${posSearch}".</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--muted)">Sin posiciones que coincidan con "${escHtml(posSearch)}".</td></tr>`;
     tableShell.classList.remove("is-loading-prices");
     return;
   }
@@ -8850,21 +9106,30 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
       const dSign = dPct >= 0 ? "+" : "";
       dayCell = `<span class="${dCls}">${dSign}${dPct.toFixed(2)}%</span>`;
     }
-    const currentValueRaw = currentPrice !== null ? currentPrice * pos.quantity : null;
-    const currentValue = currentValueRaw !== null ? (convertAmount(currentValueRaw, posCur, currency) ?? currentValueRaw) : null;
-    const costConverted = convertAmount(t.total, posCur, currency) ?? t.total;
+    // P0.2: sin tipo de cambio NO se inventa una cifra. Antes estas tres líneas
+    // hacían `?? valorSinConvertir`, así que una posición en pesos se sumaba a
+    // un portafolio en dólares 1:1 y la celda mostraba un número ~18× inflado.
+    const fxOk = posCur === currency || getCachedExchangeRate(posCur, currency) !== null;
+    if (!fxOk) _noteFxMissing(posCur, currency);
+    const fxMissTitle = `Falta el tipo de cambio ${posCur}→${currency}`;
+    const fxMissCell = `<span class="muted-val" title="${escHtml(fxMissTitle)}">—</span>`;
+    const currentValueRaw = currentPrice !== null ? currentPrice * (pos.quantity || 0) : null;
+    const currentValue = currentValueRaw !== null ? convertAmount(currentValueRaw, posCur, currency) : null;
+    const costConverted = convertAmount(t.total, posCur, currency);
+    const costCell = costConverted !== null ? formatCurrency(costConverted, currency) : fxMissCell;
+    const valueCellFallback = fxOk ? '<span class="muted-val">…</span>' : fxMissCell;
     const dateStr = pos.purchaseDate
       ? new Date(pos.purchaseDate + "T12:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
       : "—";
-    let retCell = "—";
+    let retCell = fxOk ? "—" : fxMissCell;
     if (posReturnPeriod === "total") {
-      if (currentValue !== null && costConverted > 0) {
+      if (currentValue !== null && costConverted !== null && costConverted > 0) {
         const retAmt = currentValue - costConverted;
         const retPct = retAmt / costConverted * 100;
         const sign = retAmt >= 0 ? "+" : "";
         retCell = `<span class="${retAmt >= 0 ? "return-pos" : "return-neg"}">${sign}${retPct.toFixed(2)}%<br><small>${sign}${formatCurrency(retAmt, currency)}</small></span>`;
       }
-    } else {
+    } else if (fxOk) {
       // Se completa async por renderPositionsReturnPeriod (P1.1): requiere el
       // cierre histórico del ticker en la fecha de referencia del periodo.
       retCell = '<span class="muted-val">…</span>';
@@ -8875,44 +9140,46 @@ function renderPositionsTable(positions, totalInvested, currency, transactions) 
     const txs = (transactions || [])
       .filter(tx => tx.ticker === pos.ticker)
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-    const lotsHtml = txs.length ? `<tr class="pos-lots-row" data-lots-for="${pos.id}" style="display:none">
+    const lotsHtml = txs.length ? `<tr class="pos-lots-row" data-lots-for="${escHtml(pos.id)}" style="display:none">
       <td colspan="12" class="pos-lots-cell"><div class="pos-lots-inner">
         <table class="pos-lots-table">
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Precio</th><th>Total neto</th></tr></thead>
           <tbody>${txs.map(tx => {
             const d = tx.date ? new Date(tx.date.includes("T") ? tx.date : tx.date + "T12:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—";
             const tc = tx.type === "COMPRA" ? "compra" : tx.type === "VENTA" ? "venta" : "dividendo";
-            return `<tr><td>${d}</td><td><span class="lot-type-badge lot-type-${tc}">${tx.type}</span></td><td>${parseFloat((tx.quantity || 0).toFixed(5))}</td><td>${formatCurrency(tx.price || 0, tx.currency || posCur)}</td><td>${formatCurrency(Math.abs(tx.net || 0), tx.currency || posCur)}</td></tr>`;
+            return `<tr><td>${d}</td><td><span class="lot-type-badge lot-type-${tc}">${escHtml(tx.type)}</span></td><td>${parseFloat(Number(tx.quantity || 0).toFixed(5))}</td><td>${formatCurrency(tx.price || 0, tx.currency || posCur)}</td><td>${formatCurrency(Math.abs(tx.net || 0), tx.currency || posCur)}</td></tr>`;
           }).join("")}</tbody>
         </table>
       </div></td></tr>` : "";
 
+    const tk = escHtml(pos.ticker);   // el ticker viaja a texto y a 6 atributos
+    const pid = escHtml(pos.id);
     return `<tr class="pos-row">
       <td data-label="Activo">
-        <button class="pos-expand-btn" type="button" data-lots-for="${pos.id}" data-has-lots="${txs.length ? "1" : "0"}" aria-label="Ver detalle" aria-expanded="false"><svg class="pos-expand-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
-        ${posTickerLogoHtml(pos.ticker, color)}<strong>${pos.ticker}</strong>${currTag}${pos.note ? `<span class="pos-note-dot" title="${_aiChatEsc(pos.note).replace(/"/g, "&quot;")}">✎</span>` : ""}
+        <button class="pos-expand-btn" type="button" data-lots-for="${pid}" data-has-lots="${txs.length ? "1" : "0"}" aria-label="Ver detalle" aria-expanded="false"><svg class="pos-expand-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        ${posTickerLogoHtml(pos.ticker, color)}<strong>${tk}</strong>${currTag}${pos.note ? `<span class="pos-note-dot" title="${escHtml(pos.note)}">✎</span>` : ""}
       </td>
-      <td class="td-sparkline" data-label="30 días"><canvas class="pos-sparkline" data-ticker="${pos.ticker}" width="80" height="28"></canvas></td>
+      <td class="td-sparkline" data-label="30 días"><canvas class="pos-sparkline" data-ticker="${tk}" width="80" height="28"></canvas></td>
       <td data-label="Fecha">${dateStr}</td>
       <td data-label="Precio promedio">${formatCurrency(effectiveAvgPrice(pos), posCur)}<small class="fx-tag" title="Incluye comisión de entrada e IVA">c/com</small></td>
-      <td data-label="Precio actual">${currentPrice !== null ? `<span class="price-fresh-dot price-fresh-dot--${fr.cls}" title="${fr.title}"></span>` + formatCurrency(currentPrice, posCur) : '<span class="muted-val" title="Precio cargando o no disponible">…</span>'}</td>
+      <td data-label="Precio actual">${currentPrice !== null ? `<span class="price-fresh-dot price-fresh-dot--${fr.cls}" title="${escHtml(fr.title)}"></span>` + formatCurrency(currentPrice, posCur) : '<span class="muted-val" title="Precio cargando o no disponible">…</span>'}</td>
       <td data-label="Cambio hoy">${dayCell}</td>
-      <td data-label="Cantidad">${parseFloat(pos.quantity.toFixed(5))}</td>
-      <td data-label="Costo total">${formatCurrency(costConverted, currency)}</td>
-      <td data-label="Valor actual">${currentValue !== null ? formatCurrency(currentValue, currency) : '<span class="muted-val">…</span>'}</td>
-      <td data-label="Retorno" data-ticker="${pos.ticker}">${retCell}</td>
-      <td class="td-vs-bench" data-label="vs Bench." data-bench-ticker="${pos.ticker}"><span class="muted-val">…</span></td>
+      <td data-label="Cantidad">${parseFloat(Number(pos.quantity || 0).toFixed(5))}</td>
+      <td data-label="Costo total">${costCell}</td>
+      <td data-label="Valor actual">${currentValue !== null ? formatCurrency(currentValue, currency) : valueCellFallback}</td>
+      <td data-label="Retorno" data-ticker="${tk}">${retCell}</td>
+      <td class="td-vs-bench" data-label="vs Bench." data-bench-ticker="${tk}"><span class="muted-val">…</span></td>
       <td class="pos-actions-cell" data-label="Acciones">
         <div class="pos-action-menu">
-          <button class="pos-action-trigger" type="button" data-menu-for="${pos.id}" aria-haspopup="true" aria-expanded="false" aria-label="Acciones de ${pos.ticker}" title="Acciones">⋯</button>
-          <div class="pos-action-dropdown" data-menu-id="${pos.id}" role="menu" hidden>
-            <button type="button" role="menuitem" data-act="buy" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Comprar más</button>
-            <button type="button" role="menuitem" data-act="sell" data-pos-id="${pos.id}">Vender</button>
-            <button type="button" role="menuitem" data-act="dividend" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Registrar dividendo</button>
-            <button type="button" role="menuitem" data-act="alert" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">Crear alerta</button>
-            <button type="button" role="menuitem" data-act="note" data-pos-id="${pos.id}" data-ticker="${pos.ticker}">${pos.note ? "Editar nota" : "Agregar nota"}</button>
-            <button type="button" role="menuitem" data-act="market" data-ticker="${pos.ticker}">Ver en Mercados</button>
-            <button type="button" role="menuitem" class="pos-action-danger" data-act="delete" data-pos-id="${pos.id}">Eliminar</button>
+          <button class="pos-action-trigger" type="button" data-menu-for="${pid}" aria-haspopup="true" aria-expanded="false" aria-label="Acciones de ${tk}" title="Acciones">⋯</button>
+          <div class="pos-action-dropdown" data-menu-id="${pid}" role="menu" hidden>
+            <button type="button" role="menuitem" data-act="buy" data-pos-id="${pid}" data-ticker="${tk}">Comprar más</button>
+            <button type="button" role="menuitem" data-act="sell" data-pos-id="${pid}">Vender</button>
+            <button type="button" role="menuitem" data-act="dividend" data-pos-id="${pid}" data-ticker="${tk}">Registrar dividendo</button>
+            <button type="button" role="menuitem" data-act="alert" data-pos-id="${pid}" data-ticker="${tk}">Crear alerta</button>
+            <button type="button" role="menuitem" data-act="note" data-pos-id="${pid}" data-ticker="${tk}">${pos.note ? "Editar nota" : "Agregar nota"}</button>
+            <button type="button" role="menuitem" data-act="market" data-ticker="${tk}">Ver en Mercados</button>
+            <button type="button" role="menuitem" class="pos-action-danger" data-act="delete" data-pos-id="${pid}">Eliminar</button>
           </div>
         </div>
       </td>
@@ -8976,7 +9243,7 @@ async function renderPositionBenchmarkDeltas(portfolio) {
   let benchHist = _benchHistCache[benchSym];
   if (!benchHist) {
     try {
-      const h = await fetchHistoricalCloses(benchSym, "max", "1wk");
+      const h = await fetchHistoricalCloses(benchSym, "max", "1wk", ADJ);
       benchHist = (h || []).map((d) => ({ t: new Date(d.ts).getTime(), c: d.close }))
         .filter((d) => isFinite(d.c) && d.c > 0).sort((a, b) => a.t - b.t);
       _benchHistCache[benchSym] = benchHist;
@@ -9027,9 +9294,16 @@ function _posReturnRenderCell(cell, pos, currency, refPrice) {
   const posCur = getPosCurrency(pos, currency);
   const retPct = (price - refPrice) / refPrice * 100;
   const retAmtRaw = (price - refPrice) * (pos.quantity || 0);
-  const retAmt = convertAmount(retAmtRaw, posCur, currency) ?? retAmtRaw;
-  const sign = retAmt >= 0 ? "+" : "";
-  cell.innerHTML = `<span class="${retAmt >= 0 ? "return-pos" : "return-neg"}">${sign}${retPct.toFixed(2)}%<br><small>${sign}${formatCurrency(retAmt, currency)}</small></span>`;
+  // P0.2: el porcentaje es válido siempre (se calcula dentro de una sola
+  // divisa); el importe no, así que sin tipo de cambio se omite el importe en
+  // vez de mostrarlo sin convertir.
+  const retAmt = convertAmount(retAmtRaw, posCur, currency);
+  const sign = retPct >= 0 ? "+" : "";
+  const cls = retPct >= 0 ? "return-pos" : "return-neg";
+  const amtHtml = retAmt !== null
+    ? `<br><small>${retAmt >= 0 ? "+" : ""}${formatCurrency(retAmt, currency)}</small>`
+    : `<br><small class="muted-val" title="Falta el tipo de cambio ${escHtml(posCur)}→${escHtml(currency)}">—</small>`;
+  cell.innerHTML = `<span class="${cls}">${sign}${retPct.toFixed(2)}%${amtHtml}</span>`;
 }
 
 async function renderPositionsReturnPeriod(portfolio) {
@@ -9054,7 +9328,7 @@ async function renderPositionsReturnPeriod(portfolio) {
   await Promise.all(uniqueTickers.map(async (ticker) => {
     if (_posReturnHistCache[ticker]) return;
     try {
-      const h = await fetchHistoricalCloses(ticker, "1y", "1d");
+      const h = await fetchHistoricalCloses(ticker, "1y", "1d", ADJ);
       _posReturnHistCache[ticker] = (h || []).map((d) => ({ t: new Date(d.ts).getTime(), c: d.close }))
         .filter((d) => isFinite(d.c) && d.c > 0).sort((a, b) => a.t - b.t);
     } catch { _posReturnHistCache[ticker] = []; }
@@ -9265,6 +9539,153 @@ function updateWithdrawPreview(pos, portfolioCurrency) {
   el.textContent = net > 0 ? formatCurrency(netConverted, portfolioCurrency) : "—";
 }
 
+// ── Splits pendientes de aplicar (P0.4) ──────────────────────────────────────
+// El Tracker guarda cantidad y precio promedio como números fijos. Cuando el
+// emisor parte la acción 4:1, el precio de mercado se divide entre cuatro y la
+// cantidad guardada no cambia: la posición pierde el 75% de su valor en
+// pantalla, para siempre, y arrastra al Valor actual, al Retorno y al vs Bench.
+// No había nada en el código que lo detectara.
+//
+// Se DETECTA y se OFRECE; no se aplica solo. Un ajuste automático sobre datos
+// que quizá ya vengan ajustados (una importación de bróker, por ejemplo) haría
+// el daño que intenta evitar. El aviso dice el número exacto que resultaría,
+// para que el usuario lo contraste con su estado de cuenta antes de aceptar.
+const _splitCache = {};   // ticker -> [{date, ratio, label}]
+
+async function _fetchSplits(ticker) {
+  if (_splitCache[ticker]) return _splitCache[ticker];
+  try {
+    const res = await fetch(`${API_BASE_URL}/splits/${encodeURIComponent(ticker)}`);
+    if (!res.ok) { _splitCache[ticker] = []; return []; }
+    const data = await res.json();
+    _splitCache[ticker] = Array.isArray(data?.splits) ? data.splits : [];
+  } catch { _splitCache[ticker] = []; }
+  return _splitCache[ticker];
+}
+
+// Splits posteriores a la compra que la posición todavía no refleja.
+function _pendingSplitsFor(pos, splits) {
+  const bought = pos.purchaseDate ? String(pos.purchaseDate).slice(0, 10) : null;
+  if (!bought) return [];   // sin fecha no se puede saber si ya venía ajustada
+  const applied = pos.splitsApplied || [];
+  const dismissed = pos.splitsDismissed || [];
+  return (splits || []).filter((sp) =>
+    sp && sp.date > bought &&
+    Number.isFinite(sp.ratio) && sp.ratio > 0 && Math.abs(sp.ratio - 1) > 1e-6 &&
+    !applied.includes(sp.date) && !dismissed.includes(sp.date)
+  );
+}
+
+// Aplica un split a la posición Y a las transacciones anteriores a su fecha:
+// si sólo se tocara la posición, la primera edición de una transacción la
+// reconstruiría desde el historial en crudo y desharía el ajuste.
+// El dinero no cambia — `net` y `commCost` quedan intactos a propósito.
+function _applySplit(portfolio, ticker, split) {
+  const key = split.date;
+  const ratio = split.ratio;
+  (portfolio.positions || []).forEach((pos) => {
+    if (pos.ticker !== ticker) return;
+    pos.splitsApplied = pos.splitsApplied || [];
+    if (pos.splitsApplied.includes(key)) return;
+    pos.quantity = parseFloat(((pos.quantity || 0) * ratio).toFixed(10));
+    pos.avgPrice = (pos.avgPrice || 0) / ratio;
+    pos.splitsApplied.push(key);
+  });
+  (portfolio.transactions || []).forEach((tx) => {
+    if (tx.ticker !== ticker) return;
+    if (String(tx.date || "").slice(0, 10) >= key) return;
+    tx.splitsApplied = tx.splitsApplied || [];
+    if (tx.splitsApplied.includes(key)) return;
+    tx.quantity = parseFloat(((tx.quantity || 0) * ratio).toFixed(10));
+    tx.price = (tx.price || 0) / ratio;
+    tx.splitsApplied.push(key);
+  });
+}
+
+function _dismissSplit(portfolio, ticker, split) {
+  (portfolio.positions || []).forEach((pos) => {
+    if (pos.ticker !== ticker) return;
+    pos.splitsDismissed = pos.splitsDismissed || [];
+    if (!pos.splitsDismissed.includes(split.date)) pos.splitsDismissed.push(split.date);
+  });
+}
+
+function _renderSplitNotice(pending) {
+  const bar = document.getElementById("splitNoticeBar");
+  if (!bar) return;
+  if (!pending.length) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+  bar.classList.remove("hidden");
+  bar.innerHTML = `
+    <div class="split-notice-head">
+      <strong>${pending.length === 1 ? "Un activo hizo split" : `${pending.length} activos hicieron split`} desde tu compra</strong>
+      <span>Tu cantidad y tu precio promedio siguen siendo los de antes del split, así que el valor que ves está mal. Compara con tu estado de cuenta antes de ajustar.</span>
+    </div>
+    <ul class="split-notice-list">
+      ${pending.map((it, i) => `
+        <li>
+          <span class="split-notice-ticker">${escHtml(it.ticker)}</span>
+          <span class="split-notice-detail">split ${escHtml(it.split.label)} del ${escHtml(it.split.date)} · ${parseFloat(Number(it.fromQty).toFixed(5))} → <strong>${parseFloat(Number(it.toQty).toFixed(5))}</strong> acciones</span>
+          <span class="split-notice-actions">
+            <button type="button" class="button primary split-apply-btn" data-split-idx="${i}">Ajustar</button>
+            <button type="button" class="button ghost split-dismiss-btn" data-split-idx="${i}">Ya está ajustada</button>
+          </span>
+        </li>`).join("")}
+    </ul>`;
+
+  const act = (idx, apply) => {
+    const item = pending[idx];
+    if (!item) return;
+    const portfolios = getPortfolios();
+    const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+    if (!portfolio || portfolio._consolidated) return;
+    if (apply) _applySplit(portfolio, item.ticker, item.split);
+    else _dismissSplit(portfolio, item.ticker, item.split);
+    savePortfolios(portfolios);
+    showToast(
+      apply
+        ? `${item.ticker}: posición ajustada por el split ${item.split.label}.`
+        : `${item.ticker}: no volveremos a avisarte de ese split.`,
+      { type: apply ? "success" : "info", duration: 5000 }
+    );
+    renderPortfolioDashboard();
+  };
+  bar.querySelectorAll(".split-apply-btn").forEach((b) =>
+    b.addEventListener("click", () => act(Number(b.dataset.splitIdx), true)));
+  bar.querySelectorAll(".split-dismiss-btn").forEach((b) =>
+    b.addEventListener("click", () => act(Number(b.dataset.splitIdx), false)));
+}
+
+async function checkPositionSplits(portfolio) {
+  const bar = document.getElementById("splitNoticeBar");
+  if (!bar) return;
+  // El consolidado es sintético y de sólo lectura: ajustarlo no llevaría a nada.
+  if (!portfolio || portfolio._consolidated || !(portfolio.positions || []).length) {
+    _renderSplitNotice([]);
+    return;
+  }
+  const tickers = [...new Set(portfolio.positions.map((p) => p.ticker))];
+  const lists = await Promise.all(tickers.map((t) => _fetchSplits(t).then((sp) => ({ t, sp }))));
+  const byTicker = {};
+  lists.forEach(({ t, sp }) => { byTicker[t] = sp; });
+
+  // La lista pudo cambiar mientras descargábamos.
+  const live = getPortfolios().find((p) => p.id === activePortfolioId);
+  if (!live || live.id !== portfolio.id) return;
+
+  const pending = [];
+  (live.positions || []).forEach((pos) => {
+    _pendingSplitsFor(pos, byTicker[pos.ticker]).forEach((split) => {
+      pending.push({
+        ticker: pos.ticker,
+        split,
+        fromQty: pos.quantity || 0,
+        toQty: (pos.quantity || 0) * split.ratio,
+      });
+    });
+  });
+  _renderSplitNotice(pending);
+}
+
 async function syncDividends(portfolio) {
   if (!portfolio.positions?.length) return false;
   if (!portfolio.transactions) portfolio.transactions = [];
@@ -9314,9 +9735,11 @@ async function syncDividends(portfolio) {
 
       const perShare = Number(div.amount);
       const gross = perShare * qtyAtExDate;
-      const grossInPortfolioCur = posCur !== portfolioCur
-        ? (convertAmount(gross, posCur, portfolioCur) ?? gross)
-        : gross;
+      // Sin tipo de cambio no se abona nada: meter la cifra en la divisa del
+      // emisor a una caja en otra divisa era sumar peras con manzanas (P0.2).
+      const converted = posCur !== portfolioCur ? convertAmount(gross, posCur, portfolioCur) : gross;
+      if (converted === null) { _noteFxMissing(posCur, portfolioCur); continue; }
+      const grossInPortfolioCur = converted;
 
       portfolio.transactions.unshift({
         id: `div_${ticker}_${div.date}`,
@@ -9329,6 +9752,7 @@ async function syncDividends(portfolio) {
         commCost: 0,
         net: gross,
         currency: posCur,
+        cashApplied: grossInPortfolioCur,   // P0.5: reversa exacta al editarlo
       });
       portfolio.cashBalance = (portfolio.cashBalance || 0) + grossInPortfolioCur;
       existing.add(key);
@@ -10030,7 +10454,7 @@ async function renderCorrelationTab(portfolio) {
   status.style.display = ""; status.textContent = "Descargando históricos y calculando correlaciones…";
   wrap.innerHTML = "";
 
-  const histories = await Promise.all(tickers.map((t) => fetchHistoricalCloses(t, "1y", "1d").then((h) => ({ t, h }))));
+  const histories = await Promise.all(tickers.map((t) => fetchHistoricalCloses(t, "1y", "1d", ADJ).then((h) => ({ t, h }))));
   const maps = {};
   histories.forEach(({ t, h }) => {
     maps[t] = {};
@@ -10139,8 +10563,9 @@ async function renderWatchlist() {
   const list = getWatchlist();
   if (!list.length) { tbody.innerHTML = ""; shell.style.display = "none"; empty.style.display = ""; return; }
   shell.style.display = ""; empty.style.display = "none";
-  tbody.innerHTML = list.map((tk) =>
-    `<tr data-wl="${tk}" class="wl-row">` +
+  tbody.innerHTML = list.map((raw) => {
+    const tk = escHtml(raw);
+    return `<tr data-wl="${tk}" class="wl-row">` +
     `<td data-label="Ticker"><strong>${tk}</strong></td>` +
     `<td class="td-sparkline" data-label="30 días"><canvas class="pos-sparkline wl-sparkline" data-ticker="${tk}" width="80" height="28"></canvas></td>` +
     `<td class="wl-price" data-label="Precio">…</td>` +
@@ -10149,8 +10574,8 @@ async function renderWatchlist() {
       `<button class="wl-buy" data-wl-buy="${tk}" title="Comprar / agregar a un portafolio" type="button">Comprar</button>` +
       `<button class="wl-alert" data-wl-alert="${tk}" title="Crear alerta de precio" type="button" aria-label="Crear alerta">🔔</button>` +
       `<button class="wl-remove" data-wl-remove="${tk}" title="Quitar de la lista" type="button" aria-label="Quitar">✕</button>` +
-    `</td></tr>`
-  ).join("");
+    `</td></tr>`;
+  }).join("");
 
   // Sparklines de 30 días (reutiliza el mismo motor que la tabla de posiciones)
   drawAllSparklines(list.map((tk) => ({ ticker: tk })));
@@ -10263,7 +10688,7 @@ async function runWhatIf() {
   status.style.display = ""; status.textContent = "Simulando…";
 
   const allTickers = [...new Set([...posTickers, altTicker])];
-  const histories = await Promise.all(allTickers.map((t) => fetchHistoricalCloses(t, range, interval).then((h) => ({ t, h }))));
+  const histories = await Promise.all(allTickers.map((t) => fetchHistoricalCloses(t, range, interval, ADJ).then((h) => ({ t, h }))));
   const maps = {};
   histories.forEach(({ t, h }) => { maps[t] = {}; (h || []).forEach((d) => { maps[t][new Date(d.ts).toISOString().slice(0, 10)] = d.close; }); });
   if (!Object.keys(maps[altTicker] || {}).length) { status.textContent = `No se encontraron datos para ${altTicker}.`; return; }
@@ -10348,11 +10773,11 @@ function renderRebalanceTab() {
 
   tbody.innerHTML = rows.map((r) => {
     const curW = (r.value / totalValue) * 100;
-    return `<tr data-ticker="${r.ticker}">
-      <td><strong>${r.ticker}</strong></td>
+    return `<tr data-ticker="${escHtml(r.ticker)}">
+      <td><strong>${escHtml(r.ticker)}</strong></td>
       <td>${formatCurrency(r.value, cur)}</td>
       <td>${curW.toFixed(1)}%</td>
-      <td><input class="rebal-target-input" type="number" step="0.1" min="0" max="100" value="${rebalTargets[r.ticker].toFixed(1)}" data-ticker="${r.ticker}"></td>
+      <td><input class="rebal-target-input" type="number" step="0.1" min="0" max="100" value="${rebalTargets[r.ticker].toFixed(1)}" data-ticker="${escHtml(r.ticker)}"></td>
       <td class="rebal-target-val">—</td>
       <td class="rebal-action">—</td>
     </tr>`;
@@ -10834,7 +11259,7 @@ function renderDonutLegend(positions, totalInvested, currency, cashBalance) {
     const weight = grandTotal > 0 ? (entry.value / grandTotal * 100).toFixed(1) : "0.0";
     return `<button class="donut-legend-item" type="button" data-index="${i}" style="--dot:${entry.color};--w:${bar(entry.value)}%">
       ${_compositionMarkHtml(entry)}
-      <span class="donut-legend-ticker">${entry.label}</span>
+      <span class="donut-legend-ticker">${escHtml(entry.label)}</span>
       <span class="donut-legend-track"><span class="donut-legend-fill"></span></span>
       <span class="donut-legend-value">${formatCurrency(entry.value, currency)}</span>
       <span class="donut-legend-weight">${weight}%</span>
@@ -11095,7 +11520,7 @@ function renderAttributionChart(portfolio) {
     const pos = r.pp >= 0;
     const w = Math.max(2, Math.abs(r.pp) / maxAbs * 50);
     return `<div class="attrib-row">
-      <span class="attrib-ticker" title="${r.ticker}">${r.ticker}</span>
+      <span class="attrib-ticker" title="${escHtml(r.ticker)}">${escHtml(r.ticker)}</span>
       <span class="attrib-track"><span class="attrib-bar ${pos ? "pos" : "neg"}" style="width:${w.toFixed(1)}%"></span></span>
       <span class="attrib-val ${pos ? "pos" : "neg"}">${pos ? "+" : ""}${r.pp.toFixed(2)} pp</span>
     </div>`;
@@ -11192,8 +11617,8 @@ function renderHoldingsTreemap(positions, currency) {
     const cls = ["treemap-tile", small ? "is-small" : "", tiny ? "is-tiny" : ""].filter(Boolean).join(" ");
     const chgTxt = t.chg !== null ? `${t.chg >= 0 ? "+" : ""}${t.chg.toFixed(2)}%` : "—";
     const pctPort = (t.value / total * 100).toFixed(1);
-    return `<div class="${cls}" style="left:${t.x.toFixed(1)}px;top:${t.y.toFixed(1)}px;width:${t.w.toFixed(1)}px;height:${t.h.toFixed(1)}px;background:${_treemapHeatColor(t.chg)}" title="${t.ticker} · ${pctPort}% del portafolio · hoy ${chgTxt}">
-      <span class="treemap-tile-ticker">${t.ticker}</span>
+    return `<div class="${cls}" style="left:${t.x.toFixed(1)}px;top:${t.y.toFixed(1)}px;width:${t.w.toFixed(1)}px;height:${t.h.toFixed(1)}px;background:${_treemapHeatColor(t.chg)}" title="${escHtml(t.ticker)} · ${pctPort}% del portafolio · hoy ${chgTxt}">
+      <span class="treemap-tile-ticker">${escHtml(t.ticker)}</span>
       <span class="treemap-tile-chg">${chgTxt}</span>
     </div>`;
   }).join("");
@@ -11268,7 +11693,7 @@ function renderRiskContribution(portfolio, valid, rets, M, meta = {}) {
     const tip = `${r.ticker} — peso ${r.weight.toFixed(1)}% · riesgo ${r.risk.toFixed(1)}%${r.weight > 0 ? ` (${ratio.toFixed(1)}× su peso)` : ""} · σ anualizada ${r.sigmaAnn.toFixed(0)}%${hedge ? " · reduce el riesgo total (cobertura)" : ""}`;
     return `<div class="rc-row${alert ? " rc-alert" : ""}" title="${tip}">
       <div class="rc-id">
-        <span class="rc-ticker-line"><span class="rc-ticker">${r.ticker}</span>${alert ? `<span class="rc-badge">${ratio.toFixed(1)}×</span>` : ""}</span>
+        <span class="rc-ticker-line"><span class="rc-ticker">${escHtml(r.ticker)}</span>${alert ? `<span class="rc-badge">${ratio.toFixed(1)}×</span>` : ""}</span>
         <span class="rc-sigma">σ ${r.sigmaAnn.toFixed(0)}%</span>
       </div>
       <div class="rc-track">
@@ -11720,7 +12145,18 @@ function initializeTrackerModule() {
     if (!isFinite(perShare) || perShare <= 0) { errEl.textContent = "Ingresa un dividendo por acción válido."; errEl.classList.remove("hidden"); return; }
     if (!date) { errEl.textContent = "Ingresa la fecha de pago."; errEl.classList.remove("hidden"); return; }
     const posCur = getPosCurrency(pos, portfolio.currency || "USD");
-    recordTransaction(portfolio, "DIVIDENDO", pos.ticker, pos.quantity, perShare, 0, posCur, { date: new Date(date + "T12:00:00").toISOString() });
+    const portfolioCur = portfolio.currency || "USD";
+    // El dividendo registrado a mano NO abonaba a la caja, pero el sincronizado
+    // sí, y la reversa al editarlo restaba efectivo que nunca había entrado
+    // (P0.5). Ahora los dos caminos mueven la caja igual.
+    const grossInPortfolioCur = convertAmount(perShare * (pos.quantity || 0), posCur, portfolioCur);
+    const cashApplied = grossInPortfolioCur === null ? 0 : grossInPortfolioCur;
+    if (grossInPortfolioCur === null) {
+      showToast(`Sin tipo de cambio ${posCur}→${portfolioCur}: el dividendo se registró, pero el efectivo no se ajustó.`, { type: "warn", duration: 8000 });
+    } else {
+      portfolio.cashBalance = (portfolio.cashBalance || 0) + cashApplied;
+    }
+    recordTransaction(portfolio, "DIVIDENDO", pos.ticker, pos.quantity, perShare, 0, posCur, { date: new Date(date + "T12:00:00").toISOString(), cashApplied });
     savePortfolios(portfolios);
     closeModal("dividendModal");
     renderPortfolioDashboard();
@@ -12019,18 +12455,35 @@ function initializeTrackerModule() {
       });
     }
 
-    // Deduct purchase cost from cash balance (cash first, remainder is new injection)
+    // La compra consume el efectivo disponible; lo que exceda se financia por
+    // fuera. Eso ya era el modelo, pero era invisible y no quedaba registrado
+    // (P0.5): ahora se anota cuánto salió de la caja y, si el portafolio SÍ
+    // llevaba efectivo y no alcanzó, se dice en pantalla en vez de que el
+    // usuario descubra el descuadre semanas después.
     const { total: purchaseCostInPosCur } = calcPositionTotals({ avgPrice, quantity, commissionPercent, applyIva, ivaRate });
     const portfolioCur = portfolio.currency || "USD";
     const purchaseCostInPortfolioCur = posCurrency !== portfolioCur
-      ? (convertAmount(purchaseCostInPosCur, posCurrency, portfolioCur) ?? purchaseCostInPosCur)
+      ? convertAmount(purchaseCostInPosCur, posCurrency, portfolioCur)
       : purchaseCostInPosCur;
     const currentCash = portfolio.cashBalance || 0;
-    if (currentCash > 0) {
-      portfolio.cashBalance = Math.max(0, currentCash - purchaseCostInPortfolioCur);
+    let cashUsed = 0;
+    if (purchaseCostInPortfolioCur === null) {
+      // Sin tipo de cambio no se toca la caja: descontar la cifra sin convertir
+      // vaciaría el saldo por un factor de 18 (P0.2).
+      showToast(`Sin tipo de cambio ${posCurrency}→${portfolioCur}: la compra se registró, pero el efectivo no se ajustó.`, { type: "warn", duration: 8000 });
+    } else {
+      cashUsed = Math.min(Math.max(0, currentCash), purchaseCostInPortfolioCur);
+      portfolio.cashBalance = currentCash - cashUsed;
+      if (currentCash > 0 && purchaseCostInPortfolioCur - cashUsed > 0.005) {
+        showToast(
+          `Se usaron ${formatCurrency(cashUsed, portfolioCur)} de efectivo; ` +
+          `los ${formatCurrency(purchaseCostInPortfolioCur - cashUsed, portfolioCur)} restantes cuentan como aportación externa.`,
+          { type: "info", duration: 8000 }
+        );
+      }
     }
 
-    recordTransaction(portfolio, "COMPRA", ticker, quantity, avgPrice, commissionPercent, posCurrency);
+    recordTransaction(portfolio, "COMPRA", ticker, quantity, avgPrice, commissionPercent, posCurrency, { cashApplied: -cashUsed });
     savePortfolios(portfolios);
     closeModal("addPositionModal");
     e.target.reset();
@@ -12082,7 +12535,14 @@ function initializeTrackerModule() {
     const posCur = getPosCurrency(pos, portfolio.currency || "USD");
     const portfolioCur = portfolio.currency || "USD";
     const net = calcWithdrawNet(sellPrice, qty, commPct, applyIva, ivaRate);
-    const netInPortfolioCur = posCur !== portfolioCur ? (convertAmount(net, posCur, portfolioCur) ?? net) : net;
+    const netConverted = posCur !== portfolioCur ? convertAmount(net, posCur, portfolioCur) : net;
+    if (netConverted === null) {
+      // Sin tipo de cambio, abonar la cifra sin convertir metería pesos a una
+      // caja en dólares. Se detiene la venta con un motivo, no en silencio.
+      showToast(`No se pudo obtener el tipo de cambio ${posCur}→${portfolioCur}. Intenta de nuevo en un momento.`, { type: "error", duration: 8000 });
+      return;
+    }
+    const netInPortfolioCur = netConverted;
 
     const t = calcPositionTotals(pos);
     const costPerUnit = pos.quantity > 0 ? t.total / pos.quantity : 0;
@@ -12101,7 +12561,9 @@ function initializeTrackerModule() {
     }
 
     portfolio.cashBalance = (portfolio.cashBalance || 0) + netInPortfolioCur;
-    recordTransaction(portfolio, "VENTA", pos.ticker, qty, sellPrice, commPct, posCur);
+    // El importe abonado incluye el IVA descontado; `tx.net` no. Registrarlo
+    // explícitamente es lo que hace exacta la reversa al editar o borrar (P0.5).
+    recordTransaction(portfolio, "VENTA", pos.ticker, qty, sellPrice, commPct, posCur, { cashApplied: netInPortfolioCur });
     savePortfolios(portfolios);
     closeModal("withdrawPositionModal");
     renderPortfolioDashboard();
@@ -12511,6 +12973,14 @@ function _wireCashModal() {
    para medir RETORNO el dividendo es parte del rendimiento, y omitirlo subestima
    el total return de cualquier pagador: a 30 años con 3% de yield, el capital
    final se queda en menos de la mitad. Sólo lo piden los motores de retorno. */
+// P0.4: toda serie histórica que alimente un retorno, una correlación o una
+// gráfica de valor pide cierres AJUSTADOS. Con cierres crudos, un split 4:1
+// aparece como un desplome del 75% —envenena beta, drawdown y correlación— y los
+// dividendos quedan fuera, así que la cartera se compara contra el retorno de
+// PRECIO del índice en vez de contra su retorno total. La única serie que sigue
+// sin ajustar es la de un par FX: un tipo de cambio no reparte dividendos.
+const ADJ = { adjusted: true };
+
 async function fetchHistoricalCloses(symbol, range, interval, opts = {}) {
   const { adjusted = false } = opts;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -13250,7 +13720,7 @@ async function drawSummaryChartForMode() {
     }
     if (!data.benchPoints) {
       try {
-        const h = await fetchHistoricalCloses(data.benchmark, data.range, data.interval);
+        const h = await fetchHistoricalCloses(data.benchmark, data.range, data.interval, ADJ);
         const map = {};
         (h || []).forEach((d) => { map[new Date(d.ts).toISOString().slice(0, 10)] = d.close; });
         let lastClose = null;
@@ -13323,7 +13793,7 @@ async function loadSummaryValueChart(portfolio) {
   const posCurrencies = [...new Set(allPositions.map((p) => p.currency))];
   const [histories] = await Promise.all([
     Promise.all(uniqueTickers.map((t) =>
-      fetchHistoricalCloses(t, range, interval).then((h) => ({ t, h })).catch(() => ({ t, h: [] }))
+      fetchHistoricalCloses(t, range, interval, ADJ).then((h) => ({ t, h })).catch(() => ({ t, h: [] }))
     )),
     fetchExchangeRates(posCurrencies, portfolioCur)
   ]);
@@ -13595,9 +14065,9 @@ async function loadPerformanceTab(portfolio) {
   // Fetch all historical data in parallel + Yahoo beta per active ticker
   const activeTickersForBeta = [...new Set(allPositions.filter((p) => !p.sellDate).map((p) => p.ticker))];
   const [tickerHistories, benchmarkHistory, yahooBetaResults] = await Promise.all([
-    Promise.all(uniqueTickers.map((t) => fetchHistoricalCloses(t, range, interval).then((h) => ({ t, h })))),
+    Promise.all(uniqueTickers.map((t) => fetchHistoricalCloses(t, range, interval, ADJ).then((h) => ({ t, h })))),
     portfolio.benchmark && portfolio.benchmark !== "none"
-      ? fetchHistoricalCloses(portfolio.benchmark, range, interval)
+      ? fetchHistoricalCloses(portfolio.benchmark, range, interval, ADJ)
       : Promise.resolve([]),
     Promise.all(activeTickersForBeta.map((t) =>
       fetch(`${API_BASE_URL}/info/${encodeURIComponent(t)}`)
@@ -13621,8 +14091,8 @@ async function loadPerformanceTab(portfolio) {
       const stillMissing = missingBetaTickers.filter((t) => yahooBetas[t] == null);
       if (!stillMissing.length) break;
       const [bmData, ...tickerDatas] = await Promise.all([
-        fetchHistoricalCloses("^GSPC", cfg.range, cfg.interval),
-        ...stillMissing.map((t) => fetchHistoricalCloses(t, cfg.range, cfg.interval))
+        fetchHistoricalCloses("^GSPC", cfg.range, cfg.interval, ADJ),
+        ...stillMissing.map((t) => fetchHistoricalCloses(t, cfg.range, cfg.interval, ADJ))
       ]);
       const bmDateMap = {};
       bmData.forEach((d) => { bmDateMap[new Date(d.ts).toISOString().slice(0, cfg.sliceKey)] = d.close; });
@@ -13688,34 +14158,75 @@ async function loadPerformanceTab(portfolio) {
     return;
   }
 
-  // Compute cost basis per position (in portfolio currency) for date-aware weighting
-  let totalAllCost = 0;
+  // ── Retornos diarios ponderados por VALOR y con fecha de compra (P0.3) ─────
+  //
+  // Lo que había antes tenía dos defectos que se sumaban, y de ellos cuelga toda
+  // la pestaña (TWR, Sharpe, volatilidad, VaR, beta, drawdown, Sortino, Calmar,
+  // alfa, information ratio y captura):
+  //
+  //   1. `isActive` sólo miraba `sellDate`. NUNCA comparaba contra la fecha de
+  //      compra, así que una posición comprada la semana pasada aportaba su
+  //      retorno de los últimos doce meses al desempeño anual del portafolio.
+  //   2. El peso de cada posición salía de su costo ACTUAL y se aplicaba igual a
+  //      todos los días del periodo: no derivaba con el precio ni cambiaba
+  //      cuando la composición cambiaba, y al vender, el peso liberado
+  //      simplemente desaparecía sin repartirse.
+  //
+  // Ahora cada día se pondera por el VALOR de mercado de la víspera, y sólo
+  // entre las posiciones tenidas en las DOS fechas del par. Comprar o vender
+  // deja de ser un "retorno": entra por su valor, no por su salto de saldo, que
+  // es justo lo que distingue un retorno ponderado por tiempo de una variación
+  // de patrimonio.
+  const _posHeldOn = (pos, date) => {
+    // Sin fecha de compra (portafolios viejos o importados sin fecha) se asume
+    // tenida desde el inicio de la ventana: es el comportamiento anterior y no
+    // conviene borrarles el histórico por un campo que nunca se les pidió.
+    if (pos.purchaseDate && date < String(pos.purchaseDate).slice(0, 10)) return false;
+    if (pos.sellDate && date > String(pos.sellDate).slice(0, 10)) return false;
+    return true;
+  };
+  const _posValueOn = (pos, date) => {
+    const close = tickerDateMaps[pos.ticker]?.[date];
+    if (!Number.isFinite(close) || close <= 0) return null;
+    const qty = Number(pos.quantity) || 0;
+    if (qty <= 0) return null;
+    const posCur = pos.currency || portfolioCur;
+    const converted = convertAmount(close * qty, posCur, portfolioCur);
+    return converted !== null ? converted : null;
+  };
+
+  // Base de ponderación para la beta agregada: valor de mercado en la última
+  // fecha con datos (y costo sólo si esa posición no cotizó ese día). Antes era
+  // el costo, que ignora cuánto pesa hoy cada activo en la cartera.
+  const _lastDate = commonDates[commonDates.length - 1];
   allPositions.forEach((pos) => {
     const posCur = pos.currency || portfolioCur;
-    const cost = convertAmount(pos.avgPrice * pos.quantity, posCur, portfolioCur) ?? (pos.avgPrice * pos.quantity);
-    pos._cost = cost;
-    totalAllCost += cost;
-  });
-  allPositions.forEach((pos) => {
-    pos._weight = totalAllCost > 0 ? pos._cost / totalAllCost : 0;
+    const costFallback = convertAmount((pos.avgPrice || 0) * (pos.quantity || 0), posCur, portfolioCur) ?? 0;
+    const marketValue = _posHeldOn(pos, _lastDate) ? _posValueOn(pos, _lastDate) : null;
+    pos._weightBase = marketValue !== null ? marketValue : costFallback;
   });
 
-  // Calculate daily portfolio returns with date-aware weights
-  // Sold positions contribute 0% (cash) after their sell date
   const dailyPortfolioReturns = [];
   for (let i = 1; i < commonDates.length; i++) {
     const d0 = commonDates[i - 1];
     const d1 = commonDates[i];
-    let portReturn = 0;
+    let baseValue = 0;
+    const legs = [];
     allPositions.forEach((pos) => {
-      const isActive = !pos.sellDate || d1 <= pos.sellDate;
-      if (!isActive) return;
-      const c0 = tickerDateMaps[pos.ticker]?.[d0];
-      const c1 = tickerDateMaps[pos.ticker]?.[d1];
-      if (c0 && c1 && c0 > 0) {
-        portReturn += pos._weight * (c1 - c0) / c0;
-      }
+      if (!_posHeldOn(pos, d0) || !_posHeldOn(pos, d1)) return;
+      const v0 = _posValueOn(pos, d0);
+      const v1 = _posValueOn(pos, d1);
+      if (v0 === null || v1 === null || v0 <= 0) return;
+      baseValue += v0;
+      legs.push({ v0, r: v1 / v0 - 1 });
     });
+    // Sin nada tenido en el par (todo era efectivo, o el activo aún no existía)
+    // el retorno del día es 0, no un hueco: la serie tiene que seguir alineada
+    // con `commonDates` porque el eje del gráfico se construye con ella.
+    let portReturn = 0;
+    if (baseValue > 0) {
+      for (const leg of legs) portReturn += (leg.v0 / baseValue) * leg.r;
+    }
     dailyPortfolioReturns.push(portReturn);
   }
 
@@ -13884,11 +14395,11 @@ async function loadPerformanceTab(portfolio) {
   if (dailyBenchmarkReturns.length >= 2) {
     // Only include currently held positions (no sellDate) and re-normalize weights
     const activePositions = allPositions.filter((pos) => !pos.sellDate);
-    const activeTotalCost = activePositions.reduce((s, pos) => s + (pos._cost || 0), 0);
+    const activeTotalCost = activePositions.reduce((s, pos) => s + (pos._weightBase || 0), 0);
     const tickerWeights = {};
     activePositions.forEach((pos) => {
       if (!tickerWeights[pos.ticker]) tickerWeights[pos.ticker] = 0;
-      tickerWeights[pos.ticker] += activeTotalCost > 0 ? (pos._cost || 0) / activeTotalCost : 0;
+      tickerWeights[pos.ticker] += activeTotalCost > 0 ? (pos._weightBase || 0) / activeTotalCost : 0;
     });
     // Mapa de closes del benchmark por fecha (para fallback de beta)
     const bmCloseMap = {};
@@ -13907,8 +14418,8 @@ async function loadPerformanceTab(portfolio) {
         const still = missingHistTickers.filter((t) => extraMonthlyBetas[t] == null);
         if (!still.length) break;
         const [bmD, ...tDs] = await Promise.all([
-          fetchHistoricalCloses("^GSPC", cfg.range, cfg.interval),
-          ...still.map((t) => fetchHistoricalCloses(t, cfg.range, cfg.interval))
+          fetchHistoricalCloses("^GSPC", cfg.range, cfg.interval, ADJ),
+          ...still.map((t) => fetchHistoricalCloses(t, cfg.range, cfg.interval, ADJ))
         ]);
         const bmDM = {};
         bmD.forEach((d) => { bmDM[new Date(d.ts).toISOString().slice(0, cfg.sliceKey)] = d.close; });

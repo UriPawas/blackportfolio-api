@@ -422,6 +422,55 @@ def portfolio_checksum(portfolios: list[dict[str, Any]]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+# Longitud maxima por campo de texto libre. Un nombre de 1 MB cabia de sobra en
+# el limite de 5 MB del snapshot y reventaba el layout de quien lo abriera.
+_TEXT_LIMITS = {"name": 120, "description": 500, "ticker": 40, "note": 2000, "type": 20}
+
+
+def _strip_markup(value: Any, limit: int) -> Any:
+    """Quita `<` y `>` y recorta. No rechaza ni convierte tipos."""
+    if not isinstance(value, str):
+        return value
+    clean = value.replace("<", "").replace(">", "")
+    return clean[:limit]
+
+
+def sanitize_portfolios(portfolios: list[Any]) -> list[Any]:
+    """Sanea EN SITIO los campos de texto que el frontend pinta como HTML.
+
+    Por que asi y no con un esquema estricto: rechazar una escritura mal formada
+    dejaria fuera de servicio a cualquier usuario cuyo snapshot ya guardado no
+    cumpla el esquema nuevo — no podria volver a guardar nunca. Aqui se limpia y
+    se deja pasar, que es fail-open en disponibilidad y fail-closed en inyeccion.
+    Tampoco se tocan las claves desconocidas: borrarlas seria perder datos.
+
+    El frontend ya escapa al pintar; esto cubre a cualquier otro cliente y a los
+    snapshots que ya esten envenenados.
+    """
+    if not isinstance(portfolios, list):
+        return portfolios
+    for portfolio in portfolios:
+        if not isinstance(portfolio, dict):
+            continue
+        for key in ("name", "description"):
+            if key in portfolio:
+                portfolio[key] = _strip_markup(portfolio[key], _TEXT_LIMITS[key])
+        for position in (portfolio.get("positions") or []):
+            if not isinstance(position, dict):
+                continue
+            if "ticker" in position:
+                position["ticker"] = _strip_markup(position["ticker"], _TEXT_LIMITS["ticker"])
+            if "note" in position:
+                position["note"] = _strip_markup(position["note"], _TEXT_LIMITS["note"])
+        for tx in (portfolio.get("transactions") or []):
+            if not isinstance(tx, dict):
+                continue
+            for key in ("ticker", "type"):
+                if key in tx:
+                    tx[key] = _strip_markup(tx[key], _TEXT_LIMITS[key])
+    return portfolios
+
+
 def upsert_user(session: Session, token: dict[str, Any]) -> AppUser:
     uid = token["uid"]
     current_time = utc_now()
@@ -1232,6 +1281,9 @@ def replace_portfolios(
     uid = token["uid"]
     current_time = utc_now()
     user = upsert_user(session, token)
+    # Saneado ANTES del checksum: lo que se guarda y lo que se firma tienen que
+    # ser lo mismo, o el 409 por version se dispararia solo (P0.1).
+    sanitize_portfolios(payload.portfolios)
     checksum = portfolio_checksum(payload.portfolios)
     snapshot = session.get(PortfolioSnapshot, uid)
 
