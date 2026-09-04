@@ -358,6 +358,14 @@
 #section-tracker .tracker-kpi-grid > *,
 #section-tracker .kpi-strip > * { min-width: 0; }
 
+/* La conciliacion es una anotacion al pie del registro, no otra tarjeta. */
+#section-tracker .kpi-reconcile-note {
+  margin: .55rem 0 1.4rem;
+  padding: 0;
+  font: 400 var(--v4-t-mini)/1.55 var(--v4-sans);
+  color: var(--v4-ink-3);
+}
+
 #section-tracker .summary-item {
   padding: .8rem 1rem;
   background: none;
@@ -1144,6 +1152,7 @@
   font: 400 var(--v4-t-mini)/1.55 var(--v4-sans);
   color: var(--v4-ink-3);
 }
+#section-tracker .form-hint--warn { color: var(--v4-warn, #b8860b); }
 #section-tracker .rebal-target-input {
   background: var(--v4-surface);
   border: 1px solid var(--v4-rule-strong);

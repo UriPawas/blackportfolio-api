@@ -1759,8 +1759,19 @@ def public_portfolio(request: Request, token: str, session: Session = Depends(ge
     if not p:
         raise HTTPException(status_code=404, detail="El portafolio ya no está disponible.")
     owner = session.get(AppUser, share.firebase_uid)
-    # Saneado: solo composición de inversión. Sin datos de cuenta ni credenciales.
-    positions = []
+    # P1.13: el modal de compartir promete "no se muestran datos de tu cuenta" y
+    # esta respuesta traía `quantity` y `avgPrice` de cada posición, con los que
+    # p.html pintaba un KPI "Valor estimado". Quien recibiera el enlace sabía
+    # cuánto dinero tienes y en qué, para siempre, hasta revocarlo.
+    #
+    # Por omisión ya no se publica ningún importe: sólo proporciones. El dueño
+    # puede activar "incluir montos" desde el Tracker, y entonces la copia del
+    # modal dice exactamente eso. La preferencia viaja dentro del portafolio
+    # (`shareIncludeAmounts`), así que apagarla afecta al enlace ya repartido.
+    include_amounts = bool(p.get("shareIncludeAmounts"))
+    raw = []
+    cost_total = 0.0
+    qty_total = 0.0
     for pos in (p.get("positions") or []):
         try:
             qty = float(pos.get("quantity") or 0)
@@ -1769,17 +1780,37 @@ def public_portfolio(request: Request, token: str, session: Session = Depends(ge
             qty, avg = 0, 0
         if qty <= 0:
             continue
-        positions.append({
-            "ticker": _clean(pos.get("ticker"), 40),
-            "quantity": qty,
-            "avgPrice": avg,
-            "currency": _clean(pos.get("currency") or p.get("currency") or "USD", 10),
-        })
+        raw.append((
+            _clean(pos.get("ticker"), 40),
+            qty,
+            max(avg, 0.0),
+            _clean(pos.get("currency") or p.get("currency") or "USD", 10),
+        ))
+        cost_total += qty * max(avg, 0.0)
+        qty_total += qty
+
+    # `relQty` es la cantidad NORMALIZADA por la base de costo: sirve para que la
+    # vista pública valore con precios en vivo y saque pesos de mercado exactos,
+    # y de ella no se puede despejar ni la cantidad ni el precio. `costWeight` es
+    # el respaldo cuando algún precio no llega. Ninguno de los dos es dinero.
+    divisor = cost_total if cost_total > 0 else (qty_total or 1.0)
+    positions = []
+    for ticker, qty, avg, cur in raw:
+        item = {"ticker": ticker, "currency": cur}
+        if include_amounts:
+            item["quantity"] = qty
+            item["avgPrice"] = avg
+        else:
+            item["relQty"] = qty / divisor
+            item["costWeight"] = (qty * avg / cost_total * 100) if cost_total > 0 else (qty / (qty_total or 1.0) * 100)
+        positions.append(item)
+
     return {
         "name": _clean(p.get("name")) or "Portafolio",
         "currency": _clean(p.get("currency", "USD"), 10),
         "ownerName": _clean(owner.display_name if owner else None) or "Un inversor",
         "positions": positions,
+        "includesAmounts": include_amounts,
         "sharedAt": share.created_at.isoformat() if share.created_at else None,
     }
 

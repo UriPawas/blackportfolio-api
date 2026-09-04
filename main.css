@@ -4544,6 +4544,16 @@ body.light-mode .kpi-alt-currency-select {
    Antes cada KPI secundario era una tarjeta igual a los heroes, diluyendo la
    jerarquía visual. Ahora es una sola franja "label: valor" separada por
    divisores, liberando ~150px verticales para los heroes y el primer gráfico. */
+/* Conciliacion bajo el registro de KPIs (P1.9). */
+.kpi-reconcile-note {
+  margin: -12px 0 20px;
+  padding: 0 4px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.kpi-reconcile-note:empty { display: none; }
+
 .kpi-strip {
   display: flex;
   flex-wrap: wrap;
@@ -4988,6 +4998,10 @@ body.light-mode .tab-group-sep {
   margin-top: 3px;
   display: block;
 }
+/* `display:block` de arriba gana sobre la hoja del navegador, asi que sin esta
+   regla el atributo `hidden` no oculta nada. */
+.form-hint[hidden] { display: none; }
+.form-hint--warn { color: var(--warning); }
 
 .pos-checkbox-label {
   display: flex;

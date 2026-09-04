@@ -337,7 +337,14 @@
                 <h3 id="shareModalTitle">Compartir portafolio</h3>
                 <button class="tracker-modal-close" type="button" data-close-modal="shareModal" aria-label="Cerrar">✕</button>
               </div>
-              <p class="share-modal-desc">Cualquiera con este enlace podrá ver la composición de tu portafolio en modo solo lectura. No se muestran datos de tu cuenta.</p>
+              <p class="share-modal-desc">Cualquiera con este enlace verá qué activos tienes y en qué proporción, en modo solo lectura. No se muestran importes ni datos de tu cuenta.</p>
+              <div class="form-row">
+                <label class="pos-checkbox-label">
+                  <input id="shareIncludeAmounts" type="checkbox">
+                  <span>Incluir montos (cantidades y valor estimado)</span>
+                </label>
+              </div>
+              <p id="shareAmountsHint" class="form-hint"></p>
               <div class="share-link-row">
                 <input id="shareLinkInput" type="text" readonly placeholder="Generando enlace…">
                 <button id="shareCopyBtn" class="button primary" type="button">Copiar</button>
@@ -409,7 +416,7 @@
             <div class="summary-item tracker-kpi-hero">
               <div class="kpi-info-wrap">
                 <button class="kpi-info-btn" aria-label="Información">?</button>
-                <span class="kpi-tooltip">Ganancia o pérdida total (no realizada + realizada) expresada como porcentaje sobre el costo invertido de las posiciones con precio. El monto es la suma en la moneda del portafolio.</span>
+                <span class="kpi-tooltip">Ganancia o pérdida total (no realizada + realizada + dividendos cobrados) expresada como porcentaje sobre el costo invertido de las posiciones con precio. El monto es la suma en la moneda del portafolio.</span>
               </div>
               <span>Retorno total</span>
               <strong id="dashReturnAmt">—</strong>
@@ -433,6 +440,13 @@
                 <span class="kpi-tooltip">Ganancia o pérdida ya materializada por ventas: el dinero que efectivamente obtuviste (o perdiste) al vender, comparado con el costo promedio de esas acciones.</span>
               </div>
               <span>P/L realizada</span><strong id="dashRealizedPnL">—</strong>
+            </div>
+            <div class="summary-item kpi-strip-item">
+              <div class="kpi-info-wrap">
+                <button class="kpi-info-btn" aria-label="Información">?</button>
+                <span class="kpi-tooltip">Dividendos cobrados y registrados en este portafolio, convertidos a su moneda. Forman parte del "Retorno total" y ya están dentro del efectivo.</span>
+              </div>
+              <span>Dividendos cobrados</span><strong id="dashDividendIncome">—</strong>
             </div>
             <div class="summary-item kpi-strip-item">
               <div class="kpi-info-wrap">
@@ -496,6 +510,8 @@
               </div>
             </details>
           </div>
+          <!-- Conciliación de los KPIs (P1.9): la identidad comprobable a mano. -->
+          <p id="dashReconcileNote" class="kpi-reconcile-note"></p>
           <!-- Aviso de split pendiente (P0.4). Lo llena checkPositionSplits();
                nunca se ajusta una posición sin que el usuario lo pida. -->
           <div id="splitNoticeBar" class="split-notice hidden" role="status" aria-live="polite"></div>
@@ -1714,7 +1730,15 @@
                   <option value="BRL">BRL — Real brasileño</option>
                 </select>
               </div>
-              <p class="form-hint">Cambiar la moneda no reconvierte tus posiciones; solo cambia la moneda de presentación del portafolio.</p>
+              <p class="form-hint">Cambiar la moneda no reconvierte tus posiciones (cada una lleva la suya); sí convierte tu efectivo al tipo de cambio del momento.</p>
+              <p id="editPortfolioCurrencyNote" class="form-hint form-hint--warn" hidden></p>
+              <div class="form-row">
+                <label class="pos-checkbox-label">
+                  <input id="editPortfolioAutoDiv" type="checkbox">
+                  <span>Sincronizar dividendos automáticamente</span>
+                </label>
+              </div>
+              <p class="form-hint">Registra solo los dividendos pagados por tus activos y los abona al efectivo. Desactívalo si los reinviertes (DRIP) o los cobras en otra cuenta.</p>
               <button class="button primary" type="submit">Guardar cambios</button>
             </form>
           </div>

@@ -207,7 +207,8 @@ const PLAN_LIMITS = {
     chartTypes: ["line", "area"],
     indicators: ["sma20", "vol"],
     maxIndicators: 1,
-    maxPortfolios: 1
+    maxPortfolios: 1,
+    maxPositions: 10
   },
   0: { // Demo
     sections: ["home", "markets", "settings"],
@@ -215,7 +216,8 @@ const PLAN_LIMITS = {
     chartTypes: ["line", "area"],
     indicators: ["sma20", "ema20", "rsi", "vol"],
     maxIndicators: 2,
-    maxPortfolios: 0
+    maxPortfolios: 0,
+    maxPositions: 0
   },
   1: { // Investor
     sections: ["home", "tracker", "markets", "markowitz", "analyzer", "settings"],
@@ -224,15 +226,16 @@ const PLAN_LIMITS = {
     indicators: ["sma20", "ema20", "ema50", "sma50", "sma200", "bb", "rsi", "macd", "vol",
       "ichimoku", "supertrend", "pivots", "adx", "obv", "mfi", "willr", "roc"],
     maxIndicators: 5,
-    maxPortfolios: 3
+    maxPortfolios: 3,
+    maxPositions: 50
   },
   2: { // Advisor Pro
     sections: null, ranges: null, chartTypes: null, indicators: null,
-    maxIndicators: Infinity, maxPortfolios: Infinity
+    maxIndicators: Infinity, maxPortfolios: Infinity, maxPositions: Infinity
   },
   3: { // Wealth Desk
     sections: null, ranges: null, chartTypes: null, indicators: null,
-    maxIndicators: Infinity, maxPortfolios: Infinity
+    maxIndicators: Infinity, maxPortfolios: Infinity, maxPositions: Infinity
   }
 };
 
@@ -5719,18 +5722,26 @@ function _donutPosValue(pos, currency) {
   }
   return cost;
 }
+// P1.10: Sharpe, Sortino y Alfa usaban SIEMPRE la TIIE 28 mexicana (~9-11 %),
+// también para un portafolio en dólares o en euros. La tasa ahora se pide por
+// DIVISA del portafolio y la etiqueta dice cuál se usó; el backend responde
+// Banxico para MXN, ^IRX para USD y una referencia declarada para las demás.
 let perfRfr = { rate: 9.0, label: "Tasa libre de riesgo (fallback)", date: null, source: "fallback" };
-let perfRfrFetched = false;
+const _rfrByCurrency = {};   // divisa -> respuesta definitiva ya obtenida
 
-async function fetchRiskFreeRate() {
+async function fetchRiskFreeRate(currency) {
+  const cur = (currency || "MXN").toUpperCase();
+  const known = _rfrByCurrency[cur];
+  if (known) { perfRfr = known; return; }
   try {
-    const res = await fetch(`${API_BASE_URL}/risk-free-rate`);
+    const res = await fetch(`${API_BASE_URL}/risk-free-rate?currency=${encodeURIComponent(cur)}`);
     if (!res.ok) return;
     const data = await res.json();
     if (data && typeof data.rate === "number" && isFinite(data.rate)) {
       perfRfr = data;
-      // Solo marcar como definitivo si vino de Banxico; si es fallback, reintentar la próxima vez
-      if (data.source === "banxico") perfRfrFetched = true;
+      // Un "fallback" es un fallo temporal de la fuente: se reintenta la próxima
+      // vez. Una "reference" es la respuesta definitiva para esa divisa.
+      if (data.source !== "fallback") _rfrByCurrency[cur] = data;
     }
   } catch { /* keep fallback, allow retry */ }
 }
@@ -5739,7 +5750,8 @@ function updateSharpeRfrLabel() {
   const el = document.getElementById("sharpeRfrLabel");
   if (!el) return;
   const dateTxt = perfRfr.date ? ` · ${perfRfr.date}` : "";
-  el.textContent = `Tasa libre de riesgo: ${perfRfr.rate.toFixed(2)}% (${perfRfr.label}${dateTxt})`;
+  const curTxt = perfRfr.currency ? `${perfRfr.currency} · ` : "";
+  el.textContent = `Tasa libre de riesgo: ${perfRfr.rate.toFixed(2)}% (${curTxt}${perfRfr.label}${dateTxt})`;
 }
 
 let _portfolioMemory = [];
@@ -6059,7 +6071,17 @@ function recordTransaction(portfolio, type, ticker, quantity, price, commissionP
   if (!portfolio.transactions) portfolio.transactions = [];
   const commCost = price * quantity * (commissionPercent / 100);
   const gross = price * quantity;
-  const net = type === "COMPRA" ? gross + commCost : gross - commCost;
+  // P1.8: el IVA de la comisión formaba parte del costo de la POSICIÓN
+  // (`calcPositionTotals`) pero no del de la TRANSACCIÓN, así que la misma
+  // pantalla mezclaba dos bases de costo: el P/L no realizado salía de una y el
+  // realizado --que se reconstruye del historial-- de la otra. En la venta el
+  // desfase era peor: la caja se abonaba ya sin IVA y la transacción se grababa
+  // con el dentro, de modo que la ganancia realizada quedaba sobreestimada
+  // exactamente en el IVA de la comisión de venta.
+  const applyIva = !!(opts && opts.applyIva);
+  const ivaRate = applyIva ? (Number(opts.ivaRate) || 0) : 0;
+  const ivaCost = commCost * ivaRate / 100;
+  const net = type === "COMPRA" ? gross + commCost + ivaCost : gross - commCost - ivaCost;
   const tx = {
     id: generateId(),
     date: (opts && opts.date) || new Date().toISOString(),
@@ -6072,6 +6094,9 @@ function recordTransaction(portfolio, type, ticker, quantity, price, commissionP
     net,
     currency: currency || "USD"
   };
+  // Solo se escriben si hay IVA: una transacción sin el queda idéntica a las ya
+  // guardadas, y el historial existente no cambia de forma.
+  if (ivaCost > 0) { tx.applyIva = true; tx.ivaRate = ivaRate; tx.ivaCost = ivaCost; }
   // P0.5: cuánto efectivo movió DE VERDAD esta transacción, en la divisa del
   // portafolio y con signo. Sin este dato la reversa (editar o borrar) tenía que
   // adivinarla, y como el descuento en la compra va topado por el saldo
@@ -6236,6 +6261,13 @@ function importPositionsCSV(file) {
         positions.push({ id: generateId(), ticker, avgPrice, quantity, commissionPercent, applyIva, ivaRate, purchaseDate, currency });
       }
       if (!positions.length) { showToast("No se encontraron posiciones válidas en el CSV.", { type: "error" }); return; }
+      // P1.14: 200 filas contra un plan de 10 posiciones creaban el portafolio,
+      // lo pintaban y el servidor lo rechazaba con 403 después. Se dice antes.
+      const maxPosCsv = window._planLimits?.maxPositions ?? Infinity;
+      if (positions.length > maxPosCsv) {
+        showPlanToast(`Tu CSV tiene ${positions.length} posiciones y tu plan permite ${maxPosCsv} por portafolio.`);
+        return;
+      }
       // Registrar una COMPRA por posición para que las transacciones sean la fuente de
       // verdad del P/L realizado (L1.3) — necesario para ventas futuras de lo importado.
       const transactions = positions.map((p) => {
@@ -6246,6 +6278,9 @@ function importPositionsCSV(file) {
           date: p.purchaseDate ? new Date(p.purchaseDate + "T12:00:00").toISOString() : new Date().toISOString(),
           type: "COMPRA", ticker: p.ticker, quantity: p.quantity, price: p.avgPrice,
           commissionPercent: p.commissionPercent || 0, commCost: comm, net: total, currency: p.currency,
+          // `net` ya venia con IVA (usa `calcPositionTotals`); faltaba la tasa
+          // para poder recalcularlo al editar la transacción (P1.8).
+          ...(p.applyIva && p.ivaRate ? { applyIva: true, ivaRate: p.ivaRate, ivaCost: comm * p.ivaRate / 100 } : {}),
           cashApplied: 0   // P0.5: la importación no toca la caja, y borrarlas tampoco debe
         };
       }).sort((a, b) => b.date.localeCompare(a.date));
@@ -6699,6 +6734,9 @@ function _wireReportRangeModal() {
 // cierre, valor, P&L, métricas y series — todo "as of" [startStr, endStr].
 async function computeHistoricalReport(portfolio, startStr, endStr) {
   const currency = portfolio.currency || "USD";
+  // El reporte usaba la tasa que hubiera quedado en memoria —el 9 % de respaldo
+  // si nunca se abrió la pestaña de Desempeño—. Se pide la de su divisa (P1.10).
+  await fetchRiskFreeRate(currency);
   const todayStr = new Date().toISOString().slice(0, 10);
   const isEndToday = endStr >= todayStr;
   const allLots = buildAllPositionHistory(portfolio); // {ticker, avgPrice, quantity, currency, purchaseDate, sellDate}
@@ -7714,6 +7752,32 @@ function captureTickerBaseline(portfolio, ticker) {
   };
 }
 
+// Cantidad tenida de un ticker en una FECHA dada, reconstruida del historial de
+// transacciones más la porción baseline (lo importado por CSV, que no tiene
+// COMPRA propia y se considera tenido desde `purchaseDate`).
+//
+// P1.6: los dividendos se calculaban con `pos.quantity` --la cantidad de HOY--
+// aunque el pago fuera de hace ocho meses. Si compraste 10 acciones en enero y
+// 90 en junio, el dividendo de marzo se pagaba sobre 100.
+function qtyHeldOnDate(portfolio, ticker, dateStr, baseline) {
+  const day = String(dateStr || "").slice(0, 10);
+  if (!day) return 0;
+  const base = baseline !== undefined ? baseline : captureTickerBaseline(portfolio, ticker);
+  let qty = 0;
+  if (base && base.qty > 1e-9) {
+    const bDay = String(base.purchaseDate || "").slice(0, 10);
+    if (!bDay || bDay <= day) qty += base.qty;
+  }
+  for (const t of (portfolio.transactions || [])) {
+    if (t.ticker !== ticker) continue;
+    if (t.type !== "COMPRA" && t.type !== "VENTA") continue;
+    const d = String(t.date || "").slice(0, 10);
+    if (!d || d > day) continue;
+    qty += t.type === "COMPRA" ? (t.quantity || 0) : -(t.quantity || 0);
+  }
+  return qty > 1e-9 ? qty : 0;
+}
+
 // Reconstruye la posición abierta de un ticker replayando su historial con la
 // MISMA semántica de promedio móvil incremental que usa addPosition/withdraw:
 // la compra pondera contra la cantidad tenida al momento; la venta solo reduce
@@ -7875,8 +7939,15 @@ function buildTxFromForm(oldTx, type, dateStr, ticker, quantity, price, commissi
   }
   const commCost = price * quantity * (commissionPercent / 100);
   const gross = price * quantity;
-  const net = type === "COMPRA" ? gross + commCost : gross - commCost;
-  return { ...base, ticker, quantity, price, commissionPercent, commCost, net };
+  // El IVA de la transacción vieja se conserva como TASA y se recalcula sobre la
+  // comisión nueva (P1.8). Copiar el importe tal cual dejaría un IVA que no
+  // corresponde a la comisión editada; borrarlo desharia la base de costo.
+  const ivaRate = oldTx.applyIva ? (Number(oldTx.ivaRate) || 0) : 0;
+  const ivaCost = commCost * ivaRate / 100;
+  const net = type === "COMPRA" ? gross + commCost + ivaCost : gross - commCost - ivaCost;
+  const tx = { ...base, ticker, quantity, price, commissionPercent, commCost, net };
+  if (ivaCost > 0) { tx.applyIva = true; tx.ivaRate = ivaRate; tx.ivaCost = ivaCost; }
+  return tx;
 }
 
 function confirmDeleteTx(txId) {
@@ -8191,6 +8262,30 @@ function reconstructRealizedPnL(portfolio) {
   return total;
 }
 
+// P1.9: los dividendos subian el efectivo --y con el, el Valor actual-- pero no
+// entraban al Retorno, porque `reconstructRealizedPnL` solo mira COMPRA y VENTA.
+// Cobrabas un dividendo, el Valor actual subia y el Retorno no se movia: para
+// una cartera de dividendos, el KPI principal subestimaba el desempeño de forma
+// sistemática y creciente, y `Capital invertido + Retorno` no reconciliaba con
+// `Valor actual`.
+//
+// Se prefiere `cashApplied` cuando existe: es el importe exacto que entro a la
+// caja, en la divisa del portafolio, así que el Retorno cuadra con el efectivo
+// en vez de reconvertir hoy un pago de hace meses.
+function sumDividendIncome(portfolio) {
+  const portfolioCur = portfolio.currency || "USD";
+  let total = 0;
+  for (const tx of (portfolio.transactions || [])) {
+    if (tx.type !== "DIVIDENDO") continue;
+    if (Number.isFinite(tx.cashApplied)) { total += tx.cashApplied; continue; }
+    const txCur = tx.currency || portfolioCur;
+    const conv = convertAmount(tx.net || 0, txCur, portfolioCur);
+    if (conv === null) { _noteFxMissing(txCur, portfolioCur); continue; }
+    total += conv;
+  }
+  return total;
+}
+
 // Resumen financiero de un portafolio usando precios en caché (sin fetch).
 // Reutilizado por las tarjetas de la lista y la barra de patrimonio consolidado.
 function computePortfolioSnapshot(portfolio) {
@@ -8218,10 +8313,11 @@ function computePortfolioSnapshot(portfolio) {
   const cashBalance = portfolio.cashBalance || 0;
   // Fuente única de verdad: el P/L realizado se reconstruye siempre desde las transacciones
   const realizedPnL = reconstructRealizedPnL(portfolio);
+  const dividendIncome = sumDividendIncome(portfolio);   // P1.9
   const currentValue = (hasAnyPrice ? totalCurrentValue : 0) + cashBalance;
   const unrealizedPnL = hasAnyPrice ? totalCurrentValue - totalCostPriced : 0;
-  const returnAmt = (hasAnyPrice || (!positions.length && realizedPnL !== 0))
-    ? unrealizedPnL + realizedPnL : null;
+  const returnAmt = (hasAnyPrice || (!positions.length && (realizedPnL !== 0 || dividendIncome !== 0)))
+    ? unrealizedPnL + realizedPnL + dividendIncome : null;
   // Retorno % sobre el costo invertido (base de costo), no sobre el valor actual
   const returnCostBasis = totalCostPriced > 0 ? totalCostPriced : 0;
   const returnPct = returnAmt !== null && returnCostBasis > 0 ? returnAmt / returnCostBasis * 100 : null;
@@ -8587,7 +8683,12 @@ async function renderPortfolioDashboard() {
   // En modo consolidado no se sincroniza: es sólo lectura y ya se sincroniza por portafolio.
   const portfolios = getPortfolios();
   const stored = portfolios.find((p) => p.id === activePortfolioId);
-  if (stored && !_consolidatedActive) {
+  // P1.6: una vez por portafolio y sesión, y solo si el usuario la dejo activada
+  // (quien reinvierte los dividendos o los cobra en otra cuenta no quiere que se
+  // le abonen a la caja de este portafolio).
+  if (stored && !_consolidatedActive && stored.autoSyncDividends !== false
+      && !_divSyncedPortfolios.has(stored.id)) {
+    _divSyncedPortfolios.add(stored.id);
     const divChanged = await syncDividends(stored);
     if (divChanged) {
       savePortfolios(portfolios);
@@ -8795,12 +8896,13 @@ function _doRenderDashboard(portfolio) {
   const cashBalance = portfolio.cashBalance || 0;
   // Fuente única de verdad: el P/L realizado se reconstruye siempre desde las transacciones
   const realizedPnL = reconstructRealizedPnL(portfolio);
+  const dividendIncome = sumDividendIncome(portfolio);   // P1.9
 
   const displayCurrentValue = (hasAnyPrice ? totalCurrentValue : 0) + cashBalance;
   _lastPortfolioCurrentValue = displayCurrentValue > 0 ? displayCurrentValue : null;
   const unrealizedPnL = hasAnyPrice ? totalCurrentValue - totalCostPriced : 0;
-  const showReturn = hasAnyPrice || (!positions.length && realizedPnL !== 0);
-  const returnAmt = showReturn ? unrealizedPnL + realizedPnL : null;
+  const showReturn = hasAnyPrice || (!positions.length && (realizedPnL !== 0 || dividendIncome !== 0));
+  const returnAmt = showReturn ? unrealizedPnL + realizedPnL + dividendIncome : null;
   // Retorno % sobre el costo invertido de las posiciones con precio (base de costo), no sobre el valor actual
   const returnCostBasis = totalCostPriced > 0 ? totalCostPriced : 0;
   const returnPct = returnAmt !== null && returnCostBasis > 0
@@ -8890,6 +8992,26 @@ function _doRenderDashboard(portfolio) {
   };
   setPnlKpi("dashUnrealizedPnL", unrealizedPnL, hasAnyPrice);
   setPnlKpi("dashRealizedPnL", realizedPnL, realizedPnL !== 0);
+  setPnlKpi("dashDividendIncome", dividendIncome, dividendIncome !== 0);
+
+  // Fila de conciliacion (P1.9): la identidad que el usuario puede comprobar a
+  // mano. Sin ella, "Capital invertido + Retorno" no daba "Valor actual" y no
+  // habia ninguna nota que lo explicara.
+  const reconcileEl = document.getElementById("dashReconcileNote");
+  if (reconcileEl) {
+    if (!hasAnyPrice && !cashBalance) {
+      reconcileEl.textContent = "";
+    } else {
+      const parts = [
+        `Costo de posiciones con precio ${formatCurrency(totalCostPriced, currency)}`,
+        `${unrealizedPnL >= 0 ? "+" : "−"} P/L no realizada ${formatCurrency(Math.abs(unrealizedPnL), currency)}`,
+        `${cashBalance >= 0 ? "+" : "−"} efectivo ${formatCurrency(Math.abs(cashBalance), currency)}`,
+      ];
+      const excluded = positions.length - pricedCount;
+      const tail = excluded > 0 ? ` · excluye ${excluded} posición(es) sin precio o sin tipo de cambio` : "";
+      reconcileEl.textContent = `${parts.join(" ")} = ${formatCurrency(displayCurrentValue, currency)} de valor actual${tail}`;
+    }
+  }
 
   // XIRR
   const xirrEl = document.getElementById("dashXirr");
@@ -9440,6 +9562,16 @@ function openBuyMoreModal(posId, ticker) {
     const cached = getCachedPrice(ticker);
     priceInput.value = cached !== null ? parseFloat(cached.toFixed(4)) : "";
   }
+  // El IVA se precarga del lote que ya tienes: dejarlo en blanco hacia que el
+  // caso normal --volver a comprar en las mismas condiciones-- entrara por el
+  // camino que antes borraba el IVA de la posición entera (P1.7).
+  const ivaCheck = document.getElementById("posIvaCheck");
+  const ivaRateInput = document.getElementById("posIvaRateInput");
+  if (ivaCheck && pos) {
+    ivaCheck.checked = !!pos.applyIva;
+    if (ivaRateInput) ivaRateInput.value = pos.ivaRate || 16;
+    document.getElementById("posIvaRateRow")?.classList.toggle("hidden", !pos.applyIva);
+  }
   openModal("addPositionModal");
 }
 
@@ -9464,7 +9596,30 @@ function openEditPortfolioModal() {
   document.getElementById("editPortfolioDesc").value = portfolio.description || "";
   document.getElementById("editPortfolioBenchmark").value = portfolio.benchmark || "^GSPC";
   document.getElementById("editPortfolioCurrency").value = portfolio.currency || "USD";
+  const autoDiv = document.getElementById("editPortfolioAutoDiv");
+  if (autoDiv) autoDiv.checked = portfolio.autoSyncDividends !== false;
+  updateEditPortfolioCurrencyNote();
   openModal("editPortfolioModal");
+}
+
+// P1.11: cambiar la divisa del portafolio REDENOMINABA el efectivo. `cashBalance`
+// es un número desnudo, así que pasar de USD a MXN convertia 10 000 dólares en
+// 10 000 pesos, sin conversión y sin aviso. Aquí se dice antes de guardar; la
+// conversión se hace en el submit.
+function updateEditPortfolioCurrencyNote() {
+  const note = document.getElementById("editPortfolioCurrencyNote");
+  const sel = document.getElementById("editPortfolioCurrency");
+  if (!note || !sel) return;
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  const from = portfolio ? (portfolio.currency || "USD") : "USD";
+  const to = sel.value;
+  const cash = portfolio ? (portfolio.cashBalance || 0) : 0;
+  if (!portfolio || to === from || Math.abs(cash) < 0.005) { note.hidden = true; note.textContent = ""; return; }
+  const converted = convertAmount(cash, from, to);
+  note.hidden = false;
+  note.textContent = converted === null
+    ? `Sin tipo de cambio ${from}→${to}: no se puede convertir tu efectivo, así que el cambio de moneda se rechazará.`
+    : `Tu efectivo de ${formatCurrency(cash, from)} se convertirá a ${formatCurrency(converted, to)}.`;
 }
 
 // "Registrar dividendo": modal ligero que crea una transacción DIVIDENDO.
@@ -9474,16 +9629,46 @@ function openDividendModal(posId, ticker) {
   if (!portfolio || !pos) return;
   const posCur = getPosCurrency(pos, portfolio.currency || "USD");
   document.getElementById("dividendPosId").value = posId;
-  const qty = parseFloat(pos.quantity.toFixed(5));
-  document.getElementById("dividendTickerDisplay").textContent =
-    `${pos.ticker} · ${qty} acciones` + (posCur !== (portfolio.currency || "USD") ? ` (${posCur})` : "");
   document.getElementById("dividendPerShareInput").value = "";
   const dateEl = document.getElementById("dividendDateInput");
   dateEl.value = new Date().toISOString().slice(0, 10);
   dateEl.max = new Date().toISOString().slice(0, 10);
+  refreshDividendModalQty();
   document.getElementById("dividendTotalNote").textContent = "";
   document.getElementById("dividendError").classList.add("hidden");
   openModal("dividendModal");
+}
+
+// Cantidad que se usa para el dividendo manual: la tenida en la FECHA DE PAGO
+// elegida, no la de hoy (P1.6). Registrar un pago viejo con la cantidad actual
+// inventaba dinero que nunca se cobro.
+function dividendQtyForModal() {
+  const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
+  const posId = document.getElementById("dividendPosId")?.value;
+  const pos = portfolio && (portfolio.positions || []).find((p) => p.id === posId);
+  if (!portfolio || !pos) return { portfolio: null, pos: null, qty: 0 };
+  const date = document.getElementById("dividendDateInput")?.value
+    || new Date().toISOString().slice(0, 10);
+  return { portfolio, pos, qty: qtyHeldOnDate(portfolio, pos.ticker, date), date };
+}
+
+function refreshDividendModalQty() {
+  const { portfolio, pos, qty, date } = dividendQtyForModal();
+  const el = document.getElementById("dividendTickerDisplay");
+  if (!el || !pos) return;
+  const posCur = getPosCurrency(pos, portfolio.currency || "USD");
+  const shown = parseFloat(qty.toFixed(5));
+  const today = new Date().toISOString().slice(0, 10);
+  const whenTxt = date && date !== today ? ` al ${date}` : "";
+  el.textContent = `${pos.ticker} · ${shown} acciones${whenTxt}`
+    + (posCur !== (portfolio.currency || "USD") ? ` (${posCur})` : "");
+  // El total estimado se recalcula con la cantidad de esa fecha.
+  const note = document.getElementById("dividendTotalNote");
+  const perShare = parseFloat(document.getElementById("dividendPerShareInput")?.value);
+  if (note) {
+    note.textContent = (isFinite(perShare) && perShare > 0 && qty > 0)
+      ? `Total estimado: ${formatCurrency(perShare * qty, posCur)}` : "";
+  }
 }
 
 function openPositionNoteModal(posId, ticker) {
@@ -9686,6 +9871,11 @@ async function checkPositionSplits(portfolio) {
   _renderSplitNotice(pending);
 }
 
+// Portafolios ya sincronizados en ESTA sesión (P1.6). `syncDividends` muta y
+// guarda el portafolio sin que el usuario lo pida; hacerlo en cada pintado del
+// dashboard provocaba conflictos 409 espurios con dos pestañas abiertas.
+const _divSyncedPortfolios = new Set();
+
 async function syncDividends(portfolio) {
   if (!portfolio.positions?.length) return false;
   if (!portfolio.transactions) portfolio.transactions = [];
@@ -9714,6 +9904,11 @@ async function syncDividends(portfolio) {
     if (!history.length) continue;
 
     const positionsForTicker = portfolio.positions.filter((p) => p.ticker === ticker);
+    const posCur = positionsForTicker.length
+      ? getPosCurrency(positionsForTicker[0], portfolioCur) : portfolioCur;
+    // El baseline se calcula UNA vez por ticker: no cambia entre dividendos y
+    // recorrer el historial completo por cada pago era el gasto caro del bucle.
+    const baseline = captureTickerBaseline(portfolio, ticker);
 
     for (const div of history) {
       if (!div.date || div.amount == null) continue;
@@ -9721,16 +9916,10 @@ async function syncDividends(portfolio) {
       const key = `${ticker}|${div.date}`;
       if (existing.has(key)) continue;
 
-      // Sumar cantidad de las posiciones cuyo purchaseDate es <= ex-date
-      let qtyAtExDate = 0;
-      let posCur = portfolioCur;
-      for (const pos of positionsForTicker) {
-        if (!pos.purchaseDate) continue;
-        if (pos.purchaseDate <= div.date) {
-          qtyAtExDate += pos.quantity || 0;
-          posCur = getPosCurrency(pos, portfolioCur);
-        }
-      }
+      // P1.6: cantidad tenida EN LA FECHA EX, no la de hoy. Y como "comprar más"
+      // ya no reescribe `purchaseDate`, los dividendos anteriores al último lote
+      // dejan de desaparecer del historial y del saldo.
+      const qtyAtExDate = qtyHeldOnDate(portfolio, ticker, div.date, baseline);
       if (qtyAtExDate <= 0) continue;
 
       const perShare = Number(div.amount);
@@ -9877,8 +10066,11 @@ function renderDividendsTab() {
     const yoc = inv > 0 ? `${(b.trailing / inv * 100).toFixed(2)}%` : "—";
     const share = totalReceived > 0 ? (b.total / totalReceived) * 100 : 0;
     const color = _divColorFor(tk);
+    // `tx.date` es un ISO completo, no `YYYY-MM-DD`: concatenarle "T12:00:00"
+    // producía una fecha inválida y la columna decía "Invalid Date". Se veía
+    // sólo cuando había dividendos registrados, que es justo lo que P1.6 arregla.
     const last = b.last
-      ? new Date(b.last + "T12:00:00").toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "2-digit" })
+      ? new Date(String(b.last).slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "2-digit" })
       : "—";
     const esc = _divEsc(tk);
     return `<tr data-ticker="${esc}">
@@ -11738,6 +11930,17 @@ function _wireShareModal() {
   document.getElementById("shareModal")?.addEventListener("click", (e) => {
     if (e.target.id === "shareModal") closeModal("shareModal");
   });
+  // P1.13: el enlace público ya no publica importes por omisión. La preferencia
+  // vive DENTRO del portafolio, así que apagarla cambia lo que ve un enlace ya
+  // repartido; no hace falta revocarlo y volver a generarlo.
+  document.getElementById("shareIncludeAmounts")?.addEventListener("change", (e) => {
+    const portfolios = getPortfolios();
+    const portfolio = portfolios.find((p) => p.id === activePortfolioId);
+    if (!portfolio) return;
+    portfolio.shareIncludeAmounts = !!e.target.checked;
+    savePortfolios(portfolios);
+    _updateShareAmountsHint(portfolio.shareIncludeAmounts);
+  });
   document.getElementById("shareCopyBtn")?.addEventListener("click", async () => {
     const inp = document.getElementById("shareLinkInput");
     if (!inp.value) return;
@@ -11765,6 +11968,15 @@ function _wireShareModal() {
   });
 }
 
+function _updateShareAmountsHint(on) {
+  const el = document.getElementById("shareAmountsHint");
+  if (!el) return;
+  el.textContent = on
+    ? "Quien abra el enlace verá cuántas acciones tienes y el valor estimado del portafolio."
+    : "Sólo se publican porcentajes. Nadie puede deducir cuánto dinero tienes invertido.";
+  el.classList.toggle("form-hint--warn", !!on);
+}
+
 async function openShareModal() {
   if (!activePortfolioId) return;
   const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
@@ -11777,6 +11989,9 @@ async function openShareModal() {
   const openLink = document.getElementById("shareOpenLink");
   inp.value = "";
   statusEl.textContent = "";
+  const amountsCheck = document.getElementById("shareIncludeAmounts");
+  if (amountsCheck) amountsCheck.checked = !!portfolio.shareIncludeAmounts;
+  _updateShareAmountsHint(!!portfolio.shareIncludeAmounts);
   openModal("shareModal");
   inp.placeholder = "Generando enlace…";
   try {
@@ -12122,16 +12337,8 @@ function initializeTrackerModule() {
   document.getElementById("dividendModal")?.addEventListener("click", (e) => {
     if (e.target === e.currentTarget) closeModal("dividendModal");
   });
-  document.getElementById("dividendPerShareInput")?.addEventListener("input", () => {
-    const portfolio = getPortfolios().find((p) => p.id === activePortfolioId);
-    const pos = portfolio && (portfolio.positions || []).find((p) => p.id === document.getElementById("dividendPosId").value);
-    const note = document.getElementById("dividendTotalNote");
-    const perShare = parseFloat(document.getElementById("dividendPerShareInput").value);
-    if (pos && isFinite(perShare) && perShare > 0) {
-      const posCur = getPosCurrency(pos, portfolio.currency || "USD");
-      note.textContent = `Total estimado: ${formatCurrency(perShare * pos.quantity, posCur)}`;
-    } else if (note) note.textContent = "";
-  });
+  document.getElementById("dividendPerShareInput")?.addEventListener("input", refreshDividendModalQty);
+  document.getElementById("dividendDateInput")?.addEventListener("change", refreshDividendModalQty);
   document.getElementById("dividendForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const errEl = document.getElementById("dividendError");
@@ -12146,17 +12353,24 @@ function initializeTrackerModule() {
     if (!date) { errEl.textContent = "Ingresa la fecha de pago."; errEl.classList.remove("hidden"); return; }
     const posCur = getPosCurrency(pos, portfolio.currency || "USD");
     const portfolioCur = portfolio.currency || "USD";
+    // P1.6: la cantidad es la tenida en la FECHA DE PAGO, no la de hoy.
+    const divQty = qtyHeldOnDate(portfolio, pos.ticker, date);
+    if (divQty <= 0) {
+      errEl.textContent = `El ${date} no tenías acciones de ${pos.ticker} según tu historial.`;
+      errEl.classList.remove("hidden");
+      return;
+    }
     // El dividendo registrado a mano NO abonaba a la caja, pero el sincronizado
     // sí, y la reversa al editarlo restaba efectivo que nunca había entrado
     // (P0.5). Ahora los dos caminos mueven la caja igual.
-    const grossInPortfolioCur = convertAmount(perShare * (pos.quantity || 0), posCur, portfolioCur);
+    const grossInPortfolioCur = convertAmount(perShare * divQty, posCur, portfolioCur);
     const cashApplied = grossInPortfolioCur === null ? 0 : grossInPortfolioCur;
     if (grossInPortfolioCur === null) {
       showToast(`Sin tipo de cambio ${posCur}→${portfolioCur}: el dividendo se registró, pero el efectivo no se ajustó.`, { type: "warn", duration: 8000 });
     } else {
       portfolio.cashBalance = (portfolio.cashBalance || 0) + cashApplied;
     }
-    recordTransaction(portfolio, "DIVIDENDO", pos.ticker, pos.quantity, perShare, 0, posCur, { date: new Date(date + "T12:00:00").toISOString(), cashApplied });
+    recordTransaction(portfolio, "DIVIDENDO", pos.ticker, divQty, perShare, 0, posCur, { date: new Date(date + "T12:00:00").toISOString(), cashApplied });
     savePortfolios(portfolios);
     closeModal("dividendModal");
     renderPortfolioDashboard();
@@ -12190,6 +12404,7 @@ function initializeTrackerModule() {
   document.getElementById("editPortfolioModal")?.addEventListener("click", (e) => {
     if (e.target === e.currentTarget) closeModal("editPortfolioModal");
   });
+  document.getElementById("editPortfolioCurrency")?.addEventListener("change", updateEditPortfolioCurrencyNote);
   document.getElementById("editPortfolioForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const portfolios = getPortfolios();
@@ -12199,13 +12414,41 @@ function initializeTrackerModule() {
     if (name) portfolio.name = name;
     portfolio.description = document.getElementById("editPortfolioDesc").value.trim();
     portfolio.benchmark = document.getElementById("editPortfolioBenchmark").value;
-    portfolio.currency = document.getElementById("editPortfolioCurrency").value;
+    portfolio.autoSyncDividends = document.getElementById("editPortfolioAutoDiv")?.checked !== false;
+
+    // P1.11: el efectivo se CONVIERTE, no se redenomina. Y con el, los importes
+    // `cashApplied` que cada transacción guarda para poder revertirse: estan en
+    // la divisa del portafolio, así que sin convertirlos la reversa devolveria
+    // una cifra en la divisa vieja sobre una caja en la nueva.
+    const oldCur = portfolio.currency || "USD";
+    const newCur = document.getElementById("editPortfolioCurrency").value;
+    let cashMsg = "";
+    if (newCur !== oldCur) {
+      const cash = portfolio.cashBalance || 0;
+      const rate = getCachedExchangeRate(oldCur, newCur);
+      if (rate === null && Math.abs(cash) >= 0.005) {
+        showToast(`No se pudo obtener el tipo de cambio ${oldCur}→${newCur}. La moneda no se cambió para no redenominar tu efectivo.`, { type: "error", duration: 9000 });
+        return;
+      }
+      if (rate !== null) {
+        portfolio.cashBalance = cash * rate;
+        (portfolio.transactions || []).forEach((t) => {
+          if (Number.isFinite(t.cashApplied)) t.cashApplied = t.cashApplied * rate;
+        });
+        // El aviso va DENTRO del toast final: dos toasts seguidos se pisan
+        // (el segundo borra el primero) y el usuario no vería la conversión.
+        if (Math.abs(cash) >= 0.005) {
+          cashMsg = ` Efectivo convertido: ${formatCurrency(cash, oldCur)} → ${formatCurrency(cash * rate, newCur)}.`;
+        }
+      }
+      portfolio.currency = newCur;
+    }
     savePortfolios(portfolios);
     closeModal("editPortfolioModal");
     const nameEl = document.getElementById("dashPortfolioName");
     if (nameEl) nameEl.textContent = portfolio.name;
     renderPortfolioDashboard();
-    showToast("Ajustes del portafolio actualizados.", { duration: 3500 });
+    showToast("Ajustes del portafolio actualizados." + cashMsg, { duration: cashMsg ? 8000 : 3500 });
     window.bpTrack?.("portfolio_edited");
   });
 
@@ -12420,7 +12663,35 @@ function initializeTrackerModule() {
     // Buscar posición existente del mismo ticker
     const existingPos = portfolio.positions.find((p) => p.ticker === ticker);
 
+    // P1.14: el tope de posiciones del plan solo lo validaba el servidor. La
+    // posición aparecía en la tabla, el guardado devolvía 403 y el manejador de
+    // errores recargaba desde el servidor: la posición DESAPARECÍA con un toast
+    // genérico. Se valida antes de mutar, igual que ya se hacia con portafolios.
+    const maxPos = window._planLimits?.maxPositions ?? Infinity;
+    if (!existingPos && portfolio.positions.length >= maxPos) {
+      showPlanToast(`Tu plan permite hasta ${maxPos} posiciones por portafolio.`);
+      closeModal("addPositionModal");
+      return;
+    }
+
     if (existingPos) {
+      // P1.7: "comprar más" reescribía el pasado de la posición. El promedio de
+      // precio y comisión si era correcto; lo que venia después no.
+
+      // La divisa se compara ANTES de promediar: promediar un lote en USD contra
+      // una posición en EUR a 1:1 no es un promedio, es un número inventado, y
+      // la divisa del lote nuevo se descartaba en silencio.
+      const existingCur = getPosCurrency(existingPos, portfolio.currency || "USD");
+      const lotCur = detectCurrencyFromTicker(ticker) || posCurrency;
+      if (existingCur !== lotCur) {
+        showToast(
+          `La posición de ${ticker} está en ${existingCur} y este lote se capturó en ${lotCur}. ` +
+          `Captura el precio en ${existingCur} para poder promediarlo.`,
+          { type: "error", duration: 9000 }
+        );
+        return;
+      }
+
       // Ponderar precio promedio y comisión
       const oldInvested = existingPos.avgPrice * existingPos.quantity;
       const newInvested = avgPrice * quantity;
@@ -12433,13 +12704,28 @@ function initializeTrackerModule() {
       const totalInvested = oldInvested + newInvested;
       const newCommissionPercent = totalInvested > 0 ? (oldCommCost + newCommCost) / totalInvested * 100 : commissionPercent;
 
+      // IVA: se pondera por IMPORTE, no se sobreescribe. Comprar más sin marcar
+      // IVA borraba el IVA del costo base de TODA la posición (y al revés, se lo
+      // agregaba a acciones que nunca lo pagaron). Con la tasa mezclada, el IVA
+      // total que devuelve `calcPositionTotals` sigue siendo el que se pago.
+      const oldIvaCost = oldCommCost * (existingPos.applyIva ? (existingPos.ivaRate || 0) : 0) / 100;
+      const newIvaCost = newCommCost * (applyIva ? ivaRate : 0) / 100;
+      const totalCommCost = oldCommCost + newCommCost;
+      const totalIvaCost = oldIvaCost + newIvaCost;
+
       // Actualizar posición existente
       existingPos.avgPrice = newAvgPrice;
       existingPos.quantity = totalQuantity;
       existingPos.commissionPercent = newCommissionPercent;
-      existingPos.applyIva = applyIva;
-      existingPos.ivaRate = ivaRate;
-      existingPos.purchaseDate = purchaseDate;
+      existingPos.applyIva = totalIvaCost > 0;
+      existingPos.ivaRate = totalCommCost > 0 ? (totalIvaCost / totalCommCost) * 100 : 0;
+      // La fecha de compra marca desde cuando sostienes la posición: se queda la
+      // MÁS ANTIGUA. Antes saltaba al último lote, y con ella el "vs Bench." y el
+      // "Retorno YTD" pasaban a medir desde ayer; si el campo venia vacio, la
+      // fecha desaparecia del todo.
+      if (purchaseDate && (!existingPos.purchaseDate || purchaseDate < existingPos.purchaseDate)) {
+        existingPos.purchaseDate = purchaseDate;
+      }
     } else {
       // Agregar nueva posición
       portfolio.positions.push({
@@ -12483,7 +12769,10 @@ function initializeTrackerModule() {
       }
     }
 
-    recordTransaction(portfolio, "COMPRA", ticker, quantity, avgPrice, commissionPercent, posCurrency, { cashApplied: -cashUsed });
+    recordTransaction(portfolio, "COMPRA", ticker, quantity, avgPrice, commissionPercent, posCurrency,
+      { cashApplied: -cashUsed, applyIva, ivaRate });
+    // La cartera cambio: los dividendos del activo nuevo aun no se han buscado.
+    _divSyncedPortfolios.delete(portfolio.id);
     savePortfolios(portfolios);
     closeModal("addPositionModal");
     e.target.reset();
@@ -12544,16 +12833,6 @@ function initializeTrackerModule() {
     }
     const netInPortfolioCur = netConverted;
 
-    const t = calcPositionTotals(pos);
-    const costPerUnit = pos.quantity > 0 ? t.total / pos.quantity : 0;
-    const costBasisSoldInPosCur = costPerUnit * qty;
-    const costBasisSoldInPortfolioCur = posCur !== portfolioCur
-      ? (convertAmount(costBasisSoldInPosCur, posCur, portfolioCur) ?? costBasisSoldInPosCur)
-      : costBasisSoldInPosCur;
-    portfolio.realizedPnL = (portfolio.realizedPnL !== undefined
-      ? portfolio.realizedPnL
-      : reconstructRealizedPnL(portfolio)) + (netInPortfolioCur - costBasisSoldInPortfolioCur);
-
     if (qty >= pos.quantity) {
       portfolio.positions = (portfolio.positions || []).filter((p) => p.id !== posId);
     } else {
@@ -12561,9 +12840,15 @@ function initializeTrackerModule() {
     }
 
     portfolio.cashBalance = (portfolio.cashBalance || 0) + netInPortfolioCur;
-    // El importe abonado incluye el IVA descontado; `tx.net` no. Registrarlo
-    // explícitamente es lo que hace exacta la reversa al editar o borrar (P0.5).
-    recordTransaction(portfolio, "VENTA", pos.ticker, qty, sellPrice, commPct, posCur, { cashApplied: netInPortfolioCur });
+    // `cashApplied` guarda el importe exacto que entro a la caja, que es lo que
+    // hace exacta la reversa al editar o borrar (P0.5). Desde P1.8 `tx.net`
+    // también descuenta el IVA, así que ambos coinciden en una sola divisa.
+    recordTransaction(portfolio, "VENTA", pos.ticker, qty, sellPrice, commPct, posCur,
+      { cashApplied: netInPortfolioCur, applyIva, ivaRate });
+    // El P/L realizado es función pura de las transacciones: acumularlo a mano
+    // creaba un campo persistido que ningun render lee y que podia contradecir
+    // al vivo (P1.8). Ahora se deriva del historial, que ya incluye el IVA.
+    portfolio.realizedPnL = reconstructRealizedPnL(portfolio);
     savePortfolios(portfolios);
     closeModal("withdrawPositionModal");
     renderPortfolioDashboard();
@@ -14033,8 +14318,8 @@ async function loadPerformanceTab(portfolio) {
   const range = activePeriodBtn?.dataset.range || "1y";
   const interval = activePeriodBtn?.dataset.interval || "1d";
 
-  // Refrescar TIIE 28 (Banxico) la primera vez en la sesión
-  if (!perfRfrFetched) await fetchRiskFreeRate();
+  // Tasa libre de riesgo de la divisa de ESTE portafolio (P1.10)
+  await fetchRiskFreeRate(portfolioCur);
   updateSharpeRfrLabel();
 
   statusEl.textContent = "Calculando rendimiento histórico...";
@@ -14149,8 +14434,42 @@ async function loadPerformanceTab(portfolio) {
     return;
   }
 
-  const dateSets = tickersWithData.map((t) => new Set(Object.keys(tickerDateMaps[t])));
-  let commonDates = [...dateSets[0]].filter((d) => dateSets.every((s) => s.has(d))).sort();
+  // ── Ventana de análisis: UNIÓN de fechas, no intersección (P1.12) ─────────
+  //
+  // Antes se tomaba la intersección de las fechas de todos los tickers. Una IPO
+  // reciente, un ETF poco líquido o una cripto que cotiza en fin de semana
+  // recortaban el "Desempeño 1 año" de TODO el portafolio al mínimo común —a
+  // veces a un mes— sin decirlo en ninguna parte.
+  //
+  // Ahora la ventana es la unión, y cada activo se rellena hacia adelante desde
+  // su PRIMER cierre real: en un día sin dato propio conserva el último precio
+  // conocido, así que ese día aporta 0 % en vez de un salto inventado. Antes de
+  // su primer cierre no existe, y `_posValueOn` lo deja fuera de la ponderación
+  // de ese día en lugar de contarlo a cero.
+  const _allDates = new Set();
+  tickersWithData.forEach((t) => Object.keys(tickerDateMaps[t]).forEach((d) => _allDates.add(d)));
+  const commonDates = [..._allDates].sort();
+
+  // El aviso sólo tiene sentido si al activo le falta una parte MATERIAL de la
+  // ventana: un día de diferencia por el arranque del rango es ruido, no una
+  // historia corta.
+  const _shortHistory = [];
+  const _shortMinGap = Math.max(5, Math.round(commonDates.length * 0.05));
+  tickersWithData.forEach((t) => {
+    const map = tickerDateMaps[t];
+    const own = Object.keys(map).sort();
+    if (own.length && commonDates.length && own[0] > commonDates[0]) {
+      const missing = commonDates.filter((d) => d < own[0]).length;
+      if (missing >= _shortMinGap) _shortHistory.push({ ticker: t, from: own[0] });
+    }
+    let last = null;
+    for (const d of commonDates) {
+      const v = map[d];
+      if (Number.isFinite(v) && v > 0) last = v;
+      else if (last !== null) map[d] = last;
+    }
+  });
+
   if (commonDates.length < 2) {
     statusEl.textContent = "Fechas insuficientes para calcular rendimiento.";
     drawInvestmentValueChart(investmentCanvas, [], portfolioCur);
@@ -14517,7 +14836,17 @@ async function loadPerformanceTab(portfolio) {
   if (investmentStatus) investmentStatus.textContent = investmentValueSeries.length
     ? `${investmentValueSeries.length} sesiones · Valores expresados en ${portfolioCur}`
     : "Sin datos históricos suficientes para comparar valores.";
-  statusEl.textContent = `${returnDates.length} sesiones · ${tickersWithData.length} ticker(s)`;
+  // El aviso de historia corta es parte del resultado, no un detalle: sin él, un
+  // activo listado hace un mes se lee como si el portafolio entero tuviera un
+  // mes de vida (P1.12).
+  const shortTxt = _shortHistory.length
+    ? ` · historia parcial: ${_shortHistory.slice(0, 3).map((s) => `${s.ticker} desde ${s.from}`).join(", ")}`
+      + (_shortHistory.length > 3 ? ` y ${_shortHistory.length - 3} más` : "")
+    : "";
+  statusEl.textContent = `${returnDates.length} sesiones · ${tickersWithData.length} ticker(s)${shortTxt}`;
+  statusEl.title = _shortHistory.length
+    ? "Los días anteriores al primer cierre de esos activos se calculan sin ellos."
+    : "";
 }
 
 // ── Monte Carlo simulation ────────────────────────────────────────────────────
@@ -19951,7 +20280,8 @@ function mkBtn(html, title, danger) {
 
       const realizedPnL = reconstructRealizedPnL(portfolio);
       const unrealizedPnL = hasAnyPrice ? totalCurrentValue - totalCostPriced : 0;
-      const returnAmt = hasAnyPrice ? unrealizedPnL + realizedPnL : null;
+      // P1.9: el mismo Retorno que muestra el Tracker, dividendos incluidos.
+      const returnAmt = hasAnyPrice ? unrealizedPnL + realizedPnL + sumDividendIncome(portfolio) : null;
       const returnPct = returnAmt !== null && totalCostPriced > 0 ? (returnAmt / totalCostPriced * 100) : null;
       if (retEl) {
         if (returnPct !== null) {

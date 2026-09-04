@@ -2207,17 +2207,37 @@ def dividends(request: Request, symbol: str):
         raise _safe_error(e)
 
 
-@app.get("/api/risk-free-rate")
-def risk_free_rate():
-    """
-    Devuelve la TIIE a 28 días desde Banxico (serie SF43783).
-    Cacheado 24 h. Si falla, devuelve fallback 9.0%.
-    """
+# ── Tasa libre de riesgo por divisa (P1.10) ─────────────────────────────────
+# Sharpe, Sortino y Alfa se calculaban SIEMPRE contra la TIIE 28 mexicana
+# (~9-11 %), también para portafolios en dólares o euros. Un portafolio en USD
+# que rinde 12 % con 15 % de volatilidad mostraba un Sharpe ≈ 0.2 cuando contra
+# la tasa correcta (~4-5 %) sería ≈ 0.5. La etiqueta decía "TIIE 28 (Banxico)",
+# así que estaba declarado — pero declarar una cifra equivocada no la corrige.
+#
+# MXN sale de Banxico y USD del rendimiento del T-Bill a 13 semanas (^IRX, que
+# Yahoo cotiza directamente en porcentaje). Para las demás divisas no hay una
+# serie pública gratuita y estable, así que se usa una referencia ESTÁTICA,
+# declarada como tal en la etiqueta y sobreescribible por entorno
+# (RFR_EUR, RFR_GBP, …) para poder corregirla sin desplegar.
+_RFR_STATIC = {
+    "EUR": (2.00, "€STR (referencia)"),
+    "GBP": (4.00, "SONIA (referencia)"),
+    "CAD": (2.50, "CORRA (referencia)"),
+    "JPY": (0.50, "TONA (referencia)"),
+    "CHF": (0.00, "SARON (referencia)"),
+    "AUD": (3.60, "AONIA (referencia)"),
+    "BRL": (14.75, "CDI (referencia)"),
+}
+_RFR_CACHE = _TTLCache(maxsize=10, ttl=21600)  # 6 h — tasas por divisa
+_ALL_CACHES.append(_RFR_CACHE)
+
+
+def _rfr_mxn():
     cached = _TIIE_CACHE_V2.get("tiie")
     if cached is not None:
         return cached
-
-    fallback = {"rate": 9.0, "label": "Tasa libre de riesgo (fallback)", "date": None, "source": "fallback"}
+    fallback = {"rate": 9.0, "label": "Tasa libre de riesgo MXN (fallback)", "date": None,
+                "source": "fallback", "currency": "MXN"}
     try:
         url = f"{BANXICO_BASE}/series/SF43783/datos/oportuno"
         res = _HTTP_SESSION.get(url, headers={"Bmx-Token": BANXICO_TOKEN, "Accept": "application/json"}, timeout=8)
@@ -2227,11 +2247,58 @@ def risk_free_rate():
         serie = j["bmx"]["series"][0]
         dato = serie["datos"][0]
         rate = float(str(dato["dato"]).replace(",", ""))
-        out = {"rate": rate, "label": "TIIE 28 (Banxico)", "date": dato.get("fecha"), "source": "banxico"}
+        out = {"rate": rate, "label": "TIIE 28 (Banxico)", "date": dato.get("fecha"),
+               "source": "banxico", "currency": "MXN"}
         _TIIE_CACHE_V2.set("tiie", out)
         return out
     except Exception:
         return fallback
+
+
+def _rfr_usd():
+    """T-Bill a 13 semanas. Yahoo publica ^IRX ya en porcentaje anual."""
+    price, _prev = _quote_from_chart("^IRX")
+    if price is not None and 0 <= float(price) < 25:
+        return {"rate": round(float(price), 2), "label": "T-Bill 13 semanas (^IRX)",
+                "date": None, "source": "yahoo", "currency": "USD"}
+    return {"rate": _rfr_env("USD", 4.30), "label": "T-Bill 3M (referencia)",
+            "date": None, "source": "reference", "currency": "USD"}
+
+
+def _rfr_env(currency: str, default: float) -> float:
+    try:
+        return float(os.environ.get(f"RFR_{currency}", "") or default)
+    except (TypeError, ValueError):
+        return default
+
+
+@app.get("/api/risk-free-rate")
+def risk_free_rate(currency: str = "MXN"):
+    """
+    Tasa libre de riesgo anual, en porcentaje, para la divisa pedida.
+
+    Sin parámetro devuelve MXN (TIIE 28 de Banxico), que es lo que respondía
+    antes: un cliente viejo sigue recibiendo exactamente lo mismo.
+    """
+    cur = (currency or "MXN").strip().upper()[:3]
+    cached = _RFR_CACHE.get(cur)
+    if cached is not None:
+        return cached
+    if cur == "MXN":
+        out = _rfr_mxn()
+    elif cur == "USD":
+        out = _rfr_usd()
+    elif cur in _RFR_STATIC:
+        default_rate, label = _RFR_STATIC[cur]
+        out = {"rate": _rfr_env(cur, default_rate), "label": label, "date": None,
+               "source": "reference", "currency": cur}
+    else:
+        # Divisa desconocida: se dice que no hay tasa propia en vez de aplicar
+        # la de otro país, que es justo el error que este cambio corrige.
+        out = {"rate": 0.0, "label": f"Sin tasa de referencia para {cur}", "date": None,
+               "source": "none", "currency": cur}
+    _RFR_CACHE.set(cur, out)
+    return out
 
 
 @app.get("/api/news/{symbol}")

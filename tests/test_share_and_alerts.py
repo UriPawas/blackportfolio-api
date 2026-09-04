@@ -29,12 +29,22 @@ def client(auth):
         yield c
 
 
-def _seed_portfolio(client):
-    client.get("/api/account/bootstrap")
-    payload = {"portfolios": [{
+def _seed_portfolio(client, include_amounts=None):
+    portfolio = {
         "id": "p1", "name": "Mi cartera", "currency": "USD",
-        "positions": [{"ticker": "AAPL", "quantity": 10, "avgPrice": 150, "currency": "USD"}],
-    }]}
+        "positions": [
+            {"ticker": "AAPL", "quantity": 10, "avgPrice": 150, "currency": "USD"},
+            {"ticker": "MSFT", "quantity": 5, "avgPrice": 300, "currency": "USD"},
+        ],
+    }
+    if include_amounts is not None:
+        portfolio["shareIncludeAmounts"] = include_amounts
+    boot = client.get("/api/account/bootstrap").json()
+    payload = {"portfolios": [portfolio]}
+    # Reescribir exige la version leida: el control de concurrencia rechaza (409)
+    # una escritura basada en datos viejos.
+    if boot.get("portfolioVersion"):
+        payload["baseVersion"] = boot["portfolioVersion"]
     r = client.put("/api/account/portfolios", json=payload)
     assert r.status_code == 200, r.text
 
@@ -57,9 +67,60 @@ def test_compartir_crea_y_expone_vista_publica(client):
     body = pub.json()
     assert body["name"] == "Mi cartera"
     assert body["positions"][0]["ticker"] == "AAPL"
-    assert body["positions"][0]["quantity"] == 10
     # No se filtran datos de cuenta
     assert "email" not in body
+
+
+def test_vista_publica_no_publica_importes_por_omision(client):
+    """P1.13: el modal promete que no se muestran datos de cuenta; la respuesta
+    traía `quantity` y `avgPrice`, con los que la vista pública pintaba el
+    patrimonio. Por omisión sólo salen proporciones."""
+    _seed_portfolio(client)
+    token = client.post("/api/account/portfolios/p1/share").json()["token"]
+    body = client.get(f"/api/public/portfolio/{token}").json()
+
+    assert body["includesAmounts"] is False
+    for pos in body["positions"]:
+        assert "quantity" not in pos
+        assert "avgPrice" not in pos
+        assert pos["relQty"] > 0
+        assert pos["costWeight"] > 0
+
+    # Los pesos por costo siguen sumando 100 % y respetan la proporción real:
+    # AAPL 10 x 150 = 1500 contra MSFT 5 x 300 = 1500.
+    weights = {p["ticker"]: p["costWeight"] for p in body["positions"]}
+    assert round(sum(weights.values())) == 100
+    assert round(weights["AAPL"], 4) == round(weights["MSFT"], 4)
+
+    # `relQty` no permite despejar la cantidad: es la cantidad entre la base de
+    # costo (3000), no la cantidad.
+    rel = {p["ticker"]: p["relQty"] for p in body["positions"]}
+    assert abs(rel["AAPL"] - 10 / 3000) < 1e-9
+    assert abs(rel["MSFT"] - 5 / 3000) < 1e-9
+
+
+def test_vista_publica_con_montos_si_el_dueno_lo_activa(client):
+    _seed_portfolio(client, include_amounts=True)
+    token = client.post("/api/account/portfolios/p1/share").json()["token"]
+    body = client.get(f"/api/public/portfolio/{token}").json()
+
+    assert body["includesAmounts"] is True
+    aapl = next(p for p in body["positions"] if p["ticker"] == "AAPL")
+    assert aapl["quantity"] == 10
+    assert aapl["avgPrice"] == 150
+
+
+def test_apagar_los_montos_afecta_al_enlace_ya_repartido(client):
+    """La preferencia vive dentro del portafolio, no en el token: apagarla no
+    exige revocar y volver a generar el enlace."""
+    _seed_portfolio(client, include_amounts=True)
+    token = client.post("/api/account/portfolios/p1/share").json()["token"]
+    assert client.get(f"/api/public/portfolio/{token}").json()["includesAmounts"] is True
+
+    _seed_portfolio(client, include_amounts=False)
+    body = client.get(f"/api/public/portfolio/{token}").json()
+    assert body["includesAmounts"] is False
+    assert "quantity" not in body["positions"][0]
 
 
 def test_compartir_portafolio_inexistente_404(client):

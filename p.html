@@ -32,6 +32,7 @@
     .pub-kpi span { display:block; font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.3rem; }
     .pub-kpi strong { font-size:1.15rem; font-weight:700; }
     .pub-section-title { font-size:0.78rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin:0 0 0.9rem; }
+    .pub-note { margin:1.2rem 0 0; font-size:0.78rem; line-height:1.55; color:var(--muted); }
     .alloc-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.85rem; }
     .alloc-ticker { width:90px; font-weight:600; font-size:0.9rem; flex-shrink:0; }
     .alloc-bar-track { flex:1; height:10px; border-radius:6px; background:rgba(var(--primary-rgb),0.08); overflow:hidden; }
@@ -112,14 +113,40 @@
           if (pr.ok) prices = await pr.json();
         } catch {}
 
+        // P1.13: por omisión el enlace ya no publica importes. Sin ellos, la API
+        // manda `relQty` (cantidad normalizada por la base de costo, de la que
+        // no se puede despejar ni cantidad ni precio) para valuar con precios en
+        // vivo, y `costWeight` como respaldo cuando algún precio no llega.
+        const hasAmounts = data.includesAmounts === true;
+        const priceFor = (t) => {
+          const live = prices[t] && prices[t].price;
+          return (live && isFinite(live)) ? live : null;
+        };
+        const allPriced = positions.every(p => priceFor(p.ticker) !== null);
+
         let total = 0;
-        const rows = positions.map(p => {
-          const live = prices[p.ticker] && prices[p.ticker].price;
-          const px = (live && isFinite(live)) ? live : p.avgPrice;
-          const value = (p.quantity || 0) * (px || 0);
-          total += value;
-          return { ticker: p.ticker, value };
-        }).sort((a, b) => b.value - a.value);
+        let rows;
+        if (hasAmounts) {
+          rows = positions.map(p => {
+            const px = priceFor(p.ticker) ?? p.avgPrice;
+            const value = (p.quantity || 0) * (px || 0);
+            total += value;
+            return { ticker: p.ticker, value };
+          });
+        } else if (allPriced) {
+          rows = positions.map(p => {
+            const value = (p.relQty || 0) * priceFor(p.ticker);
+            total += value;
+            return { ticker: p.ticker, value };
+          });
+        } else {
+          rows = positions.map(p => {
+            const value = p.costWeight || 0;
+            total += value;
+            return { ticker: p.ticker, value };
+          });
+        }
+        rows.sort((a, b) => b.value - a.value);
 
         const allocHtml = rows.map(r => {
           const pct = total > 0 ? (r.value / total * 100) : 0;
@@ -130,17 +157,25 @@
           </div>`;
         }).join("");
 
+        const valueKpi = hasAmounts
+          ? `<div class="pub-kpi"><span>Valor estimado</span><strong>${esc(fmt(total, cur))}</strong></div>`
+          : `<div class="pub-kpi"><span>Base</span><strong>${allPriced ? "Precio de mercado" : "Costo de compra"}</strong></div>`;
+        const privacyNote = hasAmounts
+          ? ""
+          : `<p class="pub-note">Este enlace muestra proporciones, no importes: no revela cuánto dinero hay invertido.</p>`;
+
         content.innerHTML = `
           <div class="pub-card">
             <h1 class="pub-title">${esc(data.name || "Portafolio")}</h1>
             <p class="pub-owner">Compartido por ${esc(data.ownerName || "un inversor")}</p>
             <div class="pub-kpis">
-              <div class="pub-kpi"><span>Valor estimado</span><strong>${esc(fmt(total, cur))}</strong></div>
+              ${valueKpi}
               <div class="pub-kpi"><span>Posiciones</span><strong>${positions.length}</strong></div>
               <div class="pub-kpi"><span>Moneda</span><strong>${esc(cur)}</strong></div>
             </div>
             <p class="pub-section-title">Composición</p>
             ${allocHtml}
+            ${privacyNote}
           </div>`;
       })();
     })();

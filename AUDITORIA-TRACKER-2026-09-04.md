@@ -22,9 +22,9 @@ cartera en menos de una sesión.
 
 ## Estado — 4 de septiembre de 2026, tarde
 
-**Los cinco P0 están aplicados y verificados** (sin desplegar). El detalle de cada
-corrección va al final, en «Qué se aplicó». Los P1–P3 siguen abiertos tal como
-están descritos aquí.
+**Los cinco P0 y los nueve P1 (6–14) están aplicados, verificados y desplegados.**
+El detalle de cada corrección va al final, en «Qué se aplicó». Los P2–P3 siguen
+abiertos tal como están descritos aquí.
 
 ---
 
@@ -657,3 +657,138 @@ sustituidos por dobles en memoria, manejando el Tracker real:
 `this.parentElement.textContent = …`; para entonces `parentElement` ya es `null`,
 así que lanza y **las iniciales de respaldo nunca se pintan** cuando el logo no
 carga. Es anterior a este trabajo y queda fuera del alcance P0.
+
+
+---
+
+# Qué se aplicó de los P1 (4 de septiembre de 2026)
+
+Los nueve: hallazgos 6 a 14. Ninguno altera datos ya guardados sin que el usuario
+lo pida, y ninguno rechaza un portafolio existente.
+
+**6. Dividendos.** Función nueva `qtyHeldOnDate(portafolio, ticker, fecha)` que
+reconstruye del historial la cantidad tenida en una fecha —transacciones más la
+porción baseline de lo importado por CSV, que se cuenta desde su `purchaseDate`—.
+La usan la sincronización automática y el registro manual, cuyo modal ahora dice
+«AAPL · 10 acciones al 2025-03-01» y recalcula el total estimado al cambiar la
+fecha de pago. Además la sincronización dejó de correr en **cada pintado** del
+dashboard: corre una vez por portafolio y sesión (se rearma al agregar posiciones)
+y sólo si el interruptor nuevo de Ajustes del portafolio, «Sincronizar dividendos
+automáticamente», está activo — quien reinvierte (DRIP) o cobra en otra cuenta
+puede apagarlo. Medido en el arnés con dos lotes de AAPL (10 en enero de 2025, 50
+más en junio de 2026): los siete pagos se acreditan como 10, 10, 10, 10, 10, 10 y
+60 acciones, **$58.30**. La fórmula anterior pagaba los siete sobre 60 —$109.80—
+y, con la reescritura de fecha del hallazgo 7, hacía desaparecer los seis
+primeros.
+
+**7. "Comprar más".** Deja de reescribir el pasado. La fecha de compra se queda
+con la **más antigua** de las dos (comprar 10 AAPL el 2026-09-01 sobre un lote de
+enero de 2025 mantiene `2025-01-15`, así que el "vs Bench." y el "Retorno YTD" no
+se reinician), un campo de fecha vacío ya no borra la que había, y el IVA se
+pondera **por importe** en vez de sobreescribirse: comprar más sin marcar IVA
+sobre una posición que sí lo pagó conserva los $0.60 exactos —tasa mezclada de
+6.8571 % sobre la comisión total— en lugar de borrarlos. El emparejamiento por
+ticker ahora compara la divisa antes de promediar: un lote en EUR contra una
+posición en USD se rechaza con el motivo, en vez de promediarse 1:1.
+
+**8. Una sola base de costo.** El IVA de la comisión entra a la transacción:
+`net = bruto ± comisión ± IVA`, con `applyIva`/`ivaRate`/`ivaCost` guardados sólo
+cuando hay IVA (una transacción sin él queda byte a byte como las ya guardadas).
+`buildTxFromForm` conserva la **tasa** y recalcula el importe sobre la comisión
+editada, en vez de copiar un IVA que ya no corresponde. Con eso el P/L realizado
+—que se reconstruye del historial— y el efectivo abonado coinciden: una venta de
+5 MSFT a 500 con 0.25 % de comisión e IVA del 16 % abona 2 492.75 a la caja y
+graba `net` 2 492.75; antes grababa 2 493.75 y la ganancia realizada quedaba
+sobreestimada exactamente en el peso de IVA de la comisión de venta. De paso, el
+`portfolio.realizedPnL` que se acumulaba a mano en la venta pasa a derivarse de
+`reconstructRealizedPnL`, que es lo único que leen los renders.
+
+**9. Dividendos en el Retorno.** `sumDividendIncome()` suma los dividendos en la
+divisa del portafolio —prefiriendo `cashApplied`, el importe exacto que entró a
+la caja, sobre reconvertir hoy un pago de hace meses— y entra al Retorno total en
+las tarjetas de la lista, en el dashboard y en el widget del hub. Se añadió el
+KPI «Dividendos cobrados» y, bajo el registro, una **fila de conciliación**:
+«Costo de posiciones con precio $19,004.35 + P/L no realizada $10,655.42 +
+efectivo $5,058.30 = $34,718.07 de valor actual», con la cola «excluye N
+posiciones sin precio o sin tipo de cambio» cuando la hay.
+
+**10. Tasa libre de riesgo por divisa.** `/api/risk-free-rate` acepta
+`?currency=`: MXN sigue siendo la TIIE 28 de Banxico —sin parámetro responde
+exactamente lo de antes, así que un cliente viejo no cambia—, USD sale del
+rendimiento del T-Bill a 13 semanas (`^IRX`, que Yahoo cotiza ya en porcentaje) y
+EUR/GBP/CAD/JPY/CHF/AUD/BRL usan una referencia **declarada como tal** en la
+etiqueta y sobreescribible por entorno (`RFR_EUR`, `RFR_GBP`, …) para corregirla
+sin desplegar. El cliente pide la de la divisa del portafolio y la etiqueta lo
+dice: «Tasa libre de riesgo: 3.76 % (USD · T-Bill 13 semanas (^IRX))». El reporte
+histórico también la pide, en vez de usar el 9 % de respaldo cuando nunca se
+abrió la pestaña de Desempeño. En el arnés, el mismo portafolio pasó de Sharpe
+≈ 0.72 contra la TIIE a **1.00** contra la tasa correcta.
+
+**11. Cambio de divisa.** El efectivo se **convierte** al tipo de cambio del
+momento en vez de redenominarse, y con él los `cashApplied` de cada transacción
+—que están en la divisa del portafolio y sin convertir habrían hecho que la
+reversa devolviera pesos a una caja en dólares—. El modal avisa antes de guardar
+(«Tu efectivo de $5,000.00 se convertirá a $84,495.00») y, si no hay tipo de
+cambio y hay saldo, el cambio de moneda se rechaza con el motivo en vez de
+convertir 5 000 dólares en 5 000 pesos.
+
+**12. Unión de fechas.** La ventana de Desempeño pasa de la **intersección** a la
+**unión**, con relleno hacia adelante por activo desde su primer cierre real: un
+día sin dato propio conserva el último precio conocido —aporta 0 %, no un salto
+inventado— y antes de existir queda fuera de la ponderación de ese día. Con
+AAPL + MSFT + BTC-USD a un año, la ventana pasó de ~250 sesiones (sólo días
+hábiles, porque la cripto cotiza en fin de semana) a **365**. Se añadió el aviso
+«historia parcial: BTC-USD desde 2019-09-01» cuando a un activo le falta una
+parte material de la ventana (≥ 5 % de las sesiones, o 5; menos que eso es el
+ruido del arranque del rango, no una historia corta).
+
+**13. Enlace público.** Por omisión ya **no se publica ningún importe**: la API
+manda `relQty` —cantidad normalizada por la base de costo, de la que no se puede
+despejar ni cantidad ni precio— para que la vista pública valore con precios en
+vivo y saque pesos de mercado exactos, y `costWeight` como respaldo cuando algún
+precio no llega. El KPI «Valor estimado» se sustituye por «Base: precio de
+mercado / costo de compra» y la página lo dice: «Este enlace muestra
+proporciones, no importes». El dueño puede activar «Incluir montos» desde el
+modal de compartir; la preferencia vive **dentro del portafolio**
+(`shareIncludeAmounts`), así que apagarla afecta al enlace ya repartido sin tener
+que revocarlo. La copia del modal se corrigió para describir lo que hace.
+
+**14. Tope de posiciones del plan.** `PLAN_LIMITS` del cliente gana
+`maxPositions` (Explorer 10, Investor 50, ilimitado arriba, espejo del servidor)
+y se valida **antes de mutar**, tanto al agregar una posición como al importar un
+CSV («Tu CSV tiene 200 posiciones y tu plan permite 10»). Comprar más de un
+ticker que ya tienes sigue permitido en el tope, igual que el
+*grandfathering* del servidor.
+
+## Cómo se verificó
+
+Mismo arnés local que los P0 —`main.html` con la autenticación y el backend de
+portafolios sustituidos por dobles en memoria—, manejando el Tracker real con
+precios y dividendos vivos de Yahoo a través de la API local:
+
+- Dividendos de AAPL: 10/10/10/10/10/10/60 acciones según la fecha ex; total
+  $58.30 contra los $109.80 de la fórmula anterior.
+- Comprar 10 AAPL el 2026-09-01: cantidad 70, promedio 200, fecha **2025-01-15**
+  intacta. El mismo lote capturado en EUR se rechaza y no toca la posición.
+- Comprar 5 MSFT sin marcar IVA sobre una posición con IVA: el IVA total sigue en
+  **$0.60** (tasa mezclada 6.8571 %).
+- Venta de MSFT con IVA: `net` = `cashApplied` = abono a la caja = 2 492.75; P/L
+  realizado 738.075 en vez de 739.075.
+- Desempeño: 365 sesiones (unión) y «3.76 % (USD · T-Bill 13 semanas (^IRX))»;
+  en «Máx», el aviso de historia parcial de BTC-USD desde 2019-09-01.
+- Cambio USD→MXN: 5 000 → 84 495 al 16.899, y los cuatro `cashApplied` escalados
+  por el mismo factor.
+- Vista pública en sus tres modos: pesos de mercado (AAPL 88.5 %) sin cifra de
+  dinero, respaldo por costo cuando los precios no llegan, y «Valor estimado»
+  sólo con el interruptor encendido.
+- Tope de plan simulado a 3 posiciones: la cuarta no se crea y sale el aviso de
+  mejora de plan; comprar más de una existente sí procede.
+- Claro y oscuro, y 375 px sin desbordar la página.
+- Backend: 97 pruebas en verde (94 previas + 3 nuevas de la vista pública).
+
+## Encontrado al verificar, corregido
+
+La columna «Último pago» de la pestaña Dividendos decía **«Invalid Date»**:
+`tx.date` es un ISO completo y el render le concatenaba `"T12:00:00"`. Es
+anterior a este trabajo, pero sólo se ve cuando hay dividendos registrados —que
+es justo lo que arregla el hallazgo 6—, así que se corrigió aquí.
