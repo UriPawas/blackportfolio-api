@@ -6,6 +6,8 @@ from typing import Optional
 from collections import OrderedDict
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from starlette.responses import PlainTextResponse
 from persistence import (
     install_persistence, verify_firebase_user, require_2fa, get_session,
     AppUser, PortfolioSnapshot, SecurityActivity, BillingEvent, Feedback,
@@ -451,6 +453,25 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# FastAPI parsea el body ANTES de correr las dependencias del endpoint, así que un
+# body enorme se buferiza igual aunque el endpoint termine devolviendo 401/422
+# (auditoría 2026-09-03, verificado con 20 MB sin autenticar). Ningún endpoint
+# recibe archivos; el payload legítimo más grande es un portafolio en JSON, muy
+# por debajo de este tope.
+_MAX_BODY_BYTES = 2 * 1024 * 1024
+
+@app.middleware("http")
+async def _limit_body_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            too_large = int(content_length) > _MAX_BODY_BYTES
+        except ValueError:
+            too_large = True
+        if too_large:
+            return PlainTextResponse("Payload too large", status_code=413)
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -460,6 +481,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
+app.add_middleware(SlowAPIMiddleware)
 
 install_persistence(app)
 

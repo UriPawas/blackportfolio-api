@@ -27,13 +27,13 @@ FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "portify-6467f")
 # Limiter compartido entre api.py y los routers de este módulo, para que los
 # endpoints sensibles de 2FA cuenten con el mismo control de tasa que el resto.
 def _client_ip(request: Request) -> str:
-    """IP real del cliente detrás del proxy de Railway. Con --forwarded-allow-ips "*"
-    uvicorn toma la PRIMERA entrada de X-Forwarded-For, que el cliente puede
-    falsificar para evadir el rate limit rotando IPs inventadas. El edge de
-    Railway añade la IP real como ÚLTIMA entrada, así que esa es la confiable."""
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        return xff.rsplit(",", 1)[-1].strip()
+    """IP real del cliente. uvicorn corre con --proxy-headers --forwarded-allow-ips "*",
+    así que ya resuelve request.client.host tomando la PRIMERA entrada de
+    X-Forwarded-For, que en el edge de Railway es la IP real del cliente. La versión
+    anterior de esta función reparseaba el header a mano y tomaba la ÚLTIMA entrada
+    -un salto interno de Railway que cambia en cada petición-, lo que apagaba el
+    rate limit por completo (auditoría 2026-09-03: 45/45 y 70/70 peticiones sin un
+    solo 429). No hace falta tocar el header: dejar que uvicorn lo resuelva."""
     return get_remote_address(request)
 
 
@@ -1197,13 +1197,16 @@ def twofa_regenerate_backup_codes(
 
 
 @twofa_router.post("/migrate")
+@limiter.limit("5/minute")
 def twofa_migrate(
+    request: Request,
     body: TotpMigrateBody,
     token: dict[str, Any] = Depends(verify_firebase_user),
     session: Session = Depends(get_session),
 ):
     """Importa el secreto TOTP heredado del doc Firestore al servidor, una sola vez.
     El cliente envía el secreto que ya tenía (y luego lo borra de Firestore)."""
+    ensure_writable_account(token)
     uid = token["uid"]
     cred = session.get(TotpCredential, uid)
     if cred and cred.enabled:

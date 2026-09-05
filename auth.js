@@ -195,7 +195,20 @@
     return buildSession(firebaseAuth.currentUser);
   }
 
+  // bp-2fa-token y totp_trusted_<uid> sobrevivían al logout: clearSession()/_doLogout()
+  // no los borraban, y login.js saltaba la pantalla de código si ambos seguían
+  // presentes (auditoría 2026-09-03). El token HMAC dura 3.5 días sin revocación.
+  function _clearTwoFactorSession(uid) {
+    try {
+      localStorage.removeItem(TWOFA_TOKEN_KEY);
+      sessionStorage.removeItem(TWOFA_TOKEN_KEY);
+      if (uid) localStorage.removeItem("totp_trusted_" + uid);
+      sessionStorage.removeItem("totp_verified");
+    } catch {}
+  }
+
   function clearSession() {
+    _clearTwoFactorSession(firebaseAuth.currentUser && firebaseAuth.currentUser.uid);
     return firebaseAuth.signOut();
   }
 
@@ -572,6 +585,7 @@
     _clearTimers();
     localStorage.removeItem(LAST_ACTIVITY_KEY);
     ACTIVITY_EVENTS.forEach(e => window.removeEventListener(e, _onActivity));
+    _clearTwoFactorSession(firebaseAuth.currentUser && firebaseAuth.currentUser.uid);
     firebaseAuth.signOut().then(() => { window.location.href = "login.html"; });
   }
 
