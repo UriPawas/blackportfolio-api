@@ -1,23 +1,95 @@
 {
-  "updatedAt": "2026-04-24T00:00:00Z",
+  "updatedAt": "2026-09-07T13:53:16.165285+00:00",
   "tickers": [
-    { "symbol": "^GSPC",    "price": 7108.4,    "previousClose": 7041.28 },
-    { "symbol": "^DJI",     "price": 49310.32,  "previousClose": 48578.72 },
-    { "symbol": "^IXIC",    "price": 24438.504, "previousClose": 24102.7 },
-    { "symbol": "AAPL",     "price": 273.43,    "previousClose": 263.4 },
-    { "symbol": "NVDA",     "price": 199.64,    "previousClose": 198.35 },
-    { "symbol": "MSFT",     "price": 415.75,    "previousClose": 420.26 },
-    { "symbol": "TSLA",     "price": 373.72,    "previousClose": 388.9 },
-    { "symbol": "BTC-USD",  "price": 77927.79,  "previousClose": 75872.52 },
-    { "symbol": "ETH-USD",  "price": 2313.58,   "previousClose": 2315.212 },
-    { "symbol": "EURUSD=X", "price": 1.1685,    "previousClose": 1.1741 },
-    { "symbol": "GBPUSD=X", "price": 1.3466,    "previousClose": 1.3484 },
-    { "symbol": "USDJPY=X", "price": 159.727,   "previousClose": 159.161 },
-    { "symbol": "GC=F",     "price": 4699.8,    "previousClose": 4806.6 },
-    { "symbol": "CL=F",     "price": 95.96,     "previousClose": 89.61 },
-    { "symbol": "^FTSE",    "price": 10457.01,  "previousClose": 10590 },
-    { "symbol": "^N225",    "price": 59691.44,  "previousClose": 58824.89 },
-    { "symbol": "^HSI",     "price": 25944.24,  "previousClose": 26160.33 },
-    { "symbol": "EWZ",      "price": 40.09,     "previousClose": 41.47 }
+    {
+      "symbol": "^GSPC",
+      "price": 7718.6,
+      "previousClose": 7711.76
+    },
+    {
+      "symbol": "^DJI",
+      "price": 53414.25,
+      "previousClose": 53559.99
+    },
+    {
+      "symbol": "^IXIC",
+      "price": 26506.99,
+      "previousClose": 26402.42
+    },
+    {
+      "symbol": "AAPL",
+      "price": 319.97,
+      "previousClose": 319.7
+    },
+    {
+      "symbol": "NVDA",
+      "price": 230.36,
+      "previousClose": 217.55
+    },
+    {
+      "symbol": "MSFT",
+      "price": 499.7,
+      "previousClose": 513.53
+    },
+    {
+      "symbol": "TSLA",
+      "price": 354.08,
+      "previousClose": 348.75
+    },
+    {
+      "symbol": "BTC-USD",
+      "price": 79351.5,
+      "previousClose": 81271.74
+    },
+    {
+      "symbol": "ETH-USD",
+      "price": 2498.29,
+      "previousClose": 2508.0208
+    },
+    {
+      "symbol": "EURUSD=X",
+      "price": 1.1633,
+      "previousClose": 1.1618
+    },
+    {
+      "symbol": "GBPUSD=X",
+      "price": 1.354,
+      "previousClose": 1.355
+    },
+    {
+      "symbol": "USDJPY=X",
+      "price": 154.456,
+      "previousClose": 159.747
+    },
+    {
+      "symbol": "GC=F",
+      "price": 4476.6,
+      "previousClose": 4348.0
+    },
+    {
+      "symbol": "CL=F",
+      "price": 91.48,
+      "previousClose": 90.22
+    },
+    {
+      "symbol": "^FTSE",
+      "price": 10856.71,
+      "previousClose": 10824.3
+    },
+    {
+      "symbol": "^N225",
+      "price": 66399.84,
+      "previousClose": 66215.34
+    },
+    {
+      "symbol": "^HSI",
+      "price": 25413.12,
+      "previousClose": 25566.99
+    },
+    {
+      "symbol": "EWZ",
+      "price": 37.86,
+      "previousClose": 35.55
+    }
   ]
 }
