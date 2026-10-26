@@ -1,95 +1,95 @@
 {
-  "updatedAt": "2026-10-19T15:12:06.491896+00:00",
+  "updatedAt": "2026-10-26T14:45:59.714286+00:00",
   "tickers": [
     {
       "symbol": "^GSPC",
-      "price": 7711.85,
-      "previousClose": 7807.24
+      "price": 7682.3,
+      "previousClose": 7690.73
     },
     {
       "symbol": "^DJI",
-      "price": 52028.46,
-      "previousClose": 51850.55
+      "price": 52501.48,
+      "previousClose": 51966.03
     },
     {
       "symbol": "^IXIC",
-      "price": 26528.508,
-      "previousClose": 27245.9
+      "price": 26191.588,
+      "previousClose": 26430.89
     },
     {
       "symbol": "AAPL",
-      "price": 343.26,
-      "previousClose": 340.97
+      "price": 345.73,
+      "previousClose": 342.94
     },
     {
       "symbol": "NVDA",
-      "price": 217.91,
-      "previousClose": 226.32
+      "price": 216.055,
+      "previousClose": 217.09
     },
     {
       "symbol": "MSFT",
-      "price": 534.395,
-      "previousClose": 541.15
+      "price": 529.23,
+      "previousClose": 533.52
     },
     {
       "symbol": "TSLA",
-      "price": 366.85,
-      "previousClose": 378.03
+      "price": 394.9,
+      "previousClose": 368.06
     },
     {
       "symbol": "BTC-USD",
-      "price": 82090.08,
-      "previousClose": 82141.46
+      "price": 79858.33,
+      "previousClose": 81311.89
     },
     {
       "symbol": "ETH-USD",
-      "price": 2404.86,
-      "previousClose": 2440.48
+      "price": 2314.84,
+      "previousClose": 2386.1892
     },
     {
       "symbol": "EURUSD=X",
-      "price": 1.1218,
-      "previousClose": 1.116
+      "price": 1.1188,
+      "previousClose": 1.1216
     },
     {
       "symbol": "GBPUSD=X",
-      "price": 1.3316,
-      "previousClose": 1.321
+      "price": 1.3345,
+      "previousClose": 1.3308
     },
     {
       "symbol": "USDJPY=X",
-      "price": 158.406,
-      "previousClose": 158.52
+      "price": 157.468,
+      "previousClose": 158.523
     },
     {
       "symbol": "GC=F",
-      "price": 4166.0,
-      "previousClose": 4107.9
+      "price": 4028.4,
+      "previousClose": 4150.0
     },
     {
       "symbol": "CL=F",
-      "price": 97.59,
-      "previousClose": 95.09
+      "price": 100.39,
+      "previousClose": 97.15
     },
     {
       "symbol": "^FTSE",
-      "price": 10735.84,
-      "previousClose": 10656.3
+      "price": 10763.6,
+      "previousClose": 10764.7
     },
     {
       "symbol": "^N225",
-      "price": 64916.7,
-      "previousClose": 67777.52
+      "price": 62189.65,
+      "previousClose": 64075.42
     },
     {
       "symbol": "^HSI",
-      "price": 24186.83,
-      "previousClose": 24211.35
+      "price": 23211.81,
+      "previousClose": 24186.83
     },
     {
       "symbol": "EWZ",
-      "price": 41.869,
-      "previousClose": 43.54
+      "price": 32.985,
+      "previousClose": 41.93
     }
   ]
 }
