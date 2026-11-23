@@ -1,0 +1,120 @@
+/* Campo · Informes. Prefijo inf-, escopado bajo .inf (#secInformes). Solo tokens de _dev_proto-campo.css. */
+#secInformes { min-width: 0; container: inf / inline-size; }
+.inf { display: grid; gap: 24px; align-content: start; min-width: 0; }
+.inf h1:focus, .inf h2:focus { outline: none; }
+.inf-head h1 { font-size: 24px; letter-spacing: -0.03em; }
+.inf-head p { margin: 4px 0 0; color: var(--text-2); max-width: 60ch; text-wrap: pretty; }
+.inf-num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+.inf .gain { color: var(--gain); } .inf .loss { color: var(--loss); }
+.inf-ic { width: 18px; height: 18px; flex: none; display: block; }
+.inf h2 { font-size: 17px; letter-spacing: -0.01em; margin: 0 0 12px; }
+.inf button:focus-visible, .inf input:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.inf-sw { width: 10px; height: 28px; border-radius: 5px; background: var(--pc); flex: none; }
+
+/* ---------- flujo nuevo informe ---------- */
+.inf-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.inf-new, .inf-prev, .inf-hist { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-1), var(--inset); padding: 20px; min-width: 0; }
+.inf-fs { border: 0; margin: 0 0 20px; padding: 0; min-width: 0; }
+.inf-fs:last-child { margin-bottom: 0; }
+.inf-fs > legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--text-3); }
+.inf-pfs { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.inf-pfc, .inf-fmt { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--s1); color: var(--text); min-width: 0; transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), transform 120ms var(--ease-out); }
+.inf-pfc:focus-visible, .inf-fmt:focus-visible, .inf-chip:focus-visible, .inf-open:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.inf-pfc:active, .inf-fmt:active, .inf-chip:active { transform: scale(0.98); }
+.inf-pfc[aria-pressed="true"], .inf-fmt[aria-pressed="true"], .inf-chip[aria-pressed="true"] { border-color: var(--accent-ink); background: color-mix(in oklch, var(--accent) 12%, var(--s1)); }
+.inf-pfn { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inf-pfv { font-size: 13.5px; color: var(--text-2); }
+.inf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.inf-chip { all: unset; box-sizing: border-box; cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; font-size: 14.5px; color: var(--text-2); transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), color 180ms var(--ease-out), transform 120ms var(--ease-out); }
+.inf-chip[aria-pressed="true"] { color: var(--text); }
+.inf-cust { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.inf-cust[hidden], .inf-err[hidden], .inf-toast[hidden] { display: none; }
+.inf-cust label { display: grid; gap: 4px; font-size: 13px; color: var(--text-3); min-width: 0; }
+.inf-cust input { min-height: 44px; width: 100%; min-width: 0; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--s2); color: var(--text); font: inherit; font-size: 15px; color-scheme: inherit; }
+.inf-err { margin: 10px 0 0; font-size: 13.5px; color: var(--loss); }
+.inf-fmts { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.inf-fmt > span { display: grid; gap: 2px; min-width: 0; }
+.inf-fmt small { font-size: 13px; color: var(--text-3); }
+.inf-fmt .inf-ic { color: var(--accent-ink); width: 22px; height: 22px; }
+
+/* ---------- vista previa ---------- */
+.inf-side { display: grid; gap: 12px; }
+.inf-prev h2 { margin-bottom: 4px; }
+.inf-prevs { margin: 0 0 16px; font-size: 13.5px; color: var(--text-3); min-height: 1.4em; overflow-wrap: anywhere; }
+.inf-figs { margin: 0; display: grid; gap: 12px; }
+.inf-figs > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.inf-figs > div:first-child { border-top: 0; padding-top: 0; }
+.inf-figs dt { font-size: 13.5px; color: var(--text-3); }
+.inf-figs dd { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; text-align: right; }
+.inf-go { width: 100%; min-height: 48px; }
+.inf-go:disabled { opacity: 0.5; cursor: not-allowed; }
+.inf-lim { margin: 0; font-size: 13.5px; color: var(--text-2); }
+.inf-lim:empty { display: none; }
+
+/* ---------- historial ---------- */
+.inf-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.inf-card { position: relative; display: flex; align-items: center; gap: 14px; padding: 12px 8px 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--s1); animation: inf-rise 320ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); transition: background-color 180ms var(--ease-out); }
+.inf-card .inf-sw { height: 52px; }
+.inf-cm { flex: 1; min-width: 0; }
+.inf-ct { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.inf-open { all: unset; cursor: pointer; display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inf-open::after { content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 1; }
+.inf-cs { margin: 2px 0 0; font-size: 13.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inf-tag { display: inline-block; padding: 1px 8px; margin-right: 4px; border-radius: 999px; background: var(--s3); color: var(--text-2); font-size: 12.5px; }
+.inf-acts { display: flex; position: relative; z-index: 2; }
+.inf-ib { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: var(--r-sm); background: none; color: var(--text-2); cursor: pointer; transition: background-color 150ms var(--ease-out), transform 120ms var(--ease-out); }
+.inf-ib:active { transform: scale(0.97); }
+.inf-rn { position: relative; z-index: 3; width: 100%; min-height: 40px; padding: 0 10px; border: 1px solid var(--accent-ink); border-radius: var(--r-sm); background: var(--s2); color: var(--text); font: inherit; font-size: 16px; font-weight: 600; }
+.inf-empty { padding: 28px 12px; text-align: center; border: 1.5px dashed var(--line); border-radius: var(--r-md); }
+.inf-empty p { margin: 6px auto 0; max-width: 46ch; color: var(--text-3); font-size: 14.5px; }
+.inf-plan { margin: 0; font-size: 13.5px; color: var(--text-3); }
+.inf-foot { margin: 0; font-size: 12.5px; color: var(--text-3); text-wrap: pretty; }
+.inf-note { color: var(--text-2); }
+.inf-toast { position: fixed; z-index: 1200; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px); padding: 6px 6px 6px 16px; background: var(--s3); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-2); animation: inf-rise 240ms var(--ease-out) both; }
+.inf-undo { min-height: 44px; padding: 0 14px; border: 0; border-radius: var(--r-sm); background: none; color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer; }
+@keyframes inf-rise { from { opacity: 0; transform: translateY(6px); } }
+.inf-toast { animation-name: inf-toast; }
+@keyframes inf-toast { from { opacity: 0; transform: translate(-50%, 6px); } }
+
+@media (hover: hover) and (pointer: fine) {
+  .inf-pfc:hover, .inf-fmt:hover, .inf-chip:hover { background: var(--s2); border-color: var(--text-3); }
+  .inf-pfc[aria-pressed="true"]:hover, .inf-fmt[aria-pressed="true"]:hover, .inf-chip[aria-pressed="true"]:hover { border-color: var(--accent-ink); }
+  .inf-card:hover { background: var(--s2); }
+  .inf-ib:hover, .inf-undo:hover { background: var(--s3); color: var(--text); }
+}
+
+/* ---------- visor ---------- */
+.inf-viewer { display: grid; gap: 12px; min-width: 0; will-change: transform; }
+.inf-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-1), var(--inset); }
+.inf-bk { min-height: 44px; gap: 6px; padding-inline: 10px 14px; }
+.inf-bt { flex: 1 1 200px; min-width: 0; }
+.inf-bt h1 { margin: 0; font-size: 18px; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inf-bt p { margin: 0; font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inf-sw2 { display: inline-flex; position: relative; }
+.inf-pr { min-height: 44px; gap: 8px; }
+.inf-pr[hidden] { display: none; }
+.inf-stage { position: relative; min-width: 0; border-radius: var(--r-md); overflow: clip; }
+.inf-stage[data-m="pres"] { height: clamp(360px, calc(100dvh - 190px), 900px); background: var(--s1); border: 1px solid var(--line); }
+.inf-ph { height: 100%; min-height: 200px; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--text-3); background: var(--s1); border: 1px dashed var(--line); border-radius: var(--r-md); }
+.inf-miss { display: grid; gap: 12px; justify-items: start; padding: 24px 0; }
+.inf-miss h1 { font-size: 24px; letter-spacing: -0.03em; margin: 0; }
+.inf-miss p { margin: 0; color: var(--text-2); }
+
+@container inf (min-width: 900px) {
+  .inf-grid { grid-template-columns: minmax(0, 1fr) 340px; }
+  .inf-side { position: sticky; top: 16px; }
+}
+@container inf (max-width: 520px) {
+  .inf-new, .inf-prev, .inf-hist { padding: 16px; }
+  .inf-bk span { display: none; }
+  .inf-pr span { display: none; }
+  .inf-pr { padding-inline: 12px; }
+  .inf-acts { flex-direction: column; }
+  .inf-ib { height: 40px; }
+  .inf-card { padding-left: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .inf-card, .inf-toast { animation: none; }
+  .inf * { transition-duration: 0.01ms !important; }
+}
+@media print { .inf-bar, .inf-foot, .inf-toast { display: none; } }
