@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>MAIN | BlackPortfolio</title>
-  <meta name="description" content="Area principal de BlackPortfolio con inicio personalizable, navegacion interna y modulo Portafolio Tracker.">
+  <title>Inicio | Portify</title>
+  <meta name="description" content="Area principal de Portify con inicio personalizable, navegacion interna y modulo Portafolio Tracker.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400..700&family=Schibsted+Grotesk:wght@500..800&family=JetBrains+Mono:wght@400..600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="campo-base.css?v=1">
   <link rel="stylesheet" href="styles.css?v=11">
   <link rel="stylesheet" href="main.css?v=33">
   <link rel="stylesheet" href="main-v4-shell.css?v=1">
@@ -18,6 +20,20 @@
   <link rel="stylesheet" href="main-v4-markowitz.css?v=3">
   <link rel="stylesheet" href="main-v4-topdown.css?v=5">
   <link rel="stylesheet" href="main-v4-tracker.css?v=26">
+  <link rel="stylesheet" href="campo-app.css?v=1">
+  <link rel="stylesheet" href="campo-gate.css">
+  <script>
+    /* Entrada desde login/registro: marca para que campo-gate.js reproduzca el "tablero" al cargar. */
+    (function () {
+      try {
+        if (document.referrer) {
+          var u = new URL(document.referrer);
+          if (u.origin === location.origin && /\/(login|registro)\.html$/.test(u.pathname)) sessionStorage.setItem('portify-gate', '1');
+        }
+      } catch (e) { /* sin referrer o almacenamiento bloqueado */ }
+    })();
+  </script>
+  <script src="campo-gate.js"></script>
   <script>
     /* Sesión 1 del cascarón V4: refleja el tema real (localStorage
        "blackportfolio-theme", el mismo que usa main.js) en data-theme antes
@@ -64,7 +80,7 @@
   <main class="dashboard-main">
     <aside id="dashboardSidebar" class="dashboard-sidebar-shell">
       <div class="sidebar-brand-row">
-        <a class="brand dashboard-brand" href="main.html"><span class="brand-mark">B</span><span>BlackPortfolio</span></a>
+        <a class="brand dashboard-brand" href="main.html"><span class="brand-mark">P</span><span>Portify</span></a>
         <button id="sidebarCloseBtn" class="sidebar-close-btn" type="button" aria-label="Cerrar menu" aria-controls="dashboardSidebar" aria-expanded="false">
           <span class="bar"></span>
           <span class="bar"></span>
@@ -87,7 +103,7 @@
         <button class="dashboard-nav-item" data-section="tracker" data-i18n="nav_tracker">Portafolio Tracker</button>
         <button class="dashboard-nav-item" data-section="markowitz">Creación de portafolio</button>
         <button class="dashboard-nav-item" data-section="topdown">Análisis Top-Down</button>
-        <button class="dashboard-nav-item" data-section="markets" data-i18n="nav_markets">Mercados</button>
+        <button class="dashboard-nav-item" data-section="markets" data-i18n="nav_markets" hidden>Mercados</button>
         <button class="dashboard-nav-item" data-section="analyzer">Analizador</button>
         <button class="dashboard-nav-item" data-section="settings" data-i18n="nav_settings">Ajustes</button>
       </nav>
@@ -1775,7 +1791,7 @@
               <div class="form-row" id="deckToneRow" hidden>
                 <label for="deckToneSelect">Estilo de la presentación</label>
                 <select id="deckToneSelect">
-                  <option value="brand">BlackPortfolio — la paleta de la app</option>
+                  <option value="brand">Portify — la paleta de la app</option>
                   <option value="institutional">Institucional — navy sobrio, tipo banca privada</option>
                   <option value="editorial">Editorial — color vivo y fotografía protagonista</option>
                   <option value="premium-dark">Premium oscuro — fondo negro y acentos dorados</option>
@@ -3567,7 +3583,7 @@
         <button id="betaWelcomeClose" class="tracker-modal-close" type="button" aria-label="Cerrar">✕</button>
       </div>
       <div class="beta-welcome-body">
-        <p>Gracias por probar <strong>BlackPortfolio</strong>. Tu objetivo es <strong>usar la app como lo harías de verdad</strong> y contarnos qué falla o qué te confunde.</p>
+        <p>Gracias por probar <strong>Portify</strong>. Tu objetivo es <strong>usar la app como lo harías de verdad</strong> y contarnos qué falla o qué te confunde.</p>
 
         <h4>Qué nos ayudaría que probaras</h4>
         <ul class="beta-welcome-list">
