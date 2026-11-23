@@ -1,7 +1,11 @@
 (function attachBlackPortfolioAuth() {
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyC4MLLdR6N_8Kt9kpKylpVhtACmCH7yqXw",
-    authDomain: "portify-6467f.firebaseapp.com",
+    /* authDomain = el dominio del propio sitio cuando se sirve desde Firebase Hosting: así el acceso con Google por
+       REDIRECCIÓN funciona también donde el navegador aísla el almacenamiento de terceros (Safari, Firefox, incógnito).
+       Requiere https://portify-6467f.web.app/__/auth/handler en los URI de redirección autorizados del cliente OAuth. */
+    authDomain: (["portify-6467f.web.app", "portify-6467f.firebaseapp.com"].indexOf(location.hostname) >= 0)
+      ? location.hostname : "portify-6467f.firebaseapp.com",
     projectId: "portify-6467f",
     storageBucket: "portify-6467f.firebasestorage.app",
     messagingSenderId: "875656821131",
@@ -315,10 +319,8 @@
     }
   }
 
-  async function authenticateWithGoogle() {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    try {
-      const result = await firebaseAuth.signInWithPopup(provider);
+  /* Lo que pasa después de que Google devuelve al usuario (ventana emergente o redirección): perfil nuevo o sincronía. */
+  async function _finishGoogleSignIn(result) {
       markFreshLogin();
       const user = result.user;
       const isNew = result.additionalUserInfo?.isNewUser;
@@ -339,12 +341,61 @@
       }
       writeLastSeen(user.uid);
       return { ok: true, user: buildSession(user), isNew };
+  }
+
+  function _googleErrorMessage(err) {
+    const c = err && err.code;
+    if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request" || c === "auth/user-cancelled") return "Inicio de sesión cancelado.";
+    if (c === "auth/network-request-failed") return "Sin conexión. Revisa tu red e intenta de nuevo.";
+    if (c === "auth/account-exists-with-different-credential") return "Ya existe una cuenta con ese correo. Entra con tu correo y contraseña.";
+    if (c === "auth/unauthorized-domain") return "Este dominio no está autorizado para entrar con Google.";
+    return "Error al iniciar sesión con Google.";
+  }
+
+  /* Ventana emergente (respaldo cuando la redirección no es posible). */
+  async function authenticateWithGoogle() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+      const result = await firebaseAuth.signInWithPopup(provider);
+      return await _finishGoogleSignIn(result);
     } catch (err) {
-      const c = err.code;
-      if (c === "auth/popup-closed-by-user" || c === "auth/cancelled-popup-request") {
-        return { ok: false, error: "Inicio de sesion cancelado." };
-      }
-      return { ok: false, error: "Error al iniciar sesion con Google." };
+      return { ok: false, code: err && err.code, error: _googleErrorMessage(err) };
+    }
+  }
+
+  /* Redirección a pantalla completa: la página va a Google y Google regresa a la MISMA página. La marca en
+     sessionStorage dice a esa página que debe recoger el resultado (completeGoogleRedirect) antes que nada. */
+  const GOOGLE_REDIRECT_KEY = "bp-google-redirect";
+  function hasPendingGoogleRedirect() {
+    try { return !!sessionStorage.getItem(GOOGLE_REDIRECT_KEY); } catch { return false; }
+  }
+  async function startGoogleRedirect() {
+    /* sin sessionStorage no hay cómo recoger el resultado al volver: que el llamador use la ventana emergente */
+    sessionStorage.setItem(GOOGLE_REDIRECT_KEY, String(Date.now()));
+    if (sessionStorage.getItem(GOOGLE_REDIRECT_KEY) === null) throw new Error("storage");
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+      await firebaseAuth.signInWithRedirect(provider);
+    } catch (err) {
+      try { sessionStorage.removeItem(GOOGLE_REDIRECT_KEY); } catch {}
+      throw err;
+    }
+  }
+  async function completeGoogleRedirect() {
+    if (!hasPendingGoogleRedirect()) return null;
+    let result = null;
+    try {
+      result = await firebaseAuth.getRedirectResult();
+    } catch (err) {
+      try { sessionStorage.removeItem(GOOGLE_REDIRECT_KEY); } catch {}
+      return { ok: false, code: err && err.code, error: _googleErrorMessage(err) };
+    }
+    try { sessionStorage.removeItem(GOOGLE_REDIRECT_KEY); } catch {}
+    if (!result || !result.user) return { ok: false, cancelled: true, error: "Inicio de sesión con Google cancelado." };
+    try {
+      return await _finishGoogleSignIn(result);
+    } catch (err) {
+      return { ok: false, code: err && err.code, error: _googleErrorMessage(err) };
     }
   }
 
@@ -635,6 +686,9 @@
     createUser,
     authenticate,
     authenticateWithGoogle,
+    startGoogleRedirect,
+    completeGoogleRedirect,
+    hasPendingGoogleRedirect,
     redeemBetaCode,
     completePlanSelection,
     syncFromFirestore,

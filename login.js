@@ -102,6 +102,14 @@ function maybeShowForgotHint() {
   loginMessage.insertAdjacentElement("afterend", hint);
 }
 
+// ── Entrada a la app: con la transición Tablero si está cargada (nunca bloquea la navegación más de ~0.9 s) ──
+function goApp(replace) {
+  if (window.CampoGate && typeof window.CampoGate.go === "function") {
+    try { window.CampoGate.go(document.querySelector(".otp-card:not(.hidden)") || loginForm, "main.html"); return; } catch (e) { /* navegación normal */ }
+  }
+  if (replace) window.location.replace("main.html"); else window.location.href = "main.html";
+}
+
 // ── 2FA recovery: returning from the email sign-in link ─────────────────────
 if (window.BlackPortfolioAuth.isEmailSignInLink()) {
   _loginFlowActive = true;
@@ -111,11 +119,37 @@ if (window.BlackPortfolioAuth.isEmailSignInLink()) {
       const enabled = await window.BlackPortfolioAuth.isTwoFactorEnabled(res.uid);
       if (!enabled) { _loginFlowActive = true; showSetupOverlay(res.uid); return; }
       trustDevice(res.uid);
-      window.location.replace("main.html");
+      goApp(true);
     } else {
       _loginFlowActive = false;
       showLoginMessage(res.error || "No se pudo completar el acceso por enlace.", "error");
     }
+  });
+}
+
+// ── Regreso de Google (acceso por redirección a pantalla completa) ──────────
+// Va ANTES de registrar onAuthStateChanged: _loginFlowActive evita que el guardián de sesión vieja cierre la
+// sesión que Google acaba de abrir.
+if (window.BlackPortfolioAuth.hasPendingGoogleRedirect && window.BlackPortfolioAuth.hasPendingGoogleRedirect()) {
+  _loginFlowActive = true;
+  const gSpan = googleLoginBtn.querySelector("span");
+  const gOriginal = gSpan.textContent;
+  googleLoginBtn.classList.add("is-loading");
+  googleLoginBtn.disabled = true;
+  gSpan.textContent = "Entrando con Google…";
+  showLoginMessage("Completando el acceso con Google…", "info");
+  window.BlackPortfolioAuth.completeGoogleRedirect().then(async result => {
+    googleLoginBtn.classList.remove("is-loading");
+    googleLoginBtn.disabled = false;
+    gSpan.textContent = gOriginal;
+    if (!result) { _loginFlowActive = false; showLoginMessage("", ""); return; }
+    if (!result.ok) {
+      _loginFlowActive = false;
+      showLoginMessage(result.error, result.cancelled ? "info" : "error");
+      return;
+    }
+    showLoginMessage("", "");
+    await continueAfterGoogle(result);
   });
 }
 
@@ -127,14 +161,14 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async user => {
   // login en bucle, así que solo tomamos este atajo cuando el token existe.
   if (isDeviceTrusted(user.uid) && localStorage.getItem("bp-2fa-token")) {
     trustDevice(user.uid); // refresh the window so active users stay trusted
-    window.location.href = "main.html";
+    goApp();
     return;
   }
   // Demo user bypasses 2FA
   const extra = JSON.parse(localStorage.getItem("bp-extra-" + user.uid) || "{}");
   if (extra.isDemo) {
     sessionStorage.setItem("totp_verified", user.uid);
-    window.location.href = "main.html";
+    goApp();
     return;
   }
   // Stale persisted session (e.g. arriving at login fresh, or reopening the tab):
@@ -150,7 +184,7 @@ async function handlePostAuth(session) {
   if (session.isDemo) {
     sessionStorage.setItem("totp_verified", session.id);
     showLoginMessage(`Bienvenido, ${session.fullName}. Redirigiendo...`, "success");
-    setTimeout(() => { window.location.href = "main.html"; }, 800);
+    setTimeout(() => { goApp(); }, 800);
     return;
   }
 
@@ -167,7 +201,7 @@ async function handlePostAuth(session) {
   if (isDeviceTrusted(session.id) && localStorage.getItem("bp-2fa-token")) {
     trustDevice(session.id);
     showLoginMessage(`Bienvenido, ${session.fullName}. Redirigiendo...`, "success");
-    setTimeout(() => { window.location.href = "main.html"; }, 600);
+    setTimeout(() => { goApp(); }, 600);
     return;
   }
 
@@ -184,6 +218,14 @@ googleLoginBtn.addEventListener("click", async () => {
   span.textContent = "Abriendo Google…";
   _loginFlowActive = true;
 
+  // Google a pantalla completa (redirección). Si el navegador no lo permite, ventana emergente como antes.
+  if (window.BlackPortfolioAuth.startGoogleRedirect) {
+    // el código de invitación escrito en el campo sobrevive al viaje a Google
+    const typed = (betaInput?.value || "").trim().toUpperCase();
+    if (typed) { try { localStorage.setItem(PENDING_BETA_KEY, typed); } catch {} }
+    try { await window.BlackPortfolioAuth.startGoogleRedirect(); return; } catch (e) { /* ventana emergente */ }
+  }
+
   const result = await window.BlackPortfolioAuth.authenticateWithGoogle();
 
   googleLoginBtn.classList.remove("is-loading");
@@ -195,7 +237,11 @@ googleLoginBtn.addEventListener("click", async () => {
     showLoginMessage(result.error, "error");
     return;
   }
+  await continueAfterGoogle(result);
+});
 
+// Lo mismo para la ventana emergente y para el regreso de la redirección.
+async function continueAfterGoogle(result) {
   // Canjea código de invitación si hay uno (campo o pendiente). Con canje
   // exitoso el plan ya quedó otorgado: se salta la selección de plan.
   const betaRedeemed = await redeemLoginBetaCode();
@@ -219,7 +265,7 @@ googleLoginBtn.addEventListener("click", async () => {
   }
 
   await handlePostAuth(result.user);
-});
+}
 
 // ── Email/password login ─────────────────────────────────────────────────────
 loginForm.addEventListener("submit", async (event) => {
@@ -426,7 +472,7 @@ function showOtpOverlay(uid) {
     if (result.valid) {
       trustDevice(uid);
       setStatus("✓ Verificado. Entrando…");
-      window.location.href = "main.html";
+      goApp();
       return;
     }
 
@@ -516,7 +562,7 @@ function showOtpOverlay(uid) {
         fallbackMsg.className = "otp-fallback-msg";
         fallbackMsg.textContent = `Te quedan ${left} código(s) de respaldo. Genera nuevos desde Ajustes → Seguridad.`;
       }
-      setTimeout(() => { window.location.href = "main.html"; }, 800);
+      setTimeout(() => { goApp(); }, 800);
       return;
     }
 
@@ -665,11 +711,11 @@ function showSetupOverlay(uid) {
         ack.checked = false;
         continueBtn.disabled = true;
         ack.onchange = () => { continueBtn.disabled = !ack.checked; };
-        continueBtn.onclick = () => { window.location.href = "main.html"; };
+        continueBtn.onclick = () => { goApp(); };
       } else {
         msg.textContent = "✓ 2FA activado. Redirigiendo…";
         msg.className = "totp-setup-msg form-message success";
-        setTimeout(() => { window.location.href = "main.html"; }, 900);
+        setTimeout(() => { goApp(); }, 900);
       }
       return;
     }
