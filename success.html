@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pago exitoso | BlackPortfolio</title>
+  <title>Pago exitoso | Portify</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
@@ -59,7 +59,7 @@
     <span class="success-icon">✅</span>
     <span class="badge">PAGO CONFIRMADO</span>
     <h1>¡Suscripción activada!</h1>
-    <p>Tu plan <span class="plan-badge" id="activePlan">BlackPortfolio</span> está activo. Ya puedes acceder a todas las funciones incluidas en tu suscripción.</p>
+    <p>Tu plan <span class="plan-badge" id="activePlan">Portify</span> está activo. Ya puedes acceder a todas las funciones incluidas en tu suscripción.</p>
     <p class="confirm-notice" id="confirmNotice" hidden></p>
     <div class="success-actions">
       <a class="button primary" href="main.html">Ir al dashboard →</a>
@@ -83,7 +83,7 @@
 
         const auth = window.BlackPortfolioAuth;
         const planEl = document.getElementById("activePlan");
-        let plan = auth?.getSession()?.selectedPlan || "BlackPortfolio";
+        let plan = auth?.getSession()?.selectedPlan || "Portify";
         let confirmed = false;
         let detalle = "";
 

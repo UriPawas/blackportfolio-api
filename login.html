@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log in | BlackPortfolio</title>
-  <meta name="description" content="Acceso a BlackPortfolio para iniciar sesión en la plataforma de portafolios de inversión.">
+  <title>Iniciar sesión | Portify</title>
+  <meta name="description" content="Acceso a Portify para iniciar sesión en la plataforma de portafolios de inversión.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="landing-v4.css">
-  <link rel="stylesheet" href="login-v4.css">
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="campo-base.css">
+  <link rel="stylesheet" href="campo-acceso.css">
+  <link rel="stylesheet" href="campo-gate.css">
 
   <script>
     (function () {
@@ -26,127 +27,103 @@
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
     })();
   </script>
+  <script src="campo-gate.js"></script>
 </head>
-<body class="auth">
+<body class="acc">
 
 <a class="skip" href="#loginForm">Saltar al formulario</a>
 
-<header class="auth__top">
-  <div class="shell auth__bar">
-    <a class="mark" href="index.html"><b>Black</b><span>Portfolio</span></a>
-    <div class="top__actions">
+<main class="access">
+  <section class="acc-form" aria-label="Iniciar sesión">
+    <div class="acc-top">
+      <a class="brand brand-live" href="index.html" aria-label="Portify, volver al inicio"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect class="lg-frame" x="1" y="1" width="22" height="22" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle class="lg-big" cx="9" cy="9.5" r="3.2" fill="currentColor"/><circle class="lg-dot" cx="16" cy="15.5" r="2.2" fill="var(--accent)"/></svg><span>Portify</span></a>
       <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
-        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
-        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+        <svg class="ic t-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+        <svg class="ic t-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
       </button>
-      <a class="btn btn--quiet" href="index.html">Volver</a>
-    </div>
-  </div>
-</header>
-
-<main class="auth__main">
-  <div class="shell auth__spread">
-
-    <div class="auth__intro">
-      <span class="rosette rosette--auth" aria-hidden="true"></span>
-      <h1>Entra a tus carteras.</h1>
-      <p class="lede">
-        Tu cuenta abre el mismo estado de cartera que dejaste: posiciones, riesgo medido y
-        los reportes que ya generaste.
-      </p>
-      <dl class="spec">
-        <div><dt>Segundo factor</dt><dd>TOTP verificado en el servidor. El secreto nunca llega a este navegador.</dd></div>
-        <div><dt>Dispositivo de confianza</dt><dd>Si ya validaste este equipo, no volvemos a pedirte el código por unos días.</dd></div>
-        <div><dt>Sesión</dt><dd>El token se revisa contra revocación en cada llamada sensible.</dd></div>
-      </dl>
-      <p class="note">
-        El acceso está en beta por invitación. Si tienes un código, puedes canjearlo al entrar.
-      </p>
     </div>
 
-    <div class="plate plate--auth">
-      <div class="plate__rule"></div>
-      <div class="plate__head">
-        <div>
-          <p class="plate__name">Iniciar sesión</p>
-          <p class="plate__meta">Cuenta registrada de BlackPortfolio</p>
-        </div>
+    <div class="step">
+      <h1>Inicia sesión</h1>
+      <p class="sub">Entra a tus carteras: posiciones, riesgo medido y los reportes que ya generaste.</p>
+
+      <div id="googleOneTap"></div>
+      <div class="social-buttons">
+        <button id="googleLoginBtn" class="btn btn-secondary btn-lg button-google" type="button">
+          <svg class="g-logo" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
+          <span>Continuar con Google</span>
+        </button>
       </div>
 
-      <div class="plate__body">
-        <div id="googleOneTap"></div>
-        <div class="social-buttons">
-          <button id="googleLoginBtn" class="button-google" type="button">
-            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
-            <span>Continuar con Google</span>
-          </button>
+      <div class="auth-divider" id="authDivider"><span>o con tu correo</span></div>
+
+      <form id="loginForm" class="signup-form" novalidate>
+        <div class="form-row">
+          <label for="loginEmail">Correo electrónico</label>
+          <input id="loginEmail" name="email" type="email" autocomplete="username" inputmode="email" spellcheck="false" autocapitalize="none"
+                 placeholder="demo@blackportfolio.ai" required>
         </div>
 
-        <div class="auth-divider" id="authDivider"><span>o con tu correo</span></div>
-
-        <form id="loginForm" class="signup-form" novalidate>
-          <div class="form-row">
-            <label for="loginEmail">Correo electrónico</label>
-            <input id="loginEmail" name="email" type="email" autocomplete="username" inputmode="email"
-                   placeholder="demo@blackportfolio.ai" required>
+        <div class="form-row">
+          <div class="login-pw-label-row">
+            <label for="loginPassword">Contraseña</label>
+            <button type="button" class="forgot-pw-btn" id="forgotPwBtn">¿Olvidaste tu contraseña?</button>
           </div>
-
-          <div class="form-row">
-            <div class="login-pw-label-row">
-              <label for="loginPassword">Contraseña</label>
-              <button type="button" class="forgot-pw-btn" id="forgotPwBtn">¿Olvidaste tu contraseña?</button>
-            </div>
-            <div class="pw-input-wrap">
-              <input id="loginPassword" name="password" type="password" placeholder="Tu contraseña"
-                     required autocomplete="current-password">
-              <button type="button" class="pw-toggle" id="loginPwToggle" aria-label="Mostrar contraseña">
-                <svg id="loginEyeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg id="loginEyeOffIcon" class="hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
-              </button>
-            </div>
+          <div class="pw-input-wrap">
+            <input id="loginPassword" name="password" type="password" placeholder="Tu contraseña"
+                   required autocomplete="current-password">
+            <button type="button" class="pw-toggle" id="loginPwToggle" aria-label="Mostrar contraseña">
+              <svg id="loginEyeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg id="loginEyeOffIcon" class="hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
+            </button>
           </div>
+        </div>
 
-          <button type="button" class="forgot-pw-btn" id="loginBetaToggle" style="margin-top:var(--s4)">
-            ¿Tienes un código de invitación?
-          </button>
+        <button type="button" class="forgot-pw-btn" id="loginBetaToggle">
+          ¿Tienes un código de invitación?
+        </button>
 
-          <div class="form-row hidden" id="loginBetaRow">
-            <label for="loginBetaCode">Código de invitación o promocional</label>
-            <input id="loginBetaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40"
-                   autocomplete="off" style="text-transform:uppercase">
-            <p class="pw-strength-label"><span id="loginBetaHint">Se canjea al entrar y desbloquea tu acceso a la beta.</span></p>
-          </div>
+        <div class="form-row hidden" id="loginBetaRow">
+          <label for="loginBetaCode">Código de invitación o promocional</label>
+          <input id="loginBetaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40"
+                 autocomplete="off" style="text-transform:uppercase">
+          <p class="pw-strength-label"><span id="loginBetaHint">Se canjea al entrar y desbloquea tu acceso a la beta.</span></p>
+        </div>
 
-          <button class="button primary submit-button btn btn--primary" type="submit">Entrar</button>
-          <p id="loginMessage" class="form-message" aria-live="polite"></p>
-        </form>
-      </div>
+        <button class="btn btn-primary btn-lg submit-button" type="submit">Entrar</button>
+        <p id="loginMessage" class="form-message" aria-live="polite"></p>
+      </form>
 
-      <div class="auth-links">
-        <a class="button secondary btn btn--quiet" href="registro.html">Crear una cuenta</a>
-        <a class="button ghost btn btn--quiet" href="index.html">Ver la plataforma</a>
-      </div>
+      <p class="switch">¿No tienes cuenta? <a href="registro.html" class="lnk" data-gate>Crea una</a></p>
+      <p class="note">El acceso está en beta por invitación. Si tienes un código, puedes canjearlo al entrar. El segundo factor (TOTP) se verifica en el servidor.</p>
     </div>
 
-  </div>
+    <div class="acc-foot">
+      <p class="note">© 2026 Portify. Monitoreo y análisis de inversiones; no constituye asesoría financiera personalizada. <a class="lnk" href="privacy.html">Privacidad</a> · <a class="lnk" href="terms.html">Términos</a></p>
+      <div class="foot-theme">
+        <span class="label" id="temaLabel">Tema</span>
+        <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+          <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="acc-visual" id="accVisual" aria-label="Comparador de mercados ilustrativo, no son cotizaciones">
+    <div class="rg-head">
+      <div class="rg-title"><h2>Mercados</h2><span class="rg-sample">Ilustrativo · no son cotizaciones</span></div>
+      <ul class="rg-sessions" id="rgSessions" aria-label="Estado de las bolsas"></ul>
+      <p class="rg-foot">Series de ejemplo generadas en tu navegador. Horario regular de las bolsas, sin días festivos.</p>
+    </div>
+    <div class="rg-per" id="rgPer" role="group" aria-label="Periodo"></div>
+    <div class="rg-stage" id="rgStage" tabindex="0" role="group" aria-label="Gráfica comparativa ilustrativa, rebasada a 0 % al inicio del periodo. Flechas izquierda y derecha mueven el cursor, Escape lo quita."><canvas id="rgCanvas" aria-hidden="true"></canvas></div>
+    <div class="rg-lhead" aria-hidden="true"><span id="rgLTitle">Cambio en el periodo</span><span id="rgNote" class="rg-note"></span></div>
+    <ul class="rg-legend" id="rgLegend"></ul>
+    <table class="rg-sr" id="rgTable"><caption>Cambio porcentual por serie en el periodo seleccionado, datos ilustrativos</caption><thead><tr><th>Serie</th><th>Cambio</th><th>Último</th></tr></thead><tbody></tbody></table>
+  </aside>
 </main>
-
-<footer class="auth__foot">
-  <div class="shell auth__foot-row">
-    <p class="note">
-      © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
-      financiera personalizada.
-    </p>
-    <div class="foot__theme">
-      <span class="label" id="temaLabel">Tema</span>
-      <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
-        <span class="seg__thumb" aria-hidden="true"></span>
-        <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
-        <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
-      </div>
-    </div>
-  </div>
-</footer>
 
 <!-- ── Verificación en dos pasos (cuando la cuenta ya tiene 2FA) ─────────── -->
 <div id="otpOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="otpTitle">
@@ -177,7 +154,7 @@
         <input id="otpBackupInput" class="dashboard-input otp-backup-input" type="text"
                inputmode="text" autocomplete="one-time-code" maxlength="12"
                placeholder="xxxx-xxxx" aria-label="Código de respaldo">
-        <button id="otpBackupVerifyBtn" class="button primary btn btn--primary" type="button">Entrar con código de respaldo</button>
+        <button id="otpBackupVerifyBtn" class="btn btn-primary" type="button">Entrar con código de respaldo</button>
       </div>
       <button id="otpEmailFallbackBtn" class="otp-fallback-link" type="button">Tampoco lo tengo: enviar un enlace de acceso por correo</button>
       <p id="otpFallbackMsg" class="otp-fallback-msg hidden"></p>
@@ -189,14 +166,14 @@
 <div id="totpSetupOverlay" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="totpSetupTitle">
   <div class="totp-setup-card">
     <h2 id="totpSetupTitle">Activa la verificación en dos pasos</h2>
-    <p class="totp-sub">Tu cuenta requiere un autenticador. Escanea el código para agregar BlackPortfolio y continuar.</p>
+    <p class="totp-sub">Tu cuenta requiere un autenticador. Escanea el código para agregar Portify y continuar.</p>
 
-    <div id="totpSetupLoading" style="text-align:center">
+    <div id="totpSetupLoading" class="totp-loading" style="text-align:center">
       <div class="totp-loading-spinner" id="totpSetupSpinner"></div>
       <p id="totpSetupLoadingMsg" class="note">Generando el código QR…</p>
       <div id="totpSetupRetry" class="totp-setup-retry hidden">
-        <button id="totpSetupRetryBtn" class="button primary btn btn--primary" type="button">Reintentar</button>
-        <button id="totpSetupErrLogoutBtn" class="button ghost btn btn--quiet" type="button">Cancelar y salir</button>
+        <button id="totpSetupRetryBtn" class="btn btn-primary" type="button">Reintentar</button>
+        <button id="totpSetupErrLogoutBtn" class="btn btn-ghost" type="button">Cancelar y salir</button>
       </div>
     </div>
 
@@ -206,14 +183,14 @@
       <ol class="totp-steps">
         <li><span class="step-num">1</span><span>Abre <strong>Google Authenticator</strong> en tu teléfono.</span></li>
         <li><span class="step-num">2</span><span>Toca <strong>+</strong> y luego <strong>Escanear código QR</strong>.</span></li>
-        <li><span class="step-num">3</span><span>Aparecerá <strong>BlackPortfolio</strong> con un código de 6 dígitos.</span></li>
+        <li><span class="step-num">3</span><span>Aparecerá <strong>Portify</strong> con un código de 6 dígitos.</span></li>
         <li><span class="step-num">4</span><span>Escribe ese código aquí abajo para activar la protección.</span></li>
       </ol>
 
       <p class="totp-manual-key-label">Clave manual, si no puedes escanear</p>
       <div class="totp-manual-key-row">
         <div class="totp-manual-key" id="totpSetupManualKey">JBSW Y3DP EHPK 3PXP</div>
-        <button id="totpSetupManualCopy" class="button secondary totp-manual-copy btn btn--quiet" type="button">Copiar</button>
+        <button id="totpSetupManualCopy" class="btn btn-secondary totp-manual-copy" type="button">Copiar</button>
       </div>
 
       <div class="totp-setup-otp-grid" id="totpSetupOtpGrid">
@@ -227,8 +204,8 @@
       <p class="totp-setup-msg" id="totpSetupMsg"></p>
 
       <div class="totp-setup-actions">
-        <button id="totpSetupVerifyBtn" class="button primary btn btn--primary" type="button" disabled>Activar y continuar</button>
-        <button id="totpSetupLogoutBtn" class="button ghost btn btn--quiet" type="button">Cancelar y salir</button>
+        <button id="totpSetupVerifyBtn" class="btn btn-primary" type="button" disabled>Activar y continuar</button>
+        <button id="totpSetupLogoutBtn" class="btn btn-ghost" type="button">Cancelar y salir</button>
       </div>
     </div>
 
@@ -240,15 +217,14 @@
       </p>
       <div id="totpSetupBackupCodes" class="backup-codes-grid"></div>
       <div class="backup-codes-actions">
-        <button id="totpSetupBackupCopy" class="button secondary btn btn--quiet" type="button">Copiar</button>
-        <button id="totpSetupBackupDownload" class="button secondary btn btn--quiet" type="button">Descargar .txt</button>
+        <button id="totpSetupBackupCopy" class="btn btn-secondary" type="button">Copiar</button>
+        <button id="totpSetupBackupDownload" class="btn btn-secondary" type="button">Descargar .txt</button>
       </div>
       <label class="backup-codes-ack">
         <input id="totpSetupBackupAck" type="checkbox">
         <span>Guardé mis códigos en un lugar seguro</span>
       </label>
-      <button id="totpSetupBackupContinue" class="button primary btn btn--primary" type="button" disabled
-              style="width:100%;margin-top:var(--s4)">Continuar</button>
+      <button id="totpSetupBackupContinue" class="btn btn-primary" type="button" disabled>Continuar</button>
     </div>
   </div>
 </div>
@@ -263,5 +239,6 @@
 <script src="auth.js?v=11"></script>
 <script src="plan-picker.js?v=2"></script>
 <script src="login.js?v=11"></script>
+<script src="campo-acceso.js"></script>
 </body>
 </html>

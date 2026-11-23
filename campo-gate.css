@@ -1,0 +1,6 @@
+/* Portify · Campo · transición entre páginas ("tablero"). Ver campo-gate.js.
+   Capa fija sobre toda la página; nunca recibe eventos. Respaldo sin WebGL2: fundido del color de fondo + logo SVG. */
+.gate-fx { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 2147483000; pointer-events: none; display: block; margin: 0; padding: 0; border: 0; }
+.gate-fx--css { overflow: hidden; }
+.gate-fx--css .gate-bg { position: absolute; inset: 0; background: var(--bg); }
+.gate-fx--css .gate-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--text); overflow: visible; opacity: 0; }
