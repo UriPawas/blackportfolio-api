@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Abrir cuenta | BlackPortfolio</title>
-  <meta name="description" content="Abre tu cuenta de BlackPortfolio. Plan gratuito sin tarjeta, verificación de correo y segundo factor obligatorio.">
+  <title>Abrir cuenta | Portify</title>
+  <meta name="description" content="Abre tu cuenta de Portify. Plan gratuito sin tarjeta, verificación de correo y segundo factor obligatorio.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="landing-v4.css">
-  <link rel="stylesheet" href="login-v4.css">
-  <link rel="stylesheet" href="registro-v4.css">
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="campo-base.css">
+  <link rel="stylesheet" href="campo-acceso.css">
+  <link rel="stylesheet" href="campo-gate.css">
 
   <script>
     (function () {
@@ -27,238 +27,223 @@
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) root.classList.add('motion-ok');
     })();
   </script>
+  <script src="campo-gate.js"></script>
 </head>
-<body class="auth auth--tall">
+<body class="acc acc--reg">
 
 <a class="skip" href="#signupForm">Saltar al formulario</a>
 
-<header class="auth__top">
-  <div class="shell auth__bar">
-    <a class="mark" href="index.html"><b>Black</b><span>Portfolio</span></a>
-    <div class="top__actions">
-      <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
-        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
-        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
-      </button>
-      <a class="btn btn--quiet" href="login.html">Ya tengo cuenta</a>
-    </div>
+<header class="reg-top">
+  <a class="brand brand-live" href="index.html" aria-label="Portify, volver al inicio"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect class="lg-frame" x="1" y="1" width="22" height="22" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle class="lg-big" cx="9" cy="9.5" r="3.2" fill="currentColor"/><circle class="lg-dot" cx="16" cy="15.5" r="2.2" fill="var(--accent)"/></svg><span>Portify</span></a>
+  <div class="acc-top__end">
+    <a class="btn btn-ghost" href="login.html" data-gate>Ya tengo cuenta</a>
+    <button class="icon-btn" id="themeToggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+      <svg class="ic t-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      <svg class="ic t-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.6 8.6 0 0 1 9.5 3.5a8.6 8.6 0 1 0 11 11z"/></svg>
+    </button>
   </div>
 </header>
 
-<main class="auth__main">
-  <div class="shell auth__spread">
+<main class="access access--reg">
 
-    <div class="auth__intro">
-      <span class="rosette rosette--auth" aria-hidden="true"></span>
-      <h1>Abre tu cuenta.</h1>
-      <p class="lede">
-        Tres pasos, en este orden. Ninguno es opcional y ninguno aparece después
-        sin avisarte.
-      </p>
-
-      <ol class="steps">
-        <li>
-          <span class="step__n">1</span>
-          <b>Cuenta</b>
-          <span>Nombre, correo y contraseña. La contraseña la gestiona Firebase Authentication; nosotros no la vemos.</span>
-        </li>
-        <li>
-          <span class="step__n">2</span>
-          <b>Verificación de correo</b>
-          <span>Te llega un enlace de confirmación. Puedes reenviarlo si no aparece.</span>
-        </li>
-        <li>
-          <span class="step__n">3</span>
-          <b>Segundo factor</b>
-          <span>La app exige un autenticador TOTP en el primer acceso. El secreto se genera y se verifica en el servidor.</span>
-        </li>
-      </ol>
-
-      <p class="note">
-        El acceso está en beta por invitación: si no tienes código, la cuenta queda creada
-        y en lista de espera. El plan Explorer no pide tarjeta.
-      </p>
-    </div>
-
-    <div class="plate plate--auth">
-      <div class="plate__rule"></div>
-      <div class="plate__head">
-        <div>
-          <p class="plate__name">Abrir cuenta</p>
-          <p class="plate__meta">Alta de usuario y elección de plan</p>
-        </div>
-      </div>
-
-      <div class="plate__body" id="signupBody">
-        <div class="social-buttons">
-          <button id="googleSignupBtn" class="button-google" type="button">
-            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
-            <span>Registrarse con Google</span>
-          </button>
-        </div>
-
-        <div class="auth-divider" id="signupDivider"><span>o con tu correo</span></div>
-
-        <form id="signupForm" class="signup-form" novalidate>
-          <div class="form-row">
-            <label for="fullName">Nombre completo</label>
-            <input id="fullName" name="fullName" type="text" placeholder="Tu nombre" autocomplete="name" required>
-          </div>
-
-          <div class="form-row">
-            <label for="email">Correo electrónico</label>
-            <input id="email" name="email" type="email" placeholder="tu@correo.com" autocomplete="email" inputmode="email" required>
-          </div>
-
-          <div class="form-row" id="passwordRow">
-            <label for="password">Contraseña</label>
-            <div class="pw-input-wrap">
-              <input id="password" name="password" type="password" placeholder="Mínimo 8 caracteres"
-                     minlength="8" required autocomplete="new-password">
-              <button type="button" class="pw-toggle" id="pwToggle" aria-label="Mostrar contraseña">
-                <svg id="eyeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg id="eyeOffIcon" class="hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
-              </button>
-            </div>
-            <div class="pw-strength-bars" id="pwBars" aria-hidden="true">
-              <span class="pw-bar" data-idx="1"></span>
-              <span class="pw-bar" data-idx="2"></span>
-              <span class="pw-bar" data-idx="3"></span>
-              <span class="pw-bar" data-idx="4"></span>
-              <span class="pw-bar" data-idx="5"></span>
-            </div>
-            <p class="pw-strength-label" id="pwStrengthLabel">
-              <span>Fuerza:</span>
-              <span id="pwStrengthText">—</span>
-            </p>
-            <ul class="pw-requirements" id="pwReqs" aria-label="Requisitos de contraseña">
-              <li data-req="length"><span class="pw-req-icon"></span><span>Al menos 8 caracteres</span></li>
-              <li data-req="number"><span class="pw-req-icon"></span><span>Al menos 1 número</span></li>
-              <li data-req="lower"><span class="pw-req-icon"></span><span>Al menos 1 minúscula</span></li>
-              <li data-req="upper"><span class="pw-req-icon"></span><span>Al menos 1 mayúscula</span></li>
-              <li data-req="special"><span class="pw-req-icon"></span><span>Al menos 1 símbolo</span></li>
-            </ul>
-          </div>
-
-          <fieldset class="plans" id="planPicker">
-            <legend>Plan inicial</legend>
-
-            <label class="plan">
-              <input type="radio" name="plan" value="Explorer" checked>
-              <span class="plan__name">Explorer</span>
-              <span class="plan__price">$0</span>
-              <span class="plan__desc">1 portafolio · 10 posiciones · precios diferidos 15 min · sin tarjeta</span>
-            </label>
-
-            <label class="plan">
-              <input type="radio" name="plan" value="Investor">
-              <span class="plan__name">Investor</span>
-              <span class="plan__price">$19 <small>USD/mes</small></span>
-              <span class="plan__desc">3 portafolios · 50 posiciones · precios en vivo · riesgo esencial · reporte PDF</span>
-            </label>
-
-            <label class="plan">
-              <input type="radio" name="plan" value="Advisor Pro">
-              <span class="plan__name">Advisor Pro</span>
-              <span class="plan__price">$59 <small>USD/mes</small></span>
-              <span class="plan__desc">Portafolios ilimitados · VaR, drawdown y Sharpe · backtesting · reporte con tu marca · 3 usuarios</span>
-            </label>
-
-            <label class="plan">
-              <input type="radio" name="plan" value="Wealth Desk">
-              <span class="plan__name">Wealth Desk</span>
-              <span class="plan__price">$129 <small>USD/mes</small></span>
-              <span class="plan__desc">Todo lo de Advisor Pro · roles ilimitados · API y webhooks · marca blanca</span>
-            </label>
-
-            <p class="plans__foot">
-              Cobro con Stripe al confirmar; anual ≈ 20 % menos. Puedes cambiar o cancelar el
-              plan después desde el portal de facturación.
-            </p>
-          </fieldset>
-          <input type="hidden" id="selectedPlan" name="selectedPlan" value="Explorer">
-
-          <button type="button" class="forgot-pw-btn" id="signupBetaToggle" style="margin-top:var(--s5)">
-            ¿Tienes un código de invitación?
-          </button>
-
-          <div class="form-row hidden" id="betaCodeRow">
-            <label for="betaCode">Código de invitación o promocional</label>
-            <input id="betaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40"
-                   autocomplete="off" style="text-transform:uppercase">
-            <p class="pw-strength-label"><span id="betaCodeHint">Se aplica al crear la cuenta y desbloquea tu acceso a la beta.</span></p>
-          </div>
-
-          <div class="consents">
-            <label class="consent" data-required="true" id="consentPrivacy">
-              <input type="checkbox" id="acceptTerms" required>
-              <span>
-                He leído el <a href="privacy.html">Aviso de privacidad</a> y el
-                <a href="terms.html">Alcance del servicio</a>, y <b>consiento expresamente</b>
-                el tratamiento de mis datos financieros y patrimoniales para operar mi cuenta.
-              </span>
-            </label>
-
-            <label class="consent" id="consentComms">
-              <input type="checkbox" id="acceptComms">
-              <span>
-                Quiero recibir avisos de producto y novedades de la beta.
-                <span class="consent__opt">Opcional. Puedes retirarlo cuando quieras sin perder el servicio.</span>
-              </span>
-            </label>
-          </div>
-
-          <button class="button primary submit-button btn btn--primary" type="submit">Crear cuenta</button>
-          <p id="formMessage" class="form-message" aria-live="polite"></p>
-        </form>
-      </div>
-
-      <!-- Estado posterior al alta: la cuenta existe, falta confirmar el correo -->
-      <div class="verify hidden" id="verifyPanel">
-        <span class="verify__mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M3 6.5h18v11H3z"/><path d="m3 7 9 6 9-6"/></svg>
-        </span>
-        <h2>Revisa tu correo.</h2>
-        <p>
-          Mandamos un enlace de confirmación a <strong id="verifyEmail">tu@correo.com</strong>.
-          La cuenta ya existe, pero no entra hasta que lo abras.
-        </p>
-        <ul class="verify__next">
-          <li><span class="step__n">2</span><span>Abre el enlace. Vence en 24 horas; si expira puedes pedir otro.</span></li>
-          <li><span class="step__n">3</span><span>En el primer acceso la app te pide activar el autenticador y te entrega tus códigos de respaldo.</span></li>
-        </ul>
-        <div class="verify__actions">
-          <a class="btn btn--primary" href="login.html">Ir a iniciar sesión</a>
-          <button class="btn btn--quiet" type="button" id="resendBtn">Reenviar el correo</button>
-        </div>
-        <p id="verifyMessage" class="form-message" aria-live="polite"></p>
-      </div>
-
-      <div class="auth-links">
-        <a class="btn btn--quiet" href="login.html">Iniciar sesión</a>
-        <a class="btn btn--quiet" href="planes.html">Comparar planes</a>
-      </div>
-    </div>
-
-  </div>
-</main>
-
-<footer class="auth__foot">
-  <div class="shell auth__foot-row">
-    <p class="note">
-      © 2026 BlackPortfolio. Monitoreo y análisis de inversiones; no constituye asesoría
-      financiera personalizada. <a href="privacy.html">Aviso de privacidad</a>.
+  <div class="acc-intro">
+    <h1>Abre tu cuenta.</h1>
+    <p class="lede">
+      Tres pasos, en este orden. Ninguno es opcional y ninguno aparece después
+      sin avisarte.
     </p>
-    <div class="foot__theme">
-      <span class="label" id="temaLabel">Tema</span>
-      <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
-        <span class="seg__thumb" aria-hidden="true"></span>
-        <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
-        <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
+
+    <ol class="steps">
+      <li>
+        <span class="step__n">1</span>
+        <b>Cuenta</b>
+        <span>Nombre, correo y contraseña. La contraseña la gestiona Firebase Authentication; nosotros no la vemos.</span>
+      </li>
+      <li>
+        <span class="step__n">2</span>
+        <b>Verificación de correo</b>
+        <span>Te llega un enlace de confirmación. Puedes reenviarlo si no aparece.</span>
+      </li>
+      <li>
+        <span class="step__n">3</span>
+        <b>Segundo factor</b>
+        <span>La app exige un autenticador TOTP en el primer acceso. El secreto se genera y se verifica en el servidor.</span>
+      </li>
+    </ol>
+
+    <p class="note">
+      El acceso está en beta por invitación: si no tienes código, la cuenta queda creada
+      y en lista de espera. El plan Explorer no pide tarjeta.
+    </p>
+  </div>
+
+  <section class="acc-form reg-card" aria-label="Abrir cuenta">
+    <div id="signupBody" class="reg-body">
+      <div class="reg-head">
+        <h2>Abrir cuenta</h2>
+        <p class="sub">Alta de usuario y elección de plan.</p>
+      </div>
+
+      <div class="social-buttons">
+        <button id="googleSignupBtn" class="btn btn-secondary btn-lg button-google" type="button">
+          <svg class="g-logo" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.85L38.36 6.2C34.52 2.37 29.57 0 24 0 14.62 0 6.62 5.47 2.69 13.44l7.27 5.65C11.88 13.13 17.48 9.5 24 9.5z"/><path fill="#4285F4" d="M46.54 24.5c0-1.62-.15-3.18-.42-4.68H24v9.04h12.7c-.56 2.96-2.2 5.47-4.66 7.15l7.18 5.57C43.44 37.57 46.54 31.5 46.54 24.5z"/><path fill="#FBBC05" d="M9.96 28.41A14.7 14.7 0 0 1 9.5 24c0-1.54.26-3.04.71-4.44l-7.27-5.65A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.55 10.73l7.41-6.32z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.14 15.9-5.82l-7.18-5.57C30.7 38.41 27.5 39.5 24 39.5c-6.48 0-12.06-3.59-14.04-8.87l-7.41 6.32C6.47 42.4 14.56 48 24 48z"/></svg>
+          <span>Registrarse con Google</span>
+        </button>
+      </div>
+
+      <div class="auth-divider" id="signupDivider"><span>o con tu correo</span></div>
+
+      <form id="signupForm" class="signup-form" novalidate>
+        <div class="form-row">
+          <label for="fullName">Nombre completo</label>
+          <input id="fullName" name="fullName" type="text" placeholder="Tu nombre" autocomplete="name" required>
+        </div>
+
+        <div class="form-row">
+          <label for="email">Correo electrónico</label>
+          <input id="email" name="email" type="email" placeholder="tu@correo.com" autocomplete="email" inputmode="email" spellcheck="false" autocapitalize="none" required>
+        </div>
+
+        <div class="form-row" id="passwordRow">
+          <label for="password">Contraseña</label>
+          <div class="pw-input-wrap">
+            <input id="password" name="password" type="password" placeholder="Mínimo 8 caracteres"
+                   minlength="8" required autocomplete="new-password">
+            <button type="button" class="pw-toggle" id="pwToggle" aria-label="Mostrar contraseña">
+              <svg id="eyeIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg id="eyeOffIcon" class="hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
+            </button>
+          </div>
+          <div class="pw-strength-bars" id="pwBars" aria-hidden="true">
+            <span class="pw-bar" data-idx="1"></span>
+            <span class="pw-bar" data-idx="2"></span>
+            <span class="pw-bar" data-idx="3"></span>
+            <span class="pw-bar" data-idx="4"></span>
+            <span class="pw-bar" data-idx="5"></span>
+          </div>
+          <p class="pw-strength-label" id="pwStrengthLabel">
+            <span>Fuerza:</span>
+            <span id="pwStrengthText">—</span>
+          </p>
+          <ul class="pw-requirements" id="pwReqs" aria-label="Requisitos de contraseña">
+            <li data-req="length"><span class="pw-req-icon"></span><span>Al menos 8 caracteres</span></li>
+            <li data-req="number"><span class="pw-req-icon"></span><span>Al menos 1 número</span></li>
+            <li data-req="lower"><span class="pw-req-icon"></span><span>Al menos 1 minúscula</span></li>
+            <li data-req="upper"><span class="pw-req-icon"></span><span>Al menos 1 mayúscula</span></li>
+            <li data-req="special"><span class="pw-req-icon"></span><span>Al menos 1 símbolo</span></li>
+          </ul>
+        </div>
+
+        <fieldset class="plans" id="planPicker">
+          <legend>Plan inicial</legend>
+
+          <label class="plan">
+            <input type="radio" name="plan" value="Explorer" checked>
+            <span class="plan__name">Explorer</span>
+            <span class="plan__price">$0</span>
+            <span class="plan__desc">1 portafolio · 10 posiciones · precios diferidos 15 min · sin tarjeta</span>
+          </label>
+
+          <label class="plan">
+            <input type="radio" name="plan" value="Investor">
+            <span class="plan__name">Investor</span>
+            <span class="plan__price">$19 <small>USD/mes</small></span>
+            <span class="plan__desc">3 portafolios · 50 posiciones · precios en vivo · riesgo esencial · reporte PDF</span>
+          </label>
+
+          <label class="plan">
+            <input type="radio" name="plan" value="Advisor Pro">
+            <span class="plan__name">Advisor Pro</span>
+            <span class="plan__price">$59 <small>USD/mes</small></span>
+            <span class="plan__desc">Portafolios ilimitados · VaR, drawdown y Sharpe · backtesting · reporte con tu marca · 3 usuarios</span>
+          </label>
+
+          <label class="plan">
+            <input type="radio" name="plan" value="Wealth Desk">
+            <span class="plan__name">Wealth Desk</span>
+            <span class="plan__price">$129 <small>USD/mes</small></span>
+            <span class="plan__desc">Todo lo de Advisor Pro · roles ilimitados · API y webhooks · marca blanca</span>
+          </label>
+
+          <p class="plans__foot">
+            Cobro con Stripe al confirmar; anual ≈ 20 % menos. Puedes cambiar o cancelar el
+            plan después desde el portal de facturación.
+          </p>
+        </fieldset>
+        <input type="hidden" id="selectedPlan" name="selectedPlan" value="Explorer">
+
+        <button type="button" class="forgot-pw-btn" id="signupBetaToggle">
+          ¿Tienes un código de invitación?
+        </button>
+
+        <div class="form-row hidden" id="betaCodeRow">
+          <label for="betaCode">Código de invitación o promocional</label>
+          <input id="betaCode" name="betaCode" type="text" placeholder="BETA-XXXXXXXX" maxlength="40"
+                 autocomplete="off" style="text-transform:uppercase">
+          <p class="pw-strength-label"><span id="betaCodeHint">Se aplica al crear la cuenta y desbloquea tu acceso a la beta.</span></p>
+        </div>
+
+        <div class="consents">
+          <label class="consent" data-required="true" id="consentPrivacy">
+            <input type="checkbox" id="acceptTerms" required>
+            <span>
+              He leído el <a href="privacy.html">Aviso de privacidad</a> y el
+              <a href="terms.html">Alcance del servicio</a>, y <b>consiento expresamente</b>
+              el tratamiento de mis datos financieros y patrimoniales para operar mi cuenta.
+            </span>
+          </label>
+
+          <label class="consent" id="consentComms">
+            <input type="checkbox" id="acceptComms">
+            <span>
+              Quiero recibir avisos de producto y novedades de la beta.
+              <span class="consent__opt">Opcional. Puedes retirarlo cuando quieras sin perder el servicio.</span>
+            </span>
+          </label>
+        </div>
+
+        <button class="btn btn-primary btn-lg submit-button" type="submit">Crear cuenta</button>
+        <p id="formMessage" class="form-message" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <!-- Estado posterior al alta: la cuenta existe, falta confirmar el correo -->
+    <div class="verify hidden" id="verifyPanel">
+      <span class="verify__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3 6.5h18v11H3z"/><path d="m3 7 9 6 9-6"/></svg>
+      </span>
+      <h2>Revisa tu correo.</h2>
+      <p>
+        Mandamos un enlace de confirmación a <strong id="verifyEmail">tu@correo.com</strong>.
+        La cuenta ya existe, pero no entra hasta que lo abras.
+      </p>
+      <ul class="verify__next">
+        <li><span class="step__n">2</span><span>Abre el enlace. Vence en 24 horas; si expira puedes pedir otro.</span></li>
+        <li><span class="step__n">3</span><span>En el primer acceso la app te pide activar el autenticador y te entrega tus códigos de respaldo.</span></li>
+      </ul>
+      <div class="verify__actions">
+        <a class="btn btn-primary" href="login.html">Ir a iniciar sesión</a>
+        <button class="btn btn-secondary" type="button" id="resendBtn">Reenviar el correo</button>
+      </div>
+      <p id="verifyMessage" class="form-message" aria-live="polite"></p>
+    </div>
+
+    <p class="switch">¿Ya tienes cuenta? <a href="login.html" class="lnk" data-gate>Inicia sesión</a> · <a href="planes.html" class="lnk">Comparar planes</a></p>
+
+    <div class="acc-foot">
+      <p class="note">© 2026 Portify. Monitoreo y análisis de inversiones; no constituye asesoría financiera personalizada. <a class="lnk" href="privacy.html">Aviso de privacidad</a>.</p>
+      <div class="foot-theme">
+        <span class="label" id="temaLabel">Tema</span>
+        <div class="seg" id="segTema" role="group" aria-labelledby="temaLabel">
+          <span class="seg__thumb" aria-hidden="true"></span>
+          <button type="button" aria-pressed="true"  data-theme-set="light">Claro</button>
+          <button type="button" aria-pressed="false" data-theme-set="dark">Oscuro</button>
+        </div>
       </div>
     </div>
-  </div>
-</footer>
+  </section>
+
+</main>
 
 <!-- ── Alta de 2FA tras crear la cuenta ──────────────────────────────── -->
 <div id="totpSetupModal" class="otp-overlay hidden" role="dialog" aria-modal="true" aria-label="Configurar Google Authenticator">
@@ -266,7 +251,7 @@
     <h2>Protege tu cuenta</h2>
     <p class="totp-sub">Configura Google Authenticator para agregar una capa extra de seguridad.</p>
 
-    <div id="totpSetupLoading" style="text-align:center">
+    <div id="totpSetupLoading" class="totp-loading" style="text-align:center">
       <div class="totp-loading-spinner"></div>
       <p class="note">Generando código QR…</p>
     </div>
@@ -279,7 +264,7 @@
       <ol class="totp-steps">
         <li><span class="step-num">1</span><span>Instala <strong>Google Authenticator</strong> en tu teléfono (iOS o Android).</span></li>
         <li><span class="step-num">2</span><span>Toca el icono <strong>+</strong> y elige <strong>"Escanear código QR"</strong>.</span></li>
-        <li><span class="step-num">3</span><span>Apunta la cámara al código de arriba. Aparecerá una entrada <strong>BlackPortfolio</strong>.</span></li>
+        <li><span class="step-num">3</span><span>Apunta la cámara al código de arriba. Aparecerá una entrada <strong>Portify</strong>.</span></li>
         <li><span class="step-num">4</span><span>Ingresa el código de 6 dígitos que muestra la app para activar 2FA.</span></li>
       </ol>
 
@@ -297,8 +282,8 @@
       <p class="totp-setup-msg" id="totpSetupMsg"></p>
 
       <div class="totp-setup-actions">
-        <button id="totpSetupVerifyBtn" class="button primary btn btn--primary" type="button" disabled>Activar 2FA y acceder al dashboard</button>
-        <button id="totpSetupSkipBtn" class="button ghost btn btn--quiet" type="button">Omitir por ahora</button>
+        <button id="totpSetupVerifyBtn" class="btn btn-primary" type="button" disabled>Activar 2FA y acceder al dashboard</button>
+        <button id="totpSetupSkipBtn" class="btn btn-ghost" type="button">Omitir por ahora</button>
       </div>
     </div>
   </div>
@@ -313,5 +298,6 @@
 <script src="auth.js?v=11"></script>
 <script src="plan-picker.js?v=2"></script>
 <script src="registro.js"></script>
+<script src="campo-acceso.js"></script>
 </body>
 </html>
