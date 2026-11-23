@@ -1,0 +1,83 @@
+/* CAMPO · Portify. Tracker, inicio: cabecera y bloque consolidado. Tokens de _dev_proto-campo.css; sin glow ni degradados. */
+:root {
+  /* categóricos de portafolio: L 0.6 en ambos temas; contraste medido contra --s1: oscuro 4.0–4.5, claro 3.5–3.9 (todos ≥ 3:1). El ocre queda para foco. */
+  --pf-1: oklch(0.6 0.1 255);
+  --pf-2: oklch(0.6 0.09 195);
+  --pf-3: oklch(0.6 0.12 12);
+  --pf-4: oklch(0.6 0.11 305);
+  --pf-5: oklch(0.6 0.11 150);
+  --pf-6: oklch(0.6 0.11 50);
+}
+
+#secTracker { display: grid; gap: 16px; align-content: start; min-width: 0; }
+#secTracker > * { min-width: 0; }
+.tk-head { flex-wrap: wrap; align-items: flex-end; }
+.tk-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tk-chip { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; margin-right: -4px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in oklch, var(--on-accent) 16%, transparent); font-variant-numeric: tabular-nums; }
+.tk-chip:empty { display: none; }
+
+.tk-hero { container-type: inline-size; padding: 0; overflow: hidden; }
+.tk-in { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 16px; }
+.tk-fig { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.tk-k { font-size: 13px; color: var(--text-3); }
+.tk-v { font-size: clamp(30px, 8.5cqw, 42px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.1; font-family: var(--font); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tk-when { font-size: 13px; color: var(--text-3); min-height: 20px; }
+.tk-rows { display: grid; gap: 10px; margin: 10px 0 0; }
+.tk-rows > div { display: grid; gap: 2px; }
+.tk-rows dt { font-size: 13px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+.tk-rows dd { margin: 0; font-size: 16px; }
+.tk-rows .delta { font-size: 16px; flex-wrap: wrap; }
+.tk-fx { margin-top: 10px; font-size: 13px; line-height: 1.45; color: var(--text-2); text-wrap: pretty; }
+.tk-all { justify-self: start; margin-top: 8px; }
+.tk-all .ic { width: 16px; height: 16px; }
+.tk-all[hidden] { display: none; }
+
+.tk-tipw { position: relative; display: inline-flex; }
+.tk-info { width: 22px; height: 22px; padding: 0; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--text-3); font-size: 12px; font-weight: 600; font-family: var(--font); line-height: 1; position: relative; }
+.tk-info::after { content: ""; position: absolute; inset: -11px; } /* área táctil de 44 px */
+@media (hover: hover) { .tk-info:hover { color: var(--text); background: var(--s2); } }
+.tk-tip { position: absolute; left: -4px; top: calc(100% + 8px); z-index: 20; width: min(260px, 72vw); padding: 10px 12px; border-radius: var(--r-sm); background: var(--s3); color: var(--text); border: 1px solid var(--line); box-shadow: var(--sh-2); font-size: 13px; font-weight: 400; line-height: 1.45; opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
+.tk-tipw:hover .tk-tip, .tk-info:focus-visible + .tk-tip, .tk-info:focus + .tk-tip { opacity: 1; transform: none; }
+
+.tk-chart { display: grid; gap: 8px; min-width: 0; align-content: start; margin-top: 8px; }
+.tk-ctop { display: flex; justify-content: flex-start; }
+.tk-per { width: min(100%, 300px); }
+.tk-stage { position: relative; height: 200px; min-width: 0; touch-action: pan-y; cursor: crosshair; border-radius: var(--r-sm); }
+.tk-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.tk-stage:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.tk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.tk-leg { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.tk-leg[hidden] { display: none; }
+.tk-leg button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-sm); background: none; font-size: 13px; color: var(--text-2); transition: background-color 150ms var(--ease-out), opacity 180ms var(--ease-out), border-color 150ms var(--ease-out); }
+.tk-leg button.is-on { background: var(--s2); border-color: var(--line); color: var(--text); }
+.tk-leg button.is-dim { opacity: 0.55; }
+@media (hover: hover) { .tk-leg button:hover { background: var(--s2); } }
+.tk-sw { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+.tk-lv { color: var(--text-3); }
+
+/* estados */
+.tk-hero .tk-empty { display: none; padding: 32px 20px; text-align: left; gap: 8px; }
+.tk-hero[data-mode="empty"] .tk-in { display: none; }
+.tk-hero[data-mode="empty"] .tk-empty { display: grid; justify-items: start; }
+.tk-empty h2 { font-size: 18px; }
+.tk-empty p { color: var(--text-2); font-size: 14px; max-width: 52ch; text-wrap: pretty; }
+.tk-empty .tk-acts { margin-top: 8px; }
+.tk-hero[data-mode="single"] .tk-leg { display: none; }
+
+@container (min-width: 900px) {
+  .tk-in { grid-template-columns: minmax(0, 38fr) minmax(0, 62fr); gap: 32px; padding: 24px; }
+  .tk-chart { margin-top: 0; }
+  .tk-stage { height: 260px; }
+  .tk-v { font-size: 42px; }
+}
+@media (max-width: 640px) {
+  .tk-head .tk-acts { width: 100%; }
+  .tk-head .tk-acts .btn { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-tip, .tk-leg button { transition: none; }
+}
+
+/* Dentro de un portafolio el encabezado de la lista (Importar / Nuevo) sobra: lo sustituye la migaja */
+#secTracker[data-view="detail"] .tk-head { display: none; }

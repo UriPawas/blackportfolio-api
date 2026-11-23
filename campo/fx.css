@@ -1,0 +1,160 @@
+/* Campo · microinteracciones y botones (se carga después de _dev_proto-campo.css).
+   Mejora progresiva: todo se cuelga de selectores existentes; el HTML no cambia.
+   Recetas de docs/rediseno-gbm-2026-11/10-recetas-microinteracciones.md (R1-R4, R6-R11, R13, R15). */
+
+:root {
+  --d-press: 90ms; --d-release: 180ms; --d-hover: 150ms; --d-state: 200ms;
+  --d-pill: 260ms; --d-data: 420ms; --d-spring: 350ms;
+  --light: oklch(1 0 0);
+  --spring-arrow: linear(0.001, 0.065, 0.205, 0.36, 0.52, 0.652, 0.767, 0.85, 0.915, 0.957, 0.986, 1.003, 1.012, 1.015, 1.016, 1.014, 1.012, 1.009, 1.007, 1.005, 1.003, 1);
+}
+@supports not (transition-timing-function: linear(0, 1)) { :root { --spring-arrow: var(--ease-out); } }
+@property --mx { syntax: '<length-percentage>'; inherits: true; initial-value: 50%; }
+@property --my { syntax: '<length-percentage>'; inherits: true; initial-value: 50%; }
+
+/* ---------- R15 + R1: presión (también táctil, con mínimo visible) ---------- */
+.btn, .icon-btn, .pw-btn, .seg > button, .side-nav button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.btn { transition: background-color var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out), color var(--d-hover) var(--ease-out), transform var(--d-release) var(--ease-out); }
+.btn:active, .btn[data-pressed] { transform: scale(0.97); transition-duration: var(--d-hover), var(--d-hover), var(--d-hover), var(--d-hover), var(--d-press); }
+.icon-btn[data-pressed], .pw-btn[data-pressed], .seg > button[data-pressed], .side-nav button[data-pressed] { transform: scale(0.97); transition-duration: var(--d-press); }
+.icon-btn[data-pressed], .pw-btn[data-pressed] { background: var(--s2); }
+
+/* ---------- R1: botón primario con luz del puntero ---------- */
+.btn-primary { overflow: hidden; isolation: isolate; }
+.btn-primary::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+  background: radial-gradient(120px circle at var(--mx) var(--my), color-mix(in oklch, var(--light) 24%, transparent), transparent 70%);
+  transition: opacity var(--d-state) var(--ease-out), --mx 140ms var(--ease-out), --my 140ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .btn-primary:hover::before { opacity: 1; } }
+@media (hover: hover) { .btn-primary:hover { background: color-mix(in oklch, var(--accent), white 6%); } }
+
+/* carga y éxito: la etiqueta se queda en su sitio (el ancho no cambia). El estado se pone con data-state. */
+.btn .bt-spin, .btn .bt-ok { position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; opacity: 0; pointer-events: none; transition: opacity 120ms var(--ease-out); }
+.btn-primary .bt-spin, .btn-primary .bt-ok { color: var(--on-accent); }
+.btn-secondary .bt-spin, .btn-secondary .bt-ok { color: var(--text); }
+.bt-spin circle { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 28 72; transform-origin: center; }
+.bt-ok path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.btn[data-state] { color: transparent; }
+.btn[data-state] .g, .btn[data-state] .ic:not(.bt-spin):not(.bt-ok) { opacity: 0; }
+.btn[data-state="loading"] { cursor: progress; }
+.btn[data-state="loading"] .bt-spin { opacity: 1; animation: bt-rot 700ms linear infinite; }
+.btn[data-state="success"] .bt-ok { opacity: 1; }
+.btn[data-state="success"] .bt-ok path { stroke-dashoffset: 0; transition: stroke-dashoffset 280ms var(--ease-out) 60ms; }
+@keyframes bt-rot { to { transform: rotate(360deg); } }
+/* el spinner viejo del prototipo se sustituye por el SVG de arriba */
+.btn .spin { display: none !important; }
+.btn[data-state] .lbl, .loading .lbl { opacity: 0; transition: opacity 120ms var(--ease-out); }
+
+/* ---------- R2: secundario / ghost, el borde se llena desde el punto de entrada ---------- */
+.btn-secondary, .btn-ghost { isolation: isolate; }
+.btn-secondary::before, .btn-ghost::before {
+  content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; pointer-events: none;
+  border: 1px solid var(--accent-ink);
+  background: color-mix(in oklch, var(--accent) 11%, transparent);
+  clip-path: circle(0 at var(--ex, 50%) var(--ey, 50%));
+  transition: clip-path 200ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-secondary:hover::before, .btn-ghost:hover::before { clip-path: circle(150% at var(--ex, 50%) var(--ey, 50%)); transition-duration: 340ms; }
+  .btn-secondary:hover { background: var(--s2); color: var(--text); }
+  .btn-ghost:hover { background: transparent; color: var(--text); }
+}
+.btn-secondary:focus-visible::before, .btn-ghost:focus-visible::before { clip-path: circle(150% at 50% 50%); }
+.btn-secondary:disabled::before, .btn-ghost:disabled::before { display: none; }
+
+/* ---------- R3: flecha del CTA, 3 px con resorte ---------- */
+.ic-go { transition: transform var(--d-spring) var(--spring-arrow); }
+@media (hover: hover) { .btn:hover .ic-go { transform: translateX(3px); } }
+.btn:focus-visible .ic-go { transform: translateX(3px); }
+
+/* ---------- R4: segmentado. La pastilla existente se mide si las columnas no son iguales ---------- */
+.seg-pill { transition: transform var(--d-pill) var(--ease-in-out); }
+.seg[data-fit] .seg-pill { width: var(--fx-w, 0px); transform: translateX(var(--fx-x, 3px)); }
+
+/* ---------- R6: odómetro ---------- */
+.od { --od-h: 1.15em; display: inline-flex; line-height: var(--od-h); font-variant-numeric: tabular-nums; vertical-align: top; }
+.od > span { display: block; height: var(--od-h); white-space: pre; }
+/* .price span del prototipo (14 px, gris) no debe alcanzar al odómetro, que también es un span */
+b > .od, b > .od span { font-size: inherit; color: inherit; }
+.price b > .od, .price b > .od span { font-size: inherit; color: inherit; }
+.od-d { overflow: clip; }
+.od-s { display: block; white-space: pre; line-height: var(--od-h); translate: 0 calc(var(--p) * -3.3333%); transition: translate var(--d-data) var(--ease-out) var(--dl, 0ms); }
+.od-s.snap { transition: none; }
+.price b .od { --od-h: 1.5em; }
+
+/* ---------- R7: destello de precio (WAAPI, aquí solo el cuerpo) ---------- */
+.fx-px { border-radius: 4px; }
+
+/* ---------- R8: foco suave + filo iluminado (y 2 px de elevación solo en planes) ---------- */
+.plan, #view-app .panel, #view-app .insight { isolation: isolate; --lit-a: 10%; }
+.plan { transition: transform var(--d-release) var(--ease-out), --mx 140ms var(--ease-out), --my 140ms var(--ease-out); }
+#view-app .panel, #view-app .insight { transition: --mx 140ms var(--ease-out), --my 140ms var(--ease-out); }
+.plan::before, #view-app .panel::before, #view-app .insight::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: radial-gradient(240px circle at var(--mx) var(--my), color-mix(in oklch, var(--accent) var(--lit-a), transparent), transparent 70%);
+  transition: opacity var(--d-state) var(--ease-out);
+}
+.plan::after, #view-app .panel::after, #view-app .insight::after {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; opacity: 0; padding: 1px;
+  background: radial-gradient(180px circle at var(--mx) var(--my), color-mix(in oklch, var(--accent-ink) 45%, transparent), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  transition: opacity var(--d-state) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .plan:hover { transform: translateY(-2px); }
+  .plan:hover::before, .plan:hover::after, #view-app .panel:hover::before, #view-app .panel:hover::after, #view-app .insight:hover::before, #view-app .insight:hover::after { opacity: 1; }
+}
+.plan:focus-within::before, .plan:focus-within::after { opacity: 1; }
+
+/* ---------- R9: tooltip con retardo y modo "ya caliente" ---------- */
+.tip { position: fixed; left: 0; top: 0; z-index: 80; max-width: 240px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--s3); color: var(--text); font-size: 13px; line-height: 1.35; box-shadow: var(--sh-2), 0 0 0 1px var(--line);
+  translate: var(--tx, 0px) var(--ty, 0px); transform-origin: var(--ox, 50%) var(--oy, 100%); opacity: 0; transform: scale(0.96); pointer-events: none; visibility: hidden;
+  transition: opacity 80ms var(--ease-out), transform 80ms var(--ease-out), visibility 0s linear 80ms; }
+.tip.on { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity 125ms var(--ease-out), transform 125ms var(--ease-out), visibility 0s; }
+.tip.instant { transition: none; }
+
+/* ---------- R10: entrada escalonada (solo animaciones finitas; en reposo todo es visible) ---------- */
+/* la animación se lanza por WAAPI desde JS; aquí no hay estado inicial oculto. */
+
+/* ---------- R11: esqueleto con barrido compuesto y aparición diferida ---------- */
+.skel { animation: skel-on 1ms linear 150ms backwards; }
+@keyframes skel-on { from { opacity: 0; } to { opacity: 1; } }
+.skel i { position: relative; overflow: hidden; background: var(--s2); animation: none; }
+.skel i::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 30%, color-mix(in oklch, var(--text) 6%, transparent) 50%, transparent 70%);
+  animation: skel-sweep 1.6s linear infinite; }
+@keyframes skel-sweep { to { transform: translateX(100%); } }
+
+/* ---------- R13: toast (misma API, mejor movimiento) ---------- */
+.toast { transform: translate(-50%, 8px) scale(0.97); transition: opacity 120ms var(--ease-out), transform 120ms var(--ease-out); }
+.toast.on { transform: translate(-50%, 0); pointer-events: auto; transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+
+/* ---------- acceso: verificación 2FA ---------- */
+.code:not(.ok) input:disabled { opacity: 0.6; cursor: progress; }
+.fx-vok { display: flex; align-items: center; gap: 8px; height: 22px; margin-top: -6px; font-size: 13.5px; font-weight: 500; color: var(--gain); opacity: 0; transition: opacity 120ms var(--ease-out); }
+.fx-vok svg { width: 20px; height: 20px; }
+.fx-vok circle { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.fx-vok path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.fx-vok.on { opacity: 1; }
+.fx-vok.on path { stroke-dashoffset: 0; transition: stroke-dashoffset 280ms var(--ease-out) 80ms; }
+
+/* ---------- movimiento reducido: sin escala, desplazamiento ni bucles de adorno ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .btn:active, .btn[data-pressed], .icon-btn[data-pressed], .pw-btn[data-pressed], .seg > button[data-pressed], .side-nav button[data-pressed] { transform: none; }
+  .btn:active, .btn[data-pressed] { background-image: linear-gradient(color-mix(in oklch, black 8%, transparent), color-mix(in oklch, black 8%, transparent)); }
+  .btn-primary::before { display: none; }
+  .btn[data-state="loading"] .bt-spin { animation-duration: 2s; }
+  .btn[data-state="success"] .bt-ok path, .fx-vok.on path { transition: none; }
+  .btn-secondary::before, .btn-ghost::before { clip-path: none; opacity: 0; transition: opacity 120ms var(--ease-out); }
+  .btn-secondary:hover::before, .btn-ghost:hover::before, .btn-secondary:focus-visible::before, .btn-ghost:focus-visible::before { clip-path: none; opacity: 1; }
+  .ic-go, .btn:hover .ic-go, .btn:focus-visible .ic-go { transition: none; transform: none; }
+  .seg-pill { transition: none; }
+  .od-s { transition: none; }
+  .plan { transition: none; }
+  .plan:hover { transform: none; }
+  .tip, .tip.on { transform: none; transition: opacity 80ms linear; }
+  .skel i::after { animation: none; display: none; }
+  .toast, .toast.on { transform: translateX(-50%); }
+}
