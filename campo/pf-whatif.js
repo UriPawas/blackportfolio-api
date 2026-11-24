@@ -17,9 +17,13 @@
 
   /* ============================== formato ============================== */
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }), nfT = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }), nfc = {};
-  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + '$' + nf0.format(a); }
-  function fA(v) { return '$' + nf0.format(Math.round(Math.abs(v))); }
-  function fS(v) { var a = Math.round(Math.abs(v)); return (a === 0 ? '' : v < 0 ? '−' : '+') + '$' + nf0.format(a); }
+  /* moneda extranjera frente a la base (USD si la base no es dólar; MXN si lo es) */
+  function FW() { var t = window.CampoTracker, b = (t && t.base) || 'MXN', f = (t && t.fx && t.fx.foreign) || (b === 'USD' ? 'MXN' : 'USD'), N = { MXN: 'peso', USD: 'dólar', EUR: 'euro', GBP: 'libra', CAD: 'dólar canadiense', BRL: 'real' };
+    return { b: b, n: f === 'MXN' ? 'peso' : 'dólar', pl: f === 'MXN' ? 'pesos' : 'dólares', pair: f + '/' + b, bpl: b === 'MXN' ? 'pesos' : b === 'USD' ? 'dólares' : b, vs: { MXN: 'al peso', USD: 'al dólar', EUR: 'al euro', GBP: 'a la libra', CAD: 'al dólar canadiense', BRL: 'al real' }[b] || 'a ' + b, bArt: (b === 'GBP' ? 'La ' : 'El ') + (N[b] || b) }; }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + SYM() + nf0.format(a); }
+  function fA(v) { return SYM() + nf0.format(Math.round(Math.abs(v))); }
+  function fS(v) { var a = Math.round(Math.abs(v)); return (a === 0 ? '' : v < 0 ? '−' : '+') + SYM() + nf0.format(a); }
   function fN(v, d) { if (!nfc[d]) nfc[d] = new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }); return nfc[d].format(v); }
   function fP(v, d) { d = d == null ? 1 : d; var a = Math.abs(v), z = a < 0.5 * Math.pow(10, -d); return (z ? '' : v < 0 ? '−' : '+') + fN(a, d) + ' %'; }
   function fPu(v, d) { d = d == null ? 0 : d; return fN(Math.abs(v), d) + ' %'; }
@@ -27,7 +31,7 @@
   function sgnClsP(v) { return v > 0.0005 ? 'gain' : v < -0.0005 ? 'loss' : 'flat'; }
   function dTxt(iso, short) { return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', short ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, ''); }
   function niceStep(span, n) { var raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag; return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * mag; }
-  function compact(v) { var a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) return s + '$' + nfT.format(a / 1e6) + ' M'; if (a >= 1e3) return s + '$' + nf0.format(Math.round(a / 1e3)) + ' mil'; return s + '$' + Math.round(a); }
+  function compact(v) { var a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) return s + SYM() + nfT.format(a / 1e6) + ' M'; if (a >= 1e3) return s + SYM() + nf0.format(Math.round(a / 1e3)) + ' mil'; return s + SYM() + Math.round(a); }
 
   var uid = 0;
   function every(fn) { var done = false, r = 0, t = 0; (function run() { if (done) return; cancelAnimationFrame(r); clearTimeout(t); if (fn() === false) { done = true; return; } r = requestAnimationFrame(run); t = setTimeout(run, 50); })(); }
@@ -36,8 +40,8 @@
   /* frases por alternativa (el "en …" de la oración de resultado) y notas */
   var ALT_SHORT = { sp500: 'S&P 500', nasdaq: 'Nasdaq 100', ipc: 'IPC', cetes: 'Cetes', btc: 'Bitcoin', oro: 'Oro', iguales: 'Pesos iguales' };
   var ALT_IN = { sp500: 'el S&P 500', nasdaq: 'el Nasdaq 100', ipc: 'el S&P/BMV IPC', cetes: 'Cetes a 28 días', btc: 'Bitcoin', oro: 'oro', iguales: 'tus mismas posiciones, en partes iguales' };
-  var ALT_NOTE = { iguales: 'Las posiciones de hoy con el mismo monto en cada una, rebalanceadas a diario.', cetes: 'Rendimiento supuesto de 7 % anual, sin riesgo de mercado.', ipc: 'Índice mexicano, ya en pesos.' };
-  var ALT_DEFAULT_NOTE = 'Valuado en pesos con el USD/MXN de cada día.';
+  var ALT_NOTE = { iguales: 'Las posiciones de hoy con el mismo monto en cada una, rebalanceadas a diario.', cetes: 'Rendimiento supuesto de 7 % anual, sin riesgo de mercado.', ipc: 'Índice mexicano.' };
+  var ALT_DEFAULT_NOTE = 'Valuado en tu moneda base con el tipo de cambio de cada día.';
   var PERIODS = [['6M', 126, '6 meses'], ['1A', 251, '1 año']];
 
   /* ============================== gráfica de líneas (lienzo nítido) ============================== */
@@ -212,7 +216,7 @@
 
     /* ---------- 3 · ¿Y si mañana…? ---------- */
     var SC = M.scenarios, CUS = { spx: -15, ndx: -20, ipc: -10, btc: -40, fx: 8 };
-    var SL = [['spx', 'S&P 500', 60, 'S&P 500'], ['ndx', 'Nasdaq 100', 60, 'Nasdaq 100'], ['ipc', 'S&P/BMV IPC', 60, 'IPC'], ['btc', 'Bitcoin', 60, 'Bitcoin'], ['fx', 'Dólar frente al peso (USD/MXN)', 40, 'USD/MXN']];
+    var SL = [['spx', 'S&P 500', 60, 'S&P 500'], ['ndx', 'Nasdaq 100', 60, 'Nasdaq 100'], ['ipc', 'S&P/BMV IPC', 60, 'IPC'], ['btc', 'Bitcoin', 60, 'Bitcoin'], ['fx', (FW().n === 'peso' ? 'Peso' : 'Dólar') + ' frente ' + FW().vs + ' (' + FW().pair + ')', 40, FW().pair]];
     function customSh() { var s = {}; SL.forEach(function (x) { s[x[0]] = CUS[x[0]] / 100; }); return s; }
     function runCustom() { return M.stress(inp, { id: 'custom', name: 'Tu escenario', sh: customSh() }); }
     var RES = {}; SC.forEach(function (s) { RES[s.id] = M.stress(inp, s.id); });
@@ -231,7 +235,7 @@
       }).join('');
     }
     var DEF_MKT = 'Lo que pasa con tus posiciones medido en su propia moneda: cuánto caen o suben las acciones, los fondos o el Bitcoin, sin contar el tipo de cambio.';
-    var DEF_FX = 'Lo que suman o restan tus posiciones en dólares cuando cambia el USD/MXN. Si el dólar sube, lo que tienes en dólares vale más pesos.';
+    var DEF_FX = 'Lo que suman o restan tus posiciones en ' + FW().pl + ' cuando cambia el ' + FW().pair + '. Si el ' + FW().n + ' sube, lo que tienes en ' + FW().pl + ' vale más ' + FW().bpl + '.';
     function splitRow(key, label, def, n) {
       return '<div class="pwi-sp2" data-sp2="' + key + '"><div class="pwi-spl"><span class="pwi-spn">' + label + '</span>' + (def ? '<button type="button" class="pwi-i" aria-expanded="false" aria-controls="' + id + '-sd' + n + '" aria-label="Qué significa: ' + esc(label) + '" title="' + esc(def) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>' : '') + '</div>' +
         '<span class="pwi-spb" aria-hidden="true"><i class="pwi-bn"></i><i class="pwi-bp"></i></span><span class="pwi-spv"><b class="num" data-v></b><span class="num" data-p></span></span>' + (def ? '<div class="pwi-def" id="' + id + '-sd' + n + '"><p>' + esc(def) + '</p></div>' : '') + '</div>';
@@ -243,12 +247,12 @@
       '<div class="pwi-scs" role="group" aria-label="Escenarios">' + SC.map(function (s, k) { return cardHTML(RES[s.id], k, false); }).join('') + cardHTML(cusRes, SC.length, true) + '</div>' +
       '<div class="pwi-det" data-det><div class="pwi-dh"><h3 data-dn></h3><span class="muted" data-dw></span></div>' +
       '<p class="pwi-big"><span class="num" data-di></span><span class="num pwi-bgp" data-dp></span></p>' +
-      '<div class="pwi-splitw"><h4>Qué lo explica</h4>' + splitRow('mkt', 'Efecto del mercado', DEF_MKT, 0) + splitRow('fx', 'Efecto del peso (tipo de cambio)', DEF_FX, 1) + splitRow('tot', 'Total', '', 2) + '</div>' +
+      '<div class="pwi-splitw"><h4>Qué lo explica</h4>' + splitRow('mkt', 'Efecto del mercado', DEF_MKT, 0) + splitRow('fx', 'Efecto del tipo de cambio', DEF_FX, 1) + splitRow('tot', 'Total', '', 2) + '</div>' +
       '<p class="pwi-ins" data-ins aria-live="polite"></p>' +
       '<div class="pwi-cust" data-cust><div class="pwi-custi"><div class="pwi-slg" role="group" aria-label="Tu escenario">' + SL.map(sliderHTML).join('') + '</div><button type="button" class="pwi-rs" data-reset>Restablecer</button></div></div>' +
       '<h4 class="pwi-h4">Impacto por posición</h4><ul class="pwi-rows" role="list" data-rows>' + rowsHTML() + '</ul><p class="pwi-note" data-note></p></div></section>';
 
-    mount.innerHTML = '<div class="pwi" id="' + id + '"><p class="pwi-tag">Base MXN · valores de hoy y de hace un año</p>' + s1HTML + s2HTML + s3HTML + '<p class="pwi-foot">Comparación informativa · no es asesoría de inversión</p></div>';
+    mount.innerHTML = '<div class="pwi" id="' + id + '"><p class="pwi-tag">Base ' + FW().b + ' · valores de hoy y de hace un año</p>' + s1HTML + s2HTML + s3HTML + '<p class="pwi-foot">Comparación informativa · no es asesoría de inversión</p></div>';
     var $ = function (s, r) { return (r || mount).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || mount).querySelectorAll(s)); };
 
     /* ---------- cifras que ruedan ---------- */
@@ -275,13 +279,13 @@
     }
     var chart = LineChart($('[data-st]'), getDead, function (i, d) {
       var n = d.dates.length - 1, k = i < 0 ? n : i, df = d.actual[k] - d.alternative[k];
-      setRO(dTxt(d.dates[k]), fM(d.actual[k]), fM(d.alternative[k]), fS(df) || '$0', sgnCls(df), i < 0 ? '' : dTxt(d.dates[k]) + ': tu valor ' + fM(d.actual[k]) + ', alternativa ' + fM(d.alternative[k]) + ', diferencia ' + fS(df));
+      setRO(dTxt(d.dates[k]), fM(d.actual[k]), fM(d.alternative[k]), fS(df) || SYM() + '0', sgnCls(df), i < 0 ? '' : dTxt(d.dates[k]) + ': tu valor ' + fM(d.actual[k]) + ', alternativa ' + fM(d.alternative[k]) + ', diferencia ' + fS(df));
     });
     function kpVals(c) {
       var up = c.diff >= 0;
       return { real: { v: c.actualEnd, f: fM, cls: '', sub: 'Al ' + dTxt(c.dates[c.dates.length - 1]) },
         alt: { v: c.end, f: fM, cls: '', sub: esc(ALT_SHORT[c.alt] || c.name) },
-        diff: { v: c.diff, f: function (x) { return fS(x) || '$0'; }, cls: sgnCls(c.diff), sub: Math.abs(c.diff) < 0.5 ? 'Igual que la alternativa' : up ? 'Vas por delante' : 'La alternativa va por delante' },
+        diff: { v: c.diff, f: function (x) { return fS(x) || SYM() + '0'; }, cls: sgnCls(c.diff), sub: Math.abs(c.diff) < 0.5 ? 'Igual que la alternativa' : up ? 'Vas por delante' : 'La alternativa va por delante' },
         twr: { v: c.twrActual * 100, f: function (x) { return fP(x, 2); }, cls: sgnClsP(c.twrActual), sub: 'Desde ' + dTxt(c.start, true) },
         twrAlt: { v: c.twrAlt * 100, f: function (x) { return fP(x, 2); }, cls: sgnClsP(c.twrAlt), sub: Math.abs((c.twrActual - c.twrAlt) * 100) < 0.005 ? 'Igual que tú' : fN(Math.abs(c.twrAlt - c.twrActual) * 100, 2) + ' pts ' + (c.twrAlt > c.twrActual ? 'más' : 'menos') + ' que tú' } };
     }
@@ -326,11 +330,11 @@
     $$('.pwi-ar', detEl).forEach(function (n) { rowEls[n.dataset.t] = n; });
     function insight(r) {
       var loc = r.impactLocal, fx = r.fxEffect, usd = inp.assets.some(function (a) { return a.isU; });
-      if (!usd) return 'Todo lo que tienes está en pesos: el tipo de cambio no mueve tu resultado.';
-      if (Math.abs(fx) < 1) return 'En este escenario el dólar casi no se mueve, así que el resultado viene del mercado.';
-      if (Math.abs(loc) < 1) return fx > 0 ? 'El mercado casi no cambia; el dólar más caro suma ' + fS(fx) + ' a tus posiciones en dólares.' : 'El mercado casi no cambia; el dólar más barato resta ' + fA(fx) + ' a tus posiciones en dólares.';
-      if (loc < 0 && fx > 0) { var c = fx / -loc; return c >= 1 ? 'El dólar compensó toda la caída: sin el tipo de cambio habrías perdido ' + fA(loc) + '; con él, ' + (r.impact >= 0 ? 'ganas ' + fA(r.impact) : 'pierdes ' + fA(r.impact)) + '.' : 'El dólar amortiguó ' + fPu(c * 100, 0) + ' de la caída: sin el tipo de cambio habrías perdido ' + fA(loc) + '; con él, ' + fA(r.impact) + '.'; }
-      if (loc > 0 && fx < 0) { var g = -fx / loc; return g >= 1 ? 'El peso más fuerte se come toda la ganancia de tus posiciones en dólares: de ' + fS(loc) + ' en el mercado a ' + (fS(r.impact) || '$0') + ' en pesos.' : 'El peso más fuerte recorta ' + fPu(g * 100, 0) + ' de la ganancia: el mercado suma ' + fA(loc) + ' y en pesos quedan ' + fA(r.impact) + '.'; }
+      if (!usd) return 'Todo lo que tienes está en ' + FW().b + ': el tipo de cambio no mueve tu resultado.';
+      if (Math.abs(fx) < 1) return 'En este escenario el ' + FW().n + ' casi no se mueve, así que el resultado viene del mercado.';
+      if (Math.abs(loc) < 1) return fx > 0 ? 'El mercado casi no cambia; el ' + FW().n + ' más caro suma ' + fS(fx) + ' a tus posiciones en ' + FW().pl + '.' : 'El mercado casi no cambia; el ' + FW().n + ' más barato resta ' + fA(fx) + ' a tus posiciones en ' + FW().pl + '.';
+      if (loc < 0 && fx > 0) { var c = fx / -loc; return c >= 1 ? 'El ' + FW().n + ' compensó toda la caída: sin el tipo de cambio habrías perdido ' + fA(loc) + '; con él, ' + (r.impact >= 0 ? 'ganas ' + fA(r.impact) : 'pierdes ' + fA(r.impact)) + '.' : 'El ' + FW().n + ' amortiguó ' + fPu(c * 100, 0) + ' de la caída: sin el tipo de cambio habrías perdido ' + fA(loc) + '; con él, ' + fA(r.impact) + '.'; }
+      if (loc > 0 && fx < 0) { var g = -fx / loc; return g >= 1 ? FW().bArt + ' más fuerte se come toda la ganancia de tus posiciones en ' + FW().pl + ': de ' + fS(loc) + ' en el mercado a ' + (fS(r.impact) || SYM() + '0') + ' en ' + FW().b + '.' : FW().bArt + ' más fuerte recorta ' + fPu(g * 100, 0) + ' de la ganancia: el mercado suma ' + fA(loc) + ' y en ' + FW().b + ' quedan ' + fA(r.impact) + '.'; }
       if (loc < 0 && fx < 0) return 'Además de la caída del mercado, el tipo de cambio resta ' + fA(fx) + ': pierdes por los dos lados.';
       return 'Además de lo que sube el mercado, el tipo de cambio suma ' + fA(fx) + '.';
     }
@@ -339,14 +343,14 @@
       var row = $('[data-sp2="' + key + '"]', detEl), w = clamp(Math.abs(v) / scale, 0, 1).toFixed(3), vv = $('[data-v]', row), pp = $('[data-p]', row);
       $('.pwi-bp', row).style.setProperty('--w', v > 0 ? w : 0); $('.pwi-bn', row).style.setProperty('--w', v < 0 ? w : 0);
       vv.className = 'num ' + sgnCls(v); pp.className = 'num ' + sgnClsP(pct); pp.textContent = fP(pct * 100, 1);
-      if (animate) roll(vv, from, v, function (x) { return fS(x) || '$0'; }, 300, 0); else { vv.textContent = fS(v) || '$0'; vv._r = ++rollId; }
+      if (animate) roll(vv, from, v, function (x) { return fS(x) || SYM() + '0'; }, 300, 0); else { vv.textContent = fS(v) || SYM() + '0'; vv._r = ++rollId; }
     }
     function showDetail(r, animate, live) {
       var old = detPrev, sameId = old && old.id === r.id;
       detEl.classList.toggle('is-live', !!live);
       $('[data-dn]').textContent = r.name; $('[data-dw]').textContent = r.id === 'custom' ? 'Hipotético · tú eliges los movimientos' : r.kind === 'Histórico' ? 'Histórico · ' + r.when : 'Hipotético';
       var di = $('[data-di]'), dp = $('[data-dp]'); di.className = 'num ' + sgnCls(r.impact); dp.className = 'num pwi-bgp ' + sgnClsP(r.pct); dp.textContent = fP(r.pct * 100, 1) + ' de tu portafolio';
-      if (animate && old) roll(di, old.impact, r.impact, function (x) { return fS(x) || '$0'; }, 320, 0); else { di.textContent = fS(r.impact) || '$0'; di._r = ++rollId; }
+      if (animate && old) roll(di, old.impact, r.impact, function (x) { return fS(x) || SYM() + '0'; }, 320, 0); else { di.textContent = fS(r.impact) || SYM() + '0'; di._r = ++rollId; }
       var scale = Math.max(Math.abs(r.impact), Math.abs(r.impactLocal), Math.abs(r.fxEffect), 1), v = inp.value || 1;
       setSplit('mkt', r.impactLocal, r.impactLocal / v, scale, animate && !!old, old ? old.impactLocal : null);
       setSplit('fx', r.fxEffect, r.fxEffect / v, scale, animate && !!old, old ? old.fxEffect : null);
@@ -356,11 +360,11 @@
       r.rows.forEach(function (x) {
         var n = rowEls[x.ticker]; if (!n) return; var w = clamp(Math.abs(x.impact) / mx, 0, 1).toFixed(3), av = $('[data-av]', n), oldRow = old ? old.rows.filter(function (y) { return y.ticker === x.ticker; })[0] : null;
         $('.pwi-bp', n).style.setProperty('--w', x.impact > 0 ? w : 0); $('.pwi-bn', n).style.setProperty('--w', x.impact < 0 ? w : 0);
-        $('[data-sub]', n).textContent = 'Mercado ' + fP(x.local * 100, 1) + (x.isU && Math.abs(x.mxn - x.local) > 0.0005 ? ' · en pesos ' + fP(x.mxn * 100, 1) : '');
+        $('[data-sub]', n).textContent = 'Mercado ' + fP(x.local * 100, 1) + (x.isU && Math.abs(x.mxn - x.local) > 0.0005 ? ' · en ' + FW().b + ' ' + fP(x.mxn * 100, 1) : '');
         av.className = 'pwi-av num ' + sgnCls(x.impact);
-        var fm = function (z) { return fS(z) || '$0'; };
+        var fm = function (z) { return fS(z) || SYM() + '0'; };
         if (animate && oldRow) roll(av, oldRow.impact, x.impact, fm, 300, 0); else { av.textContent = fm(x.impact); av._r = ++rollId; }
-        n.setAttribute('aria-label', x.ticker + ': ' + fS(x.impact) + ' en pesos, ' + fP(x.mxn * 100, 1) + '. Mercado ' + fP(x.local * 100, 1) + '.');
+        n.setAttribute('aria-label', x.ticker + ': ' + fS(x.impact) + ' en ' + FW().b + ', ' + fP(x.mxn * 100, 1) + '. Mercado ' + fP(x.local * 100, 1) + '.');
       });
       var nt = r.id === 'custom' ? 'Cada posición responde según su sensibilidad estimada (beta) a estos movimientos; no incluye lo propio de cada empresa. Lo que no mueves queda en cero.' : r.note;
       if (noteEl.textContent !== nt) { noteEl.textContent = nt; if (animate && !reduce() && noteEl.animate && !sameId) noteEl.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: EXPO }); }
@@ -368,7 +372,7 @@
     }
     function updateCard(r, id2) {
       var c = $('.pwi-sc[data-id="' + id2 + '"]'), sv = $('[data-sv]', c), sp = $('[data-sp]', c), bar = $('.pwi-scb i', c);
-      sv.className = 'num ' + sgnCls(r.impact); sv.textContent = fS(r.impact) || '$0'; sp.className = 'num pwi-scp ' + sgnClsP(r.pct); sp.textContent = fP(r.pct * 100, 1);
+      sv.className = 'num ' + sgnCls(r.impact); sv.textContent = fS(r.impact) || SYM() + '0'; sp.className = 'num pwi-scp ' + sgnClsP(r.pct); sp.textContent = fP(r.pct * 100, 1);
       bar.className = r.pct < 0 ? 'neg' : 'pos'; bar.style.setProperty('--w', clamp(Math.abs(r.pct) / PMAX, 0, 1).toFixed(3));
     }
     function setSel(id2, animate) {

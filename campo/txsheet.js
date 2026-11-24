@@ -14,8 +14,12 @@
 
   function reduce() { return !!rmq.matches; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function mxn(v) { var a = Math.abs(v); return (v < -0.004 ? '−' : '') + '$' + nf2.format(a); }
-  function cp(ccy, v) { return (ccy === 'USD' ? 'US$' : '$') + nf2.format(v); }
+  /* producción: guarda en la cuenta (CampoTracker.canWrite) y todo monto va en la moneda del portafolio (PCC) */
+  var RL = !!T.canWrite, PCC = 'MXN', SYM = { MXN: '$', USD: 'US$', EUR: '€', GBP: '£', CAD: 'C$', BRL: 'R$' };
+  function sym(c) { return SYM[c] || ((c || '') + ' '); }
+  function mxn(v) { var a = Math.abs(v); return (v < -0.004 ? '−' : '') + sym(RL ? PCC : 'MXN') + nf2.format(a); }
+  function cp(ccy, v) { return sym(ccy) + nf2.format(v); }
+  function todayIso() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function dShort(iso) { var p = iso.split('-'); return +p[2] + ' ' + MESC[+p[1] - 1]; }
   function num(s) { var v = String(s == null ? '' : s).replace(/[,\s]/g, ''); return v === '' ? NaN : Number(v); }
   function r2(v) { return Math.round(v * 100) / 100; }
@@ -44,9 +48,12 @@
     if (cur) close(true);
     var S = {
       pfId: o.pfId && T.get(o.pfId) ? o.pfId : null, type: o.type || 'buy', tk: '', name: '', date: T.dates[T.dates.length - 1],
-      qty: '', px: '', pxEd: false, fee: '', feeEd: false, amount: '', note: '', fund: true
+      qty: '', px: '', pxEd: false, fee: '', feeEd: false, amount: '', note: '', fund: true, comm: '0.25', iva: true
     };
     if (!S.pfId && T.portfolios.length) S.pfId = T.portfolios[0].id;
+    if (RL) S.date = todayIso();
+    function setPcc() { PCC = RL ? ((T.get(S.pfId) || {}).currency || 'MXN') : 'MXN'; }
+    setPcc();
     var pickPf = !(o.pfId && T.get(o.pfId));
     var id = 'txs' + (++uid), root_ = doc.createElement('div'), lastPv = null, pvT = 0, nBox = {}, closing = false;
     var lastFocus = o.from || doc.activeElement;
@@ -66,7 +73,7 @@
           '<p class="txs-err" data-err role="alert" aria-live="assertive"></p>' +
         '</div>' +
         '<footer class="txs-ft"><button type="submit" class="btn btn-primary btn-block" data-submit disabled>Registrar compra</button>' +
-          '<p class="txs-note">Se guarda en este navegador (prototipo).</p></footer></form>' +
+          '<p class="txs-note">' + (RL ? 'Se guarda en tu cuenta.' : 'Se guarda en este navegador (prototipo).') + '</p></footer></form>' +
       '</div>';
     doc.body.appendChild(root_);
     var dlg = root_.querySelector('.txs'), form = root_.querySelector('form'), fieldsEl = root_.querySelector('[data-fields]'), prevEl = root_.querySelector('[data-prev]');
@@ -76,14 +83,14 @@
     function posOf(tk) { var r = null; ((pf() || {}).positions || []).forEach(function (x) { if (x.ticker === tk) r = x; }); return r; }
     function held(tk) { var p = posOf(tk); return p ? p.qty : 0; }
     function ccyOf() {
-      var p = posOf(S.tk), c = catOf(S.tk); if (p) return p.currency; if (c) return c.currency; return 'MXN';
+      var p = posOf(S.tk), c = catOf(S.tk), rp = RL && window.CAMPO_REAL && window.CAMPO_REAL.paths[S.tk]; if (p) return p.currency; if (rp) return rp.origCcy || rp.ccy; if (c) return c.currency; if (S.pickCcy) return S.pickCcy; return 'MXN';
     }
     function isSec() { return S.type === 'buy' || S.type === 'sell'; }
 
     /* ---------- campos por tipo ---------- */
     function field(label, inner, hint) { return '<div class="txs-f"><label>' + label + inner + '</label>' + (hint || '') + '</div>'; }
     function dateField() {
-      return field('<span>Fecha</span>', '<input type="date" data-in="date" value="' + S.date + '" min="' + T.dates[0] + '" max="' + T.dates[T.dates.length - 1] + '" required>');
+      return field('<span>Fecha</span>', '<input type="date" data-in="date" value="' + S.date + '" min="' + (RL ? '1990-01-01' : T.dates[0]) + '" max="' + (RL ? todayIso() : T.dates[T.dates.length - 1]) + '" required>');
     }
     function pickList() {
       var ps = (pf() && pf().positions) || [];
@@ -108,14 +115,16 @@
           '<button type="button" class="txs-link" data-all>Vender todo</button>') + '</div>';
       } else if (t === 'div') {
         h += '<div class="txs-f"><span class="txs-lb-t">Posición que pagó</span>' + pickList() + '</div>';
-        h += '<div class="txs-row">' + dateField() + field('<span>Monto bruto (MXN)</span>', '<input data-in="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.amount) + '">') + '</div>';
+        h += '<div class="txs-row">' + dateField() + field(RL ? '<span>Dividendo por acción' + (S.tk ? ' (' + ccyOf() + ')' : '') + '</span>' : '<span>Monto bruto (MXN)</span>', '<input data-in="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.amount) + '">') + '</div>';
       } else {
-        h += '<div class="txs-row">' + dateField() + field('<span>Monto (MXN)</span>', '<input data-in="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.amount) + '">') + '</div>';
+        h += '<div class="txs-row">' + dateField() + field('<span>Monto (' + (RL ? PCC : 'MXN') + ')</span>', '<input data-in="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.amount) + '">') + '</div>';
         h += field('<span>Nota <em>(opcional)</em></span>', '<input data-in="note" maxlength="80" autocomplete="off" placeholder="Ej. ahorro de noviembre" value="' + esc(S.note) + '">');
       }
       if (isSec()) {
         h += '<div class="txs-row">' + field('<span data-pxl>Precio por unidad</span>', '<input data-in="px" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.px) + '">', '<p class="txs-h" data-pxh></p>') +
-          field('<span>Comisión (MXN)</span>', '<input data-in="fee" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.fee) + '">', '<p class="txs-h">0.25 % + IVA, editable</p>') + '</div>';
+          (RL ? field('<span>Comisión (%)</span>', '<input data-in="comm" inputmode="decimal" autocomplete="off" placeholder="0.25" value="' + esc(S.comm) + '">',
+            '<label class="txs-chk txs-iva"><input type="checkbox" data-in="iva"' + (S.iva ? ' checked' : '') + '><span>Más IVA (16 %) sobre la comisión</span></label>')
+          : field('<span>Comisión (MXN)</span>', '<input data-in="fee" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.fee) + '">', '<p class="txs-h">0.25 % + IVA, editable</p>')) + '</div>';
         h += '<p class="txs-h txs-fxr" data-fxr hidden></p>';
       }
       fieldsEl.innerHTML = h;
@@ -164,7 +173,7 @@
       var ccy = ccyOf(), pa = priceInfo(), ph = $('[data-pxh]'), fxr = $('[data-fxr]'), pl = $('[data-pxl]'), hd = $('[data-held]');
       if (pl) pl.textContent = 'Precio por unidad' + (S.tk ? ' (' + ccy + ')' : '');
       if (ph) ph.textContent = pa ? 'Cierre del ' + dShort(pa.date) + ': ' + cp(pa.currency, pa.px) : 'Elige un activo para ver su precio.';
-      if (fxr) { var show = !!pa && pa.currency === 'USD'; fxr.hidden = !show; if (show) fxr.textContent = 'Tipo de cambio del día: ' + nf2.format(pa.fx); }
+      if (fxr) { var show = RL ? (!!S.tk && ccy !== PCC) : (!!pa && pa.currency === 'USD'); fxr.hidden = !show; if (show) fxr.textContent = RL ? 'Se convierte a ' + PCC + ' con el tipo de cambio de esa fecha.' : 'Tipo de cambio del día: ' + nf2.format(pa.fx); }
       if (hd) {
         var q = held(S.tk);
         hd.textContent = !S.tk ? '' : S.type === 'sell' ? 'Disponible: ' + nfQ.format(q) + ' títulos' : q > 0 ? 'Ya tienes ' + nfQ.format(q) : '';
@@ -179,7 +188,7 @@
       refreshFee();
     }
     function refreshFee() {
-      if (!isSec() || S.feeEd) return;
+      if (RL || !isSec() || S.feeEd) return;
       var pa = priceInfo(), q = num(S.qty), p = num(S.px), fx = pa ? pa.fx : 1;
       S.fee = q > 0 && p > 0 ? String(r2(q * p * fx * 0.0029)) : '';
       var i = $('[data-in="fee"]'); if (i) i.value = S.fee;
@@ -192,6 +201,7 @@
       var e = cbEls(); if (!e.inp) return;
       var q = S.tk && e.inp.value === S.tk + ' · ' + S.name ? '' : e.inp.value;
       cbList = T.searchTickers(q);
+      if (RL && q && q.length >= 1) remoteSearch(q);
       e.lb.innerHTML = cbList.length ? cbList.map(function (c, i) {
         var h = held(c.ticker);
         return '<li role="option" id="' + id + 'o' + i + '" data-i="' + i + '" aria-selected="false"><span class="txs-lg">' + mark(c.ticker, 24) + '</span><span class="txs-ot"><b>' + esc(c.ticker) + '</b><small>' + esc(c.name) + ' · ' + esc(c.cls) + '</small></span>' +
@@ -200,6 +210,27 @@
       cbIdx = cbList.length ? 0 : -1; cbMark();
       e.lb.hidden = false; e.inp.setAttribute('aria-expanded', 'true');
     }
+    var rsT = 0, rsQ = '';
+    function remoteSearch(q) {
+      clearTimeout(rsT); rsQ = q;
+      rsT = setTimeout(function () {
+        var W8 = window.CAMPO_REAL && window.CAMPO_REAL.write; if (!W8) return;
+        W8.search(q).then(function (list) {
+          var e = cbEls(); if (!e.inp || rsQ !== q || S.tk) return;
+          var have = {}; cbList.forEach(function (c) { have[c.ticker] = 1; });
+          var add = (list || []).filter(function (c) { return !have[c.ticker]; }); if (!add.length) return;
+          cbList = cbList.concat(add).slice(0, 14); paintList(e);
+        }).catch(function () { });
+      }, 260);
+    }
+    function paintList(e) {
+      e.lb.innerHTML = cbList.length ? cbList.map(function (c, i) {
+        var h = held(c.ticker);
+        return '<li role="option" id="' + id + 'o' + i + '" data-i="' + i + '" aria-selected="false"><span class="txs-lg">' + mark(c.ticker, 24) + '</span><span class="txs-ot"><b>' + esc(c.ticker) + '</b><small>' + esc(c.name) + ' · ' + esc(c.cls || '') + (c.exch ? ' · ' + esc(c.exch) : '') + '</small></span>' +
+          '<span class="txs-oq num">' + (c.price > 0 ? cp(c.currency, c.price) : '') + (h > 0 ? '<small class="txs-hv">Ya tienes ' + nfQ.format(h) + '</small>' : '') + '</span></li>';
+      }).join('') : '<li class="txs-none" role="presentation">Sin resultados</li>';
+      if (cbIdx < 0 && cbList.length) cbIdx = 0; cbMark();
+    }
     function cbMark() {
       var e = cbEls(); Array.prototype.forEach.call(e.lb.querySelectorAll('[role="option"]'), function (li, i) { li.setAttribute('aria-selected', String(i === cbIdx)); });
       if (cbIdx >= 0) { e.inp.setAttribute('aria-activedescendant', id + 'o' + cbIdx); var li = $('#' + id + 'o' + cbIdx); if (li && li.scrollIntoView) li.scrollIntoView({ block: 'nearest' }); } else e.inp.removeAttribute('aria-activedescendant');
@@ -207,8 +238,14 @@
     function cbClose() { var e = cbEls(); if (!e.inp) return false; var was = !e.lb.hidden; e.lb.hidden = true; e.inp.setAttribute('aria-expanded', 'false'); e.inp.removeAttribute('aria-activedescendant'); return was; }
     function cbPick(i) {
       var c = cbList[i]; if (!c) return;
-      S.tk = c.ticker; S.name = c.name; var e = cbEls(); e.inp.value = c.ticker + ' · ' + c.name; cbClose();
+      S.tk = c.ticker; S.name = c.name; S.pickCcy = c.currency; var e = cbEls(); e.inp.value = c.ticker + ' · ' + c.name; cbClose();
       updateHints(); refreshPx(true); queuePreview();
+      /* emisora que aún no está en tus datos: trae su historia y su precio, y entonces propone el precio de esa fecha */
+      var W8 = RL && window.CAMPO_REAL && window.CAMPO_REAL.write;
+      if (W8 && !window.CAMPO_REAL.paths[c.ticker]) {
+        var ph = $('[data-pxh]'); if (ph) ph.textContent = 'Buscando el precio de ' + c.ticker + '…';
+        var want = c.ticker; W8.ensureTicker(c.ticker, { cur: c.currency }).then(function () { if (S.tk !== want) return; updateHints(); refreshPx(true); queuePreview(); });
+      }
     }
 
     /* ---------- vista previa ---------- */
@@ -218,9 +255,10 @@
         var q = num(S.qty), p = num(S.px);
         if (!S.tk || !(q > 0) || !(p > 0)) return null;
         u.tk = S.tk; u.qty = q; u.px = p; u.fee = num(S.fee) > 0 ? num(S.fee) : 0;
+        if (RL) { u.comm = num(S.comm) >= 0 ? num(S.comm) : 0; u.iva = !!S.iva; u.ivaRate = 16; u.name = S.name; u.ccy = ccyOf(); }
       } else {
         var a = num(S.amount); if (!(a > 0)) return null;
-        u.amount = a; if (t === 'div') { if (!S.tk) return null; u.tk = S.tk; } else u.note = S.note.trim();
+        u.amount = a; if (t === 'div') { if (!S.tk) return null; u.tk = S.tk; if (RL) u.px = a; } else u.note = S.note.trim();
       }
       if (final && t === 'buy') u.fund = fundC.checked;
       return u;
@@ -249,7 +287,11 @@
       }
       var msg = '';
       if (pv.error) msg = pv.error;
-      if (S.type === 'buy' && pv.fund > 0) {
+      if (RL && S.type === 'buy' && pv.external > 0.005) {
+        fundW.hidden = false; fundC.style.display = 'none';
+        $('[data-fundt]').textContent = (pv.cashBefore > 0.005 ? 'Se usan ' + mxn(pv.cashBefore - pv.cashAfter) + ' de tu efectivo; los ' : 'No hay efectivo en el portafolio: los ') + mxn(pv.external) + (pv.cashBefore > 0.005 ? ' restantes' : '') + ' cuentan como aportación.';
+      }
+      if (!RL && S.type === 'buy' && pv.fund > 0) {
         fundW.hidden = false; $('[data-fundt]').textContent = 'Registrar también una aportación de ' + mxn(pv.fund) + ' (no tienes efectivo suficiente)';
         if (!fundC.checked) msg = 'Sin la aportación te faltan ' + mxn(pv.fund) + ' de efectivo. Márcala o reduce la compra.';
       }
@@ -272,7 +314,7 @@
       if (e.target.closest('[data-close]')) { close(); return; }
       var ty = e.target.closest('[data-ty]'); if (ty) { if (ty.getAttribute('data-ty') !== S.type) { S.qty = ''; S.amount = ''; setType(ty.getAttribute('data-ty')); } return; }
       var pfb = e.target.closest('[data-pf]');
-      if (pfb) { S.pfId = pfb.getAttribute('data-pf'); S.tk = ''; S.name = ''; buildPf(); setType(S.type); var nb = $('[data-pf="' + S.pfId + '"]'); if (nb) nb.focus(); return; }
+      if (pfb) { S.pfId = pfb.getAttribute('data-pf'); S.tk = ''; S.name = ''; setPcc(); buildPf(); setType(S.type); var nb = $('[data-pf="' + S.pfId + '"]'); if (nb) nb.focus(); return; }
       var pk = e.target.closest('[data-pick]');
       if (pk) {
         S.tk = pk.getAttribute('data-pick'); var p = posOf(S.tk); S.name = p ? p.name : S.tk; S.px = ''; S.pxEd = false; S.feeEd = false;
@@ -289,11 +331,13 @@
       if (k === 'date') { S.date = e.target.value || S.date; refreshPx(false); updateHints(); }
       else if (k === 'px') { S.px = e.target.value; S.pxEd = true; refreshFee(); }
       else if (k === 'fee') { S.fee = e.target.value; S.feeEd = true; }
+      else if (k === 'comm') { S.comm = e.target.value; }
+      else if (k === 'iva') { S.iva = !!e.target.checked; }
       else if (k === 'qty') { S.qty = e.target.value; refreshFee(); }
       else S[k] = e.target.value;
       queuePreview();
     });
-    root_.addEventListener('change', function (e) { if (e.target === fundC) runPreview(); });
+    root_.addEventListener('change', function (e) { if (e.target === fundC) runPreview(); if (e.target.getAttribute && e.target.getAttribute('data-in') === 'iva') { S.iva = !!e.target.checked; queuePreview(); } });
     root_.addEventListener('keydown', function (e) {
       var t = e.target;
       if (t.getAttribute && t.getAttribute('data-in') === 'q') {
@@ -316,7 +360,19 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault(); clearTimeout(pvT); runPreview();
       if (subBtn.disabled) return;
-      var u = payload(true), res = T.tx.add(S.pfId, u);
+      var u = payload(true);
+      if (RL) { /* producción: se guarda en la cuenta; el botón espera la respuesta del servidor */
+        var lbl = subBtn.textContent; subBtn.disabled = true; subBtn.textContent = 'Guardando…'; errEl.textContent = '';
+        Promise.resolve(T.tx.add(S.pfId, u)).then(function (r) {
+          if (!r || r.error) { subBtn.textContent = lbl; subBtn.disabled = false; errEl.textContent = (r && r.error) || 'No se pudo registrar.'; return; }
+          var tt = S.type, m2 = tt === 'buy' ? 'Compra de ' + nfQ.format(r.qty) + ' ' + r.tk + ' registrada' : tt === 'sell' ? 'Venta de ' + nfQ.format(r.qty) + ' ' + r.tk + ' registrada'
+            : tt === 'dep' ? 'Aportación de ' + mxn(r.amount) + ' registrada' : tt === 'wd' ? 'Retiro de ' + mxn(r.amount) + ' registrado' : 'Dividendo de ' + r.tk + ' por ' + mxn(r.amount) + ' registrado';
+          close(); toast(m2, null);
+          if (typeof o.onDone === 'function') { try { o.onDone(r); } catch (x) { } }
+        });
+        return;
+      }
+      var res = T.tx.add(S.pfId, u);
       if (!res || res.error) { errEl.textContent = (res && res.error) || 'No se pudo registrar.'; return; }
       var ev = res.ev, pid = S.pfId, ids = res.ids, t = S.type, msg;
       var nm = ev.tk || '';

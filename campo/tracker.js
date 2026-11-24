@@ -71,6 +71,12 @@
   }
   function mxnPath(p) { /* la misma trayectoria en MXN, con el USD/MXN de CADA fecha para las posiciones en USD */
     var lp = localPath(p); if (!lp) return null; if (typeof p === 'string') p = { ticker: p };
+    if (REAL) { /* producción: en la MONEDA BASE de la vista (T.base), con el tipo de cambio de cada fecha */
+      var rc = p.currency || (REAL.paths[p.ticker] && REAL.paths[p.ticker].ccy) || 'MXN', rk = T.base + '|' + p.ticker + '|' + rc + '|' + lp[LAST];
+      if (mxnCache[rk]) return mxnCache[rk];
+      var b = new Float64Array(TOT); for (var j = 0; j < TOT; j++) b[j] = lp[j] * T.rate(rc, j);
+      return (mxnCache[rk] = b);
+    }
     var key = p.ticker + '|' + lp[LAST] + '|' + lp[LAST - 1]; if (mxnCache[key]) return mxnCache[key];
     var cur = p.currency || (REAL && REAL.paths[p.ticker] && REAL.paths[p.ticker].ccy); if (!cur) SEED.forEach(function (s) { s.positions.forEach(function (x) { if (x.ticker === p.ticker) cur = x.currency; }); }); if (!cur && CAT_BY[p.ticker]) cur = CAT_BY[p.ticker].currency;
     var a = new Float64Array(TOT); for (var i = 0; i < TOT; i++) a[i] = lp[i] * (cur === 'USD' ? fxSeries[i] : 1);
@@ -121,7 +127,7 @@
      proyectadas hacia atrás; el costo es el de lo que sigue abierto (en pesos al TC de cada compra) más el efectivo */
   function buildReal(spec) {
     BASE[spec.id] = spec;
-    var L = spec.ledger, V = L.V, pos = L.rows.map(function (r) { return { ticker: r.ticker, name: r.name, qty: r.qty, avg: r.avg, price: r.price, currency: r.ccy, d1: r.d1, cls: r.cls, stale: r.stale }; });
+    var L = REAL.rebase(spec.ledger0, T.base), V = L.V, pos = L.rows.map(function (r) { return { ticker: r.ticker, name: r.name, qty: r.qty, avg: r.avg, price: r.price, currency: r.ccy, d1: r.d1, cls: r.cls, stale: r.stale }; });
     var real = 0, openCost = 0, acc = {};
     L.events.forEach(function (e) {
       if (!e.tk || (e.t !== 'buy' && e.t !== 'sell')) return; var o = acc[e.tk] || (acc[e.tk] = { q: 0, c: 0 });
@@ -137,7 +143,7 @@
       share: 0, contrib: amt, series: V, usdLocal: L.usdLocal, fxMissing: 0 };
   }
   function build(spec) {
-    if (spec.ledger) return buildReal(spec);
+    if (spec.ledger0) return buildReal(spec);
     BASE[spec.id] = spec;
     var user = (USER[spec.id] || []).slice(), eff = applyUser(spec, user), base = spec;
     spec = { id: base.id, name: base.name, desc: base.desc, color: base.color, currency: base.currency, created: base.created, benchmark: base.benchmark, positions: eff.positions, cash: eff.cash, realized: eff.realized };
@@ -216,24 +222,37 @@
     T.portfolios.length = 0; next.forEach(function (p) { T.portfolios.push(p); });
     store(); emit('change', { type: 'order' });
   };
+  /* producción: crear, renombrar y borrar se GUARDAN (campo/datos.js → PUT con baseVersion) y devuelven una promesa { ok } | { error } */
+  var W8 = REAL && REAL.write;
+  T.canWrite = !!W8;
   T.rename = function (id, name) {
     if (T.readonly) { readonly(); return false; }
     var p = T.get(id), n = String(name == null ? '' : name).trim().slice(0, 40); if (!p || !n || n === p.name) return false;
+    if (W8) { var old = p.name; p.name = n; emit('change', { type: 'rename', id: id }); return W8.renamePortfolio(id, n).then(function (r) { if (r && r.error) { var q = T.get(id); if (q) q.name = old; emit('change', { type: 'rename', id: id }); } return r; }); }
     p.name = n; store(); emit('change', { type: 'rename', id: id }); return true;
   };
   T.remove = function (id) {
     if (T.readonly) { readonly(); return false; }
     var i = T.order().indexOf(id); if (i < 0) return false;
+    if (W8) return W8.deletePortfolio(id);
     T.portfolios.splice(i, 1); recompute(); store(); emit('change', { type: 'remove', id: id }); return true;
   };
   T.add = function (o) {
     if (T.readonly) { readonly(); return null; }
     o = o || {};
+    if (W8) return W8.createPortfolio(o);
     var used = {}; T.portfolios.forEach(function (p) { used[p.slot] = 1; });
     var slot = 1; while (used[slot] && slot <= 6) slot++; if (slot > 6) slot = (T.portfolios.length % 6) + 1;
     var p = build({ id: 'pf-' + (nextId++) + '-' + Date.now().toString(36), name: String(o.name || 'Nuevo portafolio').trim().slice(0, 40) || 'Nuevo portafolio', desc: o.desc || '',
       color: slot, currency: o.currency || 'MXN', created: new Date().toISOString().slice(0, 10), benchmark: o.benchmark || 'S&P 500', cash: 0, realized: 0, positions: o.positions || [] });
     T.portfolios.push(p); recompute(); emit('change', { type: 'add', id: p.id }); return p;
+  };
+  /* datos nuevos del servidor (después de guardar): se rearman los portafolios con el MISMO orden, nombres y moneda de vista */
+  T.resetData = function (specs) {
+    if (SEED !== specs) { SEED.length = 0; specs.forEach(function (s) { SEED.push(s); }); }
+    if (REAL) { Object.keys(CAT_BY).forEach(function (k) { delete CAT_BY[k]; }); CATALOG.length = 0; REAL.catalog.forEach(function (c) { CAT_BY[c.ticker] = c; CATALOG.push(c); }); }
+    pathCache = {}; mxnCache = {}; T.txVersion++;
+    seedAll(null, true); emit('change', { type: 'data' });
   };
   T.restore = function () { try { localStorage.removeItem(LS); } catch (e) { } seedAll(null, false); emit('change', { type: 'restore' }); };
   T.state = function (name) {
@@ -250,7 +269,7 @@
   T.metricsAt = metricsAt;
   T.txVersion = 0;
   function idxOn(iso) { var k = -1; for (var i = 0; i < TOT; i++) if (dates[i] <= iso) k = i; return k; }
-  function priceAt(tk, iso) { var c = CAT_BY[tk], lp = c ? localPath(c) : localPath(tk), i = idxOn(iso); if (!lp || i < 0) return null; var cur = (c && c.currency) || 'MXN'; return { idx: i, date: dates[i], px: lp[i], fx: cur === 'USD' ? fxSeries[i] : 1, currency: cur }; }
+  function priceAt(tk, iso) { var c = CAT_BY[tk], lp = c ? localPath(c) : localPath(tk), i = idxOn(iso); if (!lp || i < 0) return null; var cur = (REAL && REAL.paths[tk] && (REAL.paths[tk].origCcy || REAL.paths[tk].ccy)) || (c && c.currency) || 'MXN'; return { idx: i, date: dates[i], px: lp[i], fx: REAL ? T.rate(cur, i) : cur === 'USD' ? fxSeries[i] : 1, currency: cur }; }
   function heldQty(p, tk) { var q = 0; (p.positions || []).forEach(function (x) { if (x.ticker === tk) q += x.qty; }); return q; }
   function rebuild(id) {
     var i = T.order().indexOf(id), old = T.portfolios[i], spec = BASE[id]; if (i < 0 || !spec) return null;
@@ -291,6 +310,11 @@
   T.tx = {
     list: function (id) { return (USER[id] || []).slice(); },
     preview: function (id, u) {
+      if (W8) { /* producción: la misma intención que se guardaría, sobre una copia (moneda del portafolio) */
+        var r = W8.preview(id, u); if (!r || r.error) return { error: (r && r.error) || 'No se pudo calcular.' };
+        return { ev: { t: u.t, mxn: r.amount, ccy: r.posCcy || r.ccy, tk: r.tk, qty: r.qty }, cashBefore: r.cashBefore, cashAfter: r.cashAfter, fund: 0, external: r.external || 0,
+          qtyAfter: r.qtyAfter, avgAfter: r.avgAfter, realized: r.realized, tax: r.tax, taxRate: r.taxRate, pfCcy: r.ccy };
+      }
       var p = T.get(id); if (!p) return { error: 'Portafolio no encontrado.' };
       var o = normalize(p, u); if (o.error) return o;
       var out = { ev: o, cashBefore: p.cash, cashAfter: p.cash, fund: 0 };
@@ -314,6 +338,7 @@
     },
     add: function (id, u) {
       if (T.readonly) { readonly(); return { error: REAL.readonlyMsg }; }
+      if (W8) return W8.addTx(id, u); /* promesa { ok, ... } | { error } */
       var pv = T.tx.preview(id, u); if (pv.error) return pv;
       var list = USER[id] || (USER[id] = []), seq = list.reduce(function (m, x) { return Math.max(m, x.seq || 0); }, 0) + 1, made = [];
       if (pv.ev.t === 'buy' && pv.fund > 0) {
@@ -340,7 +365,43 @@
     out.sort(function (a, b) { var x = a.ticker.toLowerCase().indexOf(q) === 0 ? 0 : 1, y = b.ticker.toLowerCase().indexOf(q) === 0 ? 0 : 1; return x - y || a.ticker.localeCompare(b.ticker); });
     return out.slice(0, 12);
   };
-  T.pricePath = localPath; T.pricePathMxn = mxnPath; /* trayectoria de 252 puntos: local / en MXN con el TC de cada fecha; acepta {ticker, price, d1, currency} o un ticker de la semilla */
+  T.pricePath = localPath; T.pricePathMxn = mxnPath; /* trayectoria de 252 puntos: local / en la moneda base con el TC de cada fecha; acepta {ticker, price, d1, currency} o un ticker de la semilla */
+
+  /* ============================== moneda base de la vista ==============================
+     Inicio, lista y "Todos": la moneda del consolidado (la del portafolio que más pesa, o la que elija el usuario).
+     Detalle de un portafolio: SU moneda, o la que elija el usuario para ver la equivalencia. Al cambiar, cada libro se
+     vuelve a expresar en esa moneda con el tipo de cambio de cada fecha (no es dividir entre el TC de hoy).
+     T.rate(ccy, i): unidades de la base por 1 unidad de ccy en la sesión i. T.fx.series: la de la moneda "de fuera"
+     (USD si la base no es USD; MXN si la base es USD), que es la que mueve el efecto cambiario. */
+  var CK = 'campo.ccy';
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+  function okCcy(c) { return !!c && !!REAL && REAL.currencies.indexOf(c) >= 0; }
+  T.currencies = function () { return REAL ? REAL.currencies.slice() : ['MXN']; };
+  T.consolidatedCcy = function () { var c = lsGet(CK); return okCcy(c) ? c : (REAL ? REAL.defaultCcy : 'MXN'); };
+  T.viewCcy = function (id) {
+    if (!id || id === 'todos') return T.consolidatedCcy();
+    var c = lsGet(CK + '.' + id), s = BASE[id]; return okCcy(c) ? c : (s && okCcy(s.currency) ? s.currency : T.consolidatedCcy());
+  };
+  T.rate = function (ccy, i) {
+    if (i == null) i = LAST;
+    if (!REAL) return ccy === 'USD' ? fxSeries[i] : 1;
+    return REAL.mxnPer(ccy, i) / REAL.mxnPer(T.base, i);
+  };
+  function applyFx() { var FOR = REAL.foreignOf(T.base); for (var k = 0; k < TOT; k++) fxSeries[k] = T.rate(FOR, k); T.fx.usdmxn = fxSeries[LAST]; T.fx.foreign = FOR; }
+  T.setBase = function (B, quiet) { /* quiet: la ruta pinta el detalle; los demás solo actualizan sus números */
+    if (!REAL || !okCcy(B) || B === T.base) return false;
+    T.base = B; D.base = B; applyFx(); mxnCache = {};
+    T.portfolios.forEach(function (p, k) { var s = BASE[p.id]; if (!s) return; var q = build(s); q.name = p.name; q.slot = p.slot; q.color = p.color; T.portfolios[k] = q; });
+    T.txVersion++; recompute(); emit('change', { type: 'base', base: B, quiet: !!quiet }); return true;
+  };
+  /* el usuario elige la moneda de una vista ('todos' = consolidado); se recuerda en este navegador */
+  T.setViewCcy = function (id, ccy) {
+    if (!okCcy(ccy)) return;
+    lsSet(!id || id === 'todos' ? CK : CK + '.' + id, ccy);
+    if (!T.setBase(ccy)) emit('change', { type: 'base', base: ccy });
+  };
+  if (REAL) { T.base = T.consolidatedCcy(); D.base = T.base; applyFx(); }
 
   seedAll(null, true);
   window.CampoTracker = T; window.__tracker = T;
@@ -350,9 +411,12 @@
   window.addEventListener('campo:route', function (e) {
     if (!e.detail || e.detail.sec !== 'tracker') return;
     var id = idFromHash(); if (id === undefined) id = null;
+    if (REAL) T.setBase(T.viewCcy(id), !!id); /* cada vista en su moneda, ANTES de pintarla */
     T.route = id; sec.dataset.view = id ? 'detail' : 'list'; emit('route', id);
     if (!id) { hoverId = null; schedule(); }
   });
+  /* fuera del Tracker (Inicio, Informes, Ajustes) manda la moneda del consolidado */
+  window.addEventListener('campo:section', function (e) { if (REAL && e.detail && e.detail.sec !== 'tracker') T.setBase(T.consolidatedCcy()); });
   sec.dataset.view = 'list';
 
   /* ============================== DOM ============================== */
@@ -360,13 +424,13 @@
   var Pi = 1, SAMPLES = 120;
   sec.innerHTML =
     '<header class="app-head tk-head"><div><h1 tabindex="-1">Portafolios</h1><p class="asof" id="tkSub"></p></div>' +
-    '<div class="tk-acts"><a class="btn btn-secondary btn-sm tk-old" href="main-clasico.html">Editar en la versión anterior</a><button class="btn btn-secondary btn-sm" type="button" data-tk="import">Importar CSV</button>' +
+    '<div class="tk-acts"><div class="tk-ccy" id="tkCcy"></div><a class="btn btn-secondary btn-sm tk-old" href="main-clasico.html">Editar en la versión anterior</a><button class="btn btn-secondary btn-sm" type="button" data-tk="import">Importar CSV</button>' +
     '<button class="btn btn-primary btn-sm" type="button" data-tk="create">Nuevo portafolio<span class="tk-chip" id="tkChip" title=""></span></button></div></header>' +
     '<section class="tk-hero panel" id="tkHero" data-mode="multi" aria-label="Patrimonio consolidado"><div class="tk-in">' +
-    '<div class="tk-fig"><p class="tk-k" id="tkK">Patrimonio total</p><p class="tk-v num" id="tkV">$0</p><p class="tk-when" id="tkWhen"></p>' +
+    '<div class="tk-fig"><p class="tk-k" id="tkK">Patrimonio total</p><p class="tk-v num" id="tkV">' + SYM() + '0</p><p class="tk-when" id="tkWhen"></p>' +
     '<dl class="tk-rows"><div><dt>Cambio del día</dt><dd><span class="delta" id="tkDay"></span></dd></div>' +
     '<div><dt>Rentabilidad<span class="tk-tipw"><button class="tk-info" type="button" aria-label="Cómo se calcula la rentabilidad" aria-describedby="tkTip">i</button>' +
-    '<span class="tk-tip" role="tooltip" id="tkTip">Ganancia total ÷ capital aportado, en MXN. Ganancia total = patrimonio + retiros − aportaciones (incluye realizado, dividendos y tipo de cambio). Es la misma fórmula aquí, en la lista y en cada portafolio.</span></span></dt><dd><span class="delta" id="tkRet"></span></dd></div></dl>' +
+    '<span class="tk-tip" role="tooltip" id="tkTip">Ganancia total ÷ capital aportado, en la moneda base. Ganancia total = patrimonio + retiros − aportaciones (incluye realizado, dividendos y tipo de cambio). Es la misma fórmula aquí, en la lista y en cada portafolio.</span></span></dt><dd><span class="delta" id="tkRet"></span></dd></div></dl>' +
     '<p class="tk-fx" id="tkFx"></p>' +
     '<button class="btn btn-secondary btn-sm tk-all" type="button" id="tkAll">Ver análisis consolidado<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>' +
     '<div class="tk-chart"><div class="tk-ctop"><div class="seg tk-per" id="tkPer" role="group" aria-label="Periodo"></div></div>' +
@@ -401,7 +465,7 @@
     elDay.className = 'delta ' + cls(m.day); elDay.textContent = signedMoney(m.day) + ' (' + fmt.pct(m.dayPct) + ')';
     elRet.className = 'delta ' + cls(m.ret); elRet.textContent = signedMoney(m.ret) + ' (' + fmt.pct(m.retPct) + ')';
     var atNow = m.idx === LAST;
-    elFx.textContent = 'USD/MXN ' + fmt.num(m.fx, 2) + ' · ' + Math.round(m.usdShare * 100) + ' % de ' + (single ? 'este portafolio' : 'tu patrimonio') + ' está en dólares · efecto cambiario ' + (atNow ? 'hoy ' : 'ese día ') + signedMoney(m.fxEffect);
+    elFx.textContent = ((T.fx.foreign === 'MXN' && T.base === 'USD' && m.fx > 0) ? 'USD/MXN ' + fmt.num(1 / m.fx, 2) : (T.fx.foreign || 'USD') + '/' + (T.base || 'MXN') + ' ' + fmt.num(m.fx, 2)) + ' · ' + Math.round(m.usdShare * 100) + ' % de ' + (single ? 'este portafolio' : 'tu patrimonio') + ' está en ' + (T.fx.foreign === 'MXN' ? 'pesos' : 'dólares') + ' · efecto cambiario ' + (atNow ? 'hoy ' : 'ese día ') + signedMoney(m.fxEffect);
   }
   function whenNow() { return 'Hoy · ' + D.asOf.replace(/ \d\d:\d\d$/, ''); }
   var tweenId = 0;
@@ -453,10 +517,11 @@
   function niceStep(max, n) {
     var raw = max / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag, s = r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10; return s * mag;
   }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
   function compact(v) {
-    if (v >= 1e6) { var m = v / 1e6; return '$' + (m >= 10 || Math.abs(m - Math.round(m)) < 0.005 ? String(Math.round(m * 10) / 10) : m.toFixed(2)).replace(/\.0$/, '') + ' M'; }
-    if (v >= 1e3) return '$' + Math.round(v / 1e3) + ' mil';
-    return '$' + Math.round(v);
+    if (v >= 1e6) { var m = v / 1e6; return SYM() + (m >= 10 || Math.abs(m - Math.round(m)) < 0.005 ? String(Math.round(m * 10) / 10) : m.toFixed(2)).replace(/\.0$/, '') + ' M'; }
+    if (v >= 1e3) return SYM() + Math.round(v / 1e3) + ' mil';
+    return SYM() + Math.round(v);
   }
   function mkY(ymax) {
     var st = niceStep(ymax, 4), out = []; for (var v = 0; v <= ymax * 1.001; v += st) out.push(v); return out;

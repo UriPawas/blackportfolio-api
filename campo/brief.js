@@ -22,7 +22,7 @@
 
     var id = 'cbf' + (++uid), pfid = pf === 'todos' || !pf ? 'todos' : (pf.id != null ? pf.id : 'pf');
     var key = 'campo.brief.' + pfid;
-    var plan = (T && T.limit && T.limit.plan) || 'Investor';
+    var plan = (T && T.limit && T.limit.admin) ? 'Wealth Desk' : ((T && T.limit && T.limit.plan) || 'Investor'); /* la cuenta admin ve todo */
     var fmt = R.fmt || {};
     var timers = [], off = [], open = false;
 

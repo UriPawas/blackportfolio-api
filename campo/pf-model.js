@@ -36,7 +36,11 @@
   };
   /* prior por clase: rendimiento ARITMÉTICO anual esperado, nominal en MXN (supuestos de largo plazo, no pronósticos) */
   var CLS = { 'eq-us': ['Renta variable EE. UU.', 0.095], 'eq-mx': ['Renta variable México', 0.105], fibra: ['FIBRAs', 0.095], debt: ['Deuda en pesos', null], crypto: ['Cripto', 0.12] };
-  function priorOf(ck) { return ck === 'debt' ? A.rf : CLS[ck][1]; }
+  /* los priors son nominales en pesos; en otra moneda base se ajustan por la diferencia de tasas (paridad: el peso rinde más porque se espera que se deprecie) */
+  function priorOf(ck) { return ck === 'debt' ? A.rf : CLS[ck][1] + (A.rf - 0.0725); }
+  /* tasa libre de riesgo e inflación de la MONEDA BASE de la vista (producción: cada portafolio en su moneda) */
+  var RFB = { MXN: [0.0725, 0.038], USD: [0.043, 0.027], EUR: [0.0215, 0.022], GBP: [0.04, 0.03], CAD: [0.03, 0.025], BRL: [0.145, 0.045] };
+  function syncBase() { var b = RFB[T.base] || RFB.MXN; A.rf = b[0]; A.infl = b[1]; }
   function clsKey(t, ccy) {
     var c = C.clsOf ? C.clsOf(t) : '';
     if (/Cripto/.test(c)) return 'crypto'; if (/Deuda/.test(c)) return 'debt'; if (/FIBRA/i.test(c)) return 'fibra';
@@ -51,11 +55,13 @@
   function mk(sym) { var h = null; D.markets.forEach(function (m) { if (m.sym === sym) h = m.hist; }); return h ? h.slice(h.length - TOT) : null; }
   function lrs(a) { var r = new Float64Array(NR); for (var i = 1; i < TOT; i++) r[i - 1] = Math.log(a[i] / a[i - 1]); return r; }
   var FAC = null;
+  syncBase();
+  if (T.on) T.on('change', function (ev) { if (ev && ev.type === 'base') { FAC = null; syncBase(); } });
   function fac() {
     if (FAC) return FAC;
     var S = lrs(mk('S&P 500')), N = lrs(mk('Nasdaq 100')), Tc = new Float64Array(NR);
     for (var i = 0; i < NR; i++) Tc[i] = N[i] - S[i];
-    return (FAC = { SP: S, TEC: Tc, IPC: lrs(mk('S&P/BMV IPC')), BTC: lrs(mk('Bitcoin')), FX: lrs(T.fx.series), B: lrs(D.series.benchmark.slice(-TOT)) });
+    return (FAC = { SP: S, TEC: Tc, IPC: lrs(mk('S&P/BMV IPC')), BTC: lrs(mk('Bitcoin')), FX: lrs(T.fx.series), B: lrs(window.CAMPO_REAL ? C.benchOf(T, 'S&P 500').a : D.series.benchmark.slice(-TOT)) });
   }
   /* mínimos cuadrados con intercepto: y ~ b0 + Σ bj·xj (eliminación gaussiana con pivoteo) */
   function ols(y, cols) {
@@ -82,7 +88,7 @@
   function inputs(pf, drift) {
     drift = drift || 'blend';
     var L = ledger(pf); if (!L) return null;
-    var key = L.id + '|' + drift + '|' + Math.round(L.value) + '|' + L.rows.length; if (inCache[key]) return inCache[key];
+    var key = (T.base || '') + '|' + L.id + '|' + drift + '|' + Math.round(L.value) + '|' + L.rows.length; if (inCache[key]) return inCache[key];
     var F = fac(), rows = L.rows.filter(function (r) { return r.mv > 0; }), k = rows.length, Y = NR / 252, i, j, t;
     var X = rows.map(function (r) { return lrs(T.pricePathMxn({ ticker: r.ticker, price: r.price, d1: r.d1, currency: r.ccy })); });
     var mean = X.map(function (x) { return sum(x) / NR; });
@@ -100,13 +106,13 @@
       var cb = 0; for (t = 0; t < NR; t++) cb += Xd[i][t] * (F.B[t] - bm);
       var ck = clsKey(r.ticker, r.ccy), E0 = priorOf(ck), s2 = sd[i] * sd[i], muS = mean[i] * 252, muP = Math.log(1 + E0) - s2 / 2, mu = ws * muS + (1 - ws) * muP;
       /* betas locales por clase para las pruebas de estrés (rendimiento en su moneda: a los activos en USD se les quita el USD/MXN) */
-      var loc = X[i]; if (r.isU) { loc = new Float64Array(NR); for (t = 0; t < NR; t++) loc[t] = X[i][t] - F.FX[t]; }
+      var loc = X[i]; if (r.isU) { var lpth = T.pricePath({ ticker: r.ticker, price: r.price, d1: r.d1, currency: r.ccy }); if (window.CAMPO_REAL && lpth) loc = lrs(lpth); else { loc = new Float64Array(NR); for (t = 0; t < NR; t++) loc[t] = X[i][t] - F.FX[t]; } }
       var fb = {};
       if (ck === 'eq-us') { var b1 = ols(loc, [F.SP, F.TEC]); fb = { SP: b1[1], TEC: b1[2] }; }
       else if (ck === 'eq-mx' || ck === 'fibra') { var b2 = ols(loc, [F.IPC, F.SP]); fb = { IPC: b2[1], SP: b2[2] }; }
       else if (ck === 'crypto') { var b3 = ols(loc, [F.BTC, F.SP]); fb = { BTC: b3[1], SP: b3[2] }; }
       return { ticker: r.ticker, name: r.name, cls: r.cls, ck: ck, clsName: CLS[ck][0], ccy: r.ccy, isU: r.isU, qty: r.qty, price: r.price,
-        pxMxn: r.price * (r.isU ? T.fx.usdmxn : 1), mv: r.mv, w: r.mv / tot, basis: r.cost, sigma: sd[i], beta: vB ? cb / vB : 0,
+        pxMxn: r.price * (T.rate ? T.rate(r.ccy) : (r.isU ? T.fx.usdmxn : 1)), mv: r.mv, w: r.mv / tot, basis: r.cost, sigma: sd[i], beta: vB ? cb / vB : 0,
         muS: muS, muP: muP, mu: mu, er: Math.exp(mu + s2 / 2) - 1, prior: E0, fb: fb };
     });
     var out = { id: L.id, name: L.name, pf: pf, L: L, drift: drift, value: L.value, cash: Math.max(0, L.cashEnd || 0), invested: L.dep - L.wd, k: k, Y: Y,
@@ -374,7 +380,13 @@
     { id: 'sp500', name: 'S&P 500 (en pesos)' }, { id: 'nasdaq', name: 'Nasdaq 100 (en pesos)' }, { id: 'ipc', name: 'S&P/BMV IPC' },
     { id: 'cetes', name: 'Cetes 28 días' }, { id: 'btc', name: 'Bitcoin (en pesos)' }, { id: 'oro', name: 'Oro (en pesos)' }, { id: 'iguales', name: 'Tus posiciones, en pesos iguales' }];
   function altSeries(id, inp) {
-    var fx = T.fx.series, a = new Float64Array(TOT), i, h;
+    var fx = T.fx.series, a = new Float64Array(TOT), i, h, RL = !!window.CAMPO_REAL;
+    function rt(c, k) { return T.rate ? T.rate(c, k) : (c === 'USD' ? fx[k] : 1); }
+    if (RL && id === 'sp500') { h = mk('S&P 500'); for (i = 0; i < TOT; i++) a[i] = h[i] * rt('USD', i); return a; }
+    if (RL && (id === 'nasdaq' || id === 'oro' || id === 'btc')) { h = mk(id === 'nasdaq' ? 'Nasdaq 100' : id === 'oro' ? 'Oro' : 'Bitcoin'); for (i = 0; i < TOT; i++) a[i] = h[i] * rt('USD', i); return a; }
+    if (RL && id === 'ipc') { h = mk('S&P/BMV IPC'); for (i = 0; i < TOT; i++) a[i] = h[i] * rt('MXN', i); return a; }
+    /* Cetes rinden en pesos: en otra moneda base se suma el movimiento del peso */
+    if (RL && id === 'cetes') { var dq = Math.pow(1.0725, 1 / 252); for (i = 0; i < TOT; i++) a[i] = 100 * Math.pow(dq, i) * rt('MXN', i); return a; }
     if (id === 'sp500') { var b = D.series.benchmark.slice(-TOT); for (i = 0; i < TOT; i++) a[i] = b[i]; }
     else if (id === 'nasdaq' || id === 'oro') { h = mk(id === 'nasdaq' ? 'Nasdaq 100' : 'Oro'); for (i = 0; i < TOT; i++) a[i] = h[i] * fx[i]; }
     else if (id === 'ipc') { h = mk('S&P/BMV IPC'); for (i = 0; i < TOT; i++) a[i] = h[i]; }
@@ -402,7 +414,7 @@
     L.events.forEach(function (e) {
       if (e.t !== 'sell' || !e.closed || !(e.idx >= 0)) return;
       var hp = (L.held || (L.parts || []).reduce(function (s, x) { return s.concat(x.held || []); }, [])).filter(function (h) { return h.ticker === e.tk; })[0]; if (!hp) return;
-      var fxN = e.ccy === 'USD' ? T.fx.usdmxn : 1, now = e.qty * hp.path[LAST] * fxN;
+      var fxN = T.rate ? T.rate(e.ccy || 'MXN') : (e.ccy === 'USD' ? T.fx.usdmxn : 1), now = e.qty * hp.path[LAST] * fxN;
       out.push({ ticker: e.tk, name: e.name, ccy: e.ccy, date: e.date, qty: e.qty, proceeds: e.mxn, valueToday: now, diff: now - e.mxn, path: hp.path, idx: e.idx });
     });
     return out;
@@ -432,7 +444,9 @@
       if (a.ck === 'debt') loc = sh.debt || 0;
       else if (a.ck === 'fibra' && sh.fibra != null) loc = sh.fibra;
       else loc = Math.exp((b.SP || 0) * fSP + (b.TEC || 0) * fTEC + (b.IPC || 0) * fIPC + (b.BTC || 0) * fBTC) - 1;
-      var mx = a.isU ? (1 + loc) * (1 + fx) - 1 : loc; imp += a.mv * mx; impL += a.mv * loc;
+      /* el escenario mueve el USD/MXN; lo que eso le hace a ESTE activo depende de su moneda y de la base de la vista */
+      var B = T.base || 'MXN', fxm = !a.isU ? 0 : (a.ccy === 'MXN' && B === 'USD') ? 1 / (1 + fx) - 1 : (a.ccy === 'USD' ? fx : 0);
+      var mx = (1 + loc) * (1 + fxm) - 1; imp += a.mv * mx; impL += a.mv * loc;
       return { ticker: a.ticker, name: a.name, clsName: a.clsName, w: a.w, mv: a.mv, isU: a.isU, local: loc, mxn: mx, impact: a.mv * mx };
     });
     return { id: sc.id, name: sc.name, when: sc.when, kind: sc.kind, note: sc.note, sh: sh, rows: rows,
@@ -444,7 +458,7 @@
      trimestral vigente, la cantidad de hoy y el TC de hoy. Retención estimada: 10 % México, 10 % EE. UU. (W-8BEN). */
   function isoAddDays(iso, d) { var t = new Date(iso + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); }
   function dividends(pf) {
-    var L = ledger(pf), asOf = T.dates[LAST], DPS = C.DPS || {}, fxNow = T.fx.usdmxn, from = isoAddDays(asOf, -365), to = isoAddDays(asOf, 365);
+    var L = ledger(pf), asOf = T.dates[LAST], DPS = C.DPS || {}, fxNow = T.fx.usdmxn, rNow = function (r) { return T.rate ? T.rate(r.ccy || 'MXN') : (r.isU ? fxNow : 1); }, from = isoAddDays(asOf, -365), to = isoAddDays(asOf, 365);
     function wh(ccy) { return ccy === 'USD' ? A.divWhUs : A.divWhMx; }
     var rec = L.events.filter(function (e) { return e.t === 'div'; }).map(function (e) { var w = e.mxn * wh(e.ccy); return { date: e.date, ticker: e.tk, name: e.name, qty: e.qty, dps: e.px, ccy: e.ccy, fx: e.fx, gross: e.mxn, withholding: w, net: e.mxn - w }; });
     var last = {}; rec.forEach(function (r) { if (!last[r.ticker] || r.date > last[r.ticker]) last[r.ticker] = r.date; });
@@ -456,7 +470,7 @@
       rec.forEach(function (x) {
         if (x.ticker !== r.ticker || x.date <= from || !(x.dps > 0)) return;
         var d = isoAddDays(x.date, 365); if (d <= asOf || d > to) return;
-        var amt = r.qty * x.dps * (r.isU ? fxNow : 1);
+        var amt = r.qty * x.dps * rNow(r);
         proj.push({ date: d, ticker: r.ticker, name: r.name, qty: r.qty, dps: x.dps, ccy: r.ccy, gross: amt, withholding: amt * wh(r.ccy), net: amt * (1 - wh(r.ccy)), estimated: true });
       });
     });

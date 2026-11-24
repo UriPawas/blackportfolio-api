@@ -28,7 +28,8 @@
   function money(v) { return D.fmt.mxn(Math.round(v), 0); }
   function fmtN(v) { return nfN.format(Math.round(v)); }
   function signed(v) { var a = Math.round(Math.abs(v)); return (a === 0 ? '' : v < 0 ? '−' : '+') + D.fmt.mxn(a, 0); }
-  function pxTxt(ccy, px) { return (ccy === 'USD' ? 'US$ ' : '$ ') + nfP.format(px); }
+  function BS() { var t = window.CampoTracker; return (t && t.base) || 'MXN'; }
+  function pxTxt(ccy, px) { var d = window.PORTIFY_DEMO; return (d && d.fmt && d.fmt.sym ? d.fmt.sym(ccy) : '$') + ' ' + nfP.format(px); }
   function signOf(t) { return t === 'buy' || t === 'wd' ? -1 : 1; }
   function csvText(s) { s = String(s == null ? '' : s); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
   function slugOf(s) { return String(s || 'portafolio').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'portafolio'; }
@@ -86,8 +87,8 @@
 
     mount.innerHTML = '<div class="pftx" id="' + id + '">' +
       '<section class="panel pftx-led" aria-label="Totales del filtro activo">' +
-        cell('n', 'Movimientos', 'Con el filtro y la búsqueda activos') + cell('dep', 'Aportado', 'Dinero que entró, en MXN') +
-        cell('wd', 'Retirado', 'Dinero que salió, en MXN') + cell('div', 'Dividendos', 'Brutos cobrados, en MXN') +
+        cell('n', 'Movimientos', 'Con el filtro y la búsqueda activos') + cell('dep', 'Aportado', 'Dinero que entró, en ' + BS()) +
+        cell('wd', 'Retirado', 'Dinero que salió, en ' + BS()) + cell('div', 'Dividendos', 'Brutos cobrados, en ' + BS()) +
       '</section>' +
       '<section class="panel pftx-s pftx-ch" aria-labelledby="' + id + 'h1"><div class="pftx-top"><h2 id="' + id + 'h1">Flujo neto por mes</h2><span class="muted">Aportaciones menos retiros · todo el libro</span></div>' +
         '<div class="pftx-cw" data-cw></div><div class="pftx-ax" aria-hidden="true"><span data-ax0></span><span data-ax1></span></div></section>' +
@@ -98,7 +99,7 @@
         '<label class="pftx-search"><span class="pftx-sr">Buscar por ticker o nombre</span><input type="search" data-q placeholder="Buscar ticker o nombre" autocomplete="off"></label></div>' +
         '<p class="pftx-st" data-st aria-live="polite"></p>' +
         '<div class="pftx-tw"><table class="pftx-tb" data-tb><caption class="pftx-sr">Movimientos del libro, agrupados por mes</caption>' +
-          '<thead><tr><th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Activo</th><th scope="col" class="r">Cantidad</th><th scope="col" class="r">Precio</th><th scope="col" class="r">TC</th><th scope="col" class="r">Monto MXN</th><th scope="col" class="pftx-ac"><span class="pftx-sr">Acciones</span></th></tr></thead></table></div>' +
+          '<thead><tr><th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Activo</th><th scope="col" class="r">Cantidad</th><th scope="col" class="r">Precio</th><th scope="col" class="r">TC a ' + BS() + '</th><th scope="col" class="r">Monto ' + BS() + '</th><th scope="col" class="pftx-ac"><span class="pftx-sr">Acciones</span></th></tr></thead></table></div>' +
         '<p class="pftx-empty" data-empty hidden></p>' +
       '</section>' +
       '<p class="pftx-foot">Tus movimientos registrados · no es asesoría de inversión</p></div>';
@@ -139,7 +140,7 @@
         '<td>' + (sec ? '<b class="pftx-tk">' + esc(e.tk) + '</b><span class="pftx-nm">' + esc(e.name) + '</span>' : '<span class="pftx-nm">Efectivo</span>') + '</td>' +
         '<td class="r num">' + (sec && e.qty ? nfQ.format(e.qty) : '—') + '</td>' +
         '<td class="r num">' + (sec && e.px ? pxTxt(e.ccy, e.px) : '—') + '</td>' +
-        '<td class="r num">' + (e.ccy === 'USD' && e.fx ? nfP.format(e.fx) : '—') + '</td>' +
+        '<td class="r num">' + (e.ccy !== BS() && e.fx ? nfP.format(e.fx) : '—') + '</td>' +
         '<td class="r num pftx-mo">' + signed(e.sign * e.mxn) + '</td>' +
         '<td class="pftx-ac">' + (e.user && !e.auto && e.uid ? '<button type="button" class="pftx-del" data-del="' + esc(e.uid) + '" data-pf="' + esc(pfId || ownerOf(e.uid)) + '" aria-label="' +
           esc('Eliminar ' + TYPES[e.t].toLowerCase() + (e.tk ? ' de ' + e.tk : '') + ' del ' + dateTxt(e.date)) + '" title="Eliminar">' +
@@ -259,12 +260,12 @@
 
     /* ---------- exportar CSV ---------- */
     function exportCsv() {
-      var lines = [['Fecha', 'Tipo', 'Activo', 'Nombre', 'Cantidad', 'Precio', 'Moneda', 'TC', 'Monto MXN', 'Origen'].join(',')], n = 0;
+      var lines = [['Fecha', 'Tipo', 'Activo', 'Nombre', 'Cantidad', 'Precio', 'Moneda', 'TC a ' + BS(), 'Monto ' + BS(), 'Origen'].join(',')], n = 0;
       rowsM.forEach(function (m) {
         if (!m.want) return; n++;
         var e = m.e;
         lines.push([e.date, csvText(TYPES[e.t]), csvText(e.tk), csvText(e.name), e.qty ? String(e.qty) : '', e.px ? e.px.toFixed(4) : '',
-          e.ccy, e.ccy === 'USD' && e.fx ? Number(e.fx).toFixed(4) : '', (e.sign * e.mxn).toFixed(2),
+          e.ccy, e.ccy !== BS() && e.fx ? Number(e.fx).toFixed(4) : '', (e.sign * e.mxn).toFixed(2),
           csvText(e.user ? 'Registrado por ti' : 'Libro')].join(','));
       });
       var blob = new Blob(['﻿' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });

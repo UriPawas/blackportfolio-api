@@ -1,11 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6f86ff"/>
-      <stop offset="1" stop-color="#39d0ff"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="#050505"/>
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="url(#g)" stroke-width="2" opacity="0.5"/>
-  <text x="32" y="44" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="800" fill="url(#g)" text-anchor="middle">B</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<style>.t{fill:#101419}.f{fill:none;stroke:#eceff2;stroke-width:2.2}.c{fill:#eceff2}.a{fill:#e3b662}@media (prefers-color-scheme:light){.t{fill:#e9edf1}.f{stroke:#161b21}.c{fill:#161b21}.a{fill:#cd9b3c}}</style>
+<rect class="t" width="24" height="24" rx="6.5"/>
+<g transform="translate(12 12) scale(.78) translate(-12 -12)"><rect class="f" x="1" y="1" width="22" height="22" rx="6"/><circle class="c" cx="9" cy="9.5" r="3.4"/><circle class="a" cx="16" cy="15.5" r="2.4"/></g>
 </svg>

@@ -8,6 +8,7 @@
   var F = RP.fmt, W = 1600, H = 900;
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }), nf1 = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), nf2 = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  function fxw() { var T = window.CampoTracker, b = (T && T.base) || 'MXN', f = (T && T.fx && T.fx.foreign) || (b === 'USD' ? 'MXN' : 'USD'); return { n: f === 'MXN' ? 'peso' : 'dólar', pl: f === 'MXN' ? 'pesos' : 'dólares', pair: f + '/' + b, bpl: b === 'MXN' ? 'pesos' : b === 'USD' ? 'dólares' : b }; }
   var STR = { es: {
     brand: 'Portify', kickCover: 'Informe del portafolio', sample: window.CAMPO_REAL ? 'Con tus datos · no es asesoría' : 'Datos de muestra',
     gainLab: 'Ganancia del periodo', twrSub: 'ponderado por tiempo', vs: 'frente a',
@@ -17,7 +18,7 @@
     kWf: 'Qué lo movió', tWf: 'Lo que sumó y lo que restó', wfSub: 'Cada barra es lo que una posición aportó al rendimiento, en puntos. Todas juntas dan el total.', others: 'Otras', total: 'Total',
     kMv: 'Movimientos', tMv: 'Los movimientos que más pesaron', up: 'Lo que sumó', dn: 'Lo que restó', evento: 'Qué pasó', mec: 'Cómo se explica', imp: 'Qué significó', vig: 'A vigilar',
     noNews: 'Para estas posiciones no hay titulares en el periodo; el movimiento se explica con su mercado.',
-    kFx: 'El dólar', tFx: 'Lo que hizo el tipo de cambio', fxAdd: 'El dólar sumó a tus posiciones', fxSub: 'El dólar restó a tus posiciones', fxFlat: 'El dólar casi no movió tu resultado', usdShare: 'Parte de tu portafolio en dólares', fxFrom: 'Al inicio', fxTo: 'Al cierre', inUsd: 'En dólares', inMxn: 'En pesos y otras monedas', usdmxn: 'USD/MXN',
+    get kFx() { return 'El ' + fxw().n; }, tFx: 'Lo que hizo el tipo de cambio', get fxAdd() { return 'El ' + fxw().n + ' sumó a tus posiciones'; }, get fxSub() { return 'El ' + fxw().n + ' restó a tus posiciones'; }, get fxFlat() { return 'El ' + fxw().n + ' casi no movió tu resultado'; }, get usdShare() { return 'Parte de tu portafolio en ' + fxw().pl; }, fxFrom: 'Al inicio', fxTo: 'Al cierre', get inUsd() { return 'En ' + fxw().pl; }, get inMxn() { return 'En ' + fxw().bpl + ' y otras monedas'; }, get usdmxn() { return fxw().pair; },
     kRisk: 'Riesgo del periodo', tRisk: 'Qué tan fuerte se movió', maxDD: 'Caída máxima', vol: 'Volatilidad anual', beta: 'Beta', sharpe: 'Sharpe', best: 'Mejor día', worst: 'Peor día', ddFrom: 'del', ddTo: 'al', underwater: 'Distancia al máximo previo',
     kMk: 'Mercados', tMk: 'Cómo se movió el mercado', mkSub: 'Variación de cada referencia en el mismo periodo.',
     kCp: 'Composición', tCp: 'Dónde estaba tu dinero', cpStart: 'Al inicio', cpEnd: 'Al cierre',

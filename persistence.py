@@ -1313,7 +1313,12 @@ def replace_portfolios(
     ):
         raise HTTPException(status_code=409, detail="portfolio_version_required")
 
-    limits = PLAN_LIMITS[normalize_plan(user.plan)]
+    # La cuenta de administrador (cuenta maestra) no tiene tope de portafolios ni de
+    # posiciones, sea cual sea el plan guardado: el plan es para clientes.
+    if str(getattr(user, "role", "") or "").strip().lower() == "admin":
+        limits = {"max_portfolios": None, "max_positions": None}
+    else:
+        limits = PLAN_LIMITS[normalize_plan(user.plan)]
     existing_portfolios = snapshot.data if snapshot and isinstance(snapshot.data, list) else []
     existing_count = len(existing_portfolios)
     incoming_count = len(payload.portfolios)

@@ -413,7 +413,7 @@
     var amt = p.price - p.price / (1 + p.d1 / 100);
     var news = D.news.filter(function (x) { return x.ticker === p.ticker; });
     var pl = p.pnl;
-    var fx = p.ccy === 'USD' ? '<span class="fi-sub muted">USD/MXN ' + F.num(D.usdmxn, 2) + '</span>' : '';
+    var fx = p.ccy !== ((window.CampoTracker && window.CampoTracker.base) || 'MXN') ? '<span class="fi-sub muted">USD/MXN ' + F.num(D.usdmxn, 2) + '</span>' : '';
     return '<header class="fi-sym">' + '<span aria-hidden="true">' + mark(p.ticker, 36) + '</span>' +
       '<h2 id="fiT">' + esc(p.ticker) + '<span class="fi-nm">' + esc(p.name) + '</span></h2>' +
       '<p class="fi-meta"><span>' + esc(p.cls) + ' · ' + esc(p.ccy) + '</span>' + (p.where && p.where.length ? '<span>En ' + esc(p.where.join(' y ')) + '</span>' : '') + '<span class="fi-tag">' + (window.CAMPO_REAL ? 'Precio al ' + esc(D.asOf) : 'Datos de muestra') + '</span></p></header>' +
@@ -422,7 +422,7 @@
       '<section aria-labelledby="fiHk"><h3 class="fi-h" id="fiHk">Datos clave</h3><dl class="fi-k num">' +
       keyRow('Cantidad', nf(p.qty, p.qty < 1 ? 2 : 0), '<small>' + esc(p.ticker) + '</small>') +
       keyRow('Costo promedio', nf(p.avg), '<small>' + esc(p.ccy) + '</small>') +
-      keyRow('Valor', '<span data-roll="value">' + mxn0(p.value) + '</span>', '<small>MXN</small>') +
+      keyRow('Valor', '<span data-roll="value">' + mxn0(p.value) + '</span>', '<small>' + ((window.CampoTracker && window.CampoTracker.base) || 'MXN') + '</small>') +
       keyRow('Ganancia no realizada', sgn(pl) + mxn0(pl), '<span class="fi-sub">' + F.pct(p.pnlPct, 1) + '</span>', pl >= 0 ? 'gain' : 'loss') +
       keyRow(p.scope ? 'Peso en ' + esc(p.scope) : 'Peso', F.num(p.weight, 1), '<small>%</small>') +
       keyRow('Divisa', esc(p.ccy), fx) + '</dl></section>' +

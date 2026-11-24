@@ -6,6 +6,7 @@
    Todos los textos fijos viven en STR.es. Textos fijos en STR.es. */
 (function () {
   'use strict';
+  function fxw() { var T = window.CampoTracker, b = (T && T.base) || 'MXN', f = (T && T.fx && T.fx.foreign) || (b === 'USD' ? 'MXN' : 'USD'); return { n: f === 'MXN' ? 'peso' : 'dólar', pl: f === 'MXN' ? 'pesos' : 'dólares', pair: f + '/' + b, bpl: b === 'MXN' ? 'pesos' : b === 'USD' ? 'dólares' : b }; }
   var STR = {
     es: {
       brand: 'Portify', kicker: 'Informe del portafolio', sample: window.CAMPO_REAL ? 'Con tus datos' : 'Datos de muestra', generated: 'Generado el ', pageOf: function (n, N) { return 'Página ' + n + ' de ' + N; },
@@ -19,18 +20,18 @@
         periods: 'Resultado por periodo', cols: { per: 'Periodo', gain: 'Ganancia', twr: 'Ponderado por tiempo', ref: 'Referencia', diff: 'Diferencia' },
         recon: 'De dónde sale tu valor final', reconCap: 'Valor inicial + aportaciones − retiros + ganancia = valor final.',
         r: { start: function (d) { return 'Valor al inicio · ' + d; }, dep: 'Aportaciones', wd: 'Retiros', other: 'Otros movimientos de efectivo', gain: 'Ganancia del periodo', loss: 'Pérdida del periodo', end: function (d) { return 'Valor al final · ' + d; },
-          within: function (d, f) { var a = []; if (d) a.push('dividendos cobrados ' + d); if (f) a.push('efecto del dólar ' + f); return 'De la cual: ' + a.join(' · ') + '.'; } },
+          within: function (d, f) { var a = []; if (d) a.push('dividendos cobrados ' + d); if (f) a.push('efecto del ' + fxw().n + ' ' + f); return 'De la cual: ' + a.join(' · ') + '.'; } },
         mk: 'Cómo se movieron los mercados', mkCols: { n: 'Referencia', s: 'Al inicio', e: 'Al final', r: 'Cambio' } },
-      attr: { cols: { a: 'Activo', w: 'Peso promedio', g: 'Ganancia', fx: 'Dólar', r: 'Rendimiento', c: 'Contribución' }, total: 'Suma de contribuciones', sold: ' · vendida',
-        intro: function (t, fx) { return 'Cada fila es lo que esa posición aportó al rendimiento del periodo, en puntos. Todas suman ' + t + ', el rendimiento ponderado por tiempo.' + (fx ? ' La columna Dólar es la parte de la ganancia que viene del USD/MXN.' : ''); } },
+      attr: { cols: { a: 'Activo', w: 'Peso promedio', g: 'Ganancia', get fx() { return fxw().n === 'peso' ? 'Peso' : 'Dólar'; }, r: 'Rendimiento', c: 'Contribución' }, total: 'Suma de contribuciones', sold: ' · vendida',
+        intro: function (t, fx) { return 'Cada fila es lo que esa posición aportó al rendimiento del periodo, en puntos. Todas suman ' + t + ', el rendimiento ponderado por tiempo.' + (fx ? ' La columna ' + (fxw().n === 'peso' ? 'Peso' : 'Dólar') + ' es la parte de la ganancia que viene del ' + fxw().pair + '.' : ''); } },
       mv: { pos: 'Lo que más sumó', neg: 'Lo que más restó', what: 'Qué pasó', why: 'Por qué', impact: 'Impacto', watch: 'A vigilar', news: 'Titulares del periodo', lead: 'Cada tarjeta cuenta qué pasó, cómo se movió la posición frente a su mercado y cuánto pesó en este portafolio. Las explicaciones solo usan titulares reales del periodo; si no hay, se dice.' },
       risk: { lead: 'Lo que costó el rendimiento en vaivenes. Son medidas del periodo: describen lo que pasó, no lo que va a pasar.', vol: 'Volatilidad anualizada', volD: 'Cuánto se mueve el portafolio día a día, llevado a un año.', beta: function (b) { return 'Beta frente a ' + b; },
         betaD: 'Con 1.00 se mueve igual que su referencia; con menos, se mueve menos que ella.', sharpe: 'Sharpe', sharpeD: 'Rendimiento por cada unidad de riesgo, ya descontada la tasa libre de riesgo.', dd: 'Caída máxima', ddD: function (a, b) { return 'Del ' + a + ' al ' + b + '.'; },
         best: 'Mejor día', worst: 'Peor día', uw: 'Distancia al máximo anterior', uwCap: 'Qué tan por debajo del punto más alto estuvo el portafolio cada día.' },
       comp: { intro: function (a, b) { return 'Así se repartía tu portafolio el ' + a + ' y así el ' + b + '.'; }, start: 'Inicio', end: 'Final', cls: { c: 'Clase', vs: 'Inicio', ws: '%', ve: 'Final', we: '%', d: 'Cambio' }, same: 'Sin cambio',
         pos: 'Posiciones', pcols: { a: 'Activo', c: 'Clase', vs: 'Valor al inicio', ws: 'Peso', ve: 'Valor al final', we: 'Peso', d: 'Cambio de peso' },
-        usd: function (a, b) { return 'El peso en dólares pasó de ' + a + ' a ' + b + '.'; }, usdOnly: function (b) { return 'El ' + b + ' del portafolio está en dólares.'; }, effN: function (n) { return 'Por cómo está repartido, el portafolio se comporta como ' + n + ' posiciones de igual tamaño.'; },
-        fx: function (a, b, r, e, up) { return 'El USD/MXN pasó de ' + a + ' a ' + b + ' (' + r + ') y ' + (up ? 'sumó ' : 'restó ') + e + ' a tus posiciones en dólares.'; } },
+        usd: function (a, b) { return 'El peso en ' + fxw().pl + ' pasó de ' + a + ' a ' + b + '.'; }, usdOnly: function (b) { return 'El ' + b + ' del portafolio está en ' + fxw().pl + '.'; }, effN: function (n) { return 'Por cómo está repartido, el portafolio se comporta como ' + n + ' posiciones de igual tamaño.'; },
+        fx: function (a, b, r, e, up) { return 'El ' + fxw().pair + ' pasó de ' + a + ' a ' + b + ' (' + r + ') y ' + (up ? 'sumó ' : 'restó ') + e + ' a tus posiciones en ' + fxw().pl + '.'; } },
       act: { intro: function (o) { return o; }, cols: { d: 'Fecha', t: 'Tipo', x: 'Detalle', a: 'Importe' }, cap: function (n, N) { return n + ' de ' + N + ' · los más recientes'; },
         types: { dep: 'Aportación', wd: 'Retiro', buy: 'Compra' /* etiqueta de dato, no consejo: el lint solo aplica a la narrativa */, sell: 'Venta', div: 'Dividendo' }, depD: 'Entrada de efectivo', wdD: 'Salida de efectivo' },
       ahead: { lead: 'Fechas del calendario de tus posiciones. Son fechas, no pronósticos de lo que pasará.', cols: { d: 'Fecha', k: 'Evento', x: 'Detalle' }, earn: 'Resultados', div: 'Dividendo estimado', est: 'monto estimado' },
@@ -43,8 +44,9 @@
   var MINUS = '−';
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function sgn(v, eps) { return v > (eps || 0.00005) ? 'up' : v < -(eps || 0.00005) ? 'dn' : ''; }
-  function cents(v) { var c = Math.round(Math.abs(v) * 100); return (v < 0 && c ? MINUS : '') + '$' + nf2.format(c / 100); }
-  function centsAbs(c) { return '$' + nf2.format(Math.abs(c) / 100); }
+  function symR() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function cents(v) { var c = Math.round(Math.abs(v) * 100); return (v < 0 && c ? MINUS : '') + symR() + nf2.format(c / 100); }
+  function centsAbs(c) { return symR() + nf2.format(Math.abs(c) / 100); }
   function pctAbs(v, d) { return (d === 2 ? nf2 : nf1).format(Math.abs(v) * 100) + ' %'; }
   function ptsFmt(h) { /* h en centésimas de punto (entero) */ return (h > 0 ? '+' : h < 0 ? MINUS : '') + nf2.format(Math.abs(h) / 100) + ' pts'; }
   function n2(v) { return nf2.format(v); }

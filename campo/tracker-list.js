@@ -10,8 +10,9 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }), nf2 = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   var fDate = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-  var fM = function (v) { return (v < 0 ? '−' : '') + '$' + nf0.format(Math.abs(Math.round(v))); };
-  var fS = function (v) { return (v < 0 ? '−' : '+') + '$' + nf0.format(Math.abs(Math.round(v))); };
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  var fM = function (v) { return (v < 0 ? '−' : '') + SYM() + nf0.format(Math.abs(Math.round(v))); };
+  var fS = function (v) { return (v < 0 ? '−' : '+') + SYM() + nf0.format(Math.abs(Math.round(v))); };
   var fP = function (v) { return (v < 0 ? '−' : '+') + nf2.format(Math.abs(v)) + '%'; };
   var cls = function (v) { return v < 0 ? 'loss' : v > 0 ? 'gain' : ''; };
   var RET_TIP = 'Rentabilidad = ganancia total ÷ capital aportado, en moneda base. Ganancia total = patrimonio + retiros − aportaciones.';
@@ -220,7 +221,14 @@
 
   function removeRow(id) {
     var r = rowEl(id), p = getP(id), name = p ? p.name : '';
-    function done() { T.remove(id); if (renderN === rn) render(); toast('Eliminaste «' + name + '»'); live('Portafolio ' + name + ' eliminado'); }
+    function done() {
+      var r = T.remove(id);
+      if (r && typeof r.then === 'function') { /* producción: se borra en el servidor; si falla, vuelve a aparecer */
+        r.then(function (x) { if (x && x.error) { toast(x.error); render(); } else { toast('Eliminaste «' + name + '»'); live('Portafolio ' + name + ' eliminado'); } });
+        return;
+      }
+      if (renderN === rn) render(); toast('Eliminaste «' + name + '»'); live('Portafolio ' + name + ' eliminado');
+    }
     var rn = renderN;
     if (!r || reduce() || !r.animate) { done(); return; }
     var h = r.getBoundingClientRect().height;
@@ -241,7 +249,11 @@
     function end(commit) {
       if (fin) return; fin = true;
       var v = inp.value.trim(); editing = false;
-      if (commit && v && v !== p.name) { try { T.rename(id, v); } catch (e) { } toast('Renombrado a «' + v + '»'); live('Portafolio renombrado a ' + v); }
+      if (commit && v && v !== p.name) {
+        var rr = null; try { rr = T.rename(id, v); } catch (e) { }
+        if (rr && typeof rr.then === 'function') rr.then(function (x) { if (x && x.error) toast(x.error); else { toast('Renombrado a «' + v + '»'); live('Portafolio renombrado a ' + v); } });
+        else { toast('Renombrado a «' + v + '»'); live('Portafolio renombrado a ' + v); }
+      }
       inp.remove(); btn.style.display = ''; li.removeAttribute('data-edit');
       if (pending || (commit && v && v !== p.name)) render();
       var b = rowEl(id); if (b) { var o = $('.tkl-open', b); if (o) o.focus({ preventScroll: true }); }
@@ -359,7 +371,7 @@
       '<form class="tkl-form" novalidate>' +
       '<div class="tkl-fld"><label for="tklN">Nombre</label><input id="tklN" name="name" maxlength="40" autocomplete="off" required data-autofocus placeholder="Ej. Largo plazo"><p class="tkl-err" role="alert" id="tklNe"></p></div>' +
       '<div class="tkl-fld"><label for="tklD">Descripción <span>(opcional)</span></label><input id="tklD" name="desc" maxlength="120" autocomplete="off"></div>' +
-      '<div class="tkl-two"><div class="tkl-fld"><label for="tklC">Moneda</label><select id="tklC" name="currency">' + CCY.map(function (c) { return '<option>' + c + '</option>'; }).join('') + '</select></div>' +
+      '<div class="tkl-two"><div class="tkl-fld"><label for="tklC">Moneda</label><select id="tklC" name="currency">' + CCY.map(function (c) { var def = T.consolidatedCcy ? T.consolidatedCcy() : 'MXN'; return '<option' + (c === def ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
       '<div class="tkl-fld"><label for="tklB">Benchmark</label><select id="tklB" name="benchmark">' + BENCH.map(function (c) { return '<option>' + c + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="tkl-mact"><button type="button" class="btn btn-ghost btn-sm" data-mclose>Cancelar</button><button type="submit" class="btn btn-primary btn-sm">Crear portafolio</button></div></form>');
     var f = $('form', sh.el), n = $('#tklN', f), er = $('#tklNe', f);
@@ -367,7 +379,16 @@
     f.addEventListener('submit', function (e) {
       e.preventDefault(); var v = n.value.trim();
       if (!v) { n.setAttribute('aria-invalid', 'true'); n.setAttribute('aria-describedby', 'tklNe'); er.textContent = 'Escribe un nombre para el portafolio.'; n.focus(); return; }
-      sh.close(true); T.add({ name: v, desc: $('#tklD', f).value.trim(), currency: $('#tklC', f).value, benchmark: $('#tklB', f).value });
+      var spec = { name: v, desc: $('#tklD', f).value.trim(), currency: $('#tklC', f).value, benchmark: $('#tklB', f).value };
+      if (T.canWrite) { /* producción: se crea en el servidor; la hoja espera la respuesta y, si falla, dice por qué */
+        var sb = $('[type="submit"]', f); sb.disabled = true; sb.textContent = 'Creando…';
+        Promise.resolve(T.add(spec)).then(function (r) {
+          if (!r || r.error) { sb.disabled = false; sb.textContent = 'Crear portafolio'; er.textContent = (r && r.error) || 'No se pudo crear.'; return; }
+          sh.close(true); toast('Creaste «' + v + '»'); live('Portafolio ' + v + ' creado'); if (r.id) { try { T.open(r.id); } catch (x) { } }
+        });
+        return;
+      }
+      sh.close(true); T.add(spec);
       toast('Creaste «' + v + '»'); live('Portafolio ' + v + ' creado');
     });
   }
@@ -412,7 +433,7 @@
     var d = dateOf(p.created);
     return { name: p.name, desc: p.desc || '', color: p.color, value: p.value, day: p.day || { amt: 0, pct: 0 }, ret: p.ret || { amt: 0, pct: 0 }, meta: [['Moneda', p.currency || 'MXN'], ['Creado', d ? fDate.format(d) : '—'], ['Benchmark', p.benchmark || '—']], pos: (p.positions || []).map(function (x) { return { x: x }; }), cons: false };
   }
-  function posMXN(x) { var v = (x.qty || 0) * (x.price || 0); return x.currency === 'USD' ? v * ((T.fx && T.fx.usdmxn) || 1) : v; }
+  function posMXN(x) { var v = (x.qty || 0) * (x.price || 0); if (T.rate) return v * T.rate(x.currency || 'MXN'); return x.currency === 'USD' ? v * ((T.fx && T.fx.usdmxn) || 1) : v; }
   var rsApi = null;
   function destroyRs() { if (rsApi && rsApi.destroy) { try { rsApi.destroy(); } catch (e) { } } rsApi = null; if (briefApi && briefApi.destroy) { try { briefApi.destroy(); } catch (e) { } } briefApi = null; }
   var briefApi = null; /* nota del portafolio (window.CampoBrief, _dev_proto-campo-brief.js): entre el encabezado y las pestañas */
@@ -481,11 +502,12 @@
       '<header class="tkl-dhead"><span class="tkl-dsw" data-part="sw" style="--pc:' + esc(d.color) + '" aria-hidden="true"></span>' +
       '<div class="tkl-dtitle"><h2 class="tkl-dname" data-part="name" tabindex="-1">' + esc(d.name) + '</h2>' + (d.desc ? '<p class="tkl-ddesc tkl-late">' + esc(d.desc) + '</p>' : '') + '</div>' +
       '<div class="tkl-dval"><span class="tkl-dv tkl-num" data-part="value">' + fM(d.value) + '</span><span class="tkl-late tkl-dsub tkl-num"><span class="' + cls(d.day.amt) + '">Hoy ' + fS(d.day.amt) + ' (' + fP(d.day.pct) + ')</span><span class="' + cls(d.ret.pct) + '" title="' + RET_TIP + '">Rentabilidad ' + fP(d.ret.pct) + '</span></span></div>' +
-      '<dl class="tkl-dmeta tkl-late">' + d.meta.map(function (m) { return '<div><dt>' + m[0] + '</dt><dd>' + esc(m[1]) + '</dd></div>'; }).join('') + '</dl></header>' +
+      '<dl class="tkl-dmeta tkl-late">' + d.meta.map(function (m) { return '<div><dt>' + m[0] + '</dt><dd>' + esc(m[1]) + '</dd></div>'; }).join('') + (T.currencies && T.currencies().length > 1 ? '<div class="tkl-dccy"><dt>Ver cifras en</dt><dd><div data-ccy></div></dd></div>' : '') + '</dl></header>' +
       '<div class="tkl-late tkl-brief" data-brief></div>' +
       '<div class="tkl-late"><div class="tkl-tabw"><div class="tkl-tabs" role="tablist" aria-label="Secciones del portafolio" data-tabs><span class="tkl-ind" aria-hidden="true"></span>' + tabs.map(function (t) { var on = t[0] === tab, en = !!t[2]; return '<button type="button" role="tab" id="tklTab-' + t[0] + '" data-tab="' + t[0] + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '" aria-controls="tklPanel"' + (en ? '' : ' disabled title="Próximamente" aria-label="' + t[1] + ', próximamente"') + '>' + t[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="tkl-tp" id="tklPanel" role="tabpanel" aria-labelledby="tklTab-' + tab + '"><div class="tkl-rs" data-rs></div></div></div></div>';
     placeInd(false); requestAnimationFrame(function () { placeInd(false); }); if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(function () { placeInd(false); });
+    var cEl = $('[data-ccy]', detEl); if (cEl && window.__campo && window.__campo.ccySeg) window.__campo.ccySeg(cEl, d.cons ? 'todos' : id);
     var bEl = $('[data-brief]', detEl);
     if (bEl && window.CampoBrief) { try { briefApi = window.CampoBrief.render(bEl, d.cons ? 'todos' : getP(id), T); } catch (e) { if (window.console) console.error(e); } }
     else if (bEl) bEl.remove();
@@ -588,9 +610,10 @@
   }
 
   /* ---------- arranque ---------- */
-  function onChange() {
+  function onChange(ev) {
     if (!ready) return;
     render();
+    if (ev && ev.quiet) return; /* cambio de moneda por ruta: el detalle lo pinta la ruta */
     if (cur) { if (!getP(cur) && cur !== 'todos') { try { T.back(); } catch (e) { } } else if (!detEl.hidden && !drag) renderDetail(cur); }
   }
   function init() {

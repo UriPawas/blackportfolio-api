@@ -536,8 +536,19 @@
 
   /* ---------------- API ---------------- */
   function copy() { return state.widgets.map(function (w) { return { id: w.id, type: w.type, title: w.title, size: w.size, x: w.x, y: w.y, w: w.w, h: w.h, config: clone(w.config) }; }); }
+  /* vuelve a pintar el contenido de cada widget (los datos cambiaron: p. ej. la moneda del Inicio); no toca el acomodo */
+  function refreshAll() {
+    if (!rendered) return;
+    state.widgets.forEach(function (w) {
+      var e = inst[w.id], d = defs[w.type]; if (!e || !d) return;
+      try { if (e.ins && e.ins.destroy) e.ins.destroy(); } catch (x) { }
+      themeCbs = themeCbs.filter(function (c) { return e.themeCbs.indexOf(c) < 0; }); e.themeCbs = [];
+      var body = $('.hw-body', e.el); body.innerHTML = '';
+      try { e.ins = d.render(body, e.ctx) || {}; } catch (x) { console.error(x); body.innerHTML = '<p class="hw-err">No se pudo cargar este widget.</p>'; e.ins = {}; }
+    });
+  }
   window.CampoHub = {
-    register: register, widgets: copy, edit: edit, add: addWidget, reset: function (p) { if (!rendered) return; resetTo(p); }
+    register: register, widgets: copy, edit: edit, add: addWidget, reset: function (p) { if (!rendered) return; resetTo(p); }, refresh: refreshAll
   };
   window.__hub = { layout: copy, edit: edit, reset: function (p) { window.CampoHub.reset(p); }, cols: function () { return cols; } };
 

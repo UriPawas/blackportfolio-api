@@ -4,3 +4,13 @@
 .gate-fx--css { overflow: hidden; }
 .gate-fx--css .gate-bg { position: absolute; inset: 0; background: var(--bg); }
 .gate-fx--css .gate-logo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--text); overflow: visible; opacity: 0; }
+
+/* Retención (CampoGate.hold): la cubierta bloquea los clics mientras tapa la página */
+.gate-fx--hold { pointer-events: auto; cursor: default; }
+.gate-fx--hold.gate-fx--css .gate-logo { animation: gate-breathe 2.8s ease-in-out infinite; }
+.gate-fx--hold.gate-fx--css .gate-dot { animation: gate-dot 2.8s ease-in-out infinite; }
+@keyframes gate-breathe { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.04); } }
+@keyframes gate-dot { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .gate-fx--hold.gate-fx--css .gate-logo, .gate-fx--hold.gate-fx--css .gate-dot { animation: none; }
+}

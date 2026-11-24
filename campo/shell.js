@@ -103,19 +103,46 @@
     Promise.resolve(A && A.clearSession ? A.clearSession() : null).catch(function () { }).then(function () { location.href = 'login.html'; });
   });
 
-  /* ================= entrada: esqueletos → cifras ================= */
+  /* ================= moneda en la que se ven las cifras ================= */
+  /* id: un portafolio, o 'todos'/null para el consolidado (Inicio, lista del Tracker, "Todos") */
+  function ccySeg(host, id) {
+    var T = window.CampoTracker; if (!host || !T || !T.currencies) return;
+    var list = T.currencies(); if (list.length < 2) { host.hidden = true; return; }
+    host.classList.add('seg', 'ccy-seg'); host.setAttribute('role', 'group'); host.setAttribute('aria-label', 'Moneda en la que ves las cifras');
+    host.innerHTML = list.map(function (c) { return '<button type="button" data-v="' + c + '" aria-pressed="false">' + c + '</button>'; }).join('') + '<i class="seg-pill" aria-hidden="true"></i>';
+    host.style.setProperty('--n', list.length);
+    function paint() { var cur = id && id !== 'todos' ? T.viewCcy(id) : T.consolidatedCcy(); $$('button', host).forEach(function (b, i) { var on = b.dataset.v === cur; b.setAttribute('aria-pressed', String(on)); if (on) host.style.setProperty('--i', i); }); }
+    host.addEventListener('click', function (e) { var b = e.target.closest('button[data-v]'); if (!b) return; T.setViewCcy(id || 'todos', b.dataset.v); paint(); });
+    paint(); host._paint = paint;
+  }
+  function paintBase() {
+    var T = window.CampoTracker, c = T && T.consolidatedCcy ? T.consolidatedCcy() : (D.base || 'MXN');
+    $$('[data-base]').forEach(function (e) { e.textContent = c; });
+    $$('.ccy-seg').forEach(function (h) { if (h._paint) h._paint(); });
+  }
+  ccySeg($('#homeCcy'), 'todos'); ccySeg($('#tkCcy'), 'todos'); paintBase();
+  /* el consolidado cambió de moneda: cifras del registro y widgets del Inicio otra vez, en la nueva moneda */
+  doc.addEventListener('campo:inicio', function () {
+    paintBase(); runKpis(true);
+    try { if (window.CampoHub && window.CampoHub.refresh) window.CampoHub.refresh(); } catch (e) { if (window.console) console.error(e); }
+  });
+
+  /* ================= entrada: el tablero cubre hasta que TODO está pintado ================= */
   var app = $('#view-app');
+  function reveal() { try { if (window.CampoGate && window.CampoGate.reveal) window.CampoGate.reveal(); } catch (e) { } }
   doc.addEventListener('campo:ready', function () {
     /* la vista "app" se activa cuando YA están registrados todos los widgets y secciones: el Inicio y el enrutador
        reaccionan a este cambio (si se activara antes, el escritorio guardaría un preajuste vacío) */
     doc.body.dataset.view = 'app';
-    clearTimeout(enter.t);
-    enter.t = setTimeout(function () { app.dataset.loading = 'false'; runKpis(false); }, reduce() ? 150 : 450);
+    app.dataset.loading = 'false'; paintLedger();
+    /* dos cuadros para que el Inicio termine de acomodarse, y entonces el tablero gira de salida y las cifras cuentan */
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      setTimeout(function () { reveal(); setTimeout(function () { runKpis(false); }, reduce() ? 0 : 380); }, reduce() ? 0 : 120);
+    }); });
   });
-  function enter() { }
 
   window.__campo = {
     go: function () { /* la app ya es la vista; landing y acceso son páginas aparte */ },
-    setTheme: setTheme, repaints: repaints, toast: toast
+    setTheme: setTheme, repaints: repaints, toast: toast, ccySeg: ccySeg, reveal: reveal
   };
 })();

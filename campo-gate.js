@@ -4,10 +4,16 @@
  * pantalla y dejan ver el logo; la página siguiente arranca ya cubierta y las teselas giran de salida en el mismo
  * orden, de modo que landing -> login -> registro se lee como un solo movimiento.
  *
- * API: window.CampoGate = { go(fromEl, href), reveal() }
+ * API: window.CampoGate = { go(fromEl, href), reveal(), hold(), holding() }
  *   go(fromEl, href): cubre desde el rect de fromEl, deja la marca sessionStorage['portify-gate']='1' y navega a href.
  *                     Si algo falla, o con movimiento reducido, navega de inmediato. Nunca retiene la navegación > ~900 ms.
- *   reveal():         fase de salida. Se llama sola al cargar la página si existe la marca.
+ *   reveal():         fase de salida. Se llama sola al cargar la página si existe la marca. Si está retenida (hold),
+ *                     pasa del bucle de espera a la salida normal; sin cubierta ni marca no hace nada. Idempotente.
+ *   hold():           modo retención: deja el tablero cubierto y en un bucle lento (onda diagonal, logo que respira,
+ *                     punto de acento que late) hasta que se llame a reveal(). Idempotente. Tope de seguridad: 25 s.
+ *                     Si window.CAMPO_GATE_HOLD === true al cargar este script, se entra en retención en el primer
+ *                     fotograma (con o sin marca) y no se hace la salida automática.
+ *   holding():        true mientras la cubierta está retenida (antes de reveal()).
  * Técnica: fragment shader WebGL2 por SDF (bordes con fwidth/smoothstep, ruido triangular de +-0.5/255, render a
  * min(dpr,2)); sin WebGL2 = respaldo CSS (fundido + logo SVG); prefers-reduced-motion = sin animación.
  * No toca formularios ni botones de la página: sólo escucha clics en enlaces con data-gate (ver campo-acceso.js). */
@@ -17,6 +23,8 @@
   var KEY = 'portify-gate', KEYO = 'portify-gate-o';
   var COVER = 350, HOLD = 700, TOTAL = 1300, GO_MAX = 880;
   var cur = null, raf = 0, tickT = 0, safety = 0, startT = 0, forceGL = true;
+  var PERIOD = 2800, HOLD_MAX = 25000;
+  var hold = { on: false, exiting: false, o: null, org: null, t0: 0, ph: 0, last: 0, safety: 0, rz: 0, bound: false };
 
   function nav(href) { try { if (href) window.location.href = href; } catch (e) { /* nada */ } }
   function reduced() { try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return true; } }
@@ -103,7 +111,7 @@
     ' c=vec4(uTx*aB,aB)+c*(1.-aB);',
     ' c=vec4(uAc*aS,aS)+c*(1.-aS);',
     ' return c;}',
-    'uniform vec3 uGap;uniform vec2 uC,uOrgC;',
+    'uniform vec3 uGap;uniform vec2 uC,uOrgC;uniform float uIdle,uPh;',
     'uniform float uCell,uTile,uRad,uMaxD,uTc,uTr,uStroke,uBig,uSmall,uLogoA;',
     'const float SPC=200.,FLC=150.,SPR=400.,FLR=200.;',
     'float kCell(vec2 id){',
@@ -123,18 +131,23 @@
     ' float a=mix(mix(pr,prx,fxb),pry,fyb);',
     ' float e=k*k*(3.-2.*k);',
     ' float sy=uTr<0.?sin(e*1.5707963):cos(e*1.5707963);',
+    /* bucle de espera: onda diagonal suave (periodo uPh 0..1) que encoge un 5 % las teselas y las aclara un 4.5 % */
+    ' float wv=.5+.5*sin(6.2831853*(uPh-(id.x+id.y)*.07));wv=wv*wv*(3.-2.*wv);',
+    ' sy*=1.-.05*uIdle*wv;',
     ' float hy=uTile*.5*sy;',
     ' float dT=sdRB(q,vec2(uTile*.5,hy),uRad);',
     ' float tA=covp(dT,wp)*smoothstep(0.,.05,sy);',
     ' float sh=.06*(1.-sy);',
     ' float sg=clamp(q.y/max(hy,1.),-1.,1.);',
     ' vec3 tc=sg<0.?mix(uBg,vec3(1.),-sg*sh):mix(uBg,vec3(0.),sg*sh);',
+    ' tc=mix(tc,uTx,.045*uIdle*wv);',
     ' vec4 col=vec4(uGap*a,a);',
     ' col=vec4(tc*tA,tA)+col*(1.-tA);',
     ' vec2 lq=p-uC;',
-    ' float pl=covp(sdRB(lq,vec2(11.*uScale+12.),6.*uScale+12.),wp)*uLogoA;',
+    ' float scB=uScale*(1.+.03*uIdle*sin(6.2831853*uPh));',
+    ' float pl=covp(sdRB(lq,vec2(11.*scB+12.),6.*scB+12.),wp)*uLogoA;',
     ' col=vec4(uBg*pl,pl)+col*(1.-pl);',
-    ' vec4 lg=logoCol(lq,uScale,uStroke,uBig,uSmall)*uLogoA;',
+    ' vec4 lg=logoCol(lq,scB,uStroke,uBig,uSmall)*uLogoA;',
     ' col=lg+col*(1.-lg.a);',
     ' float n=(h21(gl_FragCoord.xy)+h21(gl_FragCoord.xy+17.3)-1.)*.5/255.;',
     ' col.rgb=clamp(col.rgb+n*col.a,0.,col.a);',
@@ -156,7 +169,7 @@
     if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) { lose(); return null; }
     gl.useProgram(pr); gl.viewport(0, 0, cv.width, cv.height); gl.clearColor(0, 0, 0, 0);
     var U = {};
-    ['uRes', 'uDpr', 'uScale', 'uBg', 'uTx', 'uAc', 'uGap', 'uC', 'uOrgC', 'uCell', 'uTile', 'uRad', 'uMaxD', 'uTc', 'uTr', 'uStroke', 'uBig', 'uSmall', 'uLogoA']
+    ['uRes', 'uDpr', 'uScale', 'uBg', 'uTx', 'uAc', 'uGap', 'uC', 'uOrgC', 'uCell', 'uTile', 'uRad', 'uMaxD', 'uTc', 'uTr', 'uStroke', 'uBig', 'uSmall', 'uLogoA', 'uIdle', 'uPh']
       .forEach(function (n) { U[n] = gl.getUniformLocation(pr, n); });
     var P = palette(), tile = G.W < 640 ? 44 : 56, cell = tile + 2, W = G.W, H = G.H;
     gl.uniform2f(U.uRes, W, H); gl.uniform1f(U.uDpr, cv.width / W); gl.uniform1f(U.uScale, G.scale);
@@ -167,17 +180,20 @@
     gl.uniform3f(U.uGap, P.bg[0] + (P.tx[0] - P.bg[0]) * k, P.bg[1] + (P.tx[1] - P.bg[1]) * k, P.bg[2] + (P.tx[2] - P.bg[2]) * k);
     var md = Math.max(Math.hypot(org[0], org[1]), Math.hypot(W - org[0], org[1]), Math.hypot(org[0], H - org[1]), Math.hypot(W - org[0], H - org[1])) / cell;
     gl.uniform2f(U.uOrgC, org[0], org[1]); gl.uniform1f(U.uMaxD, Math.max(md, 1));
-    function onLost(e) { try { e.preventDefault(); } catch (x) { /* nada */ } finish(); }
+    function onLost(e) { try { e.preventDefault(); } catch (x) { /* nada */ } if (hold.on && !hold.exiting) swapHold(true); else finish(); }
     cv.addEventListener('webglcontextlost', onLost);
     return {
       el: cv,
-      draw: function (T) {
+      draw: function (T, ph, idle) {
         if (dead) return;
+        ph = ph || 0; idle = idle || 0;
         var tr = T - HOLD;
         gl.uniform1f(U.uTc, T); gl.uniform1f(U.uTr, tr > 0 ? tr : -1);
         gl.uniform1f(U.uLogoA, smooth(clamp((T - 340) / 80, 0, 1)) * (1 - smooth(clamp(tr / 140, 0, 1))));
         gl.uniform1f(U.uStroke, easeOut(clamp((T - 340) / 300, 0, 1)));
-        gl.uniform1f(U.uBig, spring((T - 400) / 1000, 16)); gl.uniform1f(U.uSmall, spring((T - 420) / 1000, 22));
+        gl.uniform1f(U.uBig, spring((T - 400) / 1000, 16));
+        gl.uniform1f(U.uSmall, spring((T - 420) / 1000, 22) * (1 + 0.14 * idle * (0.5 + 0.5 * Math.sin(6.2831853 * ph - 1))));
+        gl.uniform1f(U.uIdle, idle); gl.uniform1f(U.uPh, ph);
         gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
       },
       destroy: function () { dead = true; try { cv.removeEventListener('webglcontextlost', onLost); } catch (e) { /* nada */ } lose(); if (cv.parentNode) cv.parentNode.removeChild(cv); }
@@ -191,10 +207,10 @@
     d.innerHTML = '<div class="gate-bg"></div>' +
       '<svg class="gate-logo" viewBox="0 0 24 24" width="' + G.S + '" height="' + G.S + '" fill="none">' +
       '<rect x="1" y="1" width="22" height="22" rx="6" stroke="currentColor" stroke-width="1.6"/>' +
-      '<circle cx="9" cy="9.5" r="3.2" fill="currentColor"/><circle cx="16" cy="15.5" r="2.2" fill="var(--accent)"/></svg>';
+      '<circle cx="9" cy="9.5" r="3.2" fill="currentColor"/><circle class="gate-dot" cx="16" cy="15.5" r="2.2" fill="var(--accent)"/></svg>';
     var bg = d.children[0], svg = d.children[1];
     return {
-      el: d,
+      el: d, css: true,
       draw: function (T) {
         var rv = T - HOLD;
         bg.style.opacity = (rv > 0 ? 1 - clamp(rv / 600, 0, 1) : clamp(T / COVER, 0, 1)).toFixed(3);
@@ -213,7 +229,8 @@
     return o;
   }
   function finish() {
-    cancelAnimationFrame(raf); clearTimeout(tickT); clearTimeout(safety);
+    cancelAnimationFrame(raf); clearTimeout(tickT); clearTimeout(safety); clearTimeout(hold.safety); clearTimeout(hold.rz);
+    hold.on = false; hold.exiting = false; hold.o = null;
     if (cur) { try { cur.destroy(); } catch (e) { /* nada */ } cur = null; }
   }
 
@@ -242,15 +259,21 @@
     } catch (e) { nav(href); }
   }
 
-  /* reveal: arranca ya cubierta (T = HOLD) y las teselas giran de salida */
-  function reveal() {
+  /* origen de la onda guardado por la página anterior; limpia las marcas */
+  function takeOrigin() {
     var org = [window.innerWidth / 2, window.innerHeight / 2];
     try {
-      try {
-        var raw = sessionStorage.getItem(KEYO);
-        sessionStorage.removeItem(KEY); sessionStorage.removeItem(KEYO);
-        if (raw) { var p = raw.split(','); if (p.length === 2 && isFinite(+p[0]) && isFinite(+p[1])) org = [clamp(+p[0], 0, 1) * window.innerWidth, clamp(+p[1], 0, 1) * window.innerHeight]; }
-      } catch (e) { /* nada */ }
+      var raw = sessionStorage.getItem(KEYO);
+      sessionStorage.removeItem(KEY); sessionStorage.removeItem(KEYO);
+      if (raw) { var p = raw.split(','); if (p.length === 2 && isFinite(+p[0]) && isFinite(+p[1])) org = [clamp(+p[0], 0, 1) * window.innerWidth, clamp(+p[1], 0, 1) * window.innerHeight]; }
+    } catch (e) { /* nada */ }
+    return org;
+  }
+
+  /* salida por marca (páginas sin retención): arranca ya cubierta (T = HOLD) y las teselas giran de salida */
+  function playExit() {
+    var org = takeOrigin();
+    try {
       if (cur || reduced()) return;
       var o = mount(org);
       try { o.draw(HOLD); } catch (e) { finish(); return; }
@@ -274,10 +297,91 @@
     } catch (e) { finish(); }
   }
 
-  window.CampoGate = { go: go, reveal: reveal };
+  /* ---- retención: tablero cubierto + bucle lento hasta reveal() ---- */
+  function startIdle() {
+    cancelAnimationFrame(raf); raf = 0;
+    if (!hold.on || hold.exiting || !cur || cur.css || reduced() || doc.hidden) return;
+    raf = requestAnimationFrame(idleStep);
+  }
+  function idleStep(now) {
+    raf = 0;
+    if (!hold.on || hold.exiting || !cur || cur !== hold.o || doc.hidden) return;
+    /* ~30 fps: el movimiento es lento y así se ahorra la mitad del coste en pantalla completa */
+    if (now - hold.last >= 30) {
+      hold.last = now; hold.ph = ((now - hold.t0) % PERIOD) / PERIOD;
+      try { cur.draw(HOLD, hold.ph, 1); } catch (e) { swapHold(true); return; }
+    }
+    raf = requestAnimationFrame(idleStep);
+  }
+  function mountHold(useCSS) {
+    var o = null;
+    if (!useCSS && forceGL) { try { o = mountGL(hold.org); } catch (e) { o = null; } }
+    if (!o) o = mountCSS();
+    o.el.className += ' gate-fx--hold';
+    (doc.body || root).appendChild(o.el);
+    cur = o; hold.o = o;
+    try { o.draw(HOLD, hold.ph, reduced() ? 0 : 1); } catch (e) { if (!o.css) { swapHold(true); return; } }
+    startIdle();
+  }
+  /* rehace la cubierta (tamaño, tema, pérdida de contexto) sin parpadeo: monta la nueva antes de quitar la vieja */
+  function swapHold(useCSS) {
+    if (!hold.on || hold.exiting) return;
+    var old = cur;
+    cur = null; mountHold(useCSS);
+    if (old && old !== cur) { try { old.destroy(); } catch (e) { /* nada */ } }
+  }
+  function enterHold() {
+    if (hold.on || cur) return;
+    hold.org = takeOrigin();
+    hold.on = true; hold.exiting = false; hold.t0 = performance.now(); hold.ph = 0; hold.last = 0;
+    mountHold(false);
+    hold.safety = setTimeout(reveal, HOLD_MAX);
+    if (hold.bound) return; hold.bound = true;
+    function again() { if (hold.on && !hold.exiting) swapHold(!!(cur && cur.css)); }
+    window.addEventListener('resize', function () { clearTimeout(hold.rz); hold.rz = setTimeout(again, 150); });
+    doc.addEventListener('visibilitychange', function () { if (!doc.hidden) startIdle(); });
+    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', again);
+    try { if (window.MutationObserver) new MutationObserver(again).observe(root, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* nada */ }
+  }
+  function exitHold() {
+    if (!hold.on || hold.exiting) return;
+    hold.exiting = true; clearTimeout(hold.safety); clearTimeout(hold.rz); cancelAnimationFrame(raf); raf = 0;
+    var o = cur;
+    if (!o) { finish(); return; }
+    if (reduced()) {
+      try { void o.el.offsetWidth; o.el.style.transition = 'opacity 220ms ease'; o.el.style.opacity = '0'; } catch (e) { /* nada */ }
+      tickT = setTimeout(finish, 260); return;
+    }
+    var phF = hold.ph, t0 = performance.now();
+    function adv(now) {
+      if (cur !== o) return false;
+      var T = HOLD + (now - t0);
+      if (T >= TOTAL) { finish(); return false; }
+      try { o.draw(T, phF, 1 - smooth(clamp((T - HOLD) / 160, 0, 1))); } catch (e) { finish(); return false; }
+      return true;
+    }
+    (function tick() { tickT = setTimeout(function () { if (adv(performance.now())) tick(); }, 50); })();
+    (function step(now) { if (adv(now)) raf = requestAnimationFrame(step); })(t0);
+    safety = setTimeout(finish, TOTAL + 1000);
+  }
 
-  /* si la página anterior dejó la marca, la salida se juega ahora (el script va en <head>: la página arranca cubierta) */
-  try { if (sessionStorage.getItem(KEY)) reveal(); } catch (e) { /* almacenamiento bloqueado */ }
+  /* reveal: con retención sale de ella; sin ella sólo actúa si la página anterior dejó la marca */
+  function reveal() {
+    if (hold.on) { exitHold(); return; }
+    if (cur) return;
+    var flagged = false;
+    try { flagged = !!sessionStorage.getItem(KEY); } catch (e) { /* nada */ }
+    if (flagged) playExit();
+  }
+
+  window.CampoGate = { go: go, reveal: reveal, hold: enterHold, holding: function () { return hold.on && !hold.exiting; } };
+
+  /* retención al cargar (main.html); si no, y la página anterior dejó la marca, la salida se juega ahora
+     (el script va en <head>: la página arranca cubierta) */
+  try {
+    if (window.CAMPO_GATE_HOLD === true) enterHold();
+    else if (sessionStorage.getItem(KEY)) reveal();
+  } catch (e) { /* almacenamiento bloqueado */ }
 
   /* volver con "atrás" desde el caché: que no quede la cubierta puesta */
   window.addEventListener('pageshow', function (ev) { if (ev && ev.persisted) finish(); });

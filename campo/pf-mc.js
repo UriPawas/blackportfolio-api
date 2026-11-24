@@ -25,15 +25,17 @@
   /* ============================== formato ============================== */
   var nfc = {};
   function fN(v, d) { if (!nfc[d]) nfc[d] = new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }); return nfc[d].format(v); }
-  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + (D && D.fmt ? D.fmt.mxn(a) : '$' + fN(a, 0)); }
+  function BS() { var t = window.CampoTracker; return (t && t.base) || 'MXN'; }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + (D && D.fmt ? D.fmt.mxn(a) : SYM() + fN(a, 0)); }
   function fPu(v, d) { return fN(Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v, d).replace('-', '−') + ' %'; }
   function fS(v, d) { var z = Math.abs(v) < 0.5 * Math.pow(10, -d); return (z ? '' : v < 0 ? '−' : '+') + fN(Math.abs(v), d) + ' %'; }
   function compact(v) {
     var a = Math.abs(v), s = v < 0 ? '−' : '';
-    if (a >= 1e9) return s + '$' + fN(a / 1e9, a >= 1e10 ? 0 : 1) + ' mil M';
-    if (a >= 1e6) return s + '$' + fN(a / 1e6, a >= 1e7 ? 0 : 1) + ' M';
-    if (a >= 1e3) return s + '$' + fN(a / 1e3, 0) + ' mil';
-    return s + '$' + Math.round(a);
+    if (a >= 1e9) return s + SYM() + fN(a / 1e9, a >= 1e10 ? 0 : 1) + ' mil M';
+    if (a >= 1e6) return s + SYM() + fN(a / 1e6, a >= 1e7 ? 0 : 1) + ' M';
+    if (a >= 1e3) return s + SYM() + fN(a / 1e3, 0) + ' mil';
+    return s + SYM() + Math.round(a);
   }
   var MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   function mLabel(m) { var k = M0 + m; return MES[k % 12] + ' ' + (Y0 + Math.floor(k / 12)); }
@@ -281,7 +283,7 @@
   var DEF = {
     med: 'La mediana (p50) del valor del portafolio al final del horizonte: la mitad de las trayectorias simuladas termina por encima y la otra mitad por debajo. Incluye lo que ya tienes más tus aportes mensuales.',
     rng: 'Entre el percentil 10 y el 90 del valor final: 8 de cada 10 trayectorias terminan dentro de este rango, 1 de cada 10 termina por debajo y 1 de cada 10 por encima.',
-    goal: 'Fracción de las trayectorias simuladas cuyo valor final alcanza o supera la meta. Si estás en pesos de hoy, la meta también se compara en pesos de hoy.',
+    goal: 'Fracción de las trayectorias simuladas cuyo valor final alcanza o supera la meta. Si estás en valor de hoy, la meta también se compara en valor de hoy.',
     loss: 'Fracción de las trayectorias que terminan con menos dinero del que pusiste (valor inicial más aportes acumulados, en las mismas unidades). Es la probabilidad de perder dinero en términos de lo aportado.',
     irr: 'Tasa interna de retorno anual de la trayectoria mediana: el rendimiento constante que, aplicado a tu valor de hoy y a tus aportes mensuales, produce ese valor final. Se muestra nominal y descontando la inflación esperada.',
     mdd: 'La caída máxima desde un pico previo del rendimiento del portafolio, sin contar aportes (un aporte no tapa una caída). Es la mediana entre todas las trayectorias: el bajón que sufre una trayectoria típica en algún momento.',
@@ -312,14 +314,14 @@
       return '<div class="pmc-f"><label for="' + id + '-' + name + '">' + label + '</label><select id="' + id + '-' + name + '" data-p="' + name + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === val ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div>';
     }
     function chk(name, label, val) { return '<label class="pmc-ck"><input type="checkbox" data-c="' + name + '"' + (val ? ' checked' : '') + '><span>' + label + '</span></label>'; }
-    var scope = pf === 'todos' ? 'Todos tus portafolios, en pesos' : esc(inp.name || 'Este portafolio');
+    var scope = pf === 'todos' ? 'Todos tus portafolios, en ' + BS() : esc(inp.name || 'Este portafolio');
     var ctrlHTML = '<section class="pmc-s panel pmc-ctl" aria-labelledby="' + id + 'h1"><div class="panel-head"><h2 id="' + id + 'h1">Proyección a futuro</h2><span class="muted" data-sub></span></div>' +
       '<div class="pmc-row"><div class="pmc-g"><span class="pmc-l" id="' + id + '-hl">Horizonte, en años</span><div class="seg pmc-seg" role="group" aria-labelledby="' + id + '-hl" style="--n:6;--i:3"><span class="seg-pill" aria-hidden="true"></span>' +
       YEARS.map(function (y) { return '<button type="button" data-y="' + y + '" aria-label="' + y + (y === 1 ? ' año' : ' años') + '" aria-pressed="' + (y === P.years) + '">' + y + '</button>'; }).join('') + '</div></div>' +
       '<div class="pmc-g pmc-gm"><label class="pmc-l" for="' + id + '-mn">Aporte mensual</label><div class="pmc-sl"><input type="range" id="' + id + '-ms" min="0" max="50000" step="500" value="' + P.monthly + '" aria-label="Aporte mensual, deslizador" data-ms>' +
-      '<div class="pmc-num"><span aria-hidden="true">$</span><input type="number" id="' + id + '-mn" min="0" max="1000000" step="500" inputmode="numeric" value="' + P.monthly + '" data-mn></div></div></div>' +
-      '<div class="pmc-g pmc-gg"><label class="pmc-l" for="' + id + '-gl">Meta <em>(opcional)</em></label><div class="pmc-num pmc-numg"><span aria-hidden="true">$</span><input type="number" id="' + id + '-gl" min="0" step="10000" inputmode="numeric" placeholder="Ej. 2,000,000" data-gl></div></div>' +
-      '<div class="pmc-g pmc-gr"><span class="pmc-l" id="' + id + '-rl">Valores en</span><button type="button" class="pmc-sw" role="switch" aria-checked="true" aria-labelledby="' + id + '-rl ' + id + '-rt" data-real><span class="pmc-swt" aria-hidden="true"><i></i></span><span id="' + id + '-rt">Pesos de hoy</span></button></div></div>' +
+      '<div class="pmc-num"><span aria-hidden="true">' + SYM() + '</span><input type="number" id="' + id + '-mn" min="0" max="1000000" step="500" inputmode="numeric" value="' + P.monthly + '" data-mn></div></div></div>' +
+      '<div class="pmc-g pmc-gg"><label class="pmc-l" for="' + id + '-gl">Meta <em>(opcional)</em></label><div class="pmc-num pmc-numg"><span aria-hidden="true">' + SYM() + '</span><input type="number" id="' + id + '-gl" min="0" step="10000" inputmode="numeric" placeholder="Ej. 2,000,000" data-gl></div></div>' +
+      '<div class="pmc-g pmc-gr"><span class="pmc-l" id="' + id + '-rl">Valores en</span><button type="button" class="pmc-sw" role="switch" aria-checked="true" aria-labelledby="' + id + '-rl ' + id + '-rt" data-real><span class="pmc-swt" aria-hidden="true"><i></i></span><span id="' + id + '-rt">Valor de hoy</span></button></div></div>' +
       '<details class="pmc-adv"><summary><span>Supuestos avanzados</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><div class="pmc-advb"><div class="pmc-advg">' +
       sel('dist', 'Distribución de rendimientos', [['normal', 'Normal'], ['t', 't de Student (colas gruesas)'], ['block', 'Bootstrap por bloques (meses reales)']], P.dist) +
       sel('drift', 'Deriva (rendimiento esperado)', [['blend', 'Mixta: prior de largo plazo y último año'], ['prior', 'Solo prior de largo plazo'], ['sample', 'Solo el último año']], P.drift) +
@@ -369,7 +371,7 @@
     /* ---------- estado de simulación ---------- */
     var res = null, chart = null, started = false, srT = 0;
     function opts() { return { years: P.years, monthly: P.monthly, goal: P.goal || 0, real: P.real, indexed: P.indexed, dist: P.dist, drift: P.drift, rebalance: P.reb, fee: P.fee / 100, tradeCost: P.tc / 100, tax: P.tax, paramUnc: P.unc }; }
-    function unitTxt() { return P.real ? 'en pesos de hoy' : 'en pesos nominales'; }
+    function unitTxt() { return P.real ? 'en valor de hoy' : 'en valor nominal'; }
     function paintAll(first) {
       var s = res.stats, M = res.months, inv = res.invested[M], yrTxt = res.years + (res.years === 1 ? ' año' : ' años'), last = mLabel(M);
       $('[data-sub]').textContent = scope + ' · ' + fN(res.n, 0) + ' trayectorias simuladas';
@@ -398,7 +400,7 @@
       }).join('');
       rows += '<tr class="pmc-tot"><th scope="row">Portafolio</th><td class="num">100 %</td><td class="num">—</td><td class="num">—</td><td class="num pmc-used">' + fPu(A.er * 100, 1) + '</td><td class="num">' + fPu(A.sigma * 100, 1) + '</td></tr>';
       $('[data-atb]').innerHTML = rows;
-      $('[data-asub]').textContent = 'Rendimientos anuales esperados, nominales en pesos';
+      $('[data-asub]').textContent = 'Rendimientos anuales esperados, nominales en ' + BS();
       var wsPct = fN(A.driftWeightSample * 100, 0), ex;
       if (A.drift === 'blend') ex = 'Con ' + fN(inp.Y, 0) + (inp.Y >= 1.5 ? ' años' : ' año') + ' de historia, el último año pesa <b>' + wsPct + ' %</b> en el rendimiento esperado y el resto viene del prior de largo plazo de cada clase de activo. Es más seguro que extrapolar el último año: la media de 12 meses tiene un error del tamaño de la propia volatilidad, así que un año excelente (o malo) casi no dice nada de lo que viene. La volatilidad y las correlaciones sí salen de tu historial.';
       else if (A.drift === 'prior') ex = 'Estás usando <b>solo el prior de largo plazo</b> de cada clase de activo: el último año pesa 0 %. La volatilidad y las correlaciones siguen saliendo de tu historial.';

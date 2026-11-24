@@ -293,6 +293,8 @@
   function route(animate) {
     if (doc.body.dataset.view !== 'app') return;
     var t = parse();
+    /* aviso general de sección (la moneda base de la vista depende de dónde estás) */
+    try { window.dispatchEvent(new CustomEvent('campo:section', { detail: { sec: t.sec } })); } catch (e) { }
     if (t.sec === 'inicio') { if (sec !== 'inicio') showSec('inicio', animate); return; }
     if (t.sec === 'tracker') { if (sec !== 'tracker') showSec('tracker', animate, fireTk); else fireTk(); return; }
     if (t.sec === 'informes') { if (sec !== 'informes') showSec('informes', animate, fireInf); else fireInf(); return; }
