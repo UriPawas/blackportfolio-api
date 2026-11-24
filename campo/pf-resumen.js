@@ -24,18 +24,19 @@
 
   /* ============================== formato ============================== */
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }), nf2 = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + '$' + nf0.format(a); }
-  function fS(v) { var a = Math.round(Math.abs(v)); return (a === 0 ? '' : v < 0 ? '−' : '+') + '$' + nf0.format(a); }
-  function fM2(v) { var a = Math.abs(v); return (v < 0 && a >= 0.005 ? '−' : '') + '$' + nf2.format(a); }
-  function fS2(v) { var a = Math.abs(v); return (a < 0.005 ? '' : v < 0 ? '−' : '+') + '$' + nf2.format(a); }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + SYM() + nf0.format(a); }
+  function fS(v) { var a = Math.round(Math.abs(v)); return (a === 0 ? '' : v < 0 ? '−' : '+') + SYM() + nf0.format(a); }
+  function fM2(v) { var a = Math.abs(v); return (v < 0 && a >= 0.005 ? '−' : '') + SYM() + nf2.format(a); }
+  function fS2(v) { var a = Math.abs(v); return (a < 0.005 ? '' : v < 0 ? '−' : '+') + SYM() + nf2.format(a); }
   function fP(v, d) { return D.fmt.pct(v, d == null ? 2 : d); }
   function fN(v, d) { return new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }).format(v); }
   function sgnCls(v) { return v > 0.0049 ? 'gain' : v < -0.0049 ? 'loss' : 'flat'; }
   function dTxt(iso, short) { return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', short ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, ''); }
   function compact(v) {
-    if (v >= 1e6) { var m = v / 1e6; return '$' + (Math.round(m * 100) / 100).toString().replace('.', ',') + ' M'; }
-    if (v >= 1e3) return '$' + Math.round(v / 1e3) + ' mil';
-    return '$' + Math.round(v);
+    if (v >= 1e6) { var m = v / 1e6; return SYM() + (Math.round(m * 100) / 100).toString().replace('.', ',') + ' M'; }
+    if (v >= 1e3) return SYM() + Math.round(v / 1e3) + ' mil';
+    return SYM() + Math.round(v);
   }
   function niceStep(span, n) { var raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag; return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * mag; }
 
@@ -61,7 +62,7 @@
     if (p && p.ledger) {
       var R0 = p.ledger;
       return finish({ id: p.id, name: p.name, events: R0.events.slice(), rows: R0.rows.map(function (r) { var o = {}; for (var k in r) o[k] = r[k]; return o; }),
-        V: R0.V, F: R0.F, Dc: R0.Dc, Wc: R0.Wc, cashAt: R0.cashAt, dates: R0.dates, fxLast: R0.fxLast, fxPrev: R0.fxPrev, benchmark: p.benchmark || R0.benchmark, held: R0.held });
+        V: R0.V, F: R0.F, Dc: R0.Dc, Wc: R0.Wc, cashAt: R0.cashAt, dates: R0.dates, fxLast: R0.fxLast, fxPrev: R0.fxPrev, benchmark: p.benchmark || R0.benchmark, held: R0.held, pfCcy: R0.pfCcy });
     }
     var dates = T.dates, fxs = T.fx.series, ev = [], seq = 0, held = [], rows = [], rng = mulberry32(hashStr(p.id + '·led'));
     var w0 = isoMs(dates[0]), created = p.created || dates[0];
@@ -175,9 +176,19 @@
     if (L.parts) L.parts.forEach(function (P) { realized += P.realized; openCost += P.openCost; closedCost += P.closedCost; });
     else Object.keys(pos).forEach(function (k) { if (pos[k].q > 1e-9) openCost += pos[k].c; });
     var mvPos = 0, prevVal = 0, dayAmt = 0, fxEff = 0;
-    L.rows.forEach(function (r) { mvPos += r.mv; var f = r.isU ? L.fxLast : 1; prevVal += r.qty * r.prev * f; dayAmt += r.qty * (r.price - r.prev) * f; if (r.isU) fxEff += r.qty * r.prev * (L.fxLast - L.fxPrev); });
+    /* producción: cada renglón trae su tipo de cambio a la base de hoy (fx1) y de ayer (fx0); así funciona con cualquier moneda base */
+    L.rows.forEach(function (r) {
+      mvPos += r.mv;
+      if (r.fx1 != null) { prevVal += r.qty * r.prev * r.fx1; dayAmt += r.qty * (r.price - r.prev) * r.fx1; fxEff += r.qty * r.prev * (r.fx1 - r.fx0); return; }
+      var f = r.isU ? L.fxLast : 1; prevVal += r.qty * r.prev * f; dayAmt += r.qty * (r.price - r.prev) * f; if (r.isU) fxEff += r.qty * r.prev * (L.fxLast - L.fxPrev);
+    });
     L.dep = D_; L.wd = W_; L.div = Div; L.sells = S_; L.buys = B; L.openCost = openCost; L.closedCost = closedCost; L.first = first;
     L.mvPos = mvPos; L.cashEnd = L.cashAt[LAST]; L.value = L.V[LAST]; L.realized = realized; L.unrealized = mvPos - openCost; L.gain = L.value + W_ - D_;
+    /* producción: el efectivo en otra moneda también se revalúa con el tipo de cambio del día (así "Hoy" cuadra con el encabezado) */
+    var cashFx = 0, TT = window.CampoTracker;
+    if (L.parts) L.parts.forEach(function (P) { cashFx += P.cashFx || 0; });
+    else if (L.pfCcy && TT && TT.rate && window.CAMPO_REAL) { var cr1 = TT.rate(L.pfCcy, LAST), cr0 = TT.rate(L.pfCcy, LAST - 1); if (cr0 > 0) cashFx = L.cashAt[LAST - 1] / cr0 * (cr1 - cr0); }
+    L.cashFx = cashFx; fxEff += cashFx;
     L.dayTot = dayAmt + fxEff; L.dayTotPct = L.V[LAST - 1] ? L.dayTot / L.V[LAST - 1] * 100 : 0;
     L.prevVal = prevVal; L.dayAmt = dayAmt; L.dayPct = prevVal ? dayAmt / prevVal * 100 : 0; L.fxEffect = fxEff;
     return L;
@@ -191,7 +202,7 @@
       for (var i = 0; i < TOT; i++) { V[i] += L.V[i]; F[i] += L.F[i]; Dc[i] += L.Dc[i]; Wc[i] += L.Wc[i]; cashAt[i] += L.cashAt[i]; }
       L.rows.forEach(function (r) {
         var m = by[r.ticker];
-        if (!m) { m = by[r.ticker] = { ticker: r.ticker, name: r.name, cls: r.cls, qty: 0, price: r.price, prev: r.prev, d1: r.d1, ccy: r.ccy, isU: r.isU, cost: 0, mv: 0, local: 0 }; rows.push(m); }
+        if (!m) { m = by[r.ticker] = { ticker: r.ticker, name: r.name, cls: r.cls, qty: 0, price: r.price, prev: r.prev, d1: r.d1, ccy: r.ccy, isU: r.isU, fx1: r.fx1, fx0: r.fx0, cost: 0, mv: 0, local: 0 }; rows.push(m); }
         m.qty += r.qty; m.cost += r.cost; m.mv += r.mv; m.local += r.local;
       });
     });
@@ -223,10 +234,11 @@
     var map = { 'S&P 500': 'S&P 500', 'NASDAQ 100': 'Nasdaq 100', 'S&P/BMV IPC': 'S&P/BMV IPC', 'Bitcoin': 'Bitcoin' }, want = map[name] || 'S&P 500', mk = null;
     /* S&P 500: la MISMA serie en MXN que usa la gráfica del Inicio, para que ambas pantallas cuenten lo mismo */
     var sb = D.series && D.series.benchmark;
-    if (want === 'S&P 500' && sb && sb.length >= TOT) return { name: 'S&P 500', a: Float64Array.from(sb.slice(-TOT)) };
+    if (!window.CAMPO_REAL && want === 'S&P 500' && sb && sb.length >= TOT) return { name: 'S&P 500', a: Float64Array.from(sb.slice(-TOT)) };
     D.markets.forEach(function (m) { if (m.sym === want) mk = m; });
     var usd = !/IPC/.test(mk.sym), a = new Float64Array(TOT);
-    for (var i = 0; i < TOT; i++) a[i] = mk.hist[i] * (usd ? T.fx.series[i] : 1);
+    /* producción: el índice en la moneda base de la vista (T.rate), con el TC de cada fecha */
+    for (var i = 0; i < TOT; i++) a[i] = mk.hist[mk.hist.length - TOT + i] * (T.rate ? T.rate(usd ? 'USD' : 'MXN', i) : (usd ? T.fx.series[i] : 1));
     return { name: mk.sym, a: a };
   }
 
@@ -250,7 +262,7 @@
       mount.innerHTML = '<div class="pfr"><div class="pfr-empty"><strong>Este portafolio aún no tiene movimientos</strong><p>Agrega una posición o importa un CSV y aquí verás tu patrimonio, tu rendimiento frente al índice y la composición.</p></div></div>';
       return api;
     }
-    var id = 'pfr' + (++uid), dates = T.dates, fx0 = T.fx.usdmxn;
+    var id = 'pfr' + (++uid), dates = T.dates, fx0 = T.fx.usdmxn, BASE = T.base || 'MXN', FOR = (T.fx && T.fx.foreign) || (BASE === 'USD' ? 'MXN' : 'USD'), PAIR = FOR + '/' + BASE; if (FOR === 'MXN' && BASE === 'USD' && fx0 > 0) { PAIR = 'USD/MXN'; fx0 = 1 / fx0; }
     var bench = benchOf(T, L.benchmark), V = L.V, F = L.F;
     var PERIODS = [['1M', 21], ['3M', 63], ['6M', 126], ['1A', LAST]], Pi = 3, mode = 'rend';
     function startIdx() { return Math.max(0, LAST - PERIODS[Pi][1]); }
@@ -273,10 +285,10 @@
       var rent = L.dep ? L.gain / L.dep * 100 : 0, tw = twrInfo();
       var K = [
         { id: 'pat', name: 'Patrimonio', to: L.value, fmt: fM, sign: false, sub: 'Posiciones ' + fM(L.mvPos) + ' · efectivo ' + fM(L.cashEnd),
-          lines: [['Σ cantidad × precio × TC + efectivo'], ['Posiciones en USD (' + fM2(usdLocal).replace('$', '$') + ' USD × ' + fN(fx0, 4) + ')', fM2(usdMxn)], ['Posiciones en MXN', fM2(mxnLoc)], ['Efectivo', fM2(L.cashEnd)], ['Patrimonio', fM2(L.value), 'res'],
-            ['TC USD/MXN ' + fN(fx0, 4) + ' al ' + dTxt(dates[LAST]) + ' (último dato).']] },
+          lines: [['Σ cantidad × precio × TC + efectivo'], ['Posiciones en ' + FOR + ' (' + fM2(usdLocal).replace(SYM(), '') + ' ' + FOR + ' × ' + fN(T.fx.usdmxn, 4) + ')', fM2(usdMxn)], ['Posiciones en ' + BASE, fM2(mxnLoc)], ['Efectivo', fM2(L.cashEnd)], ['Patrimonio', fM2(L.value), 'res'],
+            ['TC ' + PAIR + ' ' + fN(fx0, 4) + ' al ' + dTxt(dates[LAST]) + ' (último dato).']] },
         { id: 'hoy', name: 'Hoy', to: L.dayTot, fmt: fS, sign: true, sub: fP(L.dayTotPct) + ' vs cierre anterior · precio y tipo de cambio',
-          lines: [['Efecto precio + efecto cambiario'], ['Patrimonio al cierre anterior (con efectivo)', fM2(L.V[LAST - 1])], ['Efecto precio: Σ cantidad × (precio − cierre anterior) × TC de hoy', fS2(L.dayAmt)], ['Efecto cambiario: USD × (TC de hoy − TC anterior)', fS2(L.fxEffect)], ['Cambio total', fS2(L.dayTot), 'res'],
+          lines: [['Efecto precio + efecto cambiario'], ['Patrimonio al cierre anterior (con efectivo)', fM2(L.V[LAST - 1])], ['Efecto precio: Σ cantidad × (precio − cierre anterior) × TC de hoy', fS2(L.dayAmt)], ['Efecto cambiario: ' + FOR + ' × (TC de hoy − TC anterior)', fS2(L.fxEffect)], ['Cambio total', fS2(L.dayTot), 'res'],
             ['Hoy = cambio total ÷ patrimonio anterior', fP(L.dayTotPct)]] },
         { id: 'gan', name: 'Ganancia total', to: L.gain, fmt: fS, sign: true, sub: 'Realizada, no realizada, dividendos y tipo de cambio',
           lines: [['Patrimonio + retiros acumulados − aportaciones acumuladas'], ['Patrimonio', fM2(L.value)], ['+ Retiros acumulados', fM2(L.wd)], ['− Aportaciones acumuladas', fM2(L.dep)], ['Ganancia total', fS2(L.gain), 'res'],
@@ -288,7 +300,7 @@
         { id: 'xir', name: 'XIRR anualizado', to: X.r == null ? null : X.r * 100, fmt: function (v) { return fP(v); }, sign: true, sub: X.r == null ? (X.years < 1 ? 'Necesita 1 año de historia' : 'No hay solución real con estos flujos') : 'Ponderado por dinero · desde ' + dTxt(L.first),
           lines: (function () {
             var nd = 0, nw = 0; L.events.forEach(function (e) { if (e.t === 'dep') nd++; else if (e.t === 'wd') nw++; });
-            var a = [['Σ F<sub>i</sub> ÷ (1 + r)<sup>(d<sub>i</sub> − d<sub>0</sub>)/365</sup> = 0'], ['Primer flujo', dTxt(L.first)], ['Flujos', nd + ' aportaciones y ' + nw + ' retiros, en MXN al TC de su fecha'], ['Valor final (patrimonio)', fM2(L.value) + ' · ' + dTxt(dates[LAST])], ['Historia', fN(X.years, 2) + ' años']];
+            var a = [['Σ F<sub>i</sub> ÷ (1 + r)<sup>(d<sub>i</sub> − d<sub>0</sub>)/365</sup> = 0'], ['Primer flujo', dTxt(L.first)], ['Flujos', nd + ' aportaciones y ' + nw + ' retiros, en ' + BASE + ' al TC de su fecha'], ['Valor final (patrimonio)', fM2(L.value) + ' · ' + dTxt(dates[LAST])], ['Historia', fN(X.years, 2) + ' años']];
             a.push(X.r == null ? [X.years < 1 ? 'Con menos de 1 año el anualizado engaña: se muestra desde que haya 1 año de historia.' : 'Sin cambio de signo en los flujos.'] : ['XIRR (r)', fP(X.r * 100), 'res']);
             return a;
           })() }
@@ -329,14 +341,14 @@
     }
     function sorted() { return L.rows.slice().sort(function (a, b) { var x = a[sortKey], y = b[sortKey]; if (sortKey === 'ticker') return sortDir * String(x).localeCompare(String(y)); return sortDir * (x - y) || a.ticker.localeCompare(b.ticker); }); }
 
-    var benchLabel = bench.name === 'S&P 500' ? 'S&P 500 en MXN' : bench.name + (/IPC/.test(bench.name) ? '' : ' en MXN');
+    var benchLabel = bench.name === 'S&P 500' ? 'S&P 500 en ' + BASE : bench.name + (/IPC/.test(bench.name) ? '' : ' en ' + BASE);
     mount.innerHTML = '<div class="pfr" id="' + id + '" data-mode="rend">' +
-      '<p class="pfr-tag">Base MXN · USD/MXN ' + fN(fx0, 2) + ' al ' + dTxt(dates[LAST]) + ' · cada flujo con el tipo de cambio de su fecha</p>' +
+      '<p class="pfr-tag">Base ' + BASE + ' · ' + PAIR + ' ' + fN(fx0, 2) + ' al ' + dTxt(dates[LAST]) + ' · cada flujo con el tipo de cambio de su fecha</p>' +
       '<section class="pfr-led" aria-label="Indicadores del portafolio">' + ledHTML + '</section>' +
       '<p class="pfr-rec" aria-label="Conciliación">' + recHTML + '</p>' +
       '<section class="pfr-ch panel" aria-label="Gráfico"><div class="pfr-ctop"><div class="pfr-ct"><h2 id="' + id + 'h">Rendimiento frente a ' + esc(bench.name) + '</h2>' +
       '<ul class="pfr-key" aria-hidden="true"><li><i class="pfr-ln1"></i>Cartera</li><li data-key-b><i class="pfr-ln2"></i>' + esc(benchLabel) + '</li><li data-key-f hidden><i class="pfr-tk"></i>Aportación<i class="pfr-tk pfr-tkd"></i>Retiro</li></ul></div>' +
-      '<div class="pfr-ctl"><div class="seg pfr-sm" role="group" aria-label="Qué mostrar" style="--n:2"><span class="seg-pill" aria-hidden="true"></span><button type="button" data-m="rend" aria-pressed="true">Rendimiento</button><button type="button" data-m="valor" aria-pressed="false">Valor en MXN</button></div>' +
+      '<div class="pfr-ctl"><div class="seg pfr-sm" role="group" aria-label="Qué mostrar" style="--n:2"><span class="seg-pill" aria-hidden="true"></span><button type="button" data-m="rend" aria-pressed="true">Rendimiento</button><button type="button" data-m="valor" aria-pressed="false">Valor en ' + BASE + '</button></div>' +
       '<div class="seg pfr-sp" role="group" aria-label="Periodo" style="--n:4"><span class="seg-pill" aria-hidden="true"></span>' + PERIODS.map(function (p, i) { return '<button type="button" data-p="' + i + '" aria-pressed="' + (i === Pi) + '">' + p[0] + '</button>'; }).join('') + '</div></div></div>' +
       '<dl class="pfr-ro" data-ro><div><dt>Fecha</dt><dd data-r="a"></dd></div><div><dt data-rl="b">Cartera</dt><dd data-r="b"></dd></div><div><dt data-rl="c">' + esc(bench.name) + '</dt><dd data-r="c"></dd></div><div><dt data-rl="d">Diferencia</dt><dd data-r="d"></dd></div></dl>' +
       '<div class="pfr-stage" tabindex="0" role="group" aria-labelledby="' + id + 'h" aria-describedby="' + id + 'k"><canvas aria-hidden="true"></canvas></div>' +
@@ -527,7 +539,7 @@
     segM.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-m]'); if (!b || b.dataset.m === mode) return; mode = b.dataset.m; rootEl.setAttribute('data-mode', mode);
       $$('button', segM).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); pill(segM, mode === 'rend' ? 0 : 1);
-      $('#' + id + 'h').textContent = mode === 'rend' ? 'Rendimiento frente a ' + bench.name : 'Valor del portafolio en MXN';
+      $('#' + id + 'h').textContent = mode === 'rend' ? 'Rendimiento frente a ' + bench.name : 'Valor del portafolio en ' + BASE;
       $('[data-key-b]').hidden = mode !== 'rend'; $('[data-key-f]').hidden = mode === 'rend'; if (hIdx >= 0 || kbIdx >= 0) { hIdx = -1; kbIdx = -1; } retarget(true);
     });
     segP.addEventListener('click', function (e) {
@@ -602,7 +614,7 @@
   /* UNA definición para Hoy (precio + TC) y Rentabilidad (ganancia total ÷ aportado): se impone a CampoTracker (hero, cruz, lista y encabezado) */
   var cKey = '', cAgg = null, applying = false;
   function ledgers(T) {
-    var key = (T.txVersion || 0) + '#' + T.portfolios.map(function (p) { return p.id + ':' + (p.positions || []).length + ':' + (p.cash || 0); }).join('|');
+    var key = (T.base || '') + '#' + (T.txVersion || 0) + '#' + T.portfolios.map(function (p) { return p.id + ':' + (p.positions || []).length + ':' + (p.cash || 0); }).join('|');
     if (key !== cKey || !cAgg) { cKey = key; cAgg = aggregate(T); } return cAgg;
   }
   function retOf(L) { return { amt: L.gain, pct: L.dep ? L.gain / L.dep * 100 : 0 }; }
@@ -647,10 +659,19 @@
         return x;
       });
       D.positions.length = 0; next.forEach(function (x) { D.positions.push(x); });
-    } catch (e) { }
+      /* el S&P 500 del Inicio en la misma moneda, arrancando donde arranca el portafolio */
+      if (REAL0) { var bq = benchOf(T0, 'S&P 500').a, sb2 = D.series.benchmark, b0 = sp[off] || 100; for (var u = 0; u < TOT; u++) sb2[sb2.length - TOT + u] = b0 * bq[u] / bq[0]; D.series.benchmarkName = 'S&P 500 (en ' + T0.base + ')'; D.ccy = T0.base; }
+    } catch (e) { if (window.console) console.error(e); }
   }
   syncInicio();
-  if (window.CampoTracker && window.CampoTracker.on) window.CampoTracker.on('change', function (ev) { if (ev && ev.type === 'tx' && (window.CAMPO_REAL || ev.id === 'principal')) syncInicio(); });
+  if (window.CampoTracker && window.CampoTracker.on) window.CampoTracker.on('change', function (ev) {
+    if (ev && ev.type === 'tx' && (window.CAMPO_REAL || ev.id === 'principal')) syncInicio();
+    /* producción: el Inicio vive en la moneda del consolidado; se recalcula solo si ESA moneda cambió (no al entrar a un portafolio en otra) */
+    var T1 = window.CampoTracker;
+    if (window.CAMPO_REAL && ev && (ev.type === 'base' || ev.type === 'tx' || ev.type === 'data') && T1.base === T1.consolidatedCcy() && (D.ccy !== T1.base || ev.type !== 'base')) {
+      syncInicio(); try { document.dispatchEvent(new CustomEvent('campo:inicio')); } catch (e) { }
+    }
+  });
 
   window.CampoPfResumen = { render: render, calc: { DPS: DPS, clsOf: clsOf, buildLedger: buildLedger, aggregate: aggregate, twr: twr, twrSeries: twrSeries, xirrOf: xirrOf, solveXirr: solveXirr, npv: npv, benchOf: benchOf } };
 })();

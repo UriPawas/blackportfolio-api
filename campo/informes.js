@@ -75,7 +75,7 @@
   var view = { mode: null, id: null, handle: null, back: null, pending: null, rect: null, toastT: 0 };
 
   function bounds() { var t = T(), d = t && t.dates; return d && d.length ? { min: d[0], max: d[d.length - 1] } : { min: '', max: '' }; }
-  function plan() { var t = T(); return (t && t.limit && t.limit.plan) || 'Investor'; }
+  function plan() { var t = T(); if (t && t.limit && t.limit.admin) return 'Wealth Desk'; /* la cuenta admin no tiene tope */ return (t && t.limit && t.limit.plan) || 'Investor'; }
   function overLimit() {
     if (!/^explorer$/i.test(plan())) return false;
     var m = nowMonth(); return store.items.some(function (i) { return !i.seed && i.created.slice(0, 7) === m; });

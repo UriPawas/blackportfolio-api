@@ -14,8 +14,10 @@
 
   /* ============================== formato ============================== */
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 });
-  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + '$' + nf0.format(a); }
-  function fS(v) { var a = Math.round(Math.abs(v)); return a === 0 ? '$0' : (v < 0 ? '−' : '+') + '$' + nf0.format(a); }
+  function BS() { var t = window.CampoTracker; return (t && t.base) || 'MXN'; }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + SYM() + nf0.format(a); }
+  function fS(v) { var a = Math.round(Math.abs(v)); return a === 0 ? SYM() + '0' : (v < 0 ? '−' : '+') + SYM() + nf0.format(a); }
   var nfc = {};
   function fN(v, d) { if (!nfc[d]) nfc[d] = new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }); return nfc[d].format(v); }
   function sgn(v, d, unit) { var a = Math.abs(v), z = a < 0.5 * Math.pow(10, -d); return (z ? '' : v < 0 ? '−' : '+') + fN(a, d) + (unit || ''); }
@@ -40,7 +42,7 @@
     ops: 'Número de compras y ventas que tendrías que hacer. Las diferencias menores a la operación mínima se omiten.',
     vol: 'Cuánto suele moverse el portafolio en un año (desviación estándar anualizada), con la covarianza de un año de historia y correlaciones suavizadas hacia su promedio.',
     er: 'Rendimiento anual esperado con supuestos de largo plazo por clase de activo, mezclados con el último año (que pesa solo 10 %). Es un supuesto, no un pronóstico.',
-    beta: 'Cuánto se mueve el portafolio por cada 1 % que se mueve el S&P 500 en pesos.',
+    beta: 'Cuánto se mueve el portafolio por cada 1 % que se mueve el S&P 500 en tu moneda base.',
     loss: 'Pérdida a un año que solo se supera 1 de cada 20 años (percentil 5, con distribución log-normal). No es el peor caso posible.',
     dist: 'Qué parte del portafolio tendría que cambiar de lugar para coincidir con el objetivo.'
   };
@@ -93,8 +95,8 @@
 
     var modeHTML = '<section class="prb-s panel" aria-labelledby="' + id + 'h2"><div class="panel-head"><h2 id="' + id + 'h2">Cómo operar</h2><span class="muted" data-cash>Efectivo disponible ' + fM(inp.cash) + '</span></div><div class="prb-ctl">' +
       '<div class="seg prb-mode" role="group" aria-label="Modo de operación" style="--n:2;--i:0"><span class="seg-pill" aria-hidden="true"></span><button type="button" data-mode="full" aria-pressed="true">Comprar y vender</button><button type="button" data-mode="contrib" aria-pressed="false">Solo comprar (sin impuestos)</button></div>' +
-      '<label class="prb-f"><span class="prb-fl">Aportación adicional</span><span class="prb-fi"><span class="prb-pre" aria-hidden="true">$</span><input type="text" inputmode="numeric" autocomplete="off" data-extra value="0" aria-label="Aportación adicional en pesos"><span class="prb-suf" aria-hidden="true">MXN</span></span></label>' +
-      '<label class="prb-f"><span class="prb-fl">Operación mínima</span><span class="prb-fi"><span class="prb-pre" aria-hidden="true">$</span><input type="text" inputmode="numeric" autocomplete="off" data-min value="500" aria-label="Operación mínima en pesos"><span class="prb-suf" aria-hidden="true">MXN</span></span></label></div>' +
+      '<label class="prb-f"><span class="prb-fl">Aportación adicional</span><span class="prb-fi"><span class="prb-pre" aria-hidden="true">' + SYM() + '</span><input type="text" inputmode="numeric" autocomplete="off" data-extra value="0" aria-label="Aportación adicional en ' + BS() + '"><span class="prb-suf" aria-hidden="true">' + BS() + '</span></span></label>' +
+      '<label class="prb-f"><span class="prb-fl">Operación mínima</span><span class="prb-fi"><span class="prb-pre" aria-hidden="true">' + SYM() + '</span><input type="text" inputmode="numeric" autocomplete="off" data-min value="500" aria-label="Operación mínima en ' + BS() + '"><span class="prb-suf" aria-hidden="true">' + BS() + '</span></span></label></div>' +
       '<p class="prb-hint" data-modehint></p></section>';
 
     var driftRows = order.map(function (i) {
@@ -139,7 +141,7 @@
       '<p class="prb-rcn">Qué parte de la volatilidad del portafolio aporta cada posición. Una posición pequeña puede aportar mucho riesgo si se mueve fuerte o sube y baja con las demás.</p>' +
       '<ul class="prb-rl" role="list" data-rl>' + rcRows + '</ul></section>';
 
-    mount.innerHTML = '<div class="prb" id="' + id + '"><p class="prb-tag">Un plan en pesos para acercar <b>' + esc(inp.name || 'tu portafolio') + '</b> al objetivo que elijas, con comisiones e ISR estimados.</p>' +
+    mount.innerHTML = '<div class="prb" id="' + id + '"><p class="prb-tag">Un plan en ' + BS() + ' para acercar <b>' + esc(inp.name || 'tu portafolio') + '</b> al objetivo que elijas, con comisiones e ISR estimados.</p>' +
       (todos ? '<p class="prb-orient" role="note">Plan orientativo: cada operación se hace en su portafolio.</p>' : '') +
       targetHTML + modeHTML + driftHTML + planHTML + ledHTML + baHTML + '<p class="prb-foot">Ejercicio informativo · no es asesoría de inversión</p></div>';
     var $ = function (s, r) { return (r || mount).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || mount).querySelectorAll(s)); };
@@ -339,13 +341,13 @@
     function csvCell(v) { var s = String(v == null ? '' : v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
     function exportCsv() {
       if (!R || !R.totals.ops) return;
-      var tn = S.sel === 'custom' ? 'Personalizado' : byId[S.sel].name, rows = [['Acción', 'Ticker', 'Activo', 'Títulos', 'Precio MXN', 'Monto MXN', 'Peso hoy %', 'Peso objetivo %', 'Peso después %', 'Comisión MXN', 'Ganancia realizada MXN', 'ISR estimado MXN']];
+      var tn = S.sel === 'custom' ? 'Personalizado' : byId[S.sel].name, rows = [['Acción', 'Ticker', 'Activo', 'Títulos', 'Precio ' + BS(), 'Monto ' + BS(), 'Peso hoy %', 'Peso objetivo %', 'Peso después %', 'Comisión ' + BS(), 'Ganancia realizada ' + BS(), 'ISR estimado ' + BS()]];
       R.trades.forEach(function (t, i) {
         if (t.side === 'hold') return;
         rows.push([actOf(t), t.ticker, t.name, t.qty, t.pxMxn.toFixed(4), t.amount.toFixed(2), (t.wNow * 100).toFixed(2), (R.target[i] * 100).toFixed(2), (t.wAfter * 100).toFixed(2), t.commission.toFixed(2), t.side === 'sell' ? t.gain.toFixed(2) : '', t.tax ? t.tax.toFixed(2) : '']);
       });
-      var tt = R.totals; rows.push([]); rows.push(['Portafolio', inp.name || '']); rows.push(['Objetivo', tn]); rows.push(['Modo', S.mode === 'contrib' ? 'Solo comprar' : 'Comprar y vender']); rows.push(['Compras MXN', tt.buys.toFixed(2)]); rows.push(['Ventas MXN', tt.sells.toFixed(2)]);
-      rows.push(['Comisiones MXN (0.25 % + IVA)', tt.commission.toFixed(2)]); rows.push(['ISR estimado MXN', tt.tax.toFixed(2)]); rows.push(['Efectivo restante MXN', tt.cashAfter.toFixed(2)]); rows.push(['Rotación %', (tt.turnover * 100).toFixed(2)]); rows.push(['Operaciones', tt.ops]);
+      var tt = R.totals; rows.push([]); rows.push(['Portafolio', inp.name || '']); rows.push(['Objetivo', tn]); rows.push(['Modo', S.mode === 'contrib' ? 'Solo comprar' : 'Comprar y vender']); rows.push(['Compras ' + BS(), tt.buys.toFixed(2)]); rows.push(['Ventas ' + BS(), tt.sells.toFixed(2)]);
+      rows.push(['Comisiones ' + BS() + ' (0.25 % + IVA)', tt.commission.toFixed(2)]); rows.push(['ISR estimado ' + BS(), tt.tax.toFixed(2)]); rows.push(['Efectivo restante ' + BS(), tt.cashAfter.toFixed(2)]); rows.push(['Rotación %', (tt.turnover * 100).toFixed(2)]); rows.push(['Operaciones', tt.ops]);
       rows.push(['Ejercicio informativo · no es asesoría de inversión']);
       var csv = '﻿' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
       var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' }), url = URL.createObjectURL(blob), a = doc.createElement('a');

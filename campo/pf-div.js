@@ -19,13 +19,15 @@
 
   /* ============================== formato ============================== */
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 });
-  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + '$' + nf0.format(a); }
+  function BS() { var t = window.CampoTracker; return (t && t.base) || 'MXN'; }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + SYM() + nf0.format(a); }
   var nfc = {};
   function fN(v, d) { if (!nfc[d]) nfc[d] = new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }); return nfc[d].format(v); }
   function fPc(v, d) { return fN(v, d == null ? 2 : d) + ' %'; }
   function dTxt(iso, short) { return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', short ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, ''); }
   function niceStep(span, n) { var raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag; return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * mag; }
-  function compact(v) { var a = Math.abs(v); if (a >= 1e6) return '$' + (Math.round(a / 1e4) / 100).toString().replace('.', ',') + ' M'; if (a >= 1e3) return '$' + (Math.round(a / 100) / 10).toString().replace('.', ',') + ' mil'; return '$' + Math.round(a); }
+  function compact(v) { var a = Math.abs(v); if (a >= 1e6) return SYM() + (Math.round(a / 1e4) / 100).toString().replace('.', ',') + ' M'; if (a >= 1e3) return SYM() + (Math.round(a / 100) / 10).toString().replace('.', ',') + ' mil'; return SYM() + Math.round(a); }
   var MESC = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   var MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   function cap1(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -250,7 +252,7 @@
       tgHTML(id + '-his', 'Mostrar el historial', 'Ocultar el historial') +
       coHTML(id + '-his', '<div class="pdv-tw" tabindex="0" role="region" aria-label="Historial de dividendos, desplazable"><table class="pdv-tb pdv-tb2"><thead><tr><th scope="col">Fecha</th><th scope="col">Activo</th><th scope="col">Títulos</th><th scope="col">Por acción</th><th scope="col">Bruto</th><th scope="col">Retención</th><th scope="col">Neto</th></tr></thead><tbody>' +
         recs.map(function (r) {
-          return '<tr><th scope="row"><span class="num">' + dTxt(r.date) + '</span></th><td><span class="pdv-ca">' + mark(r.ticker) + '<strong>' + esc(r.ticker) + '</strong></span></td><td class="num">' + fN(r.qty, r.qty % 1 ? 4 : 0) + '</td><td class="num">' + dpsTxt(r) + (r.ccy === 'USD' && r.fx ? '<span class="pdv-an">TC ' + fN(r.fx, 2) + '</span>' : '') + '</td><td class="num">' + fM(r.gross) + '</td><td class="num">' + fM(r.withholding) + '</td><td class="num"><b>' + fM(r.net) + '</b></td></tr>';
+          return '<tr><th scope="row"><span class="num">' + dTxt(r.date) + '</span></th><td><span class="pdv-ca">' + mark(r.ticker) + '<strong>' + esc(r.ticker) + '</strong></span></td><td class="num">' + fN(r.qty, r.qty % 1 ? 4 : 0) + '</td><td class="num">' + dpsTxt(r) + (r.ccy !== BS() && r.fx ? '<span class="pdv-an">TC ' + fN(r.fx, 2) + '</span>' : '') + '</td><td class="num">' + fM(r.gross) + '</td><td class="num">' + fM(r.withholding) + '</td><td class="num"><b>' + fM(r.net) + '</b></td></tr>';
         }).join('') + '</tbody></table></div>') + '</section>';
 
     mount.innerHTML = '<div class="pdv" id="' + id + '">' + ledHTML + chHTML + '<div class="pdv-cols">' + calHTML + assetHTML + '</div>' + hisHTML +

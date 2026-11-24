@@ -5,6 +5,7 @@
    Pearson sobre las fechas comunes de cada par (mínimo 20 retornos). En producción, con los datos reales de campo/datos.js. */
 (function () {
   'use strict';
+  function BS() { var t = window.CampoTracker; return (t && t.base) || 'MXN'; }
   var D = window.PORTIFY_DEMO, R = window.CampoPfResumen;
   if (!D || !R || !R.calc) return;
   var doc = typeof document !== 'undefined' ? document : null, root = doc && doc.documentElement;
@@ -34,7 +35,7 @@
       (P.held || []).forEach(function (h) {
         var q = 0; h.lots.forEach(function (l) { if (l.idx <= LAST) q += l.q; });
         if (!(q > 1e-9)) return;
-        var f = h.ccy === 'USD', val = q * h.path[LAST] * (f ? fxs[LAST] : 1), o = by[h.ticker];
+        var f = h.ccy === 'USD', val = q * h.path[LAST] * (T.rate ? T.rate(h.ccy) : (f ? fxs[LAST] : 1)), o = by[h.ticker];
         if (!o) {
           var p = new Float64Array(TOT); for (var t = 0; t < TOT; t++) p[t] = h.path[t] * (f ? fxs[t] : 1);
           o = by[h.ticker] = { tk: h.ticker, name: h.ticker, cls: '', ccy: h.ccy, p: p, v: 0 }; list.push(o);
@@ -160,7 +161,7 @@
       return '<div class="pfc-card" data-k="' + c.k + '"><span class="pfc-cl">' + c.name + '</span><strong class="pfc-cv num" data-kv>—</strong><span class="pfc-cs" data-ks>—</span></div>';
     }).join('');
     function sumLines() {
-      var S = St, a = [['ρ<sub>ij</sub> = Pearson de los retornos logarítmicos diarios (en MXN) del periodo'],
+      var S = St, a = [['ρ<sub>ij</sub> = Pearson de los retornos logarítmicos diarios (en ' + BS() + ') del periodo'],
         ['Peso w<sub>i</sub> = valor actual de la posición ÷ valor de las ' + n + ' posiciones'],
         ['ρ̄<sub>pond</sub> = Σ<sub>i&lt;j</sub> w<sub>i</sub>w<sub>j</sub>ρ<sub>ij</sub> ÷ Σ<sub>i&lt;j</sub> w<sub>i</sub>w<sub>j</sub>'],
         ['Promedio ponderado de pares', S.avgW == null ? '—' : fR(S.avgW)], ['Promedio simple de pares (' + S.pairs.length + ')', S.avgS == null ? '—' : fR(S.avgS)],
@@ -182,10 +183,10 @@
     });
     function mxLines() {
       var S = St, nn = 0; S.pairs.forEach(function (p) { nn = Math.max(nn, p.n); });
-      return [['ρ<sub>ij</sub> = Σ(x−x̄)(y−ȳ) ÷ √[Σ(x−x̄)² · Σ(y−ȳ)²] · x, y = ln(P<sub>t</sub> ÷ P<sub>t−1</sub>) en MXN'],
+      return [['ρ<sub>ij</sub> = Σ(x−x̄)(y−ȳ) ÷ √[Σ(x−x̄)² · Σ(y−ȳ)²] · x, y = ln(P<sub>t</sub> ÷ P<sub>t−1</sub>) en ' + BS()],
         ['Periodo', dTxt(dates[S.s]) + ' → ' + dTxt(dates[LAST])], ['Retornos diarios en la ventana', String(S.W)], ['Retornos en común por par', S.pairs.length ? (S.N === nn ? String(S.N) : S.N + ' a ' + nn) : '—'],
         ['Mínimo para mostrar una correlación', MIN_N + ' retornos'],
-        ['Cada precio se convierte con el USD/MXN de su fecha: el tipo de cambio también mueve la correlación de los activos en dólares.'],
+        ['Cada precio se convierte a ' + BS() + ' con el tipo de cambio de su fecha: el tipo de cambio también mueve la correlación de los activos en otras monedas.'],
         ['La cripto opera fines de semana: se alinea con los días hábiles comunes (cierre de cada día hábil), así que el retorno del lunes incluye su fin de semana.'],
         ['Colores: cálido = se mueven juntos, frío = se mueven en sentido opuesto, neutro = sin relación lineal.']];
     }
@@ -214,7 +215,7 @@
     /* ---------- bloque 4: con el portafolio y con el benchmark ---------- */
     function bnLines() {
       return [['ρ<sub>i,p</sub> = Σ<sub>j</sub> w<sub>j</sub>σ<sub>j</sub>ρ<sub>ij</sub> ÷ σ<sub>p</sub> (el portafolio incluye a la propia posición)'],
-        ['ρ<sub>i,b</sub> = Pearson de los retornos diarios de la posición y de ' + esc(A.bench.name) + ' en MXN'], ['Benchmark del portafolio', esc(A.bench.name)], ['Retornos en la ventana', String(St.W)],
+        ['ρ<sub>i,b</sub> = Pearson de los retornos diarios de la posición y de ' + esc(A.bench.name) + ' en ' + BS()], ['Benchmark del portafolio', esc(A.bench.name)], ['Retornos en la ventana', String(St.W)],
         ['Cerca de +1: la posición se mueve como el conjunto o el índice; cerca de 0 aporta algo distinto; negativa cubre.']];
     }
     var bnHTML = '<section class="pfc-s panel" aria-labelledby="' + id + 'h4"><div class="panel-head"><h2 id="' + id + 'h4">Con el portafolio y con el benchmark</h2><span class="muted">' + esc(A.bench.name) + '</span></div>' +
@@ -464,7 +465,7 @@
       if (go) rows.forEach(function (r) { var e = rcRows[A.tk[r.i]], d = tops[A.tk[r.i]] - e.getBoundingClientRect().top; if (Math.abs(d) > 1 && e.animate) e.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO }); });
       var kp = $('[data-kp]'), kvs = [['Volatilidad del portafolio', fN(S.volP, 1) + ' %', 'anualizada'], ['Sin diversificación', fN(S.volNo, 1) + ' %', 'suma ponderada de σ'], ['Ahorro por diversificar', '−' + fN(S.saving, 0) + ' %', 'menos volatilidad']];
       kp.innerHTML = kvs.map(function (k, q) { return '<div class="pfc-kpi' + (q === 2 ? ' good' : '') + '"><span class="pfc-kl">' + k[0] + '</span><strong class="num">' + k[1] + '</strong><span class="pfc-ks">' + k[2] + '</span></div>'; }).join('');
-      $('[data-rn]').textContent = (S.W < 60 ? 'Solo ' + S.W + ' retornos diarios en el periodo: toma estos resultados con cautela. ' : '') + 'Calculado con ' + S.W + ' retornos diarios · retornos logarítmicos en MXN.';
+      $('[data-rn]').textContent = (S.W < 60 ? 'Solo ' + S.W + ' retornos diarios en el periodo: toma estos resultados con cautela. ' : '') + 'Calculado con ' + S.W + ' retornos diarios · retornos logarítmicos en ' + BS() + '.';
     }
 
     /* ---------- con el portafolio y el benchmark ---------- */

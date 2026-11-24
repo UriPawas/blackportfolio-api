@@ -19,8 +19,10 @@
 
   /* ============================== formato ============================== */
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 });
-  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + '$' + nf0.format(a); }
-  function fS(v) { var a = Math.round(Math.abs(v)); return (a === 0 ? '' : v < 0 ? '−' : '+') + '$' + nf0.format(a); }
+  function BS() { var t = window.CampoTracker; return (t && t.base) || 'MXN'; }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function fM(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a > 0 ? '−' : '') + SYM() + nf0.format(a); }
+  function fS(v) { var a = Math.round(Math.abs(v)); return (a === 0 ? '' : v < 0 ? '−' : '+') + SYM() + nf0.format(a); }
   var nfc = {};
   function fN(v, d) { var k = d; if (!nfc[k]) nfc[k] = new Intl.NumberFormat('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }); return nfc[k].format(v); }
   function sgn(v, d, unit) { var a = Math.abs(v), z = a < 0.5 * Math.pow(10, -d); return (z ? '' : v < 0 ? '−' : '+') + fN(a, d) + (unit || ''); }
@@ -29,7 +31,7 @@
   function sgnCls(v) { return v > 0.0049 ? 'gain' : v < -0.0049 ? 'loss' : 'flat'; }
   function dTxt(iso, short) { return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', short ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' }).replace(/\./g, ''); }
   function niceStep(span, n) { var raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag; return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * mag; }
-  function compact(v) { var a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) return s + '$' + (Math.round(a / 1e4) / 100).toString().replace('.', ',') + ' M'; if (a >= 1e3) return s + '$' + Math.round(a / 1e3) + ' mil'; return s + '$' + Math.round(a); }
+  function compact(v) { var a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) return s + SYM() + (Math.round(a / 1e4) / 100).toString().replace('.', ',') + ' M'; if (a >= 1e3) return s + SYM() + Math.round(a / 1e3) + ' mil'; return s + SYM() + Math.round(a); }
   var MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   var MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
@@ -39,7 +41,7 @@
 
   /* ============================== cálculo ============================== */
   function context(T, L, pf) {
-    var ccy = pf && pf !== 'todos' && pf.currency ? pf.currency : 'MXN', rf = RF[ccy] || RF.MXN, crypto = L.rows.length > 0 && L.rows.every(function (r) { return r.cls === 'Cripto'; });
+    var ccy = (T && T.base) || (pf && pf !== 'todos' && pf.currency ? pf.currency : 'MXN'), rf = RF[ccy] || RF.MXN, /* la tasa de la moneda en la que ves las cifras */ crypto = L.rows.length > 0 && L.rows.every(function (r) { return r.cls === 'Cripto'; });
     var hasCrypto = L.rows.some(function (r) { return r.cls === 'Cripto'; });
     return { T: T, L: L, V: L.V, F: L.F, dates: T.dates, bench: R.calc.benchOf(T, L.benchmark), crypto: crypto, hasCrypto: hasCrypto, rf: rf[0] / 100, rfName: rf[1], ccy: RF[ccy] ? ccy : 'MXN' };
   }
@@ -126,7 +128,7 @@
     parts.forEach(function (L) {
       (L.held || []).forEach(function (h) {
         var o = acc[h.ticker] || (acc[h.ticker] = { tk: h.ticker, name: h.ticker, val: new Float64Array(TOT), flow: new Float64Array(TOT), div: new Float64Array(TOT), cls: '' });
-        for (var t = 0; t < TOT; t++) { var q = 0; h.lots.forEach(function (l) { if (l.idx <= t) q += l.q; }); if (q) o.val[t] += q * h.path[t] * (h.ccy === 'USD' ? fxs[t] : 1); }
+        for (var t = 0; t < TOT; t++) { var q = 0; h.lots.forEach(function (l) { if (l.idx <= t) q += l.q; }); if (q) o.val[t] += q * h.path[t] * (C.T.rate ? C.T.rate(h.ccy, t) : (h.ccy === 'USD' ? fxs[t] : 1)); }
       });
       L.events.forEach(function (e) {
         if (e.idx < 0 || !e.tk) return; var o = acc[e.tk]; if (!o) return; if (e.name) o.name = e.name;
@@ -295,7 +297,7 @@
     /* ---------- bloque 1: rendimiento por periodo ---------- */
     var rollReg = [];
     function perLines() {
-      var a = [['TWR = ∏ [ V<sub>t</sub> ÷ (V<sub>t−1</sub> + F<sub>t</sub>) ] − 1 · Benchmark = P<sub>fin</sub> ÷ P<sub>ini</sub> − 1 (en MXN)'], ['Anualizado = (1 + r)<sup>1 ÷ años</sup> − 1, solo si el periodo dura 1 año o más']];
+      var a = [['TWR = ∏ [ V<sub>t</sub> ÷ (V<sub>t−1</sub> + F<sub>t</sub>) ] − 1 · Benchmark = P<sub>fin</sub> ÷ P<sub>ini</sub> − 1 (en ' + BS() + ')'], ['Anualizado = (1 + r)<sup>1 ÷ años</sup> − 1, solo si el periodo dura 1 año o más']];
       per.forEach(function (r) {
         a.push([r.name + ' · ' + dTxt(dates[r.s], true) + ' → ' + dTxt(dates[LAST], true), fN(r.years, 2) + ' años']);
         a.push(['Patrimonio ' + fM(r.vS) + ' → ' + fM(r.vE) + ' · flujos netos ' + fS(r.net) + ' (' + r.n + ')', fP(r.p * 100)]);
@@ -311,7 +313,7 @@
         '<td><span class="num pfd-cv ' + sgnCls(r.b) + '" data-r="' + (rid_ + 1) + '">' + fP(r.b * 100) + '</span>' + (r.ba != null ? '<span class="pfd-an num">' + fP(r.ba * 100) + ' anualizado</span>' : '') + '</td>' +
         '<td><span class="num pfd-cv ' + sgnCls(r.diff) + '" data-r="' + (rid_ + 2) + '">' + sgn(r.diff, 1, ' pts') + '</span></td></tr>';
     }).join('');
-    var perHTML = '<section class="pfd-s panel" aria-labelledby="' + id + 'h1"><div class="panel-head"><h2 id="' + id + 'h1">Rendimiento por periodo</h2><span class="muted">TWR · cartera frente a ' + esc(bench.name) + ' en MXN</span></div>' +
+    var perHTML = '<section class="pfd-s panel" aria-labelledby="' + id + 'h1"><div class="panel-head"><h2 id="' + id + 'h1">Rendimiento por periodo</h2><span class="muted">TWR · cartera frente a ' + esc(bench.name) + ' en ' + BS() + '</span></div>' +
       '<div class="pfd-tw"><table class="pfd-tb"><thead><tr><th scope="col">Periodo</th><th scope="col">Cartera</th><th scope="col">' + esc(bench.name) + '</th><th scope="col">Diferencia</th></tr></thead><tbody>' + rows1 + '</tbody></table></div>' + dxHTML(id + '-d1', 'Cálculo del rendimiento por periodo', perLines()) + '</section>';
 
     /* ---------- bloque 2: métricas de riesgo ---------- */
@@ -330,7 +332,7 @@
         { id: 'mdd', name: 'Máxima caída', to: d.max * 100, fmt: function (v) { return fPu(v, 1); }, sign: true, sub: d.max < 0 ? 'Pico ' + dTxt(dates[s.s + d.peak], true) + ' → valle ' + dTxt(dates[s.s + d.trough], true) + (d.rec != null ? ' · recuperada ' + dTxt(dates[s.s + d.rec], true) : ' · sin recuperar') : 'Sin caídas en el periodo',
           lines: d.max < 0 ? [['Mín<sub>t</sub> [ g<sub>t</sub> ÷ máx<sub>u≤t</sub> g<sub>u</sub> − 1 ] sobre el índice TWR'], ['Pico (índice ' + fN(s.g[d.peak], 1) + ')', dTxt(dates[s.s + d.peak])], ['Valle (índice ' + fN(s.g[d.trough], 1) + ')', dTxt(dates[s.s + d.trough])], ['Recuperación', d.rec != null ? dTxt(dates[s.s + d.rec]) : 'Sin recuperar'], ['Duración pico → valle', (d.trough - d.peak) + ' sesiones'], ['Máxima caída', fPu(d.max * 100, 2), 'res'], ['Se mide sobre el índice TWR, no sobre el patrimonio: una aportación no “tapa” una caída.']] : [['No hubo caídas desde máximos en el periodo.']] },
         { id: 'bet', name: 'Beta', to: s.beta, fmt: function (v) { return fN(v, 2); }, sub: shortSub('vs ' + b + ' · la misma en toda la pestaña'),
-          lines: [['β = Cov(r<sub>cartera</sub>, r<sub>' + esc(b) + '</sub>) ÷ Var(r<sub>' + esc(b) + '</sub>)'], nn[0], nn[1], ['Benchmark', esc(b) + ' en MXN'], ['Covarianza diaria', s.cov == null ? '—' : fN(s.cov * 1e4, 3) + ' × 10⁻⁴'], ['Varianza del benchmark', s.varB == null ? '—' : fN(s.varB * 1e4, 3) + ' × 10⁻⁴'], ['Beta', s.beta == null ? '—' : fN(s.beta, 3), 'res'], ['Se calcula una sola vez, con estos mismos rendimientos y esta ventana; Alfa, captura y tracking error usan la misma serie.']] },
+          lines: [['β = Cov(r<sub>cartera</sub>, r<sub>' + esc(b) + '</sub>) ÷ Var(r<sub>' + esc(b) + '</sub>)'], nn[0], nn[1], ['Benchmark', esc(b) + ' en ' + BS()], ['Covarianza diaria', s.cov == null ? '—' : fN(s.cov * 1e4, 3) + ' × 10⁻⁴'], ['Varianza del benchmark', s.varB == null ? '—' : fN(s.varB * 1e4, 3) + ' × 10⁻⁴'], ['Beta', s.beta == null ? '—' : fN(s.beta, 3), 'res'], ['Se calcula una sola vez, con estos mismos rendimientos y esta ventana; Alfa, captura y tracking error usan la misma serie.']] },
         { id: 'alp', name: 'Alfa de Jensen', to: s.alpha == null ? null : s.alpha * 100, fmt: function (v) { return fP(v, 1); }, sign: true, sub: shortSub('vs ' + b + ' · anualizada'),
           lines: [['α = [ Σ (r<sub>i</sub> − rf·Δt<sub>i</sub>) − β · Σ (r<sub>b,i</sub> − rf·Δt<sub>i</sub>) ] ÷ Σ Δt<sub>i</sub>'], ['Σ exceso de la cartera', fP((s.sumP - C.rf * s.T) * 100)], ['Σ exceso del benchmark', fP((s.sumB - C.rf * s.T) * 100)], ['β (la misma de Beta)', s.beta == null ? '—' : fN(s.beta, 3)], ['Tasa libre de riesgo', rfTxt], ['Alfa anualizada', s.alpha == null ? '—' : fP(s.alpha * 100, 2), 'res']] },
         { id: 'te', name: 'Tracking error', to: s.te == null ? null : s.te * 100, fmt: function (v) { return fN(v, 1) + ' %'; }, sub: shortSub('Desviación del rendimiento activo vs ' + b),
@@ -381,15 +383,15 @@
     var contHTML = '<section class="pfd-s panel pfd-cp" aria-labelledby="' + id + 'h5"><div class="panel-head"><h2 id="' + id + 'h5">Contribución por posición</h2><span class="muted" data-cs></span></div>' +
       '<div class="pfd-ch5" role="group" aria-label="Ordenar"><button type="button" class="pfd-sh" data-s="tk"><span>Activo</span><svg class="pfd-si" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M7 14l5 5 5-5"/></svg></button><span class="pfd-axl" aria-hidden="true">Resta · suma</span><button type="button" class="pfd-sh" data-s="w"><span>Peso medio</span><svg class="pfd-si" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M7 14l5 5 5-5"/></svg></button><button type="button" class="pfd-sh" data-s="c"><span>Contribución</span><svg class="pfd-si" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M7 14l5 5 5-5"/></svg></button></div>' +
       '<ul class="pfd-cl" role="list" data-cl></ul><p class="pfd-sum" data-sum></p><div class="pfd-tip" role="status" data-tip2 hidden></div>' +
-      dxHTML(id + '-d5', 'Cálculo de la contribución', [['c<sub>i</sub> = Σ<sub>t</sub> g<sub>t−1</sub> ÷ g<sub>ini</sub> × n<sub>i,t</sub> ÷ (V<sub>t−1</sub> + F<sub>t</sub>)'], ['n<sub>i,t</sub> (por activo y día)', 'Δ valor − (compras − ventas) + dividendos, en MXN al tipo de cambio del día'], ['Suma de n<sub>i,t</sub> sobre activos', 'V<sub>t</sub> − V<sub>t−1</sub> − F<sub>t</sub> (el efectivo no contribuye)'], ['Método', 'aritmético encadenado con el índice TWR: la suma de contribuciones es el TWR del periodo, sin residuo'], ['Peso medio', 'promedio diario de V<sub>i,t−1</sub> ÷ (V<sub>t−1</sub> + F<sub>t</sub>)'], ['Rentabilidad de la posición ≈ contribución ÷ peso medio'], ['Incluye posiciones vendidas dentro del periodo y dividendos cobrados.']]) + '</section>';
+      dxHTML(id + '-d5', 'Cálculo de la contribución', [['c<sub>i</sub> = Σ<sub>t</sub> g<sub>t−1</sub> ÷ g<sub>ini</sub> × n<sub>i,t</sub> ÷ (V<sub>t−1</sub> + F<sub>t</sub>)'], ['n<sub>i,t</sub> (por activo y día)', 'Δ valor − (compras − ventas) + dividendos, en ' + BS() + ' al tipo de cambio del día'], ['Suma de n<sub>i,t</sub> sobre activos', 'V<sub>t</sub> − V<sub>t−1</sub> − F<sub>t</sub> (el efectivo no contribuye)'], ['Método', 'aritmético encadenado con el índice TWR: la suma de contribuciones es el TWR del periodo, sin residuo'], ['Peso medio', 'promedio diario de V<sub>i,t−1</sub> ÷ (V<sub>t−1</sub> + F<sub>t</sub>)'], ['Rentabilidad de la posición ≈ contribución ÷ peso medio'], ['Incluye posiciones vendidas dentro del periodo y dividendos cobrados.']]) + '</section>';
 
     /* ---------- bloque extra: capital vs mercado ---------- */
     var cvHTML = '<section class="pfd-s panel pfd-ch" aria-labelledby="' + id + 'h6"><div class="pfd-ctop"><div class="pfd-ct"><h2 id="' + id + 'h6">Capital aportado vs valor de mercado</h2><ul class="pfd-key" aria-hidden="true"><li><i class="pfd-ln1"></i>Valor de mercado</li><li><i class="pfd-ln2"></i>Capital neto aportado</li></ul></div></div>' +
       '<dl class="pfd-ro" data-ro="cv"><div><dt>Fecha</dt><dd data-r="a"></dd></div><div><dt>Valor</dt><dd data-r="b"></dd></div><div><dt>Capital neto</dt><dd data-r="c"></dd></div><div><dt>Ganancia de mercado</dt><dd data-r="d"></dd></div></dl>' +
       '<div class="pfd-stage" tabindex="0" role="group" aria-labelledby="' + id + 'h6" aria-describedby="' + id + 'k6" data-st="cv"><canvas aria-hidden="true"></canvas></div><p class="pfd-sr" id="' + id + 'k6" aria-live="polite" data-sr="cv">Con las flechas izquierda y derecha lees cada día.</p>' +
-      dxHTML(id + '-d6', 'Cálculo de capital contra mercado', [['Ganancia de mercado = valor − capital neto aportado'], ['Capital neto aportado', 'Σ aportaciones − Σ retiros hasta cada fecha, cada flujo en MXN al tipo de cambio de su fecha'], ['Valor', 'patrimonio con efectivo, igual que en Resumen'], ['La brecha entre las dos líneas es lo que ganó (o perdió) el mercado, no lo que pusiste.']]) + '</section>';
+      dxHTML(id + '-d6', 'Cálculo de capital contra mercado', [['Ganancia de mercado = valor − capital neto aportado'], ['Capital neto aportado', 'Σ aportaciones − Σ retiros hasta cada fecha, cada flujo en ' + BS() + ' al tipo de cambio de su fecha'], ['Valor', 'patrimonio con efectivo, igual que en Resumen'], ['La brecha entre las dos líneas es lo que ganó (o perdió) el mercado, no lo que pusiste.']]) + '</section>';
 
-    mount.innerHTML = '<div class="pfd" id="' + id + '"><p class="pfd-tag">Base MXN · tasa libre de riesgo ' + esc(rfTxt) + ' · benchmark ' + esc(bench.name) + ' en MXN</p>' + perHTML + barHTML + riskHTML +
+    mount.innerHTML = '<div class="pfd" id="' + id + '"><p class="pfd-tag">Base ' + BS() + ' · tasa libre de riesgo ' + esc(rfTxt) + ' · benchmark ' + esc(bench.name) + ' en ' + BS() + '</p>' + perHTML + barHTML + riskHTML +
       '<div class="pfd-cols">' + ddHTML + hmHTML + '</div><div class="pfd-cols pfd-cols-b">' + contHTML + cvHTML + '</div></div>';
     var $ = function (s, r) { return (r || mount).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || mount).querySelectorAll(s)); };
     var rootEl = $('.pfd');

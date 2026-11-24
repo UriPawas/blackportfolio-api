@@ -6,6 +6,9 @@
 <meta name="color-scheme" content="dark light">
 <meta name="robots" content="noindex">
 <title>Inicio | Portify</title>
+<link rel="icon" href="favicon.svg?v=3" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png?v=3" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=3">
 <meta name="description" content="Tu patrimonio en Portify: inicio, portafolios e informes.">
 <script>
   /* tema antes del primer pintado: la misma preferencia de la landing (bp-theme) y de la app anterior (blackportfolio-theme) */
@@ -52,12 +55,12 @@
 <link rel="stylesheet" href="campo/informes.css?v=1">
 <link rel="stylesheet" href="campo/report-deck.css?v=1">
 <link rel="stylesheet" href="campo/report-doc.css?v=1">
-<link rel="stylesheet" href="campo-gate.css?v=1">
+<link rel="stylesheet" href="campo-gate.css?v=2">
 <style>
   /* arranque: mientras llegan los datos reales, el cascarón ya está y un aviso dice qué pasa */
   .boot { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 12px 16px; border-radius: 12px;
     background: var(--s1); border: 1px solid var(--line); color: var(--text-2); font: 500 14px/1.4 var(--font); }
-  .boot[data-state="done"] { display: none; }
+  .boot[data-state="done"], .boot[data-state="load"] { display: none; } /* mientras carga manda el tablero (campo-gate.js), no un aviso */
   .boot .boot-spin { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2px solid color-mix(in oklab, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: bootspin .8s linear infinite; }
   .boot[data-state="error"] { color: var(--text); border-color: color-mix(in oklab, var(--loss) 45%, var(--line)); }
   .boot[data-state="error"] .boot-spin { display: none; }
@@ -66,16 +69,21 @@
   @keyframes bootspin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .boot .boot-spin { animation-duration: 2.4s; } }
   .side-old { display: block; margin: 0 0 8px; color: var(--text-3); font: 500 12.5px/1.3 var(--font); text-decoration: none; }
+  .home-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .ccy-seg { font-size: 12.5px; }
+  .tk-ccy:empty { display: none; }
   .side-old:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
   @media (max-width: 860px) { .side-old { display: none; } }
-  /* primera entrega de solo lectura: lo que registra o edita vive en la versión anterior */
+  /* producción: crear, editar y registrar ya se guardan; lo que aún no existe aquí (importar CSV, alertas, Mercados) se oculta */
   .tk-old { display: none; }
-  .campo-ro .tk-old { display: inline-flex; }
-  .campo-ro .tkl-add, .campo-ro [data-tk="create"], .campo-ro [data-tk="import"], .campo-ro .tkl-addtx, .campo-ro [data-addtx],
-  .campo-ro .fi-act, .campo-ro .fi-mode, .campo-ro [data-reg], .campo-ro [data-m="ren"], .campo-ro [data-m="del"] { display: none !important; }
+  .campo-real [data-tk="import"], .campo-real [data-act="imp"], .campo-real .fi-act [data-act], .campo-real .fi-mode { display: none !important; }
+  .txs-iva { margin-top: 6px; font-size: 12.5px; }
 </style>
 </head>
 <body data-view="boot">
+<!-- el tablero cubre desde el primer cuadro y gira de salida cuando el Inicio ya está pintado (campo/shell.js) -->
+<script>window.CAMPO_GATE_HOLD = true;</script>
+<script src="campo-gate.js?v=2"></script>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <symbol id="i-logo" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="9.5" r="3.2" fill="currentColor"/><circle cx="16" cy="15.5" r="2.2" fill="var(--accent)"/></symbol>
@@ -117,8 +125,8 @@
     </div>
     <div id="secHome">
     <header class="app-head">
-      <div><h1>Inicio</h1><p class="asof">Todos tus portafolios · precios al <span data-asof>–</span> · base MXN</p></div>
-      <button class="btn btn-secondary btn-sm" id="hubEdit" type="button" aria-pressed="false">Editar inicio</button>
+      <div><h1>Inicio</h1><p class="asof">Todos tus portafolios · precios al <span data-asof>–</span> · cifras en <span data-base>MXN</span></p></div>
+      <div class="home-acts"><div id="homeCcy"></div><button class="btn btn-secondary btn-sm" id="hubEdit" type="button" aria-pressed="false">Editar inicio</button></div>
     </header>
 
     <section class="ledger panel" id="ledger" aria-label="Indicadores"></section>
@@ -152,7 +160,6 @@
   </div>
 </template>
 
-<script src="campo-gate.js?v=1"></script>
 <script src="monitoring.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -160,10 +167,10 @@
 <script src="auth.js?v=11"></script>
 <script>
   /* módulos de la app, en el orden del prototipo; campo/datos.js los carga cuando ya están los datos reales */
-  window.CAMPO_V = '5'; window.CAMPO_MODULES = ['tracker', 'pf-resumen', 'shell', 'mkt', 'app', 'hub', 'w1', 'w2', 'settings', 'pf-desempeno', 'pf-correl', 'pf-model',
+  window.CAMPO_V = '8'; window.CAMPO_MODULES = ['tracker', 'pf-resumen', 'shell', 'mkt', 'app', 'hub', 'w1', 'w2', 'settings', 'pf-desempeno', 'pf-correl', 'pf-model',
     'pf-rebal', 'pf-mc', 'pf-metas', 'pf-whatif', 'pf-tx', 'pf-div', 'report-model', 'brief', 'txsheet', 'report-deck', 'report-doc', 'informes', 'tracker-list', 'fx']
     .map(function (m) { return 'campo/' + m + '.js?v=' + window.CAMPO_V; });
 </script>
-<script src="campo/datos.js?v=5"></script>
+<script src="campo/datos.js?v=8"></script>
 </body>
 </html>

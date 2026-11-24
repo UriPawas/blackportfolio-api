@@ -13,9 +13,10 @@
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function easeOut(x) { x = clamp(x, 0, 1); return 1 - Math.pow(1 - x, 3); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function fM(v) { return D.fmt && D.fmt.mxn ? D.fmt.mxn(Math.round(v)) : '$' + Math.round(v).toLocaleString('es-MX'); }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function fM(v) { return D.fmt && D.fmt.mxn ? D.fmt.mxn(Math.round(v)) : SYM() + Math.round(v).toLocaleString('es-MX'); }
   var nf1 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 });
-  function compact(v) { var a = Math.abs(v); if (a >= 1e6) return '$' + (Math.round(a / 1e4) / 100).toString() + ' M'; if (a >= 1e3) return '$' + Math.round(a / 1e3) + ' mil'; return '$' + Math.round(a); }
+  function compact(v) { var a = Math.abs(v); if (a >= 1e6) return SYM() + (Math.round(a / 1e4) / 100).toString() + ' M'; if (a >= 1e3) return SYM() + Math.round(a / 1e3) + ' mil'; return SYM() + Math.round(a); }
   function niceStep(span, n) { var raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag; return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * mag; }
   var MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   var Q = 0.8, MAXG = 6, uid = 0;
@@ -185,7 +186,7 @@
         '<p class="pmt-ifr" data-ifr></p><div class="pmt-ifb"><button type="button" class="btn btn-ghost btn-sm" data-reset hidden>Volver a mi aporte</button><button type="button" class="btn btn-secondary btn-sm" data-keep hidden>Usar este aporte</button></div></div>' +
         '</article>';
     }
-    function realTxt() { return st.real ? 'pesos de hoy' : 'pesos del año de la meta'; }
+    function realTxt() { return st.real ? 'valor de hoy' : 'valor del año de la meta'; }
     function rangeSpec(g, eng) { var need = eng.need.p90 != null ? eng.need.p90 : 0, mx = Math.max(need, g.monthly, 1000) * 1.5, stp = mx <= 20000 ? 100 : mx <= 100000 ? 500 : 1000; return { max: Math.ceil(mx / stp) * stp, step: stp }; }
     function status(p) { return p >= Q ? ['Muy probable', 'gain'] : p >= 0.5 ? ['Incierta', 'flat'] : ['Poco probable', 'loss']; }
     function setRing(c, p) {
@@ -249,7 +250,7 @@
 
     /* ---------- estructura ---------- */
     mount.innerHTML = '<div class="pmt" id="' + id + '"><p class="pmt-tag">Cada meta se calcula con la parte del portafolio que le asignas y con 4,000 simulaciones</p>' +
-      '<div class="pmt-bar"><div class="pmt-barl"><span class="pmt-barx">Montos en</span><div class="seg pmt-seg" role="group" aria-label="Unidad de los montos" style="--n:2;--i:0"><span class="seg-pill" aria-hidden="true"></span><button type="button" data-real="1" aria-pressed="true">Pesos de hoy</button><button type="button" data-real="0" aria-pressed="false">Pesos futuros</button></div></div>' +
+      '<div class="pmt-bar"><div class="pmt-barl"><span class="pmt-barx">Montos en</span><div class="seg pmt-seg" role="group" aria-label="Unidad de los montos" style="--n:2;--i:0"><span class="seg-pill" aria-hidden="true"></span><button type="button" data-real="1" aria-pressed="true">Valor de hoy</button><button type="button" data-real="0" aria-pressed="false">Valor futuro</button></div></div>' +
       '<button type="button" class="btn btn-primary btn-sm" data-new>Agregar meta</button></div>' +
       '<p class="pmt-unit" data-unit></p><div class="pmt-warn" role="status" data-warn hidden></div><div class="pmt-list" data-list></div><p class="pmt-foot">Simulación con supuestos · no es asesoría de inversión</p>' +
       '<div class="pmt-toast" role="status" aria-live="polite" data-toast hidden></div></div>';
@@ -259,7 +260,7 @@
 
     function paintUnit() {
       var asg = sumShare(), val = inp.value * Math.min(asg, 100) / 100;
-      unitEl.innerHTML = (st.real ? 'Todo está en <strong>pesos de hoy</strong>: descontamos la inflación esperada (' + nf1.format(CM.A.infl * 100) + ' % anual) para que ' + '<span class="num">' + fM(1000000) + '</span> signifique lo mismo que hoy.' : 'Los montos están en <strong>pesos futuros</strong>, sin descontar la inflación: ' + fM(1000000) + ' dentro de 20 años comprará bastante menos que hoy.') +
+      unitEl.innerHTML = (st.real ? 'Todo está en <strong>valor de hoy</strong>: descontamos la inflación esperada (' + nf1.format(CM.A.infl * 100) + ' % anual) para que ' + '<span class="num">' + fM(1000000) + '</span> signifique lo mismo que hoy.' : 'Los montos están en <strong>valor futuro</strong>, sin descontar la inflación: ' + fM(1000000) + ' dentro de 20 años comprará bastante menos que hoy.') +
         (st.goals.length ? ' Asignado a metas: <strong class="num">' + asg + ' %</strong> del portafolio (' + fM(inp.value * asg / 100) + ' de ' + fM(inp.value) + ').' : '');
     }
     function paintWarn() {
@@ -316,7 +317,7 @@
 
     /* ---------- hoja de alta y edición ---------- */
     function parseNum(s) { var t = String(s == null ? '' : s).replace(/[^\d.]/g, ''); return t === '' ? NaN : +t; }
-    function fld(nm, label, v, extra) { return '<div class="pmt-fld"><label for="' + id + 'f-' + nm + '">' + label + '</label><div class="pmt-in' + (extra && extra.pre ? ' pre' : '') + (extra && extra.suf ? ' suf' : '') + '">' + (extra && extra.pre ? '<span class="pmt-pre" aria-hidden="true">$</span>' : '') + '<input id="' + id + 'f-' + nm + '" name="' + nm + '" type="text" inputmode="' + (extra && extra.mode || 'numeric') + '" autocomplete="off" value="' + esc(v) + '"' + (nm === 'name' ? ' maxlength="40"' : '') + ' aria-describedby="' + id + 'e-' + nm + '">' + (extra && extra.suf ? '<span class="pmt-suf" aria-hidden="true">' + extra.suf + '</span>' : '') + '</div><p class="pmt-err" id="' + id + 'e-' + nm + '" data-err="' + nm + '"></p></div>'; }
+    function fld(nm, label, v, extra) { return '<div class="pmt-fld"><label for="' + id + 'f-' + nm + '">' + label + '</label><div class="pmt-in' + (extra && extra.pre ? ' pre' : '') + (extra && extra.suf ? ' suf' : '') + '">' + (extra && extra.pre ? '<span class="pmt-pre" aria-hidden="true">' + SYM() + '</span>' : '') + '<input id="' + id + 'f-' + nm + '" name="' + nm + '" type="text" inputmode="' + (extra && extra.mode || 'numeric') + '" autocomplete="off" value="' + esc(v) + '"' + (nm === 'name' ? ' maxlength="40"' : '') + ' aria-describedby="' + id + 'e-' + nm + '">' + (extra && extra.suf ? '<span class="pmt-suf" aria-hidden="true">' + extra.suf + '</span>' : '') + '</div><p class="pmt-err" id="' + id + 'e-' + nm + '" data-err="' + nm + '"></p></div>'; }
     function openSheet(g) {
       if (sheet) closeSheet(true);
       var isNew = !g, d = g || { name: '', target: 1000000, years: 10, monthly: 2000, share: Math.max(5, Math.min(100, 100 - sumShare())) || 100 };

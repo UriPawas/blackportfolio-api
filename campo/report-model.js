@@ -18,8 +18,11 @@
   var nf0 = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }), nf1 = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 1, maximumFractionDigits: 1 }), nf2 = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   /* ---------- formato (para los textos generados; las vistas formatean sus cifras) ---------- */
-  function money(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a ? '−' : '') + '$' + nf0.format(a); }
-  function smoney(v) { var a = Math.round(Math.abs(v)); return (a ? (v < 0 ? '−' : '+') : '') + '$' + nf0.format(a); }
+  /* moneda extranjera frente a la base: USD cuando la base no es dólar, MXN cuando lo es */
+  function FXW() { var b = T.base || 'MXN', f = (T.fx && T.fx.foreign) || (b === 'USD' ? 'MXN' : 'USD'); return { n: f === 'MXN' ? 'peso' : 'dólar', pl: f === 'MXN' ? 'pesos' : 'dólares', pair: f + '/' + b, b: b, vs: { MXN: 'al peso', USD: 'al dólar', EUR: 'al euro', GBP: 'a la libra', CAD: 'al dólar canadiense', BRL: 'al real' }[b] || 'a ' + b }; }
+  function SYM() { var d = window.PORTIFY_DEMO; return d && d.fmt && d.fmt.sym ? d.fmt.sym() : '$'; }
+  function money(v) { var a = Math.round(Math.abs(v)); return (v < 0 && a ? '−' : '') + SYM() + nf0.format(a); }
+  function smoney(v) { var a = Math.round(Math.abs(v)); return (a ? (v < 0 ? '−' : '+') : '') + SYM() + nf0.format(a); }
   function pct(v, d) { var x = v * 100, f = d === 2 ? nf2 : nf1, a = Math.abs(x); return (a < (d === 2 ? 0.005 : 0.05) ? '' : x < 0 ? '−' : '+') + f.format(a) + ' %'; }
   function pts(v) { var a = Math.abs(v); return (a < 0.05 ? '' : v < 0 ? '−' : '+') + nf1.format(a) + ' pts'; }
   function isoMs(s) { return Date.parse(s + 'T12:00:00Z'); }
@@ -93,8 +96,8 @@
     var parts = L.parts || [L], out = {};
     parts.forEach(function (P) {
       (P.held || []).forEach(function (h) {
-        if (h.ccy !== 'USD') return; var sum = 0;
-        for (var t = s + 1; t <= e; t++) { var q = 0; h.lots.forEach(function (l) { if (l.idx <= t) q += l.q; }); if (q) sum += q * h.path[t] * (fxs[t] - fxs[t - 1]); }
+        var Bb = T.base || 'MXN'; if (T.rate ? h.ccy === Bb : h.ccy !== 'USD') return; var sum = 0;
+        for (var t = s + 1; t <= e; t++) { var q = 0; h.lots.forEach(function (l) { if (l.idx <= t) q += l.q; }); if (q) sum += q * h.path[t] * (T.rate ? T.rate(h.ccy, t) - T.rate(h.ccy, t - 1) : fxs[t] - fxs[t - 1]); }
         out[h.ticker] = (out[h.ticker] || 0) + sum;
       });
     });
@@ -138,7 +141,7 @@
     if (x.ret != null && mkt) {
       /* se compara en la MISMA moneda: el activo en dólares contra su mercado en dólares; el peso se cuenta aparte */
       var usdA = Math.abs(x.fxPnl) > 0.5 || /EE\. UU\.|ETF|Cripto/.test(cls), loc = usdA && fxR ? (1 + x.ret) / (1 + fxR) - 1 : x.ret, diff = loc - mkt.r;
-      mec = x.ticker + ' ' + (loc >= 0 ? 'subió ' : 'bajó ') + pct(Math.abs(loc)).replace('+', '') + (usdA ? ' en dólares' : '') + '; ' + mkt.name + ' se movió ' + pct(mkt.r) + '. ' +
+      mec = x.ticker + ' ' + (loc >= 0 ? 'subió ' : 'bajó ') + pct(Math.abs(loc)).replace('+', '') + (usdA ? ' en su moneda' : '') + '; ' + mkt.name + ' se movió ' + pct(mkt.r) + '. ' +
         (Math.abs(diff) < 0.02 ? 'Se movió con su mercado.' : diff > 0 ? 'Le fue mejor que a su mercado por ' + pts(diff * 100).replace('+', '') + '.' : 'Le fue peor que a su mercado por ' + pts(diff * 100).replace('−', '') + '.');
       if (Math.abs(x.fxPnl) > 0.15 * Math.abs(x.pnl) && Math.abs(x.fxPnl) > 500) mec += ' El tipo de cambio ' + (x.fxPnl > 0 ? 'sumó ' : 'restó ') + money(Math.abs(x.fxPnl)) + ' de ese resultado.';
     } else mec = x.closed ? 'Se vendió dentro del periodo.' : '';
@@ -154,10 +157,10 @@
       body: K.bench != null ? 'Tu referencia, ' + K.benchName + ', hizo ' + pct(K.bench, 2) + ': quedaste ' + (K.excess >= 0 ? pts(K.excess * 100).replace('+', '') + ' por encima.' : pts(K.excess * 100).replace('−', '') + ' por debajo.') : 'Sin referencia para comparar.' });
     var top = contrib[0], bot = contrib[contrib.length - 1];
     if (top && bot && top !== bot) h.push(bot.c < -0.0005 ? { headline: top.ticker + ' fue lo que más sumó (' + pts(top.c * 100) + ') y ' + bot.ticker + ' lo que más restó (' + pts(bot.c * 100) + ').',
-      body: 'Entre las dos explican ' + money(Math.abs(top.pnl) + Math.abs(bot.pnl)) + ' de movimiento en pesos.' } : top.c > 0.0005 ? { headline: top.ticker + ' fue lo que más sumó (' + pts(top.c * 100) + ').',
+      body: 'Entre las dos explican ' + money(Math.abs(top.pnl) + Math.abs(bot.pnl)) + ' de movimiento en ' + (T.base || 'MXN') + '.' } : top.c > 0.0005 ? { headline: top.ticker + ' fue lo que más sumó (' + pts(top.c * 100) + ').',
       body: 'Ninguna posición restó en el periodo; ' + top.ticker + ' sola explica ' + smoney(top.pnl) + '.' } : { headline: 'Ninguna posición se movió lo suficiente para destacar.', body: '' });
-    if (comp.usdShare > 0.15 && Math.abs(fx.effect) > 0.002 * K.vEnd) h.push({ headline: 'El dólar ' + (fx.effect >= 0 ? 'sumó ' : 'restó ') + money(Math.abs(fx.effect)) + '.',
-      body: 'El USD/MXN pasó de ' + nf2.format(fx.start) + ' a ' + nf2.format(fx.end) + ' (' + pct(fx.r) + ') y el ' + nf0.format(comp.usdShare * 100) + ' % de tu portafolio está en dólares.' });
+    if (comp.usdShare > 0.15 && Math.abs(fx.effect) > 0.002 * K.vEnd) h.push({ headline: 'El ' + FXW().n + ' ' + (fx.effect >= 0 ? 'sumó ' : 'restó ') + money(Math.abs(fx.effect)) + '.',
+      body: 'El ' + FXW().pair + ' pasó de ' + nf2.format(fx.start) + ' a ' + nf2.format(fx.end) + ' (' + pct(fx.r) + ') y el ' + nf0.format(comp.usdShare * 100) + ' % de tu portafolio está en ' + FXW().pl + '.' });
     else if (risk.maxDD < -0.05) h.push({ headline: 'La caída más profunda del periodo fue de ' + pct(risk.maxDD) + '.', body: 'Del ' + dShort(risk.ddPeak) + ' al ' + dShort(risk.ddTrough) + '.' });
     return h;
   }
@@ -190,8 +193,8 @@
     var name = isTodos(P) ? 'Todos los portafolios' : P.name;
     var dv = M.dividends(P), nextDiv = dv.projected.filter(function (x) { return x.date <= addDays(asOf, 45); });
     return {
-      meta: { portfolioId: isTodos(P) ? 'todos' : P.id, portfolioName: name, currency: 'MXN', period: per, periodLabel: per.label, periodName: per.name, generatedAt: asOf,
-        benchmark: bench.name || L.benchmark, lang: 'es', tone: 'campo', plan: T.limit && T.limit.plan, sessions: e - s, isRecent: isRecent, sample: !window.CAMPO_REAL },
+      meta: { portfolioId: isTodos(P) ? 'todos' : P.id, portfolioName: name, currency: T.base || 'MXN', period: per, periodLabel: per.label, periodName: per.name, generatedAt: asOf,
+        benchmark: bench.name || L.benchmark, lang: 'es', tone: 'campo', ccy: T.base || 'MXN', plan: T.limit && T.limit.plan, sessions: e - s, isRecent: isRecent, sample: !window.CAMPO_REAL },
       kpis: K, risk: risk, series: series,
       contributions: contrib, movers: { positive: pos.map(function (x) { return moverCard(x, mkts, isRecent, asOf, contrib, fx.r); }), negative: neg.map(function (x) { return moverCard(x, mkts, isRecent, asOf, contrib, fx.r); }) },
       composition: { start: compS, end: compE }, fx: fx, markets: mkts,
@@ -203,7 +206,7 @@
         'Ganancia = valor final − valor inicial − aportaciones netas del periodo. Incluye dividendos, lo realizado y el tipo de cambio.',
         'Rendimiento ponderado por dinero: Dietz modificado del periodo; sí refleja el momento de tus aportaciones.',
         'Contribución: lo que cada posición aportó al TWR, en puntos; la suma de todas es el TWR.',
-        'Efecto del dólar: la parte del resultado de tus posiciones en dólares que viene del USD/MXN, a precio en dólares de cada día.',
+        'Efecto del ' + FXW().n + ': la parte del resultado de tus posiciones en ' + FXW().pl + ' que viene del ' + FXW().pair + ', a precio en ' + FXW().pl + ' de cada día.',
         'Volatilidad anualizada con ' + (crypto ? '365' : '252') + ' días; el Sharpe solo se reporta con 60 sesiones o más (tasa libre de riesgo ' + nf2.format(M.A.rf * 100) + ' %).',
         (window.CAMPO_REAL ? 'Este informe describe lo que pasó con tus datos; no es una recomendación de inversión.' : 'Datos de muestra. Este informe describe lo que pasó; no es una recomendación de inversión.')
       ]
@@ -225,7 +228,7 @@
     var pulse = [
       { id: 'mov', k: 'Movimiento reciente', v: ratio > 1.25 ? 'Más agitado que de costumbre' : ratio < 0.8 ? 'Más tranquilo que de costumbre' : 'Como de costumbre', tone: ratio > 1.25 ? 'warn' : 'flat',
         d: 'Volatilidad del último mes: ' + (rec.vol != null ? nf1.format(rec.vol * 100) + ' %' : '—') + ' anual, contra ' + (yr.vol != null ? nf1.format(yr.vol * 100) + ' %' : '—') + ' en el año.' },
-      { id: 'usd', k: 'Peso del dólar', v: comp.usdShare > 0.55 ? 'Alto' : comp.usdShare > 0.25 ? 'Medio' : 'Bajo', tone: 'flat', d: nf0.format(comp.usdShare * 100) + ' % de tu portafolio está en dólares: el USD/MXN mueve tu resultado.' },
+      { id: 'usd', k: 'Peso del ' + FXW().n, v: comp.usdShare > 0.55 ? 'Alto' : comp.usdShare > 0.25 ? 'Medio' : 'Bajo', tone: 'flat', d: nf0.format(comp.usdShare * 100) + ' % de tu portafolio está en ' + FXW().pl + ': el ' + FXW().pair + ' mueve tu resultado.' },
       { id: 'conc', k: 'Concentración', v: comp.effN < 4 ? 'Alta' : comp.effN < 8 ? 'Media' : 'Repartida', tone: comp.effN < 4 ? 'warn' : 'flat',
         d: comp.top ? comp.top.ticker + ' pesa ' + nf0.format(comp.top.w * 100) + ' %; tu portafolio se comporta como ' + nf1.format(comp.effN) + ' posiciones iguales.' : '' },
       { id: 'ref', k: 'Frente a ' + (bench.name || L.benchmark) + ', 1 mes', v: Math.abs(m1 - bm1) < 0.0025 ? 'A la par' : m1 > bm1 ? 'Por delante' : 'Por detrás', tone: 'flat', d: 'Tú ' + pct(m1) + ', tu referencia ' + pct(bm1) + '.' }
@@ -246,7 +249,7 @@
       var nw = newsFor(x.ticker)[0];
       return x.ticker + ' ' + (x.c >= 0 ? 'sumó ' : 'restó ') + pts(Math.abs(x.c * 100)).replace('+', '') + ' (' + smoney(x.pnl) + ')' + (nw ? '; en las noticias: «' + nw.title + '»' : '') + '.';
     }).join(' ');
-    if (comp.usdShare > 0.15 && Math.abs(fxE) > 300) exp += ' El dólar ' + (fx.r >= 0 ? 'subió ' : 'bajó ') + pct(Math.abs(fx.r)).replace('+', '') + ' frente al peso y eso ' + (fxE >= 0 ? 'sumó ' : 'restó ') + money(Math.abs(fxE)) + ' a tus posiciones en dólares.';
+    if (comp.usdShare > 0.15 && Math.abs(fxE) > 300) exp += ' El ' + FXW().n + ' ' + (fx.r >= 0 ? 'subió ' : 'bajó ') + pct(Math.abs(fx.r)).replace('+', '') + ' frente ' + FXW().vs + ' y eso ' + (fxE >= 0 ? 'sumó ' : 'restó ') + money(Math.abs(fxE)) + ' a tus posiciones en ' + FXW().pl + '.';
     var viene = ahead.length ? ahead.map(function (a) {
       var when = a.off === 0 ? 'hoy' : a.off === 1 ? 'mañana' : 'el ' + dShort(a.date);
       return a.kind === 'Resultados' ? a.ticker + ' reporta resultados ' + when : a.kind === 'Dato económico' ? a.name + ' (' + a.country + ') ' + when : 'Dividendo estimado de ' + a.ticker + ' ' + when + ' (≈ ' + money(a.amount) + ')';
@@ -270,6 +273,15 @@
     'Devuelve JSON: { headline, sections: [{k:"Qué pasó",t},{k:"Qué lo explica",t},{k:"Qué viene",t}] }. El servidor rechaza la salida si contiene frases prohibidas y usa la plantilla.'
   ].join('\n');
 
-  window.CampoReport = { periods: periods, custom: custom, build: build, brief: brief, lint: lint, BRIEF_PROMPT: BRIEF_PROMPT,
+  /* producción: cada informe en la moneda de SU vista (la del portafolio, o la del consolidado para "Todos"); al terminar regresa la base */
+  function inBase(pf, fn) {
+    if (!window.CAMPO_REAL || !T.setBase || !T.viewCcy) return fn(pf);
+    var id = isTodos(pf) ? 'todos' : (typeof pf === 'string' ? pf : pf && pf.id), want = T.viewCcy(id), prev = T.base;
+    if (!id || want === prev) return fn(pf);
+    T.setBase(want, true);
+    try { return fn(id === 'todos' ? 'todos' : T.get(id)); } finally { T.setBase(prev, true); }
+  }
+  function buildIn(pf, per) { return inBase(pf, function (q) { return build(q, per); }); }
+  window.CampoReport = { periods: periods, custom: custom, build: buildIn, brief: brief, lint: lint, BRIEF_PROMPT: BRIEF_PROMPT,
     fmt: { money: money, smoney: smoney, pct: pct, pts: pts, dLong: dLong, dShort: dShort } };
 })();
