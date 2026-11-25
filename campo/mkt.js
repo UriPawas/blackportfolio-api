@@ -31,16 +31,31 @@
     return { cls: 'fallback', k: 't', t: letter };
   }
   function cls(sym) { return info(sym).cls; }
+  /* Logo real de la empresa: el monograma se queda debajo y el logo (de nuestro /api/logo) lo cubre al cargar.
+     Si el API no lo tiene (404) se quita y queda el monograma. No aplica a índices, divisas, materias primas ni deuda. */
+  var LOGO_API = (location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'http://127.0.0.1:8000' : 'https://blackportfolio-api-production.up.railway.app') + '/api/logo/';
+  var NO_LOGO = { idx: 1, fx: 1, cmdty: 1, debt: 1 }, logoMiss = {};
+  /* los <image> SVG no entregan 'load'/'error' a un listener del documento: van como atributos en la propia imagen */
+  function logoOk(t) { if (t && t.ownerSVGElement) t.ownerSVGElement.classList.add('cmk-ok'); }
+  function logoNo(t) {
+    if (!t) return;
+    logoMiss[t.getAttribute('data-s')] = 1;
+    var b = t.previousSibling; if (b && b.classList && b.classList.contains('cmk-lb')) b.remove();
+    t.remove();
+  }
   function svg(sym, size) {
     var i = info(sym), s = size || 24, g = '', fs;
+    var key = String(sym == null ? '' : sym).trim().toUpperCase();
+    var lg = (!key || NO_LOGO[i.cls] || logoMiss[key]) ? ''
+      : '<circle class="cmk-lb" cx="18" cy="18" r="18"/><image class="cmk-lg" data-s="' + key.replace(/[^A-Z0-9.\-]/g, '') + '" href="' + LOGO_API + encodeURIComponent(key) + '" x="5.5" y="5.5" width="25" height="25" preserveAspectRatio="xMidYMid meet" onload="CampoMarks.ok(this)" onerror="CampoMarks.no(this)"/>';
     if (i.k === 'fx') g = '<circle class="cmk-fa" cx="13.5" cy="18" r="8.5"/><circle class="cmk-fb" cx="22.5" cy="18" r="8.5"/>';
     else if (i.k === 'btc') g = '<path class="cmk-s" d="M14.6 11.2H19.6a3.2 3.2 0 0 1 0 6.4H14.6M14.6 17.6H20.4a3.4 3.4 0 0 1 0 6.8H14.6V11.2M17.2 8.6v2.6M20.6 8.6v2.6M17.2 24.4V27M20.6 24.4V27"/>';
     else if (i.k === 'n') g = '<text class="cmk-t" x="18" y="11.6" font-size="7.4" text-anchor="middle" dy=".35em">N</text><text class="cmk-t" x="18" y="22.4" font-size="12.6" text-anchor="middle" dy=".35em">' + i.t + '</text>';
     else { fs = i.t.length === 1 ? 17 : i.t.length === 2 ? 15 : 12.8; g = '<text class="cmk-t" x="18" y="18" font-size="' + fs + '" text-anchor="middle" dy=".35em">' + i.t + '</text>'; }
-    return '<svg class="cmk cmk-' + i.cls + '" width="' + s + '" height="' + s + '" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="cmk-b" cx="18" cy="18" r="18"/>' + g + '</svg>';
+    return '<svg class="cmk cmk-' + i.cls + '" width="' + s + '" height="' + s + '" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="cmk-b" cx="18" cy="18" r="18"/>' + g + lg + '</svg>';
   }
   function el(sym, size) { var w = doc.createElement('span'); w.innerHTML = svg(sym, size); return w.firstChild; }
-  window.CampoMarks = { svg: svg, el: el, cls: cls };
+  window.CampoMarks = { svg: svg, el: el, cls: cls, ok: logoOk, no: logoNo };
 
   /* ================= utilidades ================= */
   var nfs = {};

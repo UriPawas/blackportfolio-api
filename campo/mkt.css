@@ -10,6 +10,12 @@
 .cmk .cmk-s { fill: none; stroke: oklch(0.9 calc(var(--c) * 1.5) var(--h)); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .cmk .cmk-fa { fill: oklch(0.66 0.06 var(--h)); }
 .cmk .cmk-fb { fill: oklch(0.84 0.03 var(--h)); stroke: oklch(0.34 var(--c) var(--h)); stroke-width: 1.4; }
+/* logo real: fondo claro (los logos se dibujan para fondo blanco) que aparece al cargar la imagen */
+.cmk .cmk-lb { fill: #fff; opacity: 0; transition: opacity 160ms ease-out; }
+.cmk .cmk-lg { opacity: 0; transition: opacity 160ms ease-out; }
+.cmk.cmk-ok .cmk-lb, .cmk.cmk-ok .cmk-lg { opacity: 1; }
+:root[data-theme="light"] .cmk .cmk-lb { stroke: oklch(0 0 0 / 0.14); stroke-width: 1; }
+@media (prefers-reduced-motion: reduce) { .cmk .cmk-lb, .cmk .cmk-lg { transition: none; } }
 :root[data-theme="light"] .cmk .cmk-b { fill: oklch(0.9 var(--c) var(--h)); }
 :root[data-theme="light"] .cmk .cmk-t { fill: oklch(0.36 calc(var(--c) * 1.8) var(--h)); }
 :root[data-theme="light"] .cmk .cmk-s { stroke: oklch(0.36 calc(var(--c) * 1.8) var(--h)); }
