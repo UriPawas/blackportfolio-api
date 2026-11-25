@@ -71,8 +71,10 @@ if (new URLSearchParams(window.location.search).get("beta") === "closed") {
   betaRow?.classList.remove("hidden");
 }
 
-// ── Trusted device: skip the 2FA code for ~3.5 days (≈ twice a week) ──────────
-const TRUSTED_DEVICE_TTL_MS = 3.5 * 24 * 60 * 60 * 1000;
+// ── Trusted device: el código 2FA se pide una vez cada 7 días por dispositivo ──
+// La ventana es FIJA (no se renueva al entrar): arranca al verificar el código y
+// coincide con la vigencia del token del servidor (_TWOFA_TTL_SECONDS).
+const TRUSTED_DEVICE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isDeviceTrusted(uid) {
   if (sessionStorage.getItem("totp_verified") === uid) return true;
@@ -126,7 +128,7 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async user => {
   // app. El backend exige ese token (X-2FA-Token); sin él, main.html rebotaría al
   // login en bucle, así que solo tomamos este atajo cuando el token existe.
   if (isDeviceTrusted(user.uid) && localStorage.getItem("bp-2fa-token")) {
-    trustDevice(user.uid); // refresh the window so active users stay trusted
+    sessionStorage.setItem("totp_verified", user.uid); // sin renovar la ventana de 7 días
     window.location.href = "main.html";
     return;
   }
@@ -161,11 +163,11 @@ async function handlePostAuth(session) {
     return;
   }
 
-  // Trusted device within the ~3.5-day window: skip the code SOLO si todavía
-  // hay un token de sesión 2FA vivo. Sin él, el backend devuelve 403 y main.html
-  // rebota al login en bucle, así que caemos al overlay OTP para emitir uno nuevo.
+  // Dispositivo de confianza dentro de la ventana de 7 días: salta el código SOLO si
+  // todavía hay un token de sesión 2FA vivo. Sin él, el backend devuelve 403 y
+  // main.html rebota al login en bucle, así que caemos al overlay OTP para emitir uno nuevo.
   if (isDeviceTrusted(session.id) && localStorage.getItem("bp-2fa-token")) {
-    trustDevice(session.id);
+    sessionStorage.setItem("totp_verified", session.id); // sin renovar la ventana de 7 días
     showLoginMessage(`Bienvenido, ${session.fullName}. Redirigiendo...`, "success");
     setTimeout(() => { window.location.href = "main.html"; }, 600);
     return;

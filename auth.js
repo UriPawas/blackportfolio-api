@@ -195,14 +195,14 @@
     return buildSession(firebaseAuth.currentUser);
   }
 
-  // bp-2fa-token y totp_trusted_<uid> sobrevivían al logout: clearSession()/_doLogout()
-  // no los borraban, y login.js saltaba la pantalla de código si ambos seguían
-  // presentes (auditoría 2026-09-03). El token HMAC dura 3.5 días sin revocación.
-  function _clearTwoFactorSession(uid) {
+  // Cerrar sesión (manual o por inactividad) NO olvida el dispositivo: bp-2fa-token y
+  // totp_trusted_<uid> se conservan en localStorage hasta que cumplen sus 7 días, para
+  // que volver a entrar en el mismo navegador no pida el código (la contraseña sí se
+  // pide siempre). Antes se borraban aquí (auditoría 2026-09-03) y el código salía en
+  // cada inicio de sesión. Solo se descarta el estado de la pestaña actual.
+  function _clearTwoFactorSession() {
     try {
-      localStorage.removeItem(TWOFA_TOKEN_KEY);
       sessionStorage.removeItem(TWOFA_TOKEN_KEY);
-      if (uid) localStorage.removeItem("totp_trusted_" + uid);
       sessionStorage.removeItem("totp_verified");
     } catch {}
   }

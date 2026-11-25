@@ -4109,13 +4109,13 @@ window.BlackPortfolioAuth.firebaseAuth.onAuthStateChanged(async function(user) {
   if (sessionStorage.getItem("totp_verified") !== user.uid) {
     let isDemo = false;
     try { isDemo = JSON.parse(localStorage.getItem("bp-extra-" + user.uid) || "{}").isDemo === true; } catch {}
-    // Dispositivo de confianza (verificó el código hace <3.5 días) con token de
+    // Dispositivo de confianza (verificó el código hace <7 días) con token de
     // sesión 2FA vivo: no rebotar al login, el backend valida el token igualmente.
     let trusted = false;
     try {
       const ts = parseInt(localStorage.getItem("totp_trusted_" + user.uid) || "", 10);
       trusted = Number.isFinite(ts)
-        && (Date.now() - ts) <= 3.5 * 24 * 60 * 60 * 1000
+        && (Date.now() - ts) <= 7 * 24 * 60 * 60 * 1000
         && !!localStorage.getItem("bp-2fa-token");
     } catch {}
     if (!isDemo && !trusted && await window.BlackPortfolioAuth.isTwoFactorEnabled(user.uid)) {

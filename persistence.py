@@ -772,8 +772,10 @@ def _backup_codes_remaining(session: Session, uid: str) -> int:
 # Token de sesión "2FA verificado": prueba que el usuario pasó el segundo factor.
 # Se exige en los endpoints de datos cuando la cuenta tiene 2FA activo, de modo
 # que tener solo la contraseña (token Firebase) NO basta para leer/escribir datos.
-# 3.5 días: el usuario solo re-verifica el código ~2 veces por semana.
-_TWOFA_TTL_SECONDS = int(3.5 * 24 * 3600)
+# 7 días fijos desde que se verifica el código en ese dispositivo: el usuario solo
+# lo re-escribe una vez por semana y por dispositivo. Mantener alineado con
+# TRUSTED_DEVICE_TTL_MS (login.js) y el atajo de confianza de main.js.
+_TWOFA_TTL_SECONDS = 7 * 24 * 3600
 
 
 def _twofa_signing_key() -> bytes:
