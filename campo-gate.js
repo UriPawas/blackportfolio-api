@@ -24,7 +24,15 @@
   var COVER = 350, HOLD = 700, TOTAL = 1300, GO_MAX = 880;
   var cur = null, raf = 0, tickT = 0, safety = 0, startT = 0, forceGL = true;
   var PERIOD = 2800, HOLD_MAX = 25000;
-  var hold = { on: false, exiting: false, o: null, org: null, t0: 0, ph: 0, last: 0, safety: 0, rz: 0, bound: false };
+  var hold = { on: false, exiting: false, waiting: false, wt: 0, o: null, org: null, t0: 0, ph: 0, last: 0, safety: 0, rz: 0, bound: false };
+  /* Wordmark: en la pantalla de carga (retención) el logo se desliza a la izquierda y "Portify" se escribe letra a letra a su lado
+     (máscara de texto en la tipografía de la marca, revelada en el shader). En las transiciones entre páginas sólo va el logo.
+     tw = ms de escritura; < 0 = sin texto (transiciones o aún sin fuente); 1e6 = ya escrito (movimiento reducido).
+     Línea de tiempo: 0..SLIDE el logo se desliza; desde T0 cada letra arranca con STG de diferencia y dura DUR. */
+  var WORD = 'Portify', T0 = 220, STG = 95, DUR = 650, SLIDE = 420, RISE = 0.16;
+  var TYPE_TOTAL = T0 + 6 * STG + DUR;
+  var word = { t0: -1 };
+  function twNow(now) { return reduced() ? 1e6 : (word.t0 < 0 ? -1 : now - word.t0); }
 
   function nav(href) { try { if (href) window.location.href = href; } catch (e) { /* nada */ } }
   function reduced() { try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return true; } }
@@ -113,6 +121,9 @@
     ' return c;}',
     'uniform vec3 uGap;uniform vec2 uC,uOrgC;uniform float uIdle,uPh;',
     'uniform float uCell,uTile,uRad,uMaxD,uTc,uTr,uStroke,uBig,uSmall,uLogoA;',
+    /* lockup: centro del logo (uLC), media anchura de la placa (uPlateW), máscara de texto (uTxt = x,y,w,h en px),
+       límites de letra (uB), progreso por letra (uA), alto de subida, cursor (x, media altura, alfa) */
+    'uniform sampler2D uMask;uniform vec2 uLC;uniform vec4 uTxt,uCaret;uniform float uPlateW,uTxtA,uRise;uniform float uB[8],uA[8];',
     'const float SPC=200.,FLC=150.,SPR=400.,FLR=200.;',
     'float kCell(vec2 id){',
     ' vec2 cc=uC+id*uCell;',
@@ -143,12 +154,30 @@
     ' tc=mix(tc,uTx,.045*uIdle*wv);',
     ' vec4 col=vec4(uGap*a,a);',
     ' col=vec4(tc*tA,tA)+col*(1.-tA);',
-    ' vec2 lq=p-uC;',
+    ' vec2 lq=p-uLC;',
     ' float scB=uScale*(1.+.03*uIdle*sin(6.2831853*uPh));',
-    ' float pl=covp(sdRB(lq,vec2(11.*scB+12.),6.*scB+12.),wp)*uLogoA;',
+    /* placa de color de fondo con borde MUY difuso (34 px): despeja la rejilla detrás del logo y el texto sin dejar un contorno */
+    ' float pl=covp(sdRB(p-uC,vec2(uPlateW+34.,11.*scB+34.),6.*scB+34.),34.)*uLogoA;',
     ' col=vec4(uBg*pl,pl)+col*(1.-pl);',
     ' vec4 lg=logoCol(lq,scB,uStroke,uBig,uSmall)*uLogoA;',
     ' col=lg+col*(1.-lg.a);',
+    /* wordmark: cada letra se revela con una barrida izquierda->derecha (frente teñido de acento) y sube unos px */
+    ' float tx=p.x-uTxt.x;int li=0;',
+    ' for(int i=1;i<7;i++){if(tx>=uB[i])li=i;}',
+    ' float b0=uB[li],lw=max(uB[li+1]-b0,1.);',
+    ' float la=uA[li];',
+    ' vec2 mu=(p-uTxt.xy)/uTxt.zw;',
+    ' mu.y-=(1.-la)*uRise/uTxt.w;',
+    ' float inb=step(0.,mu.x)*step(mu.x,1.)*step(0.,mu.y)*step(mu.y,1.);',
+    ' float mk=texture(uMask,clamp(mu,0.,1.)).a*inb;',
+    ' float dd=la*1.4-(tx-b0)/lw;',
+    ' float vis=smoothstep(0.,.35,dd);',
+    ' float tint=(1.-smoothstep(0.,.5,dd))*(1.-smoothstep(.7,1.,la));',
+    ' float ta=mk*vis*uTxtA*uLogoA;',
+    ' col=vec4(mix(uTx,uAc,tint*.9)*ta,ta)+col*(1.-ta);',
+    /* cursor de acento que avanza con la escritura y se apaga al terminar */
+    ' float ca=covp(sdRB(p-vec2(uCaret.x,uLC.y),vec2(1.3,uCaret.y),1.3),wp)*uCaret.z*uLogoA;',
+    ' col=vec4(uAc*ca,ca)+col*(1.-ca);',
     ' float n=(h21(gl_FragCoord.xy)+h21(gl_FragCoord.xy+17.3)-1.)*.5/255.;',
     ' col.rgb=clamp(col.rgb+n*col.a,0.,col.a);',
     ' o=col;}'
@@ -169,7 +198,8 @@
     if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) { lose(); return null; }
     gl.useProgram(pr); gl.viewport(0, 0, cv.width, cv.height); gl.clearColor(0, 0, 0, 0);
     var U = {};
-    ['uRes', 'uDpr', 'uScale', 'uBg', 'uTx', 'uAc', 'uGap', 'uC', 'uOrgC', 'uCell', 'uTile', 'uRad', 'uMaxD', 'uTc', 'uTr', 'uStroke', 'uBig', 'uSmall', 'uLogoA', 'uIdle', 'uPh']
+    ['uRes', 'uDpr', 'uScale', 'uBg', 'uTx', 'uAc', 'uGap', 'uC', 'uOrgC', 'uCell', 'uTile', 'uRad', 'uMaxD', 'uTc', 'uTr', 'uStroke', 'uBig', 'uSmall', 'uLogoA', 'uIdle', 'uPh',
+      'uMask', 'uLC', 'uTxt', 'uCaret', 'uPlateW', 'uTxtA', 'uRise', 'uB', 'uA']
       .forEach(function (n) { U[n] = gl.getUniformLocation(pr, n); });
     var P = palette(), tile = G.W < 640 ? 44 : 56, cell = tile + 2, W = G.W, H = G.H;
     gl.uniform2f(U.uRes, W, H); gl.uniform1f(U.uDpr, cv.width / W); gl.uniform1f(U.uScale, G.scale);
@@ -180,14 +210,71 @@
     gl.uniform3f(U.uGap, P.bg[0] + (P.tx[0] - P.bg[0]) * k, P.bg[1] + (P.tx[1] - P.bg[1]) * k, P.bg[2] + (P.tx[2] - P.bg[2]) * k);
     var md = Math.max(Math.hypot(org[0], org[1]), Math.hypot(W - org[0], org[1]), Math.hypot(org[0], H - org[1]), Math.hypot(W - org[0], H - org[1])) / cell;
     gl.uniform2f(U.uOrgC, org[0], org[1]); gl.uniform1f(U.uMaxD, Math.max(md, 1));
+
+    /* ---- lockup centrado: logo + "Portify" ---- */
+    var fs = G.S * 0.615, gap = G.S * 0.27, built = false, bd = [], padX = 0, x0 = 0, caretH = fs * 0.4;
+    var lcx = W / 2, pw0 = 11 * G.scale + 12, pw = pw0;   /* destino del logo y media anchura de la placa cuando el lockup está completo */
+    var fontCss = '400 ' + fs.toFixed(2) + 'px "DM Serif Display", ui-serif, Georgia, "Times New Roman", serif';
+    var tex = gl.createTexture();
+    gl.uniform1f(U.uPlateW, 11 * G.scale + 12); gl.uniform2f(U.uLC, W / 2, H / 2); gl.uniform1f(U.uRise, fs * RISE);
+    gl.uniform1i(U.uMask, 0); gl.uniform1f(U.uTxtA, 0); gl.uniform4f(U.uCaret, 0, caretH, 0, 0);
+    gl.uniform1fv(U.uA, [0, 0, 0, 0, 0, 0, 0, 0]); gl.uniform1fv(U.uB, [0, 1, 2, 3, 4, 5, 6, 7]); gl.uniform4f(U.uTxt, 0, 0, 1, 1);
+    function layout() {
+      var c = doc.createElement('canvas'), x = c.getContext('2d'), i, ls = (-0.01 * fs).toFixed(2) + 'px';
+      x.font = fontCss; try { x.letterSpacing = ls; } catch (e) { /* nada */ }
+      var w = x.measureText(WORD).width, asc = x.measureText('P').actualBoundingBoxAscent || fs * 0.7;
+      padX = Math.ceil(fs * 0.35);
+      var Hc = Math.ceil(fs * 1.9), cw = Math.ceil(w + 2 * padX);
+      c.width = Math.ceil(cw * dpr); c.height = Math.ceil(Hc * dpr);
+      x = c.getContext('2d'); x.setTransform(c.width / cw, 0, 0, c.height / Hc, 0, 0);
+      x.font = fontCss; try { x.letterSpacing = ls; } catch (e) { /* nada */ }
+      x.fillStyle = '#fff'; x.textBaseline = 'alphabetic';
+      x.fillText(WORD, padX, Hc / 2 + asc / 2);
+      bd = [];
+      for (i = 0; i <= WORD.length; i++) bd.push(padX + (i === 0 ? 0 : x.measureText(WORD.slice(0, i)).width));
+      var LW = G.S + gap + w, L = W / 2 - LW / 2;
+      x0 = L + G.S + gap - padX;
+      gl.useProgram(pr);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.uniform1fv(U.uB, bd);
+      gl.uniform4f(U.uTxt, x0, H / 2 - Hc / 2, cw, Hc);
+      lcx = L + G.S / 2; pw = Math.max(pw0, LW / 2);
+      caretH = asc * 0.55;
+    }
+    function build() {
+      if (dead) return;
+      try { layout(); built = true; if (word.t0 < 0) word.t0 = performance.now() + 140; } catch (e) { built = false; }
+    }
+    (function () {
+      var ok = true;
+      try { ok = !doc.fonts || doc.fonts.check(fontCss, WORD); } catch (e) { ok = true; }
+      if (ok) build();
+      else { try { doc.fonts.load(fontCss, WORD).then(build, build); } catch (e) { build(); } }
+    })();
     function onLost(e) { try { e.preventDefault(); } catch (x) { /* nada */ } if (hold.on && !hold.exiting) swapHold(true); else finish(); }
     cv.addEventListener('webglcontextlost', onLost);
     return {
       el: cv,
-      draw: function (T, ph, idle) {
+      draw: function (T, ph, idle, tw) {
         if (dead) return;
         ph = ph || 0; idle = idle || 0;
         var tr = T - HOLD;
+        /* wordmark: sólo con tw >= 0 (pantalla de carga). Sin tw (transiciones) va el logo solo y centrado. */
+        if (tw === undefined) tw = -1;
+        var on = built && tw >= 0, ar = [], k;
+        for (k = 0; k < 7; k++) ar.push(on ? easeOut(clamp((tw - T0 - k * STG) / DUR, 0, 1)) : 0);
+        ar.push(0);
+        gl.uniform1fv(U.uA, ar); gl.uniform1f(U.uTxtA, on ? 1 : 0);
+        /* el logo se desliza del centro a su sitio en el lockup, y la placa crece con él */
+        var sl = on ? easeOut(clamp(tw / SLIDE, 0, 1)) : 0;
+        gl.uniform2f(U.uLC, W / 2 + (lcx - W / 2) * sl, H / 2);
+        gl.uniform1f(U.uPlateW, pw0 + (pw - pw0) * sl);
+        var kc = on ? Math.max(0, (tw - T0) / STG) : 0, ci = clamp(Math.floor(kc), 0, 6), cx = on ? x0 + (kc >= 7 ? bd[7] : bd[ci] + (bd[ci + 1] - bd[ci]) * clamp(kc - ci, 0, 1)) : 0;
+        gl.uniform4f(U.uCaret, cx, caretH, on ? smooth(clamp((tw - T0) / 90, 0, 1)) * (1 - smooth(clamp((kc - 7) / 2.2, 0, 1))) : 0, 0);
         gl.uniform1f(U.uTc, T); gl.uniform1f(U.uTr, tr > 0 ? tr : -1);
         gl.uniform1f(U.uLogoA, smooth(clamp((T - 340) / 80, 0, 1)) * (1 - smooth(clamp(tr / 140, 0, 1))));
         gl.uniform1f(U.uStroke, easeOut(clamp((T - 340) / 300, 0, 1)));
@@ -204,10 +291,13 @@
   function mountCSS() {
     var G = geom();
     var d = doc.createElement('div'); d.className = 'gate-fx gate-fx--css'; d.setAttribute('aria-hidden', 'true');
+    var letters = WORD.split('').map(function (ch, i) { return '<i style="--i:' + i + '">' + ch + '</i>'; }).join('');
     d.innerHTML = '<div class="gate-bg"></div>' +
+      '<div class="gate-lock" style="gap:' + Math.round(G.S * 0.27) + 'px">' +
       '<svg class="gate-logo" viewBox="0 0 24 24" width="' + G.S + '" height="' + G.S + '" fill="none">' +
       '<rect x="1" y="1" width="22" height="22" rx="6" stroke="currentColor" stroke-width="1.6"/>' +
-      '<circle cx="9" cy="9.5" r="3.2" fill="currentColor"/><circle class="gate-dot" cx="16" cy="15.5" r="2.2" fill="var(--accent)"/></svg>';
+      '<circle cx="9" cy="9.5" r="3.2" fill="currentColor"/><circle class="gate-dot" cx="16" cy="15.5" r="2.2" fill="var(--accent)"/></svg>' +
+      '<span class="gate-word" style="font-size:' + (G.S * 0.615).toFixed(1) + 'px">' + letters + '</span></div>';
     var bg = d.children[0], svg = d.children[1];
     return {
       el: d, css: true,
@@ -229,8 +319,8 @@
     return o;
   }
   function finish() {
-    cancelAnimationFrame(raf); clearTimeout(tickT); clearTimeout(safety); clearTimeout(hold.safety); clearTimeout(hold.rz);
-    hold.on = false; hold.exiting = false; hold.o = null;
+    cancelAnimationFrame(raf); clearTimeout(tickT); clearTimeout(safety); clearTimeout(hold.safety); clearTimeout(hold.rz); clearTimeout(hold.wt);
+    hold.on = false; hold.exiting = false; hold.waiting = false; hold.o = null;
     if (cur) { try { cur.destroy(); } catch (e) { /* nada */ } cur = null; }
   }
 
@@ -309,7 +399,7 @@
     /* ~30 fps: el movimiento es lento y así se ahorra la mitad del coste en pantalla completa */
     if (now - hold.last >= 30) {
       hold.last = now; hold.ph = ((now - hold.t0) % PERIOD) / PERIOD;
-      try { cur.draw(HOLD, hold.ph, 1); } catch (e) { swapHold(true); return; }
+      try { cur.draw(HOLD, hold.ph, 1, twNow(now)); } catch (e) { swapHold(true); return; }
     }
     raf = requestAnimationFrame(idleStep);
   }
@@ -320,7 +410,7 @@
     o.el.className += ' gate-fx--hold';
     (doc.body || root).appendChild(o.el);
     cur = o; hold.o = o;
-    try { o.draw(HOLD, hold.ph, reduced() ? 0 : 1); } catch (e) { if (!o.css) { swapHold(true); return; } }
+    try { o.draw(HOLD, hold.ph, reduced() ? 0 : 1, twNow(performance.now())); } catch (e) { if (!o.css) { swapHold(true); return; } }
     startIdle();
   }
   /* rehace la cubierta (tamaño, tema, pérdida de contexto) sin parpadeo: monta la nueva antes de quitar la vieja */
@@ -343,7 +433,18 @@
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', again);
     try { if (window.MutationObserver) new MutationObserver(again).observe(root, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) { /* nada */ }
   }
+  /* la app puede estar lista antes de que el nombre termine de escribirse: se espera lo que falte (más una pausa corta) para que se vea completo */
   function exitHold() {
+    if (!hold.on || hold.exiting || hold.waiting) return;
+    var rem = TYPE_TOTAL + 250 - twNow(performance.now());
+    if (cur && !cur.css && !reduced() && word.t0 >= 0 && rem > 0) {
+      hold.waiting = true;
+      hold.wt = setTimeout(function () { hold.waiting = false; doExitHold(); }, rem);
+      return;
+    }
+    doExitHold();
+  }
+  function doExitHold() {
     if (!hold.on || hold.exiting) return;
     hold.exiting = true; clearTimeout(hold.safety); clearTimeout(hold.rz); cancelAnimationFrame(raf); raf = 0;
     var o = cur;
@@ -357,7 +458,7 @@
       if (cur !== o) return false;
       var T = HOLD + (now - t0);
       if (T >= TOTAL) { finish(); return false; }
-      try { o.draw(T, phF, 1 - smooth(clamp((T - HOLD) / 160, 0, 1))); } catch (e) { finish(); return false; }
+      try { o.draw(T, phF, 1 - smooth(clamp((T - HOLD) / 160, 0, 1)), twNow(now)); } catch (e) { finish(); return false; }
       return true;
     }
     (function tick() { tickT = setTimeout(function () { if (adv(performance.now())) tick(); }, 50); })();
