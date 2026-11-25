@@ -431,7 +431,17 @@
     }
     var p = getP(id); if (!p) return null;
     var d = dateOf(p.created);
-    return { name: p.name, desc: p.desc || '', color: p.color, value: p.value, day: p.day || { amt: 0, pct: 0 }, ret: p.ret || { amt: 0, pct: 0 }, meta: [['Moneda', p.currency || 'MXN'], ['Creado', d ? fDate.format(d) : '—'], ['Benchmark', p.benchmark || '—']], pos: (p.positions || []).map(function (x) { return { x: x }; }), cons: false };
+    return { name: p.name, desc: p.desc || '', color: p.color, value: p.value, day: p.day || { amt: 0, pct: 0 }, ret: p.ret || { amt: 0, pct: 0 }, meta: [['Moneda base', p.currency || 'MXN'], ['Creado', d ? fDate.format(d) : '—'], ['Benchmark', p.benchmark || '—']], pos: (p.positions || []).map(function (x) { return { x: x }; }), cons: false };
+  }
+  /* Tipo de cambio del encabezado. La moneda base es la del portafolio (o la que elijas en "Ver cifras en"); el par siempre va
+     expresado en dólares ("1 USD = $19.47 MXN") y el equivalente muestra cuánto valdría la cifra en la OTRA moneda: un portafolio
+     en pesos enseña su valor en USD, uno en dólares lo enseña en pesos. Solo si la cuenta maneja más de una moneda. */
+  function fxHead(value) {
+    var B = (T && T.base) || 'MXN', F = (T && T.fx && T.fx.foreign) || (B === 'USD' ? 'MXN' : 'USD'), r = T && T.rate ? T.rate(F) : 0;
+    var dm = window.PORTIFY_DEMO, sy = function (c) { return dm && dm.fmt && dm.fmt.sym ? dm.fmt.sym(c) : '$'; };
+    if (!(r > 0) || !isFinite(r) || !T.currencies || T.currencies().length < 2) return null;
+    var per = B === 'USD' ? 1 / r : r, other = B === 'USD' ? F : B, eq = Math.round(Math.abs(value) / r);
+    return { rate: '1 USD = ' + sy(other) + nf2.format(per) + ' ' + other, equiv: '≈ ' + (value < 0 ? '−' : '') + sy(F) + nf0.format(eq) + ' ' + F };
   }
   function posMXN(x) { var v = (x.qty || 0) * (x.price || 0); if (T.rate) return v * T.rate(x.currency || 'MXN'); return x.currency === 'USD' ? v * ((T.fx && T.fx.usdmxn) || 1) : v; }
   var rsApi = null;
@@ -491,7 +501,7 @@
   function renderDetail(id) {
     destroyRs();
     var d = detailData(id); if (!d) return false;
-    var tabs = TABS;
+    var tabs = TABS, fx = fxHead(d.value);
     var pl = d.pos.length ? d.pos.map(function (r) {
       var x = r.x; return '<li class="tkl-pos"><span class="tkl-mk">' + mark(x.ticker, 28) + '</span><span class="tkl-pn"><strong>' + esc(x.ticker) + '</strong><span>' + esc(x.name || '') + (r.from ? ' · ' + esc(r.from) : '') + '</span></span><span class="tkl-num">' + fM(posMXN(x)) + '</span></li>';
     }).join('') : '<li class="tkl-pos tkl-pos-empty">Aún no hay posiciones.</li>';
@@ -501,8 +511,8 @@
       '<button type="button" class="btn btn-primary btn-sm tkl-addtx" data-act="addtx"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Agregar movimiento</button></div>' +
       '<header class="tkl-dhead"><span class="tkl-dsw" data-part="sw" style="--pc:' + esc(d.color) + '" aria-hidden="true"></span>' +
       '<div class="tkl-dtitle"><h2 class="tkl-dname" data-part="name" tabindex="-1">' + esc(d.name) + '</h2>' + (d.desc ? '<p class="tkl-ddesc tkl-late">' + esc(d.desc) + '</p>' : '') + '</div>' +
-      '<div class="tkl-dval"><span class="tkl-dv tkl-num" data-part="value">' + fM(d.value) + '</span><span class="tkl-late tkl-dsub tkl-num"><span class="' + cls(d.day.amt) + '">Hoy ' + fS(d.day.amt) + ' (' + fP(d.day.pct) + ')</span><span class="' + cls(d.ret.pct) + '" title="' + RET_TIP + '">Rentabilidad ' + fP(d.ret.pct) + '</span></span></div>' +
-      '<dl class="tkl-dmeta tkl-late">' + d.meta.map(function (m) { return '<div><dt>' + m[0] + '</dt><dd>' + esc(m[1]) + '</dd></div>'; }).join('') + (T.currencies && T.currencies().length > 1 ? '<div class="tkl-dccy"><dt>Ver cifras en</dt><dd><div data-ccy></div></dd></div>' : '') + '</dl></header>' +
+      '<div class="tkl-dval"><span class="tkl-dv tkl-num" data-part="value">' + fM(d.value) + '</span>' + (fx ? '<span class="tkl-late tkl-dfx tkl-num" title="Equivalente al tipo de cambio de hoy">' + esc(fx.equiv) + '</span>' : '') + '<span class="tkl-late tkl-dsub tkl-num"><span class="' + cls(d.day.amt) + '">Hoy ' + fS(d.day.amt) + ' (' + fP(d.day.pct) + ')</span><span class="' + cls(d.ret.pct) + '" title="' + RET_TIP + '">Rentabilidad ' + fP(d.ret.pct) + '</span></span></div>' +
+      '<dl class="tkl-dmeta tkl-late">' + d.meta.map(function (m) { return '<div><dt>' + m[0] + '</dt><dd>' + esc(m[1]) + '</dd></div>'; }).join('') + (T.currencies && T.currencies().length > 1 ? '<div class="tkl-dccy"><dt>Ver cifras en</dt><dd><div data-ccy></div></dd></div>' : '') + (fx ? '<div class="tkl-dfxm"><dt>Tipo de cambio</dt><dd class="tkl-num">' + esc(fx.rate) + '</dd></div>' : '') + '</dl></header>' +
       '<div class="tkl-late tkl-brief" data-brief></div>' +
       '<div class="tkl-late"><div class="tkl-tabw"><div class="tkl-tabs" role="tablist" aria-label="Secciones del portafolio" data-tabs><span class="tkl-ind" aria-hidden="true"></span>' + tabs.map(function (t) { var on = t[0] === tab, en = !!t[2]; return '<button type="button" role="tab" id="tklTab-' + t[0] + '" data-tab="' + t[0] + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '" aria-controls="tklPanel"' + (en ? '' : ' disabled title="Próximamente" aria-label="' + t[1] + ', próximamente"') + '>' + t[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="tkl-tp" id="tklPanel" role="tabpanel" aria-labelledby="tklTab-' + tab + '"><div class="tkl-rs" data-rs></div></div></div></div>';

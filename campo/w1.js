@@ -163,7 +163,7 @@
         });
         list.appendChild(head);
         rowsHost = el('div', 'w1-rows'); list.appendChild(rowsHost);
-        sorted().slice(0, sz === 'L' ? 8 : 5).forEach(function (p) { var r = rowEl(p); rowMap[p.ticker] = r; rowsHost.appendChild(r); });
+        sorted().forEach(function (p) { var r = rowEl(p); rowMap[p.ticker] = r; rowsHost.appendChild(r); }); /* todas las posiciones: la lista se desplaza dentro del widget */
         root.appendChild(list);
       } else rowsHost = null;
     }
@@ -177,7 +177,7 @@
       if (!rowsHost) return;
       var first = {}, k;
       for (k in rowMap) first[k] = rowMap[k].getBoundingClientRect().top;
-      sorted().slice(0, 8).forEach(function (p) { if (rowMap[p.ticker]) rowsHost.appendChild(rowMap[p.ticker]); });
+      sorted().forEach(function (p) { if (rowMap[p.ticker]) rowsHost.appendChild(rowMap[p.ticker]); });
       if (ctx.reduced()) return;
       for (k in rowMap) {
         var dy = first[k] - rowMap[k].getBoundingClientRect().top;

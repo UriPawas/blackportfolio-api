@@ -89,7 +89,18 @@
   /* ================= fecha de los datos y cuenta ================= */
   $$('[data-asof]').forEach(function (e) { e.textContent = D.asOf; });
   var who = $('#whoBtn');
-  if (who && D.user) { who.textContent = D.user.email || D.user.name || 'Tu cuenta'; who.setAttribute('aria-label', 'Abrir Ajustes de la cuenta ' + (D.user.email || '')); }
+  /* la cuenta se muestra con su nombre y foto (Google); sin nombre cae al correo. La foto, si falla, deja la inicial */
+  if (who && D.user) {
+    var wn = D.user.name || D.user.email || 'Tu cuenta', av = doc.createElement('span'), ini = doc.createElement('b'), nm = doc.createElement('span');
+    av.className = 'who-av'; av.setAttribute('aria-hidden', 'true'); ini.textContent = ((wn.match(/[A-Za-z0-9À-ſ]/) || ['?'])[0]).toUpperCase(); av.appendChild(ini);
+    if (D.user.photo) {
+      var ph = doc.createElement('img'); ph.alt = ''; ph.referrerPolicy = 'no-referrer'; ph.decoding = 'async';
+      ph.addEventListener('error', function () { ph.remove(); }); ph.src = D.user.photo; av.appendChild(ph);
+    }
+    nm.className = 'who-n'; nm.textContent = wn;
+    who.textContent = ''; who.appendChild(av); who.appendChild(nm);
+    who.title = D.user.email || ''; who.setAttribute('aria-label', 'Abrir Ajustes de la cuenta de ' + wn);
+  }
 
   /* ================= avisos y botones del menú ================= */
   var toastT = 0;

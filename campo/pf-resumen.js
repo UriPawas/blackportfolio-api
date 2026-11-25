@@ -343,7 +343,7 @@
 
     var benchLabel = bench.name === 'S&P 500' ? 'S&P 500 en ' + BASE : bench.name + (/IPC/.test(bench.name) ? '' : ' en ' + BASE);
     mount.innerHTML = '<div class="pfr" id="' + id + '" data-mode="rend">' +
-      '<p class="pfr-tag">Base ' + BASE + ' · ' + PAIR + ' ' + fN(fx0, 2) + ' al ' + dTxt(dates[LAST]) + ' · cada flujo con el tipo de cambio de su fecha</p>' +
+      '<p class="pfr-tag">Cifras en ' + BASE + ' · ' + PAIR + ' ' + fN(fx0, 2) + ' al ' + dTxt(dates[LAST]) + ' · cada flujo con el tipo de cambio de su fecha</p>' +
       '<section class="pfr-led" aria-label="Indicadores del portafolio">' + ledHTML + '</section>' +
       '<p class="pfr-rec" aria-label="Conciliación">' + recHTML + '</p>' +
       '<section class="pfr-ch panel" aria-label="Gráfico"><div class="pfr-ctop"><div class="pfr-ct"><h2 id="' + id + 'h">Rendimiento frente a ' + esc(bench.name) + '</h2>' +

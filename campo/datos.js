@@ -506,6 +506,7 @@
 
     var now = new Date(), asOf = pad(now.getDate()) + '-' + MES[now.getMonth()] + '-' + now.getFullYear() + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
     var u = boot0.user || {}, fu = A().firebaseAuth.currentUser || {};
+    var fs = (fu.uid && A().buildSession && A().buildSession(fu)) || {}; /* nombre guardado al registrarse y, con Google, la foto de perfil */
     W.PORTIFY_DEMO = {
       brand: 'Portify', real: true, asOf: asOf, base: 'MXN', usdmxn: fxS[LAST],
       total: totV, cost: 0, invested: 0, pnl: 0, pnlPct: 0, dayChange: 0, dayChangePct: 0,
@@ -519,7 +520,7 @@
         { name: 'Advisor Pro', usd: 59, usdYear: 47, mxn: '≈ $1,090 MXN', portfolios: 'Ilimitados', positions: 'Ilimitadas', ai: 60, cta: 'Elegir Advisor Pro' },
         { name: 'Wealth Desk', usd: 129, usdYear: 103, mxn: '≈ $2,390 MXN', portfolios: 'Ilimitados', positions: 'Ilimitadas', ai: 120, cta: 'Hablar con nosotros' }
       ],
-      user: { email: u.email || fu.email || '', name: u.displayName || fu.displayName || '', plan: plan, role: u.role || '' },
+      user: { email: u.email || fu.email || '', name: u.displayName || fu.displayName || (fs.fullName && fs.fullName !== 'Usuario' ? fs.fullName : ''), photo: fs.photoURL || '', plan: plan, role: u.role || '' },
       fmt: {
         /* símbolo de la moneda en la que ves las cifras (la base de la vista: CampoTracker.base); "mxn" se queda por compatibilidad */
         sym: function (c) { c = c || (W.CampoTracker && W.CampoTracker.base) || 'MXN'; return { MXN: '$', USD: 'US$', EUR: '€', GBP: '£', CAD: 'C$', BRL: 'R$' }[c] || (c + ' '); },
