@@ -390,6 +390,15 @@ if (googleSignupBtn) {
     googleSignupBtn.disabled = true;
     span.textContent = 'Abriendo Google…';
 
+    // Google a pantalla completa (redirección); el plan elegido y el código de invitación viajan en sessionStorage.
+    if (window.BlackPortfolioAuth.startGoogleRedirect) {
+      try {
+        sessionStorage.setItem('bp-google-redirect-form', JSON.stringify({ plan: selectedPlanInput.value || '', beta: (betaInput?.value || '').trim().toUpperCase() }));
+        await window.BlackPortfolioAuth.startGoogleRedirect();
+        return;
+      } catch (e) { /* ventana emergente como antes */ }
+    }
+
     const result = await window.BlackPortfolioAuth.authenticateWithGoogle();
 
     googleSignupBtn.classList.remove('is-loading');
@@ -400,6 +409,40 @@ if (googleSignupBtn) {
       showFormMessage(result.error, 'error');
       return;
     }
+    await continueAfterGoogleSignup(result);
+  });
+
+  // Regreso de Google por redirección: restaura plan y código, y sigue el mismo camino que la ventana emergente.
+  if (window.BlackPortfolioAuth.hasPendingGoogleRedirect && window.BlackPortfolioAuth.hasPendingGoogleRedirect()) {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('bp-google-redirect-form') || '{}');
+      sessionStorage.removeItem('bp-google-redirect-form');
+      if (saved.plan) {
+        const radio = document.querySelector('#planPicker input[name="plan"][value="' + (window.CSS && CSS.escape ? CSS.escape(saved.plan) : saved.plan) + '"]');
+        if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); }
+        selectedPlanInput.value = saved.plan;
+      }
+      if (saved.beta && betaInput) { betaInput.value = saved.beta; betaRow?.classList.remove('hidden'); }
+    } catch {}
+    const span = googleSignupBtn.querySelector('span');
+    const original = span.textContent;
+    googleSignupBtn.classList.add('is-loading');
+    googleSignupBtn.disabled = true;
+    span.textContent = 'Entrando con Google…';
+    showFormMessage('Completando el registro con Google…', 'success');
+    window.BlackPortfolioAuth.completeGoogleRedirect().then(async result => {
+      googleSignupBtn.classList.remove('is-loading');
+      googleSignupBtn.disabled = false;
+      span.textContent = original;
+      if (!result) { showFormMessage('', ''); return; }
+      if (!result.ok) { showFormMessage(result.error, result.cancelled ? 'success' : 'error'); return; }
+      await continueAfterGoogleSignup(result);
+    });
+  }
+}
+
+async function continueAfterGoogleSignup(result) {
+  {
     showFormMessage(
       result.isNew
         ? `Cuenta creada con Google para ${result.user.fullName}.`
@@ -423,7 +466,7 @@ if (googleSignupBtn) {
         showFormMessage('No se pudo cargar la selección de plan. Recarga la página e intenta de nuevo.', 'error');
       }
     }, 1200);
-  });
+  }
 }
 
 // ── Reenviar verificación de correo (panel V4, si llega a mostrarse) ─────
