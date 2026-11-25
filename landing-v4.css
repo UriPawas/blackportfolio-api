@@ -1335,3 +1335,51 @@ p  { margin: 0; }
   .top, .drawer, .close__bg, .foot__theme { display: none !important; }
   body { background: #fff; color: #000; }
 }
+
+/* ==========================================================================
+   Puente Valyndor (solo tokens, tipografía y botones). Lo cargan planes.html,
+   privacy.html y terms.html, que siguen en la maqueta v4: así comparten
+   paleta zinc + índigo, Plus Jakarta Sans / DM Serif Display y botón en
+   píldora con la landing nueva sin rehacer sus componentes.
+   ========================================================================== */
+:root {
+  --paper: #fafafa; --surface: #ffffff; --sunken: #f4f4f5;
+  --band: #18181b; --band-deep: #09090b;
+  --ink: #18181b; --ink-2: #52525b; --ink-3: #63636b; --on-band: #fafafa; --on-band-2: #a1a1aa;
+  --rule: #e4e4e7; --rule-soft: #f4f4f5; --rule-strong: #d4d4d8; --rule-band: #27272a;
+  --cobalt: #18181b; --cobalt-deep: #27272a; --cobalt-ink: #4f46e5; --cobalt-tint: #eef2ff; --cobalt-line: #6366f1;
+  --pos: #047857; --neg: #c81e1e;
+  --ramp-1: #4f46e5; --ramp-2: #6366f1; --ramp-3: #818cf8; --ramp-4: #a5b4fc; --ramp-5: #c7d2fe; --ramp-6: #e0e7ff;
+  --serif: "DM Serif Display", Georgia, serif;
+  --sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --t-label: .75rem;
+  --shadow-plate: 0 16px 32px -8px rgba(24, 24, 27, .10), 0 4px 12px -4px rgba(24, 24, 27, .06);
+  --shadow-lift: 0 4px 8px -2px rgba(24, 24, 27, .06), 0 14px 28px -10px rgba(24, 24, 27, .14);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+}
+[data-theme="dark"] {
+  --paper: #09090b; --surface: #18181b; --sunken: #27272a;
+  --band: #18181b; --band-deep: #09090b;
+  --ink: #fafafa; --ink-2: #d4d4d8; --ink-3: #a1a1aa; --on-band: #fafafa; --on-band-2: #a1a1aa;
+  --rule: rgba(255, 255, 255, .10); --rule-soft: rgba(255, 255, 255, .06); --rule-strong: rgba(255, 255, 255, .18); --rule-band: #27272a;
+  --cobalt: #fafafa; --cobalt-deep: #ffffff; --cobalt-ink: #a5b4fc; --cobalt-tint: rgba(129, 140, 248, .14); --cobalt-line: #818cf8;
+  --pos: #34d399; --neg: #f87171;
+  --ramp-1: #818cf8; --ramp-2: #a5b4fc; --ramp-3: #6366f1; --ramp-4: #c7d2fe; --ramp-5: #4f46e5; --ramp-6: #e0e7ff;
+  --shadow-plate: 0 16px 32px -8px rgba(0, 0, 0, .6), 0 4px 12px -4px rgba(0, 0, 0, .4);
+  --shadow-lift: 0 4px 8px -2px rgba(0, 0, 0, .4), 0 14px 28px -10px rgba(0, 0, 0, .6);
+}
+html { font-synthesis-weight: none; }
+body::before { display: none; } /* sin grano de papel */
+h1, h2 { font-family: var(--serif); font-weight: 400; letter-spacing: -.015em; }
+h3, h4 { font-family: var(--sans); font-weight: 700; letter-spacing: -.015em; }
+.btn { border-radius: 999px; font-weight: 600; padding-inline: 1.35rem; }
+.btn--primary { color: var(--paper); }
+.btn:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) { .btn:active, .btn:hover { transform: none !important; } }
+a.mark:not(.mark--logo):not(.mark--flag) { min-height: 44px; align-items: center; font: 400 1.4rem/1 var(--serif); letter-spacing: -.01em; text-transform: none; }
+a.mark:not(.mark--logo):not(.mark--flag)::before { width: 8px; height: 8px; border-radius: 50%; margin-right: .45em; background: var(--cobalt-line); transform: none; }
+/* el pulgar es un elemento de 1px escalado (legal-v4.js / planes-v4.js): no admite píldora, así que el marco va en radio 12 */
+.seg { border-radius: 12px; border-color: var(--rule); background: var(--sunken); }
+.seg button { font-weight: 600; }
+.seg button[aria-selected="true"], .seg button[aria-pressed="true"] { color: var(--paper); }
+:root .legal__toc a { padding-block: .7rem; }

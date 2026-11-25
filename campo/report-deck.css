@@ -1,11 +1,11 @@
 /* Campo · Informe PRESENTACIÓN (1600×900 escalado). Todo escopado bajo .crk; solo tokens de _dev_proto-campo.css.
-   Cifras en Familjen (var(--font)) con tabular-nums; Schibsted (var(--display)) solo en palabras, con font-variant-numeric: normal. */
+   Cifras en Plus Jakarta Sans (var(--font)) con tabular-nums; DM Serif Display (var(--display)) solo en palabras, con font-variant-numeric: normal. */
 .crk {
-  --k1: var(--accent); --k2: oklch(0.7 0.07 235); --k3: oklch(0.68 0.08 175); --k4: oklch(0.66 0.09 330); --k5: oklch(0.72 0.07 125); --k6: oklch(0.6 0.03 255); --k7: oklch(0.78 0.05 60);
+  --k1: var(--accent); --k2: oklch(0.7 0.07 235); --k3: oklch(0.68 0.08 175); --k4: oklch(0.66 0.09 330); --k5: oklch(0.72 0.07 125); --k6: oklch(0.6 0.03 255); --k7: oklch(0.72 0.09 300);
   --ez: cubic-bezier(.23, 1, .32, 1);
   position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; min-width: 0; font-family: var(--font); color: var(--text); outline: none; font-variant-numeric: tabular-nums;
 }
-:root[data-theme="light"] .crk { --k2: oklch(0.52 0.09 240); --k3: oklch(0.5 0.09 180); --k4: oklch(0.5 0.12 335); --k5: oklch(0.55 0.09 125); --k6: oklch(0.45 0.03 255); --k7: oklch(0.6 0.08 60); }
+:root[data-theme="light"] .crk { --k2: oklch(0.52 0.09 240); --k3: oklch(0.5 0.09 180); --k4: oklch(0.5 0.12 335); --k5: oklch(0.55 0.09 125); --k6: oklch(0.45 0.03 255); --k7: oklch(0.52 0.12 300); }
 .crk *, .crk *::before, .crk *::after { box-sizing: border-box; }
 .crk-view { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .crk-stage { position: absolute; left: 50%; top: 50%; width: 1600px; height: 900px; transform-origin: 50% 50%; transform: translate(-50%, -50%); background: var(--s1); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--sh-2), var(--inset); overflow: hidden; }
@@ -29,7 +29,7 @@
 .crk-in { position: absolute; inset: 0; padding: 52px 72px 64px; display: flex; flex-direction: column; }
 .crk-h { flex: none; }
 .crk-k { margin: 0 0 8px; font: 600 20px/1.2 var(--font); color: var(--accent-ink); }
-.crk-t { margin: 0; font: 700 52px/1.06 var(--display); font-variant-numeric: normal; letter-spacing: -0.015em; color: var(--text); }
+.crk-t { margin: 0; font: 400 56px/1.04 var(--display); font-variant-numeric: normal; letter-spacing: -0.015em; color: var(--text); }
 .crk-b { flex: 1 1 auto; min-height: 0; margin-top: 28px; position: relative; }
 .crk-f { position: absolute; left: 72px; right: 72px; bottom: 22px; display: flex; justify-content: space-between; gap: 24px; font-size: 16px; line-height: 1.2; color: var(--text-3); }
 .crk .up { color: var(--gain); } .crk .dn { color: var(--loss); }
@@ -60,7 +60,7 @@
 /* ---------- 1 · portada ---------- */
 .crk-cover { padding-top: 52px; }
 .crk-cv-top { display: flex; justify-content: space-between; align-items: baseline; }
-.crk-brand { font: 700 26px var(--display); font-variant-numeric: normal; letter-spacing: -0.01em; }
+.crk-brand { font: 400 28px var(--display); font-variant-numeric: normal; letter-spacing: -0.01em; }
 .crk-cv-t { margin-top: 34px; font-size: 80px; line-height: 1.02; max-width: 1200px; }
 .crk-cv-per { margin: 10px 0 0; font-size: 26px; color: var(--text-2); }
 .crk-cv-fig { margin-top: 34px; display: flex; flex-direction: column; gap: 0; }

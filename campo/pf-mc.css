@@ -29,7 +29,7 @@
 .pmc .pmc-num input, .pmc-f input[type="number"], .pmc-f select { min-height: 44px; font-size: 16px; font-variant-numeric: tabular-nums; border-radius: var(--r-sm); }
 .pmc .pmc-num input { padding: 0 10px 0 26px; }
 .pmc-f input[type="number"] { padding: 0 12px; }
-.pmc-f select { width: 100%; padding: 0 12px; background: var(--s2); border: 1px solid var(--line); color: var(--text); box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.12); }
+.pmc-f select { width: 100%; padding: 0 12px; background: var(--bg); border: 1px solid var(--line-strong); color: var(--text); box-shadow: none; }
 .pmc-f select:focus-visible { outline: none; border-color: var(--accent-ink); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 30%, transparent); }
 .pmc input[type="number"]::-webkit-inner-spin-button { opacity: 0.6; }
 

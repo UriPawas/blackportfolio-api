@@ -94,7 +94,7 @@ button.who:active { transform: scale(0.97); }
 .st-fld label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 2px; }
 .st-inl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .st-inl input.st-name { flex: 1 1 200px; width: auto; min-width: 0; min-height: 44px; font-size: 17px; font-weight: 500; padding: 0 12px; margin-left: -12px; text-overflow: ellipsis; background: transparent; border-color: transparent; box-shadow: none; }
-.st-inl[data-edit] input.st-name { margin-left: 0; background: var(--s2); border-color: var(--line); box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.12); }
+.st-inl[data-edit] input.st-name { margin-left: 0; background: var(--bg); border-color: var(--line-strong); box-shadow: none; }
 .st-inl[data-edit] input.st-name:focus-visible { border-color: var(--accent-ink); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 30%, transparent); }
 .st-inl-b { display: flex; gap: 4px; }
 .st-inl[data-edit] [data-act="nameEdit"] { display: none; }
@@ -128,7 +128,7 @@ button.who:active { transform: scale(0.97); }
 
 /* ---------- uso del plan ---------- */
 .st-plan { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; }
-.st-plan-n { font: 600 22px/1.2 var(--display); letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.st-plan-n { font: 400 24px/1.2 var(--display); letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .st-plan-n .st-chip { font-family: var(--font); letter-spacing: 0; }
 .st-plan-p { margin-top: 4px; color: var(--text-2); }
 .st-use { display: grid; gap: 8px; padding: 12px 0; }
@@ -216,7 +216,7 @@ button.who:active { transform: scale(0.97); }
 /* ---------- ventana (hoja) ---------- */
 html.st-lock { overflow: hidden; scrollbar-gutter: stable; }
 .st-modal { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 16px; overscroll-behavior: contain; }
-.st-mback { position: absolute; inset: 0; background: oklch(0 0 0 / 0.45); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); opacity: 0; transition: opacity 160ms var(--ease-out); }
+.st-mback { position: absolute; inset: 0; background: var(--scrim); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(5px); opacity: 0; transition: opacity 160ms var(--ease-out); }
 .st-modal[data-open] .st-mback { opacity: 1; transition-duration: 200ms; }
 .st-mpanel { position: relative; width: 100%; max-width: 480px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-2), var(--inset);
   opacity: 0; transform: scale(0.96); transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out); }
@@ -238,7 +238,7 @@ html.st-lock { overflow: hidden; scrollbar-gutter: stable; }
 .st-pl { display: grid; align-content: start; gap: 10px; padding: 16px; border-radius: var(--r-md); background: var(--s2); border: 1px solid var(--line); }
 .st-pl[data-cur] { border-color: var(--accent-ink); }
 .st-pl h3 { font-size: 17px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.st-pl-p { font: 600 26px/1.1 var(--display); letter-spacing: -0.03em; }
+.st-pl-p { font: 800 26px/1.1 var(--font); letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
 .st-pl-p small { font: 400 13px var(--font); color: var(--text-3); letter-spacing: 0; }
 .st-pl dl { display: grid; gap: 4px; margin: 0; font-size: 14px; }
 .st-pl dl div { display: flex; justify-content: space-between; gap: 8px; }

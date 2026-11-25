@@ -99,7 +99,7 @@
 .hub-ck { width: 18px; height: 18px; display: inline-grid; place-items: center; color: var(--accent-ink); flex: none; }
 
 /* ---- hoja modal ---- */
-.hub-scrim { position: fixed; inset: 0; z-index: 69; background: oklch(0.1 0.02 255 / 0.45); opacity: 0; transition: opacity 200ms var(--ease-out); display: none; }
+.hub-scrim { position: fixed; inset: 0; z-index: 69; background: var(--scrim); opacity: 0; transition: opacity 200ms var(--ease-out); display: none; }
 .hub-scrim.on { opacity: 1; }
 .hub-scrim-s { display: block; z-index: 84; }
 .hub-sheet { position: fixed; z-index: 85; left: 50%; top: 50%; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 20px; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-2), var(--inset); opacity: 0; transform: translate(-50%, -48%); transition: opacity 180ms var(--ease-out), transform 200ms var(--ease-out); }

@@ -13,7 +13,7 @@
 #secTracker > * { min-width: 0; }
 .tk-head { flex-wrap: wrap; align-items: flex-end; }
 .tk-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.tk-chip { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; margin-right: -4px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in oklch, var(--on-accent) 16%, transparent); font-variant-numeric: tabular-nums; }
+.tk-chip { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; margin-right: -4px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--on-primary) 18%, transparent); font-variant-numeric: tabular-nums; }
 .tk-chip:empty { display: none; }
 
 .tk-hero { container-type: inline-size; padding: 0; overflow: hidden; }

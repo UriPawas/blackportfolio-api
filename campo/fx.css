@@ -23,15 +23,15 @@
 .btn-primary { overflow: hidden; isolation: isolate; }
 .btn-primary::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
-  background: radial-gradient(120px circle at var(--mx) var(--my), color-mix(in oklch, var(--light) 24%, transparent), transparent 70%);
+  background: radial-gradient(120px circle at var(--mx) var(--my), color-mix(in srgb, var(--accent) 38%, transparent), transparent 70%);
   transition: opacity var(--d-state) var(--ease-out), --mx 140ms var(--ease-out), --my 140ms var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) { .btn-primary:hover::before { opacity: 1; } }
-@media (hover: hover) { .btn-primary:hover { background: color-mix(in oklch, var(--accent), white 6%); } }
+@media (hover: hover) { .btn-primary:hover { background: var(--primary-hover); } }
 
 /* carga y éxito: la etiqueta se queda en su sitio (el ancho no cambia). El estado se pone con data-state. */
 .btn .bt-spin, .btn .bt-ok { position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; opacity: 0; pointer-events: none; transition: opacity 120ms var(--ease-out); }
-.btn-primary .bt-spin, .btn-primary .bt-ok { color: var(--on-accent); }
+.btn-primary .bt-spin, .btn-primary .bt-ok { color: var(--on-primary); }
 .btn-secondary .bt-spin, .btn-secondary .bt-ok { color: var(--text); }
 .bt-spin circle { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 28 72; transform-origin: center; }
 .bt-ok path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }

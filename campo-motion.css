@@ -1,0 +1,314 @@
+/* Portify · Campo · capa de movimiento (portada y acceso). Aditiva: no cambia nada de lo que ya existe si se quita este archivo.
+   Piezas portadas de 21st.dev (Magic UI de Dillion Verma, Aceternity UI de Manu Arora) a CSS + JS puro; ver campo-motion.js.
+   Reglas: solo transform, opacity, filter y propiedades registradas; los bucles solo corren con .js-motion (el script los pausa
+   fuera de pantalla y con la pestaña oculta); con prefers-reduced-motion todo queda estático y completo. */
+
+@property --mo-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+/* ---------- Marquee (magicui/marquee): cinta de cotizaciones bajo el héroe. Espacio reservado aunque no haya JS ---------- */
+.tape { max-width: var(--maxw); margin: var(--s-6) auto 0; padding: 0 var(--gutter); height: 44px; display: flex; align-items: center; gap: 12px; }
+.tape-lab { flex: none; font-size: 12px; font-weight: 600; color: var(--text-3); padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--s1); white-space: nowrap; }
+.tape-lab:empty { display: none; }
+.tape-vp { flex: 1; min-width: 0; height: 100%; overflow: hidden; display: flex; align-items: center; border-block: 1px solid var(--line); --gap: 28px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); }
+.tp-g { display: flex; flex: none; gap: var(--gap); padding-right: var(--gap); }
+.tp-i { display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; font-size: 13px; }
+.tp-n { color: var(--text-2); font-weight: 500; }
+.tp-i b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tp-i .mkt-px { display: inline-flex; align-items: baseline; }
+.tp-i .delta { font-size: 12.5px; }
+.tp-msg { padding: 0 16px; font-size: 13px; color: var(--text-3); white-space: nowrap; }
+.js-motion .tp-g.mo-run { animation: mo-marquee var(--dur, 40s) linear infinite; }
+.tape-vp:hover .tp-g, .tape.mo-off .tp-g, .mo-hidden .tp-g { animation-play-state: paused; }
+@keyframes mo-marquee { to { transform: translateX(-100%); } }
+@media (max-width: 640px) { .tape { margin-top: var(--s-5); } .tape-lab { display: none; } }
+
+/* ---------- Number Ticker (magicui/number-ticker): durante la cuenta el ancho queda fijo ---------- */
+.mo-tk { display: inline-block; text-align: inherit; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ---------- Blur Fade / Text Animate (magicui): h1 palabra por palabra; h2 por renglón sobre el revelado existente ---------- */
+  body.intro .hero-copy > h1.mo-words { animation: none; }
+  .mo-words .mo-w { display: inline-block; animation: mo-blur 420ms var(--ease-out) backwards; animation-delay: calc(80ms + var(--w) * 55ms); }
+  @keyframes mo-blur { from { opacity: 0; filter: blur(8px); transform: translateY(8px); } }
+  .js-motion .sr-i { animation: mo-unblur 560ms var(--ease-out) backwards; }
+  .js-motion .sr-m:nth-child(2) .sr-i { animation-delay: 90ms; }
+  .js-motion .sr-m:nth-child(3) .sr-i { animation-delay: 180ms; }
+  @keyframes mo-unblur { from { filter: blur(6px); } }
+
+  /* ---------- Shiny Button (magicui/shiny-button): un barrido al entrar y otro al apuntar; sin bucle ---------- */
+  .mo-shiny { overflow: hidden; isolation: isolate; }
+  .mo-shiny::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; transform: translateX(-110%);
+    background: linear-gradient(-75deg, transparent 35%, color-mix(in srgb, var(--accent) 55%, transparent) 50%, transparent 65%); }
+  .js-motion .mo-shiny::after { animation: mo-shine 760ms var(--ease-in-out) 1300ms; }
+  .js-motion .mo-shiny:is(:hover, :focus-visible)::after { animation: mo-shine2 760ms var(--ease-in-out); }
+  @keyframes mo-shine { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
+  @keyframes mo-shine2 { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
+
+  /* ---------- Aurora Background (aceternity/aurora-background): la malla índigo del héroe deriva muy despacio ---------- */
+  .js-motion .hero { position: relative; isolation: isolate; }
+  .js-motion .hero::before { content: ""; position: absolute; z-index: -1; pointer-events: none; top: -96px; left: 50%; width: 100vw; height: 860px; margin-left: -50vw;
+    background: radial-gradient(38% 46% at 26% 28%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
+                radial-gradient(30% 40% at 74% 62%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%);
+    -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent);
+    animation: mo-aurora 36s var(--ease-in-out) infinite alternate; }
+  .js-motion .hero.mo-off::before, .mo-hidden .hero::before { animation-play-state: paused; }
+  @keyframes mo-aurora { from { transform: translate3d(-5%, -2%, 0) scale(1); } to { transform: translate3d(5%, 3%, 0) scale(1.1); } }
+
+  /* ---------- Border Beam (magicui/border-beam): un haz recorre el borde del plan destacado ---------- */
+  .mo-beam { position: absolute; inset: -1px; z-index: 1; border-radius: inherit; border: 1.5px solid transparent; pointer-events: none;
+    -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0) border-box; -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) padding-box exclude, linear-gradient(#000 0 0) border-box; }
+  .mo-beam::before { content: ""; position: absolute; width: 96px; aspect-ratio: 1; offset-path: rect(0 auto auto 0 round 96px); offset-anchor: 90% 50%;
+    background: linear-gradient(to left, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent), transparent); }
+  .js-motion .mo-beam::before { animation: mo-beam 9s linear infinite; }
+  @keyframes mo-beam { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+  @supports not (offset-path: rect(0 auto auto 0)) {
+    .mo-beam::before { display: none; }
+    .mo-beam { background: conic-gradient(from var(--mo-a), transparent 0 80%, var(--accent) 92%, transparent) border-box; }
+    .js-motion .mo-beam { animation: mo-spin 9s linear infinite; }
+    @keyframes mo-spin { to { --mo-a: 360deg; } }
+  }
+  .mo-off .mo-beam::before, .mo-off .mo-beam, .mo-hidden .mo-beam::before, .mo-hidden .mo-beam { animation-play-state: paused; }
+
+  /* ---------- motion graphics de capacidades: corren una vez, al entrar (.mo-play); sin estado oculto previo ---------- */
+  .mo-play .mf-sl { animation: mo-fan 900ms var(--ease-expo) backwards; animation-delay: calc(var(--k) * 60ms); }
+  @keyframes mo-fan { from { transform: rotate(0deg); opacity: 0; } }
+  .mo-play .mf-ln { animation: mo-draw 1100ms var(--ease-out) backwards 120ms; }
+  @keyframes mo-draw { from { stroke-dashoffset: 1; } }
+  .mo-play .mf-ar { animation: mo-in 420ms var(--ease-out) backwards 700ms; }
+  .mo-play .mf-bar { animation: mo-grow 620ms var(--ease-expo) backwards; animation-delay: calc(200ms + var(--k) * 70ms); }
+  .mo-play .mf-h { animation: mo-grow 560ms var(--ease-expo) backwards; animation-delay: calc(300ms + var(--k) * 40ms); }
+  .mo-play .mf-bell { animation: mo-draw 900ms var(--ease-out) backwards 760ms; }
+  .mo-play .mf-ctr { animation: mo-in 420ms var(--ease-out) backwards 520ms; }
+  @keyframes mo-grow { from { transform: scaleY(0); } }
+  @keyframes mo-in { from { opacity: 0; } }
+}
+
+/* ---------- Glowing Effect (aceternity/glowing-effect) + Card Spotlight (aceternity/card-spotlight) ----------
+   Reusa la luz del puntero que campo-landing.js ya pone en los planes (--lx/--ly); campo-motion.js la extiende a las tarjetas de capacidades. */
+.cap { position: relative; isolation: isolate; --lx: 50%; --ly: 0%; }
+.cap::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 200ms var(--ease-out);
+  background: radial-gradient(260px circle at var(--lx) var(--ly), color-mix(in oklch, var(--accent) 10%, transparent), transparent 70%); }
+.cap::before, .plan:not(:has(.mo-beam))::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none; opacity: 0; transition: opacity 240ms var(--ease-out);
+  background: radial-gradient(160px circle at var(--lx) var(--ly), color-mix(in srgb, var(--accent) 75%, transparent), transparent 72%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+@media (hover: hover) and (pointer: fine) { .cap:hover::after, .cap:hover::before, .plan:hover::before { opacity: 1; } }
+
+/* ---------- figuras de capacidades (espacio reservado; se ven completas sin JS) ---------- */
+.mf { margin: 0 0 4px; height: 132px; border-radius: var(--r-md); background: var(--s2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 18px; padding: 12px 16px; overflow: hidden; }
+:root[data-theme="dark"] .mf { background: color-mix(in srgb, var(--s2) 55%, var(--s1)); }
+.mf svg { display: block; height: 100%; width: auto; max-width: 100%; overflow: visible; }
+.mf text { font: 600 11px var(--font); fill: var(--text-3); }
+.mf .mf-big { font: 700 18px var(--font); fill: var(--text); }
+.mf-sl { fill: none; stroke-width: 14; transform-box: view-box; transform-origin: 50px 50px; transform: rotate(calc(var(--o) * 3.6deg)); }
+.mf-ln, .mf-bell { fill: none; stroke: var(--accent-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
+.mf-bell { stroke: var(--text-3); stroke-width: 1.4; }
+.mf-ar { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
+.mf-bar, .mf-h { transform-box: fill-box; transform-origin: 50% 100%; }
+.mf-bar { fill: var(--accent); } .mf-h { fill: color-mix(in srgb, var(--accent) 45%, var(--s3)); }
+.mf-bar.lo { fill: color-mix(in srgb, var(--accent) 40%, var(--s3)); }
+.mf-axis { stroke: var(--line-strong); stroke-width: 1; }
+.mf-leg { display: grid; gap: 3px; font-size: 11.5px; line-height: 1.3; color: var(--text-2); }
+.mf-leg span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mf-leg i { width: 8px; height: 8px; border-radius: 2px; background: var(--c); flex: none; }
+.mf-trio { justify-content: space-between; gap: 10px; }
+.mf-trio svg { flex: 1 1 0; min-width: 0; }
+@media (max-width: 330px) { .mf-leg { display: none; } }
+
+/* ---------- Scroll Progress (magicui/scroll-progress): la barra .sr-prog ya existía; solo se afina al estilo índigo ---------- */
+.sr-prog { height: 2px; background: linear-gradient(90deg, var(--accent-ink), var(--accent)); }
+
+/* ---------- acceso (login.html, registro.html): solo CSS ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .acc .acc-form { animation: mo-card 420ms var(--ease-out) backwards 60ms; }
+  .acc .acc-visual, .access--reg .acc-intro { animation: mo-in 420ms var(--ease-out) backwards 160ms; }
+  @keyframes mo-card { from { opacity: 0; transform: translateY(10px) scale(0.99); } }
+  .acc input[aria-invalid="true"], .acc .form-row.has-error input, .acc .consent.is-missing input { animation: mo-shake 320ms var(--ease-out); }
+  @keyframes mo-shake { 25% { transform: translateX(-4px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-1.5px); } 100% { transform: none; } }
+  .acc .form-message:is(.error, .success, .info), .acc .field-error-msg { animation: mo-drop 280ms var(--ease-out); }
+  @keyframes mo-drop { from { opacity: 0; transform: translateY(-4px); } }
+  .acc .verify, .acc #loginBetaRow { animation: mo-step 380ms var(--ease-out) backwards; }
+  @keyframes mo-step { from { opacity: 0; transform: translateX(12px); } }
+}
+.mf .k1 { --c: var(--accent); } .mf .k2 { --c: color-mix(in srgb, var(--accent) 72%, var(--s1)); } .mf .k3 { --c: color-mix(in srgb, var(--accent) 50%, var(--s1)); }
+.mf .k4 { --c: color-mix(in srgb, var(--accent) 32%, var(--s1)); } .mf .k5 { --c: color-mix(in srgb, var(--text-3) 55%, var(--s1)); } .mf .k6 { --c: var(--gain); }
+.mf-sl { stroke: var(--c); }
+
+/* =====================================================================================================================
+   Tercera pasada: fondos WebGL (campo-shaders.js) y animaciones a medida (campo-motion.js).
+   Los lienzos solo existen si hay WebGL; sin él, .sh-on no se pone y manda la aurora CSS de arriba.
+   ===================================================================================================================== */
+.sh-cv { position: absolute; pointer-events: none; display: block; }
+
+/* héroe: la aurora WebGL sustituye a la CSS. Vive alrededor y detrás de la tarjeta, que queda como superficie esmerilada */
+.hero.sh-on { position: relative; isolation: isolate; }
+.js-motion .hero.sh-on::before { display: none; }
+.sh-hero { z-index: -1; top: -96px; left: 50%; width: 100vw; margin-left: -50vw; height: calc(100% + 240px);
+  -webkit-mask-image: radial-gradient(95% 85% at 66% 38%, #000 28%, transparent 76%); mask-image: radial-gradient(95% 85% at 66% 38%, #000 28%, transparent 76%); }
+.hero.sh-on .hero-stage { background: color-mix(in srgb, var(--s1) 84%, transparent); -webkit-backdrop-filter: blur(20px) saturate(1.1); backdrop-filter: blur(20px) saturate(1.1); }
+:root[data-theme="dark"] .hero.sh-on .hero-stage { background: color-mix(in srgb, var(--s1) 80%, transparent); }
+
+/* rejilla viva dentro de las áreas de trazado: debajo de las series (z-index -1 dentro de un contexto aislado) */
+.cd-plot.sh-on, .mkt-cv.sh-on, .cv-wrap.sh-on { isolation: isolate; }
+.sh-grid { z-index: -1; inset: 0; width: 100%; height: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 90%, transparent), linear-gradient(transparent, #000 8%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 90%, transparent), linear-gradient(transparent, #000 8%, #000 88%, transparent);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
+.cd-plot .sh-grid { -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 calc(100% - 100px), transparent calc(100% - 70px)), linear-gradient(transparent, #000 6%, #000 calc(100% - 34px), transparent calc(100% - 24px));
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 calc(100% - 100px), transparent calc(100% - 70px)), linear-gradient(transparent, #000 6%, #000 calc(100% - 34px), transparent calc(100% - 24px)); }
+.cd-plot .sh-fx { z-index: 1; pointer-events: none; }
+
+/* banda de Planes: seda a todo lo ancho, desvanecida arriba y abajo */
+#plans.sh-on { position: relative; isolation: isolate; }
+.sh-band { z-index: -1; top: 0; left: 50%; width: 100vw; margin-left: -50vw; height: calc(100% + 64px);
+  -webkit-mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); }
+
+/* pie: líneas de flujo + resplandor + grano */
+.site-foot.sh-on { isolation: isolate; }
+.sh-foot { z-index: -1; inset: 0; width: 100%; height: 100%; }
+
+/* app: encabezado del Inicio */
+.app-head.sh-on { position: relative; isolation: isolate; }
+.sh-apphead { z-index: -1; top: -40px; left: -48px; width: calc(100% + 96px); height: calc(100% + 72px);
+  -webkit-mask-image: radial-gradient(70% 100% at 22% 40%, #000 25%, transparent 80%); mask-image: radial-gradient(70% 100% at 22% 40%, #000 25%, transparent 80%); }
+
+/* ---------- tarjetas de mercado: inclinación 3D con paralaje interno y luz especular ---------- */
+.mkt-band { position: relative; }
+.mkc { position: relative; }
+.mkc::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 220ms var(--ease-out);
+  background: radial-gradient(160px circle at var(--lx, 50%) var(--ly, 0%), color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%); }
+.mkc.mo-tilt { transform: perspective(640px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-2px); transition: transform 90ms linear, box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.mkc.mo-tilt::after { opacity: 1; }
+.mkc.mo-tilt > * { transform: translate3d(var(--px, 0px), var(--py, 0px), 0); transition: transform 90ms linear; }
+.mkc > * { transition: transform 420ms var(--ease-spring); }
+/* indicador de la tarjeta elegida: se estira de una tarjeta a otra (FLIP) */
+.mo-ind { position: absolute; left: 0; top: 0; height: 2px; width: 10px; border-radius: 2px; pointer-events: none; z-index: 2; transform-origin: 0 50%;
+  background: linear-gradient(90deg, transparent, var(--accent) 18%, var(--accent) 82%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+/* ---------- subrayado dibujado a mano bajo una palabra por sección ---------- */
+.mo-ul { position: absolute; pointer-events: none; overflow: visible; z-index: 0; }
+.mo-ul path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0.9; }
+.mo-ul.on path { stroke-dashoffset: 0; }
+@media (prefers-reduced-motion: no-preference) { .mo-ul.on.mo-anim path { transition: stroke-dashoffset 1000ms var(--ease-out); } }
+
+/* ---------- odómetro de precios: el texto real queda para lectores de pantalla ---------- */
+.price.mo-odo-on b[data-price] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mo-odo { display: inline-flex; align-items: baseline; }
+.mo-odo i { font-style: normal; }
+.mo-odo .od { display: inline-block; height: 1.12em; line-height: 1.12em; overflow: hidden; vertical-align: bottom; position: relative; }
+.mo-odo .od-s { display: flex; flex-direction: column; transform: translateY(calc(var(--v, 0) * -1.12em)); }
+.mo-odo .od-s i { display: block; height: 1.12em; text-align: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .mo-odo .od-s { transition: transform 760ms var(--ease-expo); transition-delay: calc(var(--i, 0) * 70ms); }
+  .mo-odo.mo-flip .od { animation: mo-blurroll 760ms var(--ease-out); animation-delay: calc(var(--i, 0) * 70ms); }
+  @keyframes mo-blurroll { 30% { filter: blur(1.2px); } }
+}
+
+/* ---------- plan destacado: respira y el haz del borde gana presencia ---------- */
+.mo-beam { border-width: 2px; }
+.mo-beam::before { width: 132px; background: linear-gradient(to left, var(--accent), color-mix(in srgb, var(--accent) 50%, transparent) 40%, transparent); }
+.mo-halo { position: absolute; inset: 0; z-index: -2; border-radius: inherit; pointer-events: none; opacity: 0.55;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 18px 60px -12px color-mix(in srgb, var(--accent) 45%, transparent); }
+.mo-glow { position: absolute; inset: -1px; z-index: -1; border-radius: inherit; pointer-events: none; }
+.mo-glow::before { content: ""; position: absolute; width: 70px; aspect-ratio: 1; offset-path: rect(0 auto auto 0 round 96px); offset-anchor: 50% 50%; offset-rotate: 0deg;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 40%, transparent), transparent); filter: blur(10px); }
+@supports not (offset-path: rect(0 auto auto 0)) { .mo-glow { display: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .js-motion .mo-halo { animation: mo-breathe 6.5s var(--ease-in-out) infinite; }
+  @keyframes mo-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+  .js-motion .mo-glow::before { animation: mo-beam 9s linear infinite; }
+  .mo-off .mo-halo, .mo-off .mo-glow::before, .mo-hidden .mo-halo, .mo-hidden .mo-glow::before { animation-play-state: paused; }
+  .plan.mo-pulse .mo-halo { animation: mo-pulse 900ms var(--ease-out); }
+  @keyframes mo-pulse { 0% { opacity: 0.5; } 35% { opacity: 1; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 22px 70px -10px color-mix(in srgb, var(--accent) 60%, transparent); } 100% { opacity: 0.55; } }
+}
+
+/* ---------- escenas ligadas al scroll (scroll-driven animations; respaldo con IntersectionObserver en JS) ---------- */
+.mo-rail { position: absolute; left: 10px; width: 2px; border-radius: 2px; pointer-events: none; transform-origin: 50% 0;
+  background: linear-gradient(var(--accent), color-mix(in srgb, var(--accent) 25%, transparent)); }
+.mo-rail::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.mo-rail.mo-pre { transform: scaleY(0); }
+.mo-rail.mo-in { transform: none; transition: transform 1100ms var(--ease-out); }
+@media (max-width: 640px) { .mo-rail { left: 4px; } }
+
+.mo-shield { display: none; }
+@media (min-width: 900px) {
+  #seguridad { position: relative; }
+  .mo-shield { display: block; position: absolute; right: var(--gutter); top: calc(var(--s-8) - 8px); width: 132px; height: 150px; overflow: visible; color: var(--accent-ink); pointer-events: none; }
+}
+.mo-shield .sp { transform-box: fill-box; transform-origin: 50% 50%; }
+.mo-shield .s-out { fill: color-mix(in srgb, var(--accent) 8%, transparent); stroke: currentColor; stroke-width: 2; }
+.mo-shield .s-in { fill: none; stroke: color-mix(in srgb, var(--accent) 55%, transparent); stroke-width: 1.4; stroke-dasharray: 3 4; }
+.mo-shield .s-body { fill: var(--s1); stroke: currentColor; stroke-width: 2; }
+.mo-shield .s-shackle { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.mo-shield .s-key { fill: currentColor; }
+.mo-shield.mo-pre .s-out { opacity: 0; transform: scale(0.86); }
+.mo-shield.mo-pre .s-in { opacity: 0; transform: scale(1.2) rotate(-12deg); }
+.mo-shield.mo-pre .s-body { opacity: 0; transform: translateY(18px); }
+.mo-shield.mo-pre .s-shackle { opacity: 0; transform: translateY(-16px); }
+.mo-shield.mo-pre .s-key { opacity: 0; transform: scale(0); }
+.mo-shield.mo-in .sp { transition: transform 900ms var(--ease-spring), opacity 500ms var(--ease-out); }
+.mo-shield.mo-in .s-in { transition-delay: 120ms; } .mo-shield.mo-in .s-body { transition-delay: 220ms; } .mo-shield.mo-in .s-shackle { transition-delay: 420ms; } .mo-shield.mo-in .s-key { transition-delay: 640ms; }
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .js-motion .hero-stage { animation: mo-par-stage linear both; animation-timeline: scroll(root); animation-range: 0 90vh; }
+    .js-motion .hero-copy { animation: mo-par-copy linear both; animation-timeline: scroll(root); animation-range: 0 90vh; }
+    .js-motion .sh-hero { animation: mo-par-bg linear both; animation-timeline: scroll(root); animation-range: 0 100vh; }
+    @keyframes mo-par-stage { to { transform: translateY(-36px); } }
+    @keyframes mo-par-copy { to { transform: translateY(-14px); } }
+    @keyframes mo-par-bg { to { transform: translateY(90px); } }
+    .js-motion .mo-rail.mo-tl { animation: mo-rail linear both; animation-timeline: view(); animation-range: entry 30% cover 60%; }
+    @keyframes mo-rail { from { transform: scaleY(0); } }
+    .js-motion #compare .crow:not(.hd) { animation: mo-row linear both; animation-timeline: view(); animation-range: entry 10% entry 90%; }
+    @keyframes mo-row { from { opacity: 0.25; transform: translateX(-8px); } }
+    .js-motion .mo-shield.mo-tl .sp { animation: var(--sa) linear both; animation-timeline: view(); animation-range: entry 20% cover 42%; }
+    .mo-shield .s-out { --sa: mo-s-out; } .mo-shield .s-in { --sa: mo-s-in; } .mo-shield .s-body { --sa: mo-s-body; } .mo-shield .s-shackle { --sa: mo-s-sh; } .mo-shield .s-key { --sa: mo-s-key; }
+    @keyframes mo-s-out { from { opacity: 0; transform: scale(0.86); } }
+    @keyframes mo-s-in { 0%, 20% { opacity: 0; transform: scale(1.2) rotate(-12deg); } }
+    @keyframes mo-s-body { 0%, 35% { opacity: 0; transform: translateY(18px); } }
+    @keyframes mo-s-sh { 0%, 55% { opacity: 0; transform: translateY(-16px); } }
+    @keyframes mo-s-key { 0%, 75% { opacity: 0; transform: scale(0); } }
+  }
+}
+
+/* ---------- CTA: halo magnético y onda al hacer clic ---------- */
+.mo-mag { translate: var(--mx, 0px) var(--my, 0px); transition: translate 520ms var(--ease-spring), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-spring), box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.mo-mag.mo-near { transition-duration: 120ms, var(--dur-fast), var(--dur-fast), var(--dur-fast), var(--dur-fast), var(--dur-fast); }
+.btn-primary.mo-mag.mo-near { box-shadow: var(--sh-btn), 0 6px 26px -6px color-mix(in srgb, var(--accent) 60%, transparent); }
+.mo-rip-host { overflow: hidden; isolation: isolate; }
+.mo-rip { position: absolute; z-index: -1; border-radius: 50%; pointer-events: none; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: currentColor; opacity: 0; }
+@media (prefers-reduced-motion: no-preference) { .mo-rip { animation: mo-rip 620ms var(--ease-out); } @keyframes mo-rip { from { opacity: 0.22; transform: scale(0); } to { opacity: 0; transform: scale(var(--rs, 20)); } } }
+
+/* ---------- capacidades: lazos sutiles tras la entrada ---------- */
+.mf-dot { fill: var(--accent-ink); }
+.mf-dot-h { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
+.mf .mf-sl { transition: opacity 220ms var(--ease-out), stroke-width 220ms var(--ease-out); }
+.mf[data-k] .mf-sl { opacity: 0.3; }
+.mf[data-k="1"] .mf-sl.k1, .mf[data-k="2"] .mf-sl.k2, .mf[data-k="3"] .mf-sl.k3, .mf[data-k="4"] .mf-sl.k4, .mf[data-k="5"] .mf-sl.k5, .mf[data-k="6"] .mf-sl.k6 { opacity: 1; stroke-width: 17; }
+.mf-leg span { transition: opacity 220ms var(--ease-out); }
+.mf[data-k] .mf-leg span { opacity: 0.45; }
+.mf[data-k="1"] .mf-leg .k1, .mf[data-k="2"] .mf-leg .k2, .mf[data-k="3"] .mf-leg .k3, .mf[data-k="4"] .mf-leg .k4, .mf[data-k="5"] .mf-leg .k5, .mf[data-k="6"] .mf-leg .k6 { opacity: 1; color: var(--text); font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) {
+  .mo-loop .mf-h { animation: mo-sample 7.2s var(--ease-in-out) infinite; animation-delay: calc(1.4s + var(--j, 0) * 0.5s); }
+  @keyframes mo-sample { 0%, 9%, 100% { fill: color-mix(in srgb, var(--accent) 45%, var(--s3)); } 4% { fill: var(--accent); } }
+  .mo-off .mf-h, .mo-hidden .mf-h { animation-play-state: paused; }
+}
+
+/* ---------- entrada de página (solo si no viene del tablero de campo-gate.js): el logo se dibuja ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .mo-intro .nav .brand .logo { stroke-dasharray: 80; animation: mo-logo 1100ms var(--ease-out) both; }
+  @keyframes mo-logo { from { stroke-dashoffset: 80; } to { stroke-dashoffset: 0; } }
+  .mo-intro .nav .brand span { animation: mo-blur 600ms var(--ease-out) both 350ms; }
+  .mo-hair { position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 50; pointer-events: none; transform-origin: 0 50%;
+    background: linear-gradient(90deg, transparent, var(--accent) 30%, color-mix(in srgb, var(--accent) 60%, #8b5cf6) 70%, transparent);
+    animation: mo-hair 1300ms var(--ease-out) both; }
+  @keyframes mo-hair { 0% { transform: scaleX(0); opacity: 1; } 65% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+}
+.sh-frozen .mo-hair { display: none; }
+.mkc.mo-tilt:active { transform: perspective(640px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(0.97); }
+
+/* En pantallas angostas el lienzo no puede salirse de la cabecera: ensanchaba la pagina. */
+@media (max-width: 760px) { .sh-apphead { left: 0; width: 100%; } }

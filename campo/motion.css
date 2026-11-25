@@ -1,0 +1,42 @@
+/* Campo · capa de movimiento de la app (solo CSS, aditiva). Complementa fx.css; no oculta nada en reposo.
+   Entrada escalonada al terminar la carga, pastilla de navegación y esqueleto con barrido compuesto. */
+@media (prefers-reduced-motion: no-preference) {
+  /* entrada: corre cuando #view-app deja de estar en carga (o al pintar, si no hay estado de carga) y cuando se muestra una sección */
+  #view-app:not([data-loading="true"]) .app-main > div:not([hidden]) > .app-head,
+  #view-app:not([data-loading="true"]) .app-main > .app-head { animation: mo-rise 360ms var(--ease-out) backwards; }
+  #view-app:not([data-loading="true"]) .ledger { animation: mo-rise 360ms var(--ease-out) backwards 60ms; }
+  #view-app:not([data-loading="true"]) .hub,
+  #view-app:not([data-loading="true"]) .app-grid > * { animation: mo-rise 380ms var(--ease-out) backwards 120ms; }
+  #view-app:not([data-loading="true"]) .app-grid > .col-side { animation-delay: 180ms; }
+  #secTracker:not([hidden]), #secInformes:not([hidden]), #secSettings:not([hidden]) { animation: mo-fade 240ms var(--ease-out) backwards; }
+  @keyframes mo-rise { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes mo-fade { from { opacity: 0; } }
+
+  /* filas del tracker: escalonadas solo mientras la lista marca data-enter (lo pone tracker-list.js al entrar) */
+  .tkl[data-enter] .tkl-row { animation: mo-rise 340ms var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 8) * 40ms); }
+
+  /* pastilla de navegación: al cambiar de sección la activa entra con un leve asentamiento */
+  .side-nav button.on { animation: mo-pill 280ms var(--ease-spring); }
+  @keyframes mo-pill { from { transform: scale(0.94); } }
+
+  /* esqueleto de widgets del inicio: mismo barrido compuesto (transform) que .skel de fx.css, en vez de mover el fondo */
+  .hw-skel i { position: relative; overflow: hidden; background: var(--s2); animation: none; }
+  .hw-skel i::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(100deg, transparent 30%, color-mix(in oklch, var(--accent) 10%, transparent) 50%, transparent 70%);
+    animation: mo-sweep 1.6s linear infinite; }
+  @keyframes mo-sweep { to { transform: translateX(100%); } }
+}
+
+/* fondos WebGL de la app (campo-shaders.js). Sin WebGL no existe el lienzo ni .sh-on y nada cambia. */
+.sh-cv { position: absolute; pointer-events: none; display: block; }
+.app-head.sh-on { position: relative; isolation: isolate; }
+.sh-apphead { z-index: -1; top: -40px; left: -48px; width: calc(100% + 96px); height: calc(100% + 72px);
+  -webkit-mask-image: radial-gradient(70% 100% at 22% 40%, #000 25%, transparent 80%); mask-image: radial-gradient(70% 100% at 22% 40%, #000 25%, transparent 80%); }
+.cv-wrap.sh-on { isolation: isolate; }
+.cv-wrap .sh-grid { z-index: -1; inset: 0; width: 100%; height: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 90%, transparent), linear-gradient(transparent, #000 8%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 90%, transparent), linear-gradient(transparent, #000 8%, #000 88%, transparent);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
+
+/* En pantallas angostas el lienzo no puede salirse de la cabecera: ensanchaba la pagina. */
+@media (max-width: 760px) { .sh-apphead { left: 0; width: 100%; } }

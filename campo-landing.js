@@ -342,7 +342,7 @@
     var mn = Math.min(Math.min.apply(null, pa), Math.min.apply(null, ba), 0), mx = Math.max(Math.max.apply(null, pa), Math.max.apply(null, ba), 0), pad = (mx - mn) * 0.1 || 1; mn -= pad; mx += pad;
     var pw = w - p.l - p.r, ph = h - p.t - p.b;
     var X = function (i) { return p.l + i / (n - 1) * pw; }, Y = function (v) { return p.t + (1 - (v - mn) / (mx - mn)) * ph; };
-    ctx.font = '11.5px "Familjen Grotesk", system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.font = '11.5px "Plus Jakarta Sans", system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     var step = nice((mx - mn) / 4), v0 = Math.ceil(mn / step) * step;
     for (var v = v0; v <= mx; v += step) {
       var y = Y(v); ctx.strokeStyle = rgba('--grid', 1); ctx.lineWidth = 1; ctx.setLineDash([]);

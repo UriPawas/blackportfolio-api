@@ -108,7 +108,7 @@
 .pwi-det { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--s1); min-width: 0; }
 .pwi-det > * { min-width: 0; }
 .pwi-dh { display: grid; gap: 2px; }
-.pwi-dh h3 { margin: 0; font-family: var(--display); font-size: 18px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: normal; }
+.pwi-dh h3 { margin: 0; font-family: var(--font); font-size: 18px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: normal; }
 .pwi-big { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .pwi-big > .num:first-child { font-size: clamp(28px, 8vw, 38px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
 .pwi-bgp { font-size: 14px; color: var(--text-2); }

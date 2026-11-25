@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..800&family=DM+Serif+Display&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=4">
   <script>
     (function(){
@@ -25,6 +25,25 @@
     .not-found-shell h1 { font-size: clamp(1.2rem, 3vw, 1.5rem); margin: 0 0 0.75rem; }
     .not-found-shell p { color: var(--muted); line-height: 1.65; margin-bottom: 2rem; }
     .not-found-actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+    /* lenguaje Valyndor sobre styles.css: zinc + índigo, Plus Jakarta Sans / DM Serif Display, botones en píldora */
+    :root { --v-bg: #fafafa; --v-s1: #ffffff; --v-line: #e4e4e7; --v-text: #18181b; --v-text-2: #52525b; --v-pri: #18181b; --v-on-pri: #ffffff; --v-acc: #6366f1;
+      --v-mesh: radial-gradient(ellipse 70% 50% at 20% -10%, rgba(99,102,241,.10), transparent 55%), radial-gradient(ellipse 60% 50% at 80% 110%, rgba(99,102,241,.06), transparent 55%); }
+    :root[data-theme="dark"] { --v-bg: #09090b; --v-s1: #18181b; --v-line: rgba(255,255,255,.13); --v-text: #fafafa; --v-text-2: #d4d4d8; --v-pri: #fafafa; --v-on-pri: #18181b; --v-acc: #818cf8;
+      --v-mesh: radial-gradient(ellipse 70% 50% at 20% -10%, rgba(129,140,248,.16), transparent 55%), radial-gradient(ellipse 60% 50% at 80% 110%, rgba(129,140,248,.08), transparent 55%); }
+    html, html[data-theme] body, body { font-family: "Plus Jakarta Sans", system-ui, sans-serif; background: var(--v-mesh), var(--v-bg); background-attachment: fixed; color: var(--v-text); }
+    body::before, body::after { display: none; }
+    .background-orb, .grid-overlay { display: none; }
+    .not-found-code { font-family: "DM Serif Display", Georgia, serif; font-weight: 400; letter-spacing: -0.02em; background: none; -webkit-text-fill-color: currentColor; color: var(--v-text); }
+    .not-found-code::after { content: "."; color: var(--v-acc); }
+    .not-found-shell h1 { font-weight: 700; letter-spacing: -0.02em; color: var(--v-text); }
+    .not-found-shell p { color: var(--v-text-2); }
+    .not-found-actions .button { border-radius: 999px; min-height: 44px; padding: 0 22px; font-weight: 600; box-shadow: none; transition: transform 180ms cubic-bezier(.34,1.56,.64,1), background-color 180ms; }
+    .not-found-actions .button::after { display: none; }
+    .not-found-actions .button.primary { background: var(--v-pri); color: var(--v-on-pri); }
+    .not-found-actions .button.secondary { background: var(--v-s1); color: var(--v-text); border: 1px solid var(--v-line); }
+    .not-found-actions .button:hover { transform: none; }
+    .not-found-actions .button:active { transform: scale(.97); }
+    .not-found-actions .button:focus-visible { outline: 2px solid var(--v-acc); outline-offset: 2px; }
   </style>
 </head>
 <body>
