@@ -15,14 +15,21 @@
   function norm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim(); }
   function info(sym) {
     var n = norm(sym), pc = posCls[n], c = pc ? norm(pc) : '';
-    if (/IPC|BMV/.test(n)) return { cls: 'idx', k: 't', t: 'IPC' };
-    if (/S&P ?500|SP500|^SPX/.test(n)) return { cls: 'idx', k: 't', t: '500' };
+    if (/IPC|BMV|^\^MXX$/.test(n)) return { cls: 'idx', k: 't', t: 'IPC' };
+    if (/S&P ?500|SP500|^SPX|^\^GSPC$/.test(n)) return { cls: 'idx', k: 't', t: '500' };
     if (/NASDAQ|NDX/.test(n)) return { cls: 'idx', k: 'n', t: '100' };
     if (/USD ?\/ ?MXN|USDMXN|MXN=X/.test(n)) return { cls: 'fx', k: 'fx' };
     if (/^BTC|BITCOIN/.test(n)) return { cls: 'crypto', k: 'btc' };
-    if (/^ORO\b|GOLD|XAU/.test(n)) return { cls: 'cmdty', k: 't', t: 'Au' };
+    if (/^ORO\b|GOLD|XAU|^GC=F$/.test(n)) return { cls: 'cmdty', k: 't', t: 'Au' };
     if (/CETES?/.test(n)) return { cls: 'debt', k: 't', t: 'CT' };
-    if (/BONO|\b10A\b|TREASUR|US10Y/.test(n)) return { cls: 'debt', k: 't', t: '10A' };
+    if (/BONO|\b10A\b|TREASUR|US10Y|^\^TNX$/.test(n)) return { cls: 'debt', k: 't', t: '10A' };
+    /* índices, divisas y futuros sin logo de empresa: marca dibujada, sin pedir /api/logo */
+    if (/^\^?VIX$/.test(n)) return { cls: 'idx', k: 't', t: 'VIX' };
+    if (/DXY|^DX-Y|INDICE DOLAR/.test(n)) return { cls: 'idx', k: 't', t: 'DXY' };
+    if (/WTI|PETROLEO|^CL=F$/.test(n)) return { cls: 'cmdty', k: 't', t: 'WTI' };
+    if (/^\^/.test(n)) return { cls: 'idx', k: 't', t: n.replace(/[^A-Z0-9]/g, '').slice(0, 3) || '·' };
+    if (/=X$/.test(n)) return { cls: 'fx', k: 'fx' };
+    if (/=F$/.test(n)) return { cls: 'cmdty', k: 't', t: n.replace(/=F$/, '').slice(0, 3) };
     var letter = (n.match(/[A-Z0-9]/) || ['?'])[0];
     if (/^ETF/.test(c) || ETF_RE.test(n)) return { cls: 'etf', k: 't', t: 'ETF' };
     if (/^ACCION/.test(c)) return { cls: 'stock', k: 't', t: letter };

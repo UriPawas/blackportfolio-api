@@ -2,7 +2,7 @@
    Fase de solo lectura: presenta tu cuenta, plan y límites reales (D.user, D.plans, CampoTracker) y no simula ninguna acción.
    Lo que cambia datos sensibles (contraseña, verificación en dos pasos, facturación, exportar o eliminar datos) se hace en la versión anterior (main-clasico.html).
    Preferencias reales y locales: tema (window.__campo.setTheme; clave campo-theme-pref), color del avatar (campo-tint) y restablecer el Inicio (window.__hub.reset).
-   Router de secciones (#inicio, #tracker, #informes, #ajustes/<cat>) intacto; expone window.CampoSections y window.__settings = { open(cat), cats() }. */
+   Router de secciones (#inicio, #tracker, #mercados[/<símbolo>], #informes, #ajustes/<cat>) intacto; expone window.CampoSections y window.__settings = { open(cat), cats() }. */
 (function () {
   'use strict';
   var D = window.PORTIFY_DEMO, CP = window.__campo;
@@ -11,7 +11,8 @@
   if (!D || !set || !home) return;
   if (!trk) { trk = doc.createElement('div'); trk.id = 'secTracker'; trk.hidden = true; set.parentNode.insertBefore(trk, set); }
   var inf = doc.getElementById('secInformes'); if (!inf) { inf = doc.createElement('div'); inf.id = 'secInformes'; inf.hidden = true; set.parentNode.insertBefore(inf, set); }
-  var els = { inicio: home, tracker: trk, informes: inf, ajustes: set };
+  var mer = doc.getElementById('secMercados'); if (!mer) { mer = doc.createElement('div'); mer.id = 'secMercados'; mer.hidden = true; set.parentNode.insertBefore(mer, set); }
+  var els = { inicio: home, tracker: trk, mercados: mer, informes: inf, ajustes: set };
 
   var $ = function (s, r) { return (r || doc).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || doc).querySelectorAll(s)); };
@@ -270,7 +271,7 @@
       setSideOn(to);
       if (to === 'ajustes') { measure(); if (then) then(); }
       else { window.dispatchEvent(new Event('resize')); requestAnimationFrame(function () { window.dispatchEvent(new Event('resize')); }); if (then) then(); }
-      if (animate) { var tgt = to === 'inicio' ? $('h1', home) : to === 'tracker' ? $('h1', trk) : to === 'informes' ? $('h1', inf) : (mode() === 'stack' && set.dataset.screen === 'detail' ? $('.st-cat:not([hidden]) .st-ct', set) : $('h1', set)); if (tgt) tgt.focus({ preventScroll: true }); }
+      if (animate) { var tgt = to === 'inicio' ? $('h1', home) : to === 'tracker' ? $('h1', trk) : to === 'mercados' ? $('h1', mer) : to === 'informes' ? $('h1', inf) : (mode() === 'stack' && set.dataset.screen === 'detail' ? $('.st-cat:not([hidden]) .st-ct', set) : $('h1', set)); if (tgt) tgt.focus({ preventScroll: true }); }
       if (animate && !reduce() && inEl.animate) inEl.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: EASE });
     }
     if (!animate || reduce() || !outEl.animate || outEl.hidden) finish();
@@ -284,11 +285,13 @@
   }
   function parse() {
     var tk = /^#tracker(?:\/([\w-]+)(?:\/[\w-]+)?)?$/.exec(location.hash); if (tk) return { sec: 'tracker', id: tk[1] || null };
+    var mk = /^#mercados(?:\/(.+))?$/.exec(location.hash); if (mk) return { sec: 'mercados', id: mk[1] || null };
     var ir = /^#informes(?:\/([\w-]+))?$/.exec(location.hash); if (ir) return { sec: 'informes', id: ir[1] || null };
     var m = /^#ajustes(?:\/([a-z]+))?$/.exec(location.hash); if (!m) return { sec: 'inicio' };
     return { sec: 'ajustes', cat: m[1] && panels[m[1]] ? m[1] : null };
   }
   function fireInf() { window.dispatchEvent(new CustomEvent('campo:route', { detail: { sec: 'informes', hash: location.hash } })); }
+  function fireMk() { window.dispatchEvent(new CustomEvent('campo:route', { detail: { sec: 'mercados', hash: location.hash } })); }
   function fireTk() { window.dispatchEvent(new CustomEvent('campo:route', { detail: { sec: 'tracker', hash: location.hash } })); }
   function route(animate) {
     if (doc.body.dataset.view !== 'app') return;
@@ -297,6 +300,7 @@
     try { window.dispatchEvent(new CustomEvent('campo:section', { detail: { sec: t.sec } })); } catch (e) { }
     if (t.sec === 'inicio') { if (sec !== 'inicio') showSec('inicio', animate); return; }
     if (t.sec === 'tracker') { if (sec !== 'tracker') showSec('tracker', animate, fireTk); else fireTk(); return; }
+    if (t.sec === 'mercados') { if (sec !== 'mercados') showSec('mercados', animate, fireMk); else fireMk(); return; }
     if (t.sec === 'informes') { if (sec !== 'informes') showSec('informes', animate, fireInf); else fireInf(); return; }
     if (sec !== 'ajustes') { showSec('ajustes', animate, function () { applyCat(t.cat, false, animate); }); return; }
     var want = t.cat || (mode() === 'split' ? S.lastCat : null);
@@ -310,7 +314,7 @@
   window.addEventListener('hashchange', function () { route(true); });
   new MutationObserver(function () {
     if (doc.body.dataset.view === 'app') route(false);
-    else if (sec !== 'inicio') { ++seq; home.hidden = false; set.hidden = true; trk.hidden = true; inf.hidden = true; sec = 'inicio'; setSideOn('inicio'); if (/^#(ajustes|tracker|informes)/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { } } }
+    else if (sec !== 'inicio') { ++seq; home.hidden = false; set.hidden = true; trk.hidden = true; inf.hidden = true; mer.hidden = true; sec = 'inicio'; setSideOn('inicio'); if (/^#(ajustes|tracker|mercados|informes)/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { } } }
   }).observe(doc.body, { attributes: true, attributeFilter: ['data-view'] });
   if (window.ResizeObserver) new ResizeObserver(function () { if (!set.hidden) measure(); }).observe(set);
 
@@ -319,13 +323,14 @@
     if (to === 'ajustes') navigate('#ajustes', false, { st: 1 });
     else if (to === 'tracker') { if (sec !== 'tracker' || location.hash !== '#tracker') navigate('#tracker', false, { st: 1 }); }
     else if (to === 'informes') { if (sec !== 'informes' || location.hash !== '#informes') navigate('#informes', false, { st: 1 }); }
+    else if (to === 'mercados') { if (sec !== 'mercados') navigate('#mercados', false, { st: 1 }); }
     else if (sec !== 'inicio') navigate('', false, { st: 1 });
   }); });
   /* API de secciones para otros módulos (Tracker): navigate(hash, replace) y show(nombre[, hash]); 'campo:route' se emite al resolver una ruta del Tracker */
   window.CampoSections = {
     current: function () { return sec; },
     navigate: function (h, replace) { navigate(h, !!replace, { st: 1 }); },
-    show: function (name, h) { navigate(h != null ? h : name === 'tracker' ? '#tracker' : name === 'informes' ? '#informes' : name === 'ajustes' ? '#ajustes' : '', false, { st: 1 }); }
+    show: function (name, h) { navigate(h != null ? h : name === 'tracker' ? '#tracker' : name === 'mercados' ? '#mercados' : name === 'informes' ? '#informes' : name === 'ajustes' ? '#ajustes' : '', false, { st: 1 }); }
   };
   whoBtn.addEventListener('click', function () { navigate('#ajustes/cuenta', false, { st: 1 }); });
   nav.addEventListener('click', function (e) {
