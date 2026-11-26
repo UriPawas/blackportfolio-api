@@ -1047,6 +1047,9 @@ def twofa_status(
     }
 
 
+_TWOFA_ALREADY_ON = "El 2FA ya está activo en esta cuenta. Para cambiar de autenticador, desactívalo primero con un código."
+
+
 @twofa_router.post("/setup")
 @limiter.limit("10/minute")
 def twofa_setup(
@@ -1056,9 +1059,15 @@ def twofa_setup(
 ):
     ensure_writable_account(token)
     uid = token["uid"]
+    cred = session.get(TotpCredential, uid)
+    # Con 2FA ya activo NO se puede iniciar otro alta: /setup + /verify-setup solo piden la sesión de
+    # Firebase, así que con solo la contraseña se reemplazaba el autenticador del dueño y se obtenía un
+    # token 2FA nuevo (bypass total, auditoría nov-2026). Para cambiar de autenticador: /disable (pide
+    # código o código de respaldo) y luego alta nueva.
+    if cred is not None and cred.enabled:
+        raise HTTPException(status_code=409, detail=_TWOFA_ALREADY_ON)
     secret = _generate_totp_secret()
     now = utc_now()
-    cred = session.get(TotpCredential, uid)
     if cred is None:
         cred = TotpCredential(
             firebase_uid=uid, secret=None, pending_secret=_totp_encrypt(secret),
@@ -1089,6 +1098,8 @@ def twofa_verify_setup(
     uid = token["uid"]
     _totp_guard(uid)
     cred = session.get(TotpCredential, uid)
+    if cred is not None and cred.enabled:
+        raise HTTPException(status_code=409, detail=_TWOFA_ALREADY_ON)  # defensa en profundidad: nunca reemplaza un secreto activo
     if not cred or not cred.pending_secret:
         raise HTTPException(status_code=400, detail="Sin proceso de activación pendiente. Reinícialo.")
     if not _verify_totp(_totp_decrypt(cred.pending_secret), body.code):

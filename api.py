@@ -1354,11 +1354,16 @@ _PROFILE_SECRET_KEYS = (
     "totpSecret", "totpPendingSecret", "totpEnabled",
     "stripeCustomerId", "stripeSubscriptionId",
 )
-_PROFILE_SERVER_KEYS = (
-    "plan", "selectedPlan", "checkoutReady",
-    "stripeCustomerId", "stripeSubscriptionId",
-    "billingStatus", "billingCycle", "billingCurrentPeriodEnd",
-)
+# LISTA BLANCA de lo que el cliente puede escribir en su perfil (clave -> tipo). Todo lo demás que vive en
+# profile_data lo escribe el servidor (Stripe, betas, el reloj de eventos de Stripe) y se IGNORA si llega
+# en el PATCH. Antes era una lista negra y el cliente podía fijar billingEventAt (congelaba los webhooks:
+# plan de pago gratis para siempre), betaGrant (beta hasta 2099), cancelAtPeriodEnd, etc. (auditoría nov-2026).
+_PROFILE_CLIENT_KEYS = {
+    "fullName": str, "avatarId": (str, int), "investorProfile": dict, "lastSeen": str,
+    "createdAt": str, "planSelectionCompleted": bool, "requestedPlan": str,
+}
+_PROFILE_MAX_BYTES = 16 * 1024
+_PROFILE_MAX_STR = 200
 
 @app.get("/api/account/profile")
 def account_profile(token: dict = Depends(verify_firebase_user), session=Depends(get_session)):
@@ -1379,11 +1384,22 @@ def account_profile_patch(
 ):
     ensure_writable_account(token)
     user = upsert_user(session, token)
-    incoming = dict(body or {})
-    incoming.pop("plan", None)  # el entitlement nunca se fija desde el cliente
-    for k in (*_PROFILE_SECRET_KEYS, *_PROFILE_SERVER_KEYS):
-        incoming.pop(k, None)
+    raw = body if isinstance(body, dict) else {}
+    incoming = {}
+    for k, kind in _PROFILE_CLIENT_KEYS.items():
+        v = raw.get(k)
+        if v is None:
+            continue
+        if isinstance(v, bool) and kind is not bool:  # bool es subclase de int: no se cuela como avatarId
+            continue
+        if not isinstance(v, kind) or (isinstance(v, str) and len(v) > _PROFILE_MAX_STR):
+            continue
+        incoming[k] = v
+    if len(json.dumps(incoming, default=str)) > _PROFILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Perfil demasiado grande.")
     merged = {k: v for k, v in (user.profile_data or {}).items() if k not in _PROFILE_SECRET_KEYS[:3]}
+    if merged.get("createdAt"):
+        incoming.pop("createdAt", None)  # la fecha de alta se fija una sola vez
     merged.update(incoming)
     user.profile_data = merged
     if incoming.get("fullName"):
