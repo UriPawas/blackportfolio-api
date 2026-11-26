@@ -5,7 +5,8 @@ son del servidor. Este script es SOLO LECTURA y marca lo sospechoso:
 
   · billingEventAt en el futuro  → congelaba los webhooks de Stripe de esa cuenta
   · betaGrant sin código de beta, o que vence mucho después de lo que da cualquier código
-  · claves de servidor presentes en cuentas que nunca pasaron por Stripe ni por un código de beta
+  · cancelAtPeriodEnd sin suscripción de Stripe
+  · 2FA reemplazado: alta repetida sin una baja en medio (el bypass de /2fa/setup)
 
 Requiere DATABASE_URL (corre en Railway):
 
@@ -20,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select
 
-from persistence import AppUser, BetaCode, get_engine, get_session
+from persistence import AppUser, BetaCode, SecurityActivity, get_engine, get_session
 
 MARGEN_FUTURO_S = 3600          # un evento de Stripe no puede ser "de mañana"
 VENCE_DE_MAS_DIAS = 400         # más allá de esto no hay código de beta legítimo
@@ -63,6 +64,24 @@ def main() -> int:
         if motivos:
             marcados += 1
             print(f"{u.firebase_uid}  plan={u.plan}  " + " | ".join(motivos))
+    # 2FA reemplazado: dos altas ('2fa_enabled') seguidas sin una baja ('2fa_disabled') en medio solo eran posibles
+    # con el hueco de /2fa/setup + /verify-setup (o, raro, tras una migración); el dueño legítimo siempre pasaba por /disable.
+    hist = {}
+    for a in s.execute(select(SecurityActivity).order_by(SecurityActivity.created_at)).scalars():
+        if a.event in ("2fa_enabled", "2fa_disabled", "2fa_migrated"):
+            hist.setdefault(a.firebase_uid, []).append(a)
+    for uid, evs in hist.items():
+        activo, repetido = False, None
+        for a in evs:
+            if a.event == "2fa_disabled":
+                activo = False
+            else:
+                if activo and a.event == "2fa_enabled":
+                    repetido = a.created_at
+                activo = True
+        if repetido:
+            marcados += 1
+            print(f"{uid}  2FA reemplazado sin desactivarlo antes (alta repetida el {repetido:%Y-%m-%d %H:%M})")
     print(f"\n{marcados} cuenta(s) sospechosa(s). Revísalas a mano antes de tocar nada: este script no modifica la base.")
     return 0
 
