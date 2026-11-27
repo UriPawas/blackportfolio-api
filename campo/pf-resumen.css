@@ -88,7 +88,7 @@
 .pfr-twb i { display: block; height: 100%; width: var(--w); background: var(--text-2); border-radius: 3px; transform-origin: left; }
 .pfr-twv { text-align: right; color: var(--text-2); }
 
-.pfr-pos { --cols: minmax(0, 1fr) 78px 58px 66px; }
+.pfr-pos { --cols: minmax(0, 1fr) 78px 58px 66px; container: pos / inline-size; }
 .pfr-ph, .pfr-pr { display: grid; grid-template-columns: var(--cols); column-gap: 8px; align-items: center; }
 .pfr-ph { border-bottom: 1px solid var(--line); }
 .pfr-sh { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; min-height: 44px; font-size: 12.5px; font-weight: 500; color: var(--text-3); cursor: pointer; border-radius: var(--r-sm); white-space: nowrap; }
@@ -108,7 +108,13 @@
 .pfr-pa svg, .pfr-pa .pfr-chip { flex: none; }
 .pfr-pn { display: grid; min-width: 0; line-height: 1.3; }
 .pfr-pn strong { font-size: 14.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pfr-pn span { display: none; font-size: 12.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pfr-pnm { display: none; font-size: 12.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* precios: columnas si el panel es ancho; si no, una segunda línea de la fila (nunca se pierden) */
+.pfr-hd, .pfr-pavg, .pfr-ppx { display: none; }
+.pfr-hd { align-items: center; justify-content: flex-end; min-height: 44px; font-size: 12.5px; font-weight: 500; color: var(--text-3); white-space: nowrap; cursor: help; }
+.pfr-pavg, .pfr-ppx { text-align: right; font-size: 13.5px; white-space: nowrap; }
+.pfr-pavg { color: var(--text-2); }
+.pfr-pns { grid-column: 1 / -1; padding: 0 0 10px 38px; margin-top: -4px; font-size: 12.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pfr-pw, .pfr-pv, .pfr-pd, .pfr-pg { text-align: right; font-size: 13.5px; white-space: nowrap; }
 .pfr-pd, .pfr-pg { font-size: 13px; }
 .pfr[data-hl] .pfr-seg:not(.is-on), .pfr[data-hl] .pfr-lg:not(.is-on) { opacity: 0.4; }
@@ -118,7 +124,7 @@
   .pfr-pos { --cols: minmax(0, 1fr) 48px 84px 62px 70px; }
   .pfr-sh[data-c="w"], .pfr-pw { display: inline-flex; }
   .pfr-pw { display: block; }
-  .pfr-pn span { display: block; }
+  .pfr-pnm { display: block; }
   .pfr-ro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (min-width: 900px) {
@@ -129,6 +135,13 @@
   .pfr-cols { grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1.5fr); }
   .pfr-comp, .pfr-pos { padding: 20px; }
   .pfr-pos { --cols: minmax(0, 1fr) 56px 96px 72px 84px; }
+}
+/* panel ancho (≥ 700 px de contenido): los dos precios pasan a columnas y la segunda línea desaparece */
+@container pos (min-width: 700px) {
+  .pfr-ph, .pfr-pr { --cols: minmax(0, 1fr) 52px 92px 100px 100px 68px 80px; }
+  .pfr-hd { display: inline-flex; }
+  .pfr-pavg, .pfr-ppx { display: block; }
+  .pfr-pns { display: none; }
 }
 @media (pointer: coarse) { .pfr-lg { min-height: 44px; } .pfr-tw { min-height: 36px; } }
 @media (prefers-reduced-motion: reduce) {

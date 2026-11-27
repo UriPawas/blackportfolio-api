@@ -215,7 +215,7 @@
     function dispCcy(c) { return c === 'USD' || c === 'MXN' ? c : 'MXN'; } /* otras monedas se muestran ya convertidas a pesos */
     function hp(tk, name, ccy) {
       var h = held[tk]; if (h) return h;
-      var e = ctx.paths[tk]; h = held[tk] = { ticker: tk, name: (e && e.name) || name || tk, ccy: e ? e.ccy : dispCcy(ccy), path: e ? e.path : null, lots: [], price: null, d1: 0, q: 0, avgQ: 0, avgC: 0 };
+      var e = ctx.paths[tk]; h = held[tk] = { ticker: tk, name: (e && e.name) || name || tk, ccy: e ? e.ccy : dispCcy(ccy), path: e ? e.path : null, lots: [], price: null, d1: 0, q: 0, avgQ: 0, avgC: 0, avgL: 0 };
       order.push(tk); return h;
     }
     function add(e) { e.seq = seq++; e.pf = P.id; e.real = true; ev.push(e); return e; }
@@ -262,14 +262,14 @@
         if (dep > 0.005) { cash += dep; add({ t: 'dep', idx: idx, date: o.d, mxn: r2(dep * fxP), cpf: dep, note: o.synth ? 'Aportación (posición capturada sin movimiento)' : 'Aportación para la compra de ' + tk, auto: true }); }
         cash -= costPf;
         add({ t: 'buy', idx: idx, date: o.d, mxn: r2(costPf * fxP), cpf: -costPf, tk: tk, name: h.name, qty: q, px: pxD, ccy: h.ccy, fx: fxD, fee: r2((comm + iva) * fxL), note: (o.synth ? 'Posición inicial ' : 'Compra ') + tk, synth: !!o.synth });
-        h.lots.push({ idx: idx, q: q }); h.q += q; h.avgQ += q; h.avgC += costPf * fxP;
+        h.lots.push({ idx: idx, q: q }); h.q += q; h.avgQ += q; h.avgC += costPf * fxP; h.avgL += ex ? netL * fxL : netL; /* avgL: costo en la moneda del activo, con comisión e IVA */
       } else if (typ === 'sell') {
         if (h.q <= EPS) { warn.push('Venta de ' + tk + ' del ' + o.d + ' sin posición previa: no se tomó en cuenta.'); return; }
         var qs = Math.min(q, h.q), f = qs / q;
         var procL = (fin(t.net) && t.net > 0 ? t.net : gross - comm - iva) * f, procPf = fin(t.cashApplied) && t.cashApplied > 0 ? t.cashApplied * f : procL * fxL / fxP;
         cash += procPf;
         add({ t: 'sell', idx: idx, date: o.d, mxn: r2(procPf * fxP), cpf: procPf, tk: tk, name: h.name, qty: qs, px: pxD, ccy: h.ccy, fx: fxD, fee: r2((comm + iva) * f * fxL), note: 'Venta ' + tk });
-        h.lots.push({ idx: idx, q: -qs }); var fr = h.avgQ > 0 ? Math.min(1, qs / h.avgQ) : 0; h.avgC -= h.avgC * fr; h.avgQ -= qs; h.q -= qs;
+        h.lots.push({ idx: idx, q: -qs }); var fr = h.avgQ > 0 ? Math.min(1, qs / h.avgQ) : 0; h.avgC -= h.avgC * fr; h.avgL -= h.avgL * fr; h.avgQ -= qs; h.q -= qs;
       } else if (typ === 'div') {
         var amtL = fin(t.net) && t.net > 0 ? t.net : gross, dPf = fin(t.cashApplied) && t.cashApplied > 0 ? t.cashApplied : amtL * fxL / fxP;
         if (!(dPf > 0)) return; cash += dPf;
@@ -290,7 +290,7 @@
       var c = h.avgQ > 0 ? h.avgC * Math.min(1, extra / h.avgQ) : 0, cp = c / fxA;
       add({ t: 'sell', idx: at.idx, date: at.d, mxn: r2(c), cpf: cp, tk: tk, name: h.name, qty: extra, px: h.avgQ > 0 ? (h.avgC / h.avgQ) / fxU : 0, ccy: h.ccy, fx: fxU, fee: 0, note: 'Ajuste: cantidad registrada en la posición', auto: true, adj: true });
       add({ t: 'wd', idx: at.idx, date: at.d, mxn: r2(c), cpf: -cp, note: 'Ajuste: cantidad registrada en la posición', auto: true, adj: true });
-      h.lots.push({ idx: at.idx, q: -extra }); h.avgC -= c; h.avgQ -= extra; h.q -= extra;
+      h.lots.push({ idx: at.idx, q: -extra }); h.avgC -= c; h.avgL -= h.avgQ > 0 ? h.avgL * Math.min(1, extra / h.avgQ) : 0; h.avgQ -= extra; h.q -= extra;
     });
 
     /* 5) el efectivo es el registrado (cashBalance); si la repetición no cuadra, la diferencia entra como ajuste */
@@ -333,7 +333,7 @@
       var q = 0; h.lots.forEach(function (l) { q += l.q; }); q = +q.toFixed(8); if (q <= 1e-9) return;
       var isU = h.ccy === 'USD', pos = (posBy[h.ticker] || [])[0], meta = ctx.paths[h.ticker];
       rows.push({ ticker: h.ticker, name: h.name, cls: meta ? meta.cls : clsOf(h.ticker, null, h.ccy), qty: q, price: h.price, prev: h.path[LAST - 1], d1: h.d1, ccy: h.ccy, isU: isU,
-        cost: r2(h.avgC), mv: q * h.price * (isU ? ctx.fx[LAST] : 1), local: q * h.price, avg: pos ? num(pos.avgPrice) || 0 : (h.avgQ > 0 ? h.avgC / h.avgQ : 0), stale: !!h.stale,
+        cost: r2(h.avgC), lcost: h.avgL, mv: q * h.price * (isU ? ctx.fx[LAST] : 1), local: q * h.price, avg: pos ? num(pos.avgPrice) || 0 : (h.avgQ > 0 ? h.avgC / h.avgQ : 0), stale: !!h.stale,
         fx1: isU ? ctx.fx[LAST] : 1, fx0: isU ? ctx.fx[LAST - 1] : 1 }); /* fx1/fx0: unidades de la base por unidad de su moneda, hoy y ayer */
     });
     return { id: P.id, name: sanitize(P.name, 120) || 'Portafolio', events: ev, rows: rows, V: V, F: F, Dc: Dc, Wc: Wc, cashAt: cashAt, usdLocal: usd, dates: grid,

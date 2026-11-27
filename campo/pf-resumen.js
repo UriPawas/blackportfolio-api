@@ -202,8 +202,8 @@
       for (var i = 0; i < TOT; i++) { V[i] += L.V[i]; F[i] += L.F[i]; Dc[i] += L.Dc[i]; Wc[i] += L.Wc[i]; cashAt[i] += L.cashAt[i]; }
       L.rows.forEach(function (r) {
         var m = by[r.ticker];
-        if (!m) { m = by[r.ticker] = { ticker: r.ticker, name: r.name, cls: r.cls, qty: 0, price: r.price, prev: r.prev, d1: r.d1, ccy: r.ccy, isU: r.isU, fx1: r.fx1, fx0: r.fx0, cost: 0, mv: 0, local: 0 }; rows.push(m); }
-        m.qty += r.qty; m.cost += r.cost; m.mv += r.mv; m.local += r.local;
+        if (!m) { m = by[r.ticker] = { ticker: r.ticker, name: r.name, cls: r.cls, qty: 0, price: r.price, prev: r.prev, d1: r.d1, ccy: r.ccy, isU: r.isU, fx1: r.fx1, fx0: r.fx0, cost: 0, mv: 0, local: 0, lcost: 0 }; rows.push(m); }
+        m.qty += r.qty; m.cost += r.cost; m.mv += r.mv; m.local += r.local; m.lcost += r.lcost || 0;
       });
     });
     ev.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.seq - b.seq; });
@@ -334,10 +334,19 @@
 
     var sortKey = 'mv', sortDir = -1;
     var COLS = [['ticker', 'Activo', 1], ['w', 'Peso', 0], ['mv', 'Valor', 0], ['d1', 'Día', 0], ['gp', 'Ganancia', 0]];
-    var heads = COLS.map(function (c) { return '<button type="button" class="pfr-sh" data-s="' + c[0] + '" data-c="' + c[0] + '"><span>' + c[1] + '</span><svg class="pfr-si" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M7 14l5 5 5-5"/></svg></button>'; }).join('');
+    var heads = COLS.map(function (c) {
+      /* los dos precios van entre Valor y Día; no se ordenan porque USD y MXN no son comparables */
+      var pre = c[0] === 'd1' ? '<span class="pfr-hd pfr-hd-avg" data-tip="Precio promedio de compra, con comisiones e IVA, en la moneda del activo">Precio prom.</span><span class="pfr-hd pfr-hd-px" data-tip="Precio actual del activo, en su moneda">Precio</span>' : '';
+      return pre + '<button type="button" class="pfr-sh" data-s="' + c[0] + '" data-c="' + c[0] + '"><span>' + c[1] + '</span><svg class="pfr-si" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M7 14l5 5 5-5"/></svg></button>';
+    }).join('');
+    /* Precios en la moneda del ACTIVO (no la de la vista): el promedio es el costo con comisión e IVA entre las unidades que quedan.
+       Si son pesos y la vista no lo es, lleva el código: un "$" pelado junto a un "US$" confundiría. */
+    function avgOf(r) { return r.lcost > 0 && r.qty > 0 ? r.lcost / r.qty : 0; }
+    function pxTxt(r, v) { if (!(v > 0)) return '—'; var c = r.ccy || BASE, sy = D.fmt.sym(c); return sy + fN(v, v < 1 ? 4 : 2) + (c !== BASE && sy === '$' ? ' ' + c : ''); }
     function rowHTML(r) {
-      return '<li class="pfr-prow" data-t="' + esc(r.ticker) + '" data-c="' + esc(r.cls) + '"><button type="button" class="pfr-pr" aria-label="' + esc(r.ticker) + ', ' + esc(r.name) + '. Ver ficha"><span class="pfr-pa">' + mark(r.ticker) + '<span class="pfr-pn"><strong>' + esc(r.ticker) + '</strong><span>' + esc(r.name) + '</span></span></span>' +
-        '<span class="pfr-pw num">' + fN(r.w * 100, 1) + ' %</span><span class="pfr-pv num">' + fM(r.mv) + '</span><span class="pfr-pd num ' + sgnCls(r.d1) + '">' + fP(r.d1) + '</span><span class="pfr-pg num ' + sgnCls(r.gp) + '">' + fP(r.gp, 1) + '</span></button></li>';
+      var av = pxTxt(r, avgOf(r)), px = pxTxt(r, r.price);
+      return '<li class="pfr-prow" data-t="' + esc(r.ticker) + '" data-c="' + esc(r.cls) + '"><button type="button" class="pfr-pr" aria-label="' + esc(r.ticker) + ', ' + esc(r.name) + '. Precio promedio con comisiones ' + esc(av) + ', precio actual ' + esc(px) + '. Ver ficha"><span class="pfr-pa">' + mark(r.ticker) + '<span class="pfr-pn"><strong>' + esc(r.ticker) + '</strong><span class="pfr-pnm">' + esc(r.name) + '</span></span></span>' +
+        '<span class="pfr-pw num">' + fN(r.w * 100, 1) + ' %</span><span class="pfr-pv num">' + fM(r.mv) + '</span><span class="pfr-pavg num">' + esc(av) + '</span><span class="pfr-ppx num">' + esc(px) + '</span><span class="pfr-pd num ' + sgnCls(r.d1) + '">' + fP(r.d1) + '</span><span class="pfr-pg num ' + sgnCls(r.gp) + '">' + fP(r.gp, 1) + '</span><span class="pfr-pns num">Prom. ' + esc(av) + ' · Precio ' + esc(px) + '</span></button></li>';
     }
     function sorted() { return L.rows.slice().sort(function (a, b) { var x = a[sortKey], y = b[sortKey]; if (sortKey === 'ticker') return sortDir * String(x).localeCompare(String(y)); return sortDir * (x - y) || a.ticker.localeCompare(b.ticker); }); }
 
