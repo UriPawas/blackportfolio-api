@@ -174,10 +174,10 @@
     return backBtn() + ct('Plan y facturación') +
       card('stH-plan', 'Tu plan', null,
         '<div class="st-plan"><div><div class="st-plan-n">' + esc(U.plan || 'Sin dato') + ' <span class="st-chip" data-k="acc">Plan actual</span></div>' +
-        (P ? '<p class="st-sub">Hasta ' + esc(String(P.portfolios)) + ' portafolios y ' + esc(String(P.positions)) + ' posiciones por portafolio.</p>' : '') + '</div>' +
+        (P ? '<p class="st-sub">' + (isFinite(+P.portfolios) && isFinite(+P.positions) ? 'Hasta ' + esc(String(P.portfolios)) + ' portafolios y ' + esc(String(P.positions)) + ' posiciones por portafolio.' : 'Portafolios y posiciones ilimitados.') + '</p>' : '') + '</div>' +
         '<div class="st-actions">' + classicLink('Administrar suscripción', 'btn-primary') + '</div></div>' +
         '<p class="st-note">El método de pago, las facturas y los cambios de plan se administran en la versión anterior de la app.</p>') +
-      card('stH-tabla', 'Planes', 'Comparación de límites. Solo lectura.', '<div class="st-plans">' + cols + '</div>');
+      card('stH-tabla', 'Planes', 'Comparación de límites. Solo lectura.', '<div class="st-plans-w"><div class="st-plans">' + cols + '</div></div>');
   }
 
   function bPrefs() {

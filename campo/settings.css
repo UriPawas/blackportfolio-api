@@ -240,6 +240,9 @@ html.st-lock { overflow: hidden; scrollbar-gutter: stable; }
 .st-mact { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .st-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
 .st-codes li { font-family: var(--mono); font-size: 15px; letter-spacing: 0.04em; text-align: center; padding: 10px 6px; border-radius: var(--r-sm); background: var(--s2); border: 1px solid var(--line); user-select: all; }
+/* Las consultas de contenedor de .st-plans necesitan un ancestro que sea contenedor: dentro de una .st-card no lo había
+   (solo existe en .st-mbody) y las 4 columnas quedaban fijas en móvil. El envoltorio lo es sin tocar el resto de la tarjeta. */
+.st-plans-w { container-type: inline-size; }
 .st-plans { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @container (max-width: 700px) { .st-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 420px) { .st-plans { grid-template-columns: minmax(0, 1fr); } }
