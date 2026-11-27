@@ -109,7 +109,7 @@
       <button class="on" aria-current="page" data-sec="inicio"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span>Inicio</span></button>
       <button data-sec="tracker"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg><span>Tracker</span></button>
       <button data-sec="mercados"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg><span>Mercados</span></button>
-      <button data-soon="Crear portafolio sigue en la versión anterior de la app (enlace abajo del menú)."><svg class="ic" aria-hidden="true"><use href="#i-cone"/></svg><span>Crear portafolio</span></button>
+      <button type="button" data-create><svg class="ic" aria-hidden="true"><use href="#i-cone"/></svg><span>Crear portafolio</span></button>
       <button data-sec="informes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg><span>Informes</span></button>
       <button data-sec="ajustes"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.5h3.4l.5 2.4 1.9.8 2.1-1.3 2.4 2.4-1.3 2.1.8 1.9 2.4.5v3.4l-2.4.5-.8 1.9 1.3 2.1-2.4 2.4-2.1-1.3-1.9.8-.5 2.4h-3.4l-.5-2.4-1.9-.8-2.1 1.3-2.4-2.4 1.3-2.1-.8-1.9-2.4-.5v-3.4l2.4-.5.8-1.9-1.3-2.1 2.4-2.4 2.1 1.3 1.9-.8.5-2.4Z"/><circle cx="12" cy="12" r="3"/></svg><span>Ajustes</span></button>
     </nav>
@@ -170,7 +170,7 @@
 <script src="auth.js?v=11"></script>
 <script>
   /* módulos de la app, en el orden del prototipo; campo/datos.js los carga cuando ya están los datos reales */
-  window.CAMPO_V = '15'; window.CAMPO_MODULES = ['tracker', 'pf-resumen', 'shell', 'mkt', 'app', 'hub', 'w1', 'w2', 'settings', 'pf-desempeno', 'pf-correl', 'pf-model',
+  window.CAMPO_V = '16'; window.CAMPO_MODULES = ['tracker', 'pf-resumen', 'shell', 'mkt', 'app', 'hub', 'w1', 'w2', 'settings', 'pf-desempeno', 'pf-correl', 'pf-model',
     'pf-rebal', 'pf-mc', 'pf-metas', 'pf-whatif', 'pf-tx', 'pf-div', 'report-model', 'brief', 'txsheet', 'report-deck', 'report-doc', 'informes', 'tracker-list', 'mercados-ind', 'mercados-chart', 'mercados', 'fx']
     .map(function (m) { return 'campo/' + m + '.js?v=' + window.CAMPO_V; });
 </script>

@@ -660,6 +660,8 @@
     T.on('hover', function (id) { var v = (id && typeof id === 'object') ? id.id : id; if (v !== hovered) hovered = v || null; setHL(v); });
     T.on('route', function (a) { var id = routeId(a), tb = tabFromHash(); if (id && id === cur && !detEl.hidden) { selectTab(tb, false); return; } tab = id ? tb : 'resumen'; go(id, true); });
     T.on('create', openCreate);
+    /* "Crear portafolio" del menú lateral (main.html): abre la hoja desde cualquier sección */
+    doc.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-create]'); if (b) { e.preventDefault(); T.emit('create'); } });
     T.on('import', openImport);
     render();
     var r0 = routeId(); if (r0) { cur = null; tab = tabFromHash(); go(r0, false); }

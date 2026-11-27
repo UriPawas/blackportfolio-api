@@ -13,7 +13,7 @@
     hist: 'Tus informes', empty: 'Aún no tienes informes', emptyD: 'Elige un portafolio y un periodo arriba y crea el primero. Se guarda solo la receta; los números se recalculan cada vez que lo abres.',
     abrir: 'Abrir', ren: 'Renombrar', del: 'Eliminar', undo: 'Deshacer', deleted: 'Informe eliminado', save: 'Guardar', cancel: 'Cancelar',
     back: 'Informes', print: 'Imprimir o guardar PDF', missing: 'Este informe no existe', missingD: 'Pudo haberse eliminado. Vuelve a tus informes.',
-    noRend: 'Este formato aún no está disponible en el prototipo.', badRange: 'Elige un rango con fechas de mercado dentro de los datos disponibles.',
+    noRend: 'Este formato aún no está disponible.', badRange: 'Elige un rango con fechas de mercado dentro de los datos disponibles.',
     badOrder: 'La fecha de inicio debe ser anterior a la final.', noPf: 'Aún no tienes portafolios para armar un informe.', noData: 'No hay sesiones en ese periodo.',
     foot: 'Los informes describen lo que pasó con tus datos; no son una recomendación de inversión.',
     limit: 'Tu plan Explorer incluye 1 informe al mes y ya usaste el de este mes.'

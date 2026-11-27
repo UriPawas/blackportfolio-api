@@ -73,7 +73,7 @@
           '<p class="txs-err" data-err role="alert" aria-live="assertive"></p>' +
         '</div>' +
         '<footer class="txs-ft"><button type="submit" class="btn btn-primary btn-block" data-submit disabled>Registrar compra</button>' +
-          '<p class="txs-note">' + (RL ? 'Se guarda en tu cuenta.' : 'Se guarda en este navegador (prototipo).') + '</p></footer></form>' +
+          '<p class="txs-note">' + (RL ? 'Se guarda en tu cuenta.' : 'Se guarda en este navegador.') + '</p></footer></form>' +
       '</div>';
     doc.body.appendChild(root_);
     var dlg = root_.querySelector('.txs'), form = root_.querySelector('form'), fieldsEl = root_.querySelector('[data-fields]'), prevEl = root_.querySelector('[data-prev]');
