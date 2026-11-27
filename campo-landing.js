@@ -381,24 +381,49 @@
     return attempt();
   }
 
-  /* marcas propias (no son marcas registradas): círculo tintado + monograma */
+  /* banderas en círculo, lingotes y logo de Bitcoin: formas planas con la paleta apagada de la marca (colores en campo-landing.css) */
+  var mkUid = 0;
+  var FLAG = {
+    us: '<rect width="36" height="36" class="fl-w"/><path class="fl-r" d="M0 0h36v5.14H0zM0 10.29h36v5.14H0zM0 20.57h36v5.14H0zM0 30.86h36V36H0z"/><rect width="20" height="20.6" class="fl-b"/>' +
+      '<g class="fl-w"><circle cx="8" cy="8.6" r="1.05"/><circle cx="12.6" cy="8.6" r="1.05"/><circle cx="17.2" cy="8.6" r="1.05"/><circle cx="10.3" cy="12.9" r="1.05"/><circle cx="14.9" cy="12.9" r="1.05"/><circle cx="8" cy="17.2" r="1.05"/><circle cx="12.6" cy="17.2" r="1.05"/><circle cx="17.2" cy="17.2" r="1.05"/></g>',
+    mx: '<rect width="12" height="36" class="fl-g"/><rect x="12" width="12" height="36" class="fl-w"/><rect x="24" width="12" height="36" class="fl-r"/><circle cx="18" cy="18" r="3.5" class="fl-o"/><circle cx="18" cy="18" r="1.3" class="fl-g"/>',
+    /* mitades para el par de divisas: cada bandera comprimida a medio círculo */
+    us_h: '<rect width="18" height="36" class="fl-w"/><path class="fl-r" d="M0 0h18v5.14H0zM0 10.29h18v5.14H0zM0 20.57h18v5.14H0zM0 30.86h18V36H0z"/><rect width="10.5" height="20.6" class="fl-b"/>' +
+      '<g class="fl-w"><circle cx="5.6" cy="9" r=".95"/><circle cx="9" cy="9" r=".95"/><circle cx="5.6" cy="13" r=".95"/><circle cx="9" cy="13" r=".95"/><circle cx="5.6" cy="17" r=".95"/><circle cx="9" cy="17" r=".95"/></g>',
+    mx_h: '<rect x="18" width="6" height="36" class="fl-g"/><rect x="24" width="6" height="36" class="fl-w"/><rect x="30" width="6" height="36" class="fl-r"/><circle cx="27" cy="18" r="2.4" class="fl-o"/>'
+  };
+  /* lingote: cara frontal (más ancha abajo) y cara superior más clara */
+  function ingot(cx, yb) {
+    var w = 12, h = 5, k = 1.6, l = 1.9, x0 = cx - w / 2, x1 = cx + w / 2, y0 = yb - h;
+    return '<path class="au-f" d="M' + x0 + ' ' + yb + 'L' + x1 + ' ' + yb + 'L' + (x1 - k) + ' ' + y0 + 'L' + (x0 + k) + ' ' + y0 + 'Z"/>' +
+      '<path class="au-t" d="M' + (x0 + k) + ' ' + y0 + 'L' + (x1 - k) + ' ' + y0 + 'L' + (x1 - k - 0.8) + ' ' + (y0 - l) + 'L' + (x0 + k + 0.8) + ' ' + (y0 - l) + 'Z"/>';
+  }
+  var GOLD = ingot(11.2, 25.4) + ingot(24.8, 25.4) + ingot(18, 17.9);
+  var BTC_GLYPH = 'M14.6 11.2H19.6a3.2 3.2 0 0 1 0 6.4H14.6M14.6 17.6H20.4a3.4 3.4 0 0 1 0 6.8H14.6V11.2M17.2 8.6v2.6M20.6 8.6v2.6M17.2 24.4V27M20.6 24.4V27';
+
+  /* marcas propias (no son marcas registradas): bandera, lingotes o logo de Bitcoin; el resto, círculo tintado + monograma */
   function markSvg(m, size) {
-    var g;
-    if (m.k === 'fx') g = '<circle class="cmk-fa" cx="13.5" cy="18" r="8.5"/><circle class="cmk-fb" cx="22.5" cy="18" r="8.5"/>';
-    else if (m.k === 'btc') g = '<path class="cmk-s" d="M14.6 11.2H19.6a3.2 3.2 0 0 1 0 6.4H14.6M14.6 17.6H20.4a3.4 3.4 0 0 1 0 6.8H14.6V11.2M17.2 8.6v2.6M20.6 8.6v2.6M17.2 24.4V27M20.6 24.4V27"/>';
+    var g, pre = '', id;
+    if (m.k === 'flag' || m.k === 'fxflag') {
+      id = 'mkcp' + (++mkUid); /* id único: la misma marca sale en la tarjeta y en el encabezado */
+      pre = '<defs><clipPath id="' + id + '"><circle cx="18" cy="18" r="18"/></clipPath></defs>';
+      g = '<g clip-path="url(#' + id + ')">' + (m.k === 'flag' ? FLAG[m.f] : FLAG.us_h + FLAG.mx_h + '<path class="cmk-sep" d="M18 0v36"/>') + '</g><circle class="cmk-ring" cx="18" cy="18" r="17.5"/>';
+    } else if (m.k === 'gold') g = GOLD;
+    else if (m.k === 'btc') g = '<circle class="cmk-ob" cx="18" cy="18" r="18"/><path class="cmk-bg" transform="rotate(14 18 18)" d="' + BTC_GLYPH + '"/><circle class="cmk-ring" cx="18" cy="18" r="17.5"/>';
+    else if (m.k === 'fx') g = '<circle class="cmk-fa" cx="13.5" cy="18" r="8.5"/><circle class="cmk-fb" cx="22.5" cy="18" r="8.5"/>';
     else if (m.k === 'n') g = '<text class="cmk-t" x="18" y="11.6" font-size="7.4" text-anchor="middle" dy=".35em">N</text><text class="cmk-t" x="18" y="22.4" font-size="12.6" text-anchor="middle" dy=".35em">' + m.t + '</text>';
     else g = '<text class="cmk-t" x="18" y="18" font-size="' + (m.t.length === 1 ? 17 : m.t.length === 2 ? 15 : 12.8) + '" text-anchor="middle" dy=".35em">' + m.t + '</text>';
-    return '<svg class="cmk cmk-' + m.cls + '" width="' + size + '" height="' + size + '" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="cmk-b" cx="18" cy="18" r="18"/>' + g + '</svg>';
+    return '<svg class="cmk cmk-' + m.cls + '" width="' + size + '" height="' + size + '" viewBox="0 0 36 36" aria-hidden="true" focusable="false">' + pre + '<circle class="cmk-b" cx="18" cy="18" r="18"/>' + g + '</svg>';
   }
   /* s: símbolo Yahoo; fb: símbolo equivalente en tickers-data.js (respaldo); pp: el cambio se da en puntos porcentuales (rendimiento) */
   var MK = [
-    { s: '^GSPC',   n: 'S&P 500',          u: 'pts',    d: 2, fb: '^GSPC',   m: { cls: 'idx', k: 't', t: '500' } },
-    { s: '^NDX',    n: 'Nasdaq 100',       u: 'pts',    d: 2, fb: '^IXIC', fbn: 'Nasdaq Composite', m: { cls: 'idx', k: 'n', t: '100' } },
-    { s: '^MXX',    n: 'S&P/BMV IPC',      u: 'pts',    d: 2, m: { cls: 'idx', k: 't', t: 'IPC' } },
-    { s: 'MXN=X',   n: 'Dólar (USD/MXN)',  u: 'MXN',    d: 4, note: 'Pesos mexicanos por cada dólar.', m: { cls: 'fx', k: 'fx' } },
+    { s: '^GSPC',   n: 'S&P 500',          u: 'pts',    d: 2, fb: '^GSPC',   m: { cls: 'idx', k: 'flag', f: 'us' } },
+    { s: '^NDX',    n: 'Nasdaq 100',       u: 'pts',    d: 2, fb: '^IXIC', fbn: 'Nasdaq Composite', m: { cls: 'idx', k: 'flag', f: 'us' } },
+    { s: '^MXX',    n: 'S&P/BMV IPC',      u: 'pts',    d: 2, m: { cls: 'idx', k: 'flag', f: 'mx' } },
+    { s: 'MXN=X',   n: 'Dólar (USD/MXN)',  u: 'MXN',    d: 4, note: 'Pesos mexicanos por cada dólar.', m: { cls: 'fx', k: 'fxflag' } },
     { s: 'BTC-USD', n: 'Bitcoin',          u: 'USD',    d: 0, fb: 'BTC-USD', m: { cls: 'crypto', k: 'btc' } },
-    { s: 'GC=F',    n: 'Oro',              u: 'USD/oz', d: 2, fb: 'GC=F',    note: 'Futuro del oro, dólares por onza troy.', m: { cls: 'cmdty', k: 't', t: 'Au' } },
-    { s: '^TNX',    n: 'Bono 10a EE. UU.', u: '%',      d: 2, pp: true,     note: 'Rendimiento anual en %. El cambio se da en puntos porcentuales.', m: { cls: 'debt', k: 't', t: '10A' } }
+    { s: 'GC=F',    n: 'Oro',              u: 'USD/oz', d: 2, fb: 'GC=F',    note: 'Futuro del oro, dólares por onza troy.', m: { cls: 'cmdty', k: 'gold' } },
+    { s: '^TNX',    n: 'Bono 10a EE. UU.', u: '%',      d: 2, pp: true,     note: 'Rendimiento anual en %. El cambio se da en puntos porcentuales.', m: { cls: 'debt', k: 'flag', f: 'us' } }
   ];
   var PERIODS = [['1S', 5, '1 semana'], ['1M', 21, '1 mes'], ['3M', 1e9, '3 meses']];
 
