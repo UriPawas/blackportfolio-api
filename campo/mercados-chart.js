@@ -470,7 +470,8 @@
       ticks.forEach(function (v) { var y = Math.round(Yf(v)) + 0.5; ctx.moveTo(L.x0, y); ctx.lineTo(L.x1, y); });
       ctx.stroke();
       ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillStyle = rgba('--text-3', 1);
-      ticks.forEach(function (v) { ctx.fillText(label(v), L.x1 + 8, Yf(v)); });
+      /* la píldora del último precio vive en el mismo carril del eje: se omite la marca que quedaría debajo de ella (se encimaban, sobre todo en velas) */
+      ticks.forEach(function (v) { var ty = Yf(v); if (!pct && lastY != null && Math.abs(ty - lastY) < 14) return; ctx.fillText(label(v), L.x1 + 8, ty); });
       ctx.textAlign = 'center';
       xt.forEach(function (t) { ctx.fillText(t.label, X(t.i), L.h - AXIS_H / 2); });
       ctx.textAlign = 'left';

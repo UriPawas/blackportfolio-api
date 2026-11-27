@@ -22,7 +22,31 @@
   var EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
   var UNITS = { '^MXX': 'pts', '^GSPC': 'pts', '^NDX': 'pts', '^VIX': 'pts', 'DX-Y.NYB': 'pts', 'MXN=X': 'MXN', 'BTC-USD': 'USD', 'GC=F': 'USD/oz', 'CL=F': 'USD/bbl', '^TNX': '%' };
   var IND_SHORT = { sma20: 'MS 20', sma50: 'MS 50', sma200: 'MS 200', ema20: 'ME 20', bb: 'BB', vwap: 'VWAP', rsi: 'RSI', macd: 'MACD', stoch: 'Estoc.' };
-  var SECTORS = { 'Technology': 'Tecnología', 'Consumer Defensive': 'Consumo básico', 'Consumer Cyclical': 'Consumo discrecional', 'Financial Services': 'Servicios financieros', 'Healthcare': 'Salud', 'Industrials': 'Industria', 'Energy': 'Energía', 'Basic Materials': 'Materiales', 'Real Estate': 'Bienes raíces', 'Utilities': 'Servicios públicos', 'Communication Services': 'Comunicaciones' };
+  var SECTORS = { 'Technology': 'Tecnología', 'Consumer Defensive': 'Consumo básico', 'Consumer Cyclical': 'Consumo discrecional', 'Financial Services': 'Servicios financieros', 'Healthcare': 'Salud', 'Industrials': 'Industriales', 'Energy': 'Energía', 'Basic Materials': 'Materiales', 'Real Estate': 'Bienes raíces', 'Utilities': 'Servicios públicos', 'Communication Services': 'Comunicaciones' };
+  /* industrias de Yahoo → español (la ficha mezclaba "Sector: Tecnología" con "Industria: Consumer Electronics"); lo que no esté aquí se muestra tal cual, en inglés */
+  var INDUSTRIES = { 'Consumer Electronics': 'Electrónica de consumo', 'Software - Infrastructure': 'Software de infraestructura', 'Software - Application': 'Software de aplicaciones', 'Semiconductors': 'Semiconductores',
+    'Semiconductor Equipment & Materials': 'Equipo y materiales para semiconductores', 'Internet Content & Information': 'Contenido e información en internet', 'Internet Retail': 'Comercio electrónico', 'Auto Manufacturers': 'Fabricantes de automóviles',
+    'Auto Parts': 'Autopartes', 'Banks - Diversified': 'Bancos diversificados', 'Banks - Regional': 'Bancos regionales', 'Drug Manufacturers - General': 'Farmacéuticas', 'Drug Manufacturers - Specialty & Generic': 'Farmacéuticas especializadas y genéricas',
+    'Biotechnology': 'Biotecnología', 'Oil & Gas Integrated': 'Petróleo y gas integrado', 'Oil & Gas E&P': 'Exploración y producción de petróleo y gas', 'Oil & Gas Midstream': 'Transporte y almacenamiento de petróleo y gas',
+    'Oil & Gas Refining & Marketing': 'Refinación y comercialización de petróleo', 'Oil & Gas Equipment & Services': 'Equipo y servicios petroleros', 'Specialty Retail': 'Comercio minorista especializado', 'Discount Stores': 'Tiendas de descuento',
+    'Department Stores': 'Tiendas departamentales', 'Home Improvement Retail': 'Mejoramiento del hogar', 'Apparel Retail': 'Tiendas de ropa', 'Grocery Stores': 'Supermercados', 'Beverages - Non-Alcoholic': 'Bebidas sin alcohol',
+    'Beverages - Brewers': 'Cerveceras', 'Beverages - Wineries & Distilleries': 'Vinos y destilados', 'Packaged Foods': 'Alimentos empacados', 'Confectioners': 'Confitería', 'Tobacco': 'Tabaco', 'Household & Personal Products': 'Productos para el hogar y cuidado personal',
+    'Aerospace & Defense': 'Aeroespacial y defensa', 'Credit Services': 'Servicios de crédito', 'Asset Management': 'Administración de activos', 'Capital Markets': 'Mercados de capitales', 'Financial Data & Stock Exchanges': 'Datos financieros y bolsas',
+    'Insurance - Diversified': 'Seguros diversificados', 'Insurance - Life': 'Seguros de vida', 'Insurance - Property & Casualty': 'Seguros de daños', 'Insurance Brokers': 'Corredores de seguros', 'Mortgage Finance': 'Financiamiento hipotecario',
+    'Telecom Services': 'Servicios de telecomunicaciones', 'Communication Equipment': 'Equipo de comunicaciones', 'Entertainment': 'Entretenimiento', 'Broadcasting': 'Radiodifusión', 'Restaurants': 'Restaurantes', 'Lodging': 'Hospedaje',
+    'Resorts & Casinos': 'Resorts y casinos', 'Travel Services': 'Servicios de viaje', 'Leisure': 'Ocio', 'Airlines': 'Aerolíneas', 'Railroads': 'Ferrocarriles', 'Trucking': 'Autotransporte', 'Integrated Freight & Logistics': 'Carga y logística',
+    'Information Technology Services': 'Servicios de tecnología de la información', 'Computer Hardware': 'Equipo de cómputo', 'Electronic Components': 'Componentes electrónicos', 'Scientific & Technical Instruments': 'Instrumentos científicos y técnicos',
+    'Medical Devices': 'Dispositivos médicos', 'Medical Instruments & Supplies': 'Instrumentos y suministros médicos', 'Healthcare Plans': 'Planes de salud', 'Health Information Services': 'Servicios de información de salud',
+    'Diagnostics & Research': 'Diagnóstico e investigación', 'Medical Care Facilities': 'Centros de atención médica', 'Farm & Heavy Construction Machinery': 'Maquinaria agrícola y de construcción', 'Specialty Industrial Machinery': 'Maquinaria industrial especializada',
+    'Electrical Equipment & Parts': 'Equipo eléctrico', 'Building Materials': 'Materiales de construcción', 'Residential Construction': 'Construcción residencial', 'Engineering & Construction': 'Ingeniería y construcción', 'Waste Management': 'Manejo de residuos',
+    'Conglomerates': 'Conglomerados', 'Gold': 'Oro', 'Silver': 'Plata', 'Copper': 'Cobre', 'Steel': 'Acero', 'Aluminum': 'Aluminio', 'Chemicals': 'Químicos', 'Specialty Chemicals': 'Químicos especializados', 'Agricultural Inputs': 'Insumos agrícolas',
+    'Packaging & Containers': 'Empaques y envases', 'Paper & Paper Products': 'Papel y derivados', 'Solar': 'Energía solar', 'Utilities - Regulated Electric': 'Electricidad regulada', 'Utilities - Regulated Gas': 'Gas regulado',
+    'Utilities - Diversified': 'Servicios públicos diversificados', 'Utilities - Renewable': 'Energías renovables', 'Utilities - Independent Power Producers': 'Productores independientes de energía', 'Real Estate Services': 'Servicios inmobiliarios',
+    'Real Estate - Development': 'Desarrollo inmobiliario', 'Real Estate - Diversified': 'Inmobiliario diversificado', 'REIT - Industrial': 'FIBRA industrial', 'REIT - Retail': 'FIBRA comercial', 'REIT - Residential': 'FIBRA residencial',
+    'REIT - Office': 'FIBRA de oficinas', 'REIT - Healthcare Facilities': 'FIBRA de salud', 'REIT - Specialty': 'FIBRA especializada', 'REIT - Diversified': 'FIBRA diversificada', 'Luxury Goods': 'Artículos de lujo', 'Footwear & Accessories': 'Calzado y accesorios',
+    'Apparel Manufacturing': 'Fabricación de ropa', 'Furnishings, Fixtures & Appliances': 'Muebles, accesorios y electrodomésticos', 'Gambling': 'Apuestas', 'Electronic Gaming & Multimedia': 'Videojuegos y multimedia', 'Advertising Agencies': 'Agencias de publicidad',
+    'Publishing': 'Editorial', 'Staffing & Employment Services': 'Servicios de empleo', 'Consulting Services': 'Consultoría', 'Education & Training Services': 'Educación y capacitación', 'Security & Protection Services': 'Seguridad y protección',
+    'Medical Distribution': 'Distribución médica', 'Pharmaceutical Retailers': 'Farmacias', 'Farm Products': 'Productos agrícolas', 'Food Distribution': 'Distribución de alimentos', 'Beverages': 'Bebidas', 'Shell Companies': 'Sociedades de propósito especial' };
   var NAME_MARK = { '^MXX': 1, '^GSPC': 1, '^NDX': 1, 'MXN=X': 1, 'GC=F': 1, '^TNX': 1 };
   var NA = '<span class="mk-nd">Sin dato</span>';
   var ICON_SEARCH = '<svg class="mk-sb-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
@@ -48,10 +72,13 @@
   var nfs = {};
   function nf(dec) { return nfs[dec] || (nfs[dec] = new Intl.NumberFormat('es-MX', { minimumFractionDigits: dec, maximumFractionDigits: dec })); }
   function fmtNum(v, dec) { return finite(v) ? nf(dec).format(v).replace('-', '−') : '–'; }
-  var cnf = null;
+  /* Una sola escala, sin la "B" ambigua del compacto de es-MX (B = billón de 10¹², pero en inglés es 10⁹): mil, M (millones, con separador de miles)
+     y T (billones, 10¹²). Ej.: 5.21 T · 1,227.02 M · 58.31 M · 842.5 mil. */
   function compact(v) {
     if (!finite(v) || v <= 0) return NA;
-    try { cnf = cnf || new Intl.NumberFormat('es-MX', { notation: 'compact', maximumFractionDigits: 2 }); return esc(cnf.format(v)); } catch (e) { return esc(nf(0).format(v)); }
+    var a = v, u = '', d = 2;
+    if (v >= 1e12) { a = v / 1e12; u = ' T'; } else if (v >= 1e6) { a = v / 1e6; u = ' M'; } else if (v >= 1e3) { a = v / 1e3; u = ' mil'; } else d = 0;
+    return esc(nf(d).format(a) + u);
   }
   function decFor(sym, v) { if (/=X$/.test(sym)) return 4; if (finite(v) && Math.abs(v) < 1) return 4; return 2; }
   function pxTxt(sym, v) { return fmtNum(v, decFor(sym, v)); }
@@ -560,10 +587,18 @@
   }
   function paintWhen() {
     if (!els.mkWhen) return;
-    var sym = st.sym, open = symIsOpen(sym, rt.meta), t = '';
-    if (open && rt.live[sym] && rt.liveAt) t = ago(rt.liveAt);
-    else { var lt = lastBarT(); if (lt) t = 'al cierre del ' + fmtShort(lt, (rt.meta && rt.meta.tz) || 'America/New_York'); }
-    els.mkWhen.textContent = t;
+    var sym = st.sym, open = symIsOpen(sym, rt.meta), t = '', tip = '';
+    if (open && rt.live[sym] && rt.liveAt) {
+      t = ago(rt.liveAt);
+      /* el precio de arriba es el último en vivo; la gráfica llega a la última vela, que sigue formándose: si difieren, se dice cuál es cada uno */
+      var q = quoteFor(sym), m = rt.main, lb = m && m.bars && m.bars.length ? m.bars[m.bars.length - 1] : null;
+      if (q && lb && finite(lb.c) && q.price > 0 && Math.abs(lb.c / q.price - 1) > 0.00005) {
+        var lbx = fmtNum(lb.c, decFor(sym, lb.c));
+        t += ' · última vela ' + lbx;
+        tip = 'El precio de arriba es el último en vivo (con hasta 15 min de retraso). La gráfica termina en la última vela, que sigue formándose: su cierre parcial es ' + lbx + '.';
+      }
+    } else { var lt = lastBarT(); if (lt) t = 'al cierre del ' + fmtShort(lt, (rt.meta && rt.meta.tz) || 'America/New_York'); }
+    els.mkWhen.textContent = t; if (tip) els.mkWhen.title = tip; else els.mkWhen.removeAttribute('title');
   }
   function paintHead() {
     var sym = st.sym, meta = rt.meta, n = nameOf(sym, meta);
@@ -628,7 +663,7 @@
   function placePerInd(instant) {
     var ind = $('.mk-per-ind', els.mkPer), btn = $('.mkp[aria-pressed="true"]', els.mkPer); if (!ind || !btn || !btn.offsetWidth) return;
     if (instant) ind.classList.add('no-tr');
-    ind.style.width = btn.offsetWidth + 'px'; ind.style.transform = 'translateX(' + btn.offsetLeft + 'px)';
+    ind.style.width = btn.offsetWidth + 'px'; ind.style.height = btn.offsetHeight + 'px'; ind.style.transform = 'translate(' + btn.offsetLeft + 'px, ' + btn.offsetTop + 'px)'; /* en móvil los periodos van en dos filas */
     if (instant) { void ind.offsetWidth; ind.classList.remove('no-tr'); }
     var c = els.mkPer;
     /* solo se desplaza si el periodo activo no se ve completo (en escritorio la tira cabe casi entera y centrarla cortaba "1D") */
@@ -654,15 +689,15 @@
     var fund = t === 'EQUITY' || t === 'ETF' || t === 'MUTUALFUND', eq = t === 'EQUITY';
     if (fund || t === 'CRYPTOCURRENCY') {
       var cap = pickNum(info, ['marketCap']), ccy = info && info.currency ? info.currency : (meta && meta.ccy) || '';
-      rows.push(['Capitalización', compact(cap) + (cap > 0 && ccy ? ' <small class="u">' + esc(ccy) + '</small>' : '')]);
+      rows.push(['Capitalización', compact(cap) + (cap > 0 && ccy ? ' <small class="u">' + esc(ccy) + '</small>' : ''), 'M = millones · T = billones (10¹²)']);
     }
     if (fund) {
       var pe = pickNum(info, ['trailingPE']), beta = pickNum(info, ['beta']), dy = pickNum(info, ['trailingAnnualDividendYield']);
       rows.push(['P/U (12 m)', pe > 0 ? esc(fmtNum(pe, 2)) : NA], ['Beta (5 a)', finite(beta) ? esc(fmtNum(beta, 2)) : NA], ['Rend. por dividendo', dy > 0 ? esc(fmtNum(dy * 100, 2)) + ' %' : NA]);
     }
-    if (eq) rows.push(['Sector', info && info.sector ? esc(SECTORS[info.sector] || info.sector) : NA], ['Industria', info && info.industry ? '<span lang="en">' + esc(info.industry) + '</span>' : NA]);
+    if (eq) rows.push(['Sector', info && info.sector ? esc(SECTORS[info.sector] || info.sector) : NA], ['Industria', info && info.industry ? (INDUSTRIES[info.industry] ? esc(INDUSTRIES[info.industry]) : '<span lang="en">' + esc(info.industry) + '</span>') : NA]);
     els.mkStatG.classList.toggle('is-skel', !info && !dl);
-    els.mkStatG.innerHTML = rows.map(function (r) { return '<div class="mk-stat"><dt>' + esc(r[0]) + '</dt><dd>' + r[1] + '</dd></div>'; }).join('');
+    els.mkStatG.innerHTML = rows.map(function (r) { return '<div class="mk-stat"><dt>' + esc(r[0]) + '</dt><dd' + (r[2] ? ' title="' + esc(r[2]) + '"' : '') + '>' + r[1] + '</dd></div>'; }).join('');
     /* rango de 52 semanas */
     var h52 = pickNum(info, ['fiftyTwoWeekHigh']), l52 = pickNum(info, ['fiftyTwoWeekLow']);
     if (h52 == null && meta) h52 = finite(meta.hi52) ? meta.hi52 : null; if (l52 == null && meta) l52 = finite(meta.lo52) ? meta.lo52 : null;

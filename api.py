@@ -99,6 +99,7 @@ _FINANCIALS_CACHE     = _TTLCache(maxsize=50,  ttl=86400) # 24 h — datos trime
 _HOLDINGS_CACHE       = _TTLCache(maxsize=50,  ttl=86400) # 24 h — composición fondos
 _DIVIDENDS_CACHE      = _TTLCache(maxsize=100, ttl=3600)  # 1 h
 _NEWS_CACHE           = _TTLCache(maxsize=100, ttl=900)   # 15 min
+_NEWS_FAIL_CACHE      = _TTLCache(maxsize=100, ttl=60)    # 1 min — proveedor caído: no martillarlo
 # Imágenes del reporte: metadatos diminutos y de larga vida; bytes pocos y de
 # vida corta — un JPEG grande pesa cientos de KB y esto corre con la RAM justa.
 _REPORT_IMG_META      = _TTLCache(maxsize=40,  ttl=86400) # 24 h — id/autor/color
@@ -113,7 +114,7 @@ _LOGO_BYTES_CACHE     = _TTLCache(maxsize=150, ttl=86400) # 24 h  — PNG de log
 _ALL_CACHES = [
     _CHART_CACHE, _SEASONALITY_CACHE_V2, _CALENDAR_CACHE_V2, _TIIE_CACHE_V2,
     _SEARCH_CACHE, _INFO_CACHE, _FINANCIALS_CACHE, _HOLDINGS_CACHE,
-    _DIVIDENDS_CACHE, _NEWS_CACHE, _BINANCE_PRICE_CACHE, _SPLITS_CACHE,
+    _DIVIDENDS_CACHE, _NEWS_CACHE, _NEWS_FAIL_CACHE, _BINANCE_PRICE_CACHE, _SPLITS_CACHE,
     _REPORT_IMG_META, _REPORT_IMG_BYTES, _TICKER_LOGO_CACHE,
     _LOGO_BYTES_CACHE,
 ]
@@ -2369,10 +2370,15 @@ def risk_free_rate(currency: str = "MXN"):
 @app.get("/api/news/{symbol}")
 @limiter.limit("20/minute")
 def stock_news(request: Request, symbol: str, language: str = "es"):
+    """Titulares del activo. Son contenido accesorio: si el proveedor falla (timeout, 429, 5xx) se
+    responde 200 con la lista vacía y `unavailable: true` en vez de propagar el 503 —que ensuciaba la
+    consola y la pantalla de Mercados—, se reintenta una vez en inglés y el fallo se recuerda 1 minuto."""
     cache_key = f"{symbol}:{language}"
     cached = _NEWS_CACHE.get(cache_key)
     if cached is not None:
         return cached
+    if _NEWS_FAIL_CACHE.get(cache_key) is not None:
+        return {"news": [], "unavailable": True}
     try:
         ex_code = yf.Ticker(symbol).fast_info.exchange or ""
         exchange = YAHOO_EXCHANGE_MAP.get(ex_code, "NASDAQ")
@@ -2382,21 +2388,24 @@ def stock_news(request: Request, symbol: str, language: str = "es"):
     rapid_symbol = f"{symbol}:{exchange}"
     url = f"https://{RAPIDAPI_FINANCE_HOST}/stock-news"
 
-    try:
-        res = _HTTP_SESSION.get(
-            url,
-            params={"symbol": rapid_symbol, "language": language},
-            headers={"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_FINANCE_HOST},
-            timeout=10,
-        )
-    except Exception as e:
-        raise _safe_error(e, 503, "Servicio de datos no disponible temporalmente. Intenta más tarde.")
+    news_list = None
+    for lang in ([language] if language == "en" else [language, "en"]):
+        try:
+            res = _HTTP_SESSION.get(
+                url,
+                params={"symbol": rapid_symbol, "language": lang},
+                headers={"x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_FINANCE_HOST},
+                timeout=10,
+            )
+            if res.status_code == 200:
+                news_list = res.json().get("data", {}).get("news", [])
+                break
+        except Exception:
+            continue
 
-    if res.status_code != 200:
-        raise HTTPException(status_code=res.status_code, detail=f"RapidAPI error {res.status_code}")
-
-    raw = res.json()
-    news_list = raw.get("data", {}).get("news", [])
+    if news_list is None:
+        _NEWS_FAIL_CACHE.set(cache_key, True)
+        return {"news": [], "unavailable": True}
     out = {"news": news_list[:10]}
     _NEWS_CACHE.set(cache_key, out)
     return out

@@ -8,7 +8,10 @@
   #view-app:not([data-loading="true"]) .hub,
   #view-app:not([data-loading="true"]) .app-grid > * { animation: mo-rise 380ms var(--ease-out) backwards 120ms; }
   #view-app:not([data-loading="true"]) .app-grid > .col-side { animation-delay: 180ms; }
-  #secTracker:not([hidden]), #secMercados:not([hidden]), #secInformes:not([hidden]), #secSettings:not([hidden]) { animation: mo-fade 240ms var(--ease-out) backwards; }
+  #secTracker:not([hidden]), #secInformes:not([hidden]), #secSettings:not([hidden]) { animation: mo-fade 240ms var(--ease-out) backwards; }
+  /* Mercados: su encabezado (título y botones) ya sube con mo-rise; fundir además toda la sección lo dejaba casi invisible los primeros ~300 ms
+     (texto claro a opacidad ~0 sobre el fondo oscuro). Solo el contenido bajo el encabezado se funde con la sección. */
+  #secMercados:not([hidden]) > :not(.app-head) { animation: mo-fade 240ms var(--ease-out) backwards; }
   @keyframes mo-rise { from { opacity: 0; transform: translateY(8px); } }
   @keyframes mo-fade { from { opacity: 0; } }
 
