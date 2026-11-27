@@ -55,13 +55,25 @@
     function setPcc() { PCC = RL ? ((T.get(S.pfId) || {}).currency || 'MXN') : 'MXN'; }
     setPcc();
     var pickPf = !(o.pfId && T.get(o.pfId));
+    /* edición de un movimiento de la cuenta: el formulario sale con sus datos; el tipo y el activo no se cambian (para eso, se elimina y se registra de nuevo) */
+    var E = RL && o.edit && o.pfId && T.tx.get ? T.tx.get(o.pfId, o.edit.txId) : null, editInit = !!E;
+    if (E) {
+      S.type = { COMPRA: 'buy', VENTA: 'sell', DIVIDENDO: 'div', DEPOSITO: 'dep', RETIRO: 'wd' }[E.type] || 'buy'; S.date = String(E.date).slice(0, 10);
+      if (E.ticker && E.ticker !== 'CASH') {
+        S.tk = String(E.ticker).toUpperCase(); var pp0 = null; ((T.get(S.pfId) || {}).positions || []).forEach(function (x) { if (x.ticker === S.tk) pp0 = x; });
+        var cc0 = catOf(S.tk); S.name = (pp0 && pp0.name) || (cc0 && cc0.name) || S.tk;
+      }
+      S.qty = E.quantity != null ? String(E.quantity) : ''; S.px = E.price != null ? String(E.price) : ''; S.pxEd = true;
+      S.comm = String(E.commissionPercent != null ? E.commissionPercent : 0); S.iva = !!E.applyIva;
+      S.amount = S.type === 'dep' || S.type === 'wd' || S.type === 'div' ? String(E.price) : ''; S.fx = E.fxRate ? String(E.fxRate) : '';
+    }
     var id = 'txs' + (++uid), root_ = doc.createElement('div'), lastPv = null, pvT = 0, nBox = {}, closing = false;
     var lastFocus = o.from || doc.activeElement;
     root_.className = 'txs-root';
     root_.innerHTML = '<div class="txs-back" data-close></div>' +
       '<div class="txs" role="dialog" aria-modal="true" aria-labelledby="' + id + 't" tabindex="-1">' +
         '<div class="txs-grab" aria-hidden="true"><i></i></div>' +
-        '<header class="txs-hd"><h2 id="' + id + 't">Registrar movimiento</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">' +
+        '<header class="txs-hd"><h2 id="' + id + 't">' + (E ? 'Editar movimiento' : 'Registrar movimiento') + '</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">' +
           '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>' +
         '<form class="txs-bd" novalidate><div class="txs-sc">' +
           '<div data-pfw></div>' +
@@ -102,9 +114,18 @@
           '<span class="txs-oq num">' + nfQ.format(p.qty) + '</span></button>';
       }).join('') + '</div>';
     }
+    /* al editar, el activo va fijo */
+    function fixedTk() { return '<div class="txs-f"><span class="txs-lb-t">Activo</span><div class="txs-fixed"><span class="txs-lg">' + mark(S.tk, 24) + '</span><span class="txs-ot"><b>' + esc(S.tk) + '</b><small>' + esc(S.name) + '</small></span></div><p class="txs-h" data-held></p></div>'; }
+    function fxField() {
+      return RL ? '<div class="txs-f" data-fxw hidden><label><span>Tipo de cambio <em>(opcional)</em></span><input data-in="fx" inputmode="decimal" autocomplete="off" placeholder="De mercado" value="' + esc(S.fx || '') + '"></label><p class="txs-h" data-fxh></p></div>' : '';
+    }
     function buildFields() {
       var t = S.type, h = '';
-      if (t === 'buy') {
+      if (E && S.tk && (t === 'buy' || t === 'sell' || t === 'div')) {
+        h += fixedTk();
+        h += '<div class="txs-row">' + dateField() + (t === 'div' ? field('<span>Dividendo por acción (' + ccyOf() + ')</span>', '<input data-in="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.amount) + '">') :
+          field('<span>Cantidad</span>', '<input data-in="qty" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(S.qty) + '">')) + '</div>';
+      } else if (t === 'buy') {
         h += '<div class="txs-f txs-cb"><label for="' + id + 'tk"><span>Activo</span></label>' +
           '<div class="txs-cbw"><input id="' + id + 'tk" data-in="q" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="' + id + 'lb" autocomplete="off" spellcheck="false" placeholder="Busca por ticker o nombre" value="' + esc(S.tk ? S.tk + ' · ' + S.name : '') + '">' +
           '<ul class="txs-lb" id="' + id + 'lb" role="listbox" aria-label="Activos" hidden></ul></div><p class="txs-h" data-held></p></div>';
@@ -127,6 +148,7 @@
           : field('<span>Comisión (MXN)</span>', '<input data-in="fee" inputmode="decimal" autocomplete="off" placeholder="0.00" value="' + esc(S.fee) + '">', '<p class="txs-h">0.25 % + IVA, editable</p>')) + '</div>';
         h += '<p class="txs-h txs-fxr" data-fxr hidden></p>';
       }
+      if (t === 'buy' || t === 'sell' || t === 'div') h += fxField();
       fieldsEl.innerHTML = h;
       updateHints();
     }
@@ -146,9 +168,9 @@
       rows += row('total', t === 'buy' ? 'Total a pagar' : t === 'sell' ? 'Recibes (neto de comisión)' : t === 'dep' ? 'Aportas' : t === 'wd' ? 'Retiras' : 'Cobras');
       rows += ba('cash', 'Efectivo');
       if (t === 'buy' || t === 'sell') { rows += ba('qty', 'Posición (títulos)'); if (t === 'buy') rows += ba('avg', 'Costo promedio'); }
-      if (t === 'sell') { rows += row('real', 'Ganancia realizada estimada'); rows += row('tax', 'ISR estimado'); }
+      if (t === 'sell' && !E) { rows += row('real', 'Ganancia realizada estimada'); rows += row('tax', 'ISR estimado'); }
       prevEl.innerHTML = '<h3 class="txs-pt">Vista previa</h3><p class="txs-pe" data-pe>Completa los datos para ver cómo queda.</p><div class="txs-pg" data-pg hidden>' + rows + '</div>' +
-        (t === 'sell' ? '<p class="txs-h txs-pd" data-pd hidden></p>' : '');
+        (t === 'sell' && !E ? '<p class="txs-h txs-pd" data-pd hidden></p>' : '');
       nBox = {}; Array.prototype.forEach.call(prevEl.querySelectorAll('[data-n]'), function (e) { nBox[e.getAttribute('data-n')] = e; });
     }
 
@@ -174,6 +196,14 @@
       if (pl) pl.textContent = 'Precio por unidad' + (S.tk ? ' (' + ccy + ')' : '');
       if (ph) ph.textContent = pa ? 'Cierre del ' + dShort(pa.date) + ': ' + cp(pa.currency, pa.px) : 'Elige un activo para ver su precio.';
       if (fxr) { var show = RL ? (!!S.tk && ccy !== PCC) : (!!pa && pa.currency === 'USD'); fxr.hidden = !show; if (show) fxr.textContent = RL ? 'Se convierte a ' + PCC + ' con el tipo de cambio de esa fecha.' : 'Tipo de cambio del día: ' + nf2.format(pa.fx); }
+      var fxw = $('[data-fxw]'); /* tipo de cambio propio: solo si el activo cotiza en otra moneda que el portafolio */
+      if (fxw) {
+        var fshow = !!S.tk && ccy !== PCC; fxw.hidden = !fshow;
+        if (fshow) {
+          var mk = pa ? T.rate(ccy, pa.idx) / T.rate(PCC, pa.idx) : 0, fh = $('[data-fxh]');
+          if (fh) fh.textContent = 'Déjalo vacío para usar el de mercado de esa fecha' + (mk > 0 ? ' (≈ ' + mk.toFixed(mk < 1 ? 4 : 2) + ')' : '') + '. Escríbelo si tu bróker aplicó otro: ' + PCC + ' por 1 ' + ccy + '.';
+        }
+      }
       if (hd) {
         var q = held(S.tk);
         hd.textContent = !S.tk ? '' : S.type === 'sell' ? 'Disponible: ' + nfQ.format(q) + ' títulos' : q > 0 ? 'Ya tienes ' + nfQ.format(q) : '';
@@ -255,10 +285,10 @@
         var q = num(S.qty), p = num(S.px);
         if (!S.tk || !(q > 0) || !(p > 0)) return null;
         u.tk = S.tk; u.qty = q; u.px = p; u.fee = num(S.fee) > 0 ? num(S.fee) : 0;
-        if (RL) { u.comm = num(S.comm) >= 0 ? num(S.comm) : 0; u.iva = !!S.iva; u.ivaRate = 16; u.name = S.name; u.ccy = ccyOf(); }
+        if (RL) { u.comm = num(S.comm) >= 0 ? num(S.comm) : 0; u.iva = !!S.iva; u.ivaRate = 16; u.name = S.name; u.ccy = ccyOf(); if (num(S.fx) > 0) u.fx = num(S.fx); }
       } else {
         var a = num(S.amount); if (!(a > 0)) return null;
-        u.amount = a; if (t === 'div') { if (!S.tk) return null; u.tk = S.tk; if (RL) u.px = a; } else u.note = S.note.trim();
+        u.amount = a; if (t === 'div') { if (!S.tk) return null; u.tk = S.tk; if (RL) { u.px = a; if (num(S.fx) > 0) u.fx = num(S.fx); } } else u.note = S.note.trim();
       }
       if (final && t === 'buy') u.fund = fundC.checked;
       return u;
@@ -269,7 +299,7 @@
       lastPv = null; errEl.textContent = '';
       fundW.hidden = true;
       if (!u || !S.pfId) { pe.hidden = false; pg.hidden = true; if (pd) pd.hidden = true; subBtn.disabled = true; return; }
-      var pv = T.tx.preview(S.pfId, u);
+      var pv = E ? T.tx.previewEdit(S.pfId, o.edit.txId, u) : T.tx.preview(S.pfId, u);
       if (pv.error && !pv.ev) { pe.hidden = false; pe.textContent = 'No se puede calcular la vista previa.'; pg.hidden = true; errEl.textContent = pv.error; subBtn.disabled = true; if (pd) pd.hidden = true; return; }
       lastPv = pv; pe.hidden = true; pg.hidden = false;
       var ev = pv.ev, ccy = ev.ccy || 'MXN', pos = posOf(S.tk);
@@ -280,7 +310,7 @@
         setN('qtyB', qb, function (v) { return nfQ.format(v); }); setN('qtyA', pv.qtyAfter, function (v) { return v <= 1e-9 ? 'Cierra la posición' : nfQ.format(v); });
         if (S.type === 'buy') { setN('avgB', pos ? pos.avg : null, function (v) { return cp(ccy, v); }); setN('avgA', pv.avgAfter, function (v) { return cp(ccy, v); }); }
       }
-      if (S.type === 'sell') {
+      if (S.type === 'sell' && !E) {
         setN('real', pv.realized, function (v) { return (v > 0.004 ? '+' : '') + mxn(v); });
         setN('tax', pv.tax, mxn);
         if (pd) { pd.hidden = false; pd.textContent = 'ISR calculado a ' + Math.round((pv.taxRate || 0) * 100) + ' % sobre la ganancia' + (pv.taxRate === 0.3 ? ' (tasa marginal estimada para cripto)' : '') + '. Es una estimación descriptiva.'; }
@@ -300,13 +330,13 @@
 
     /* ---------- tipo / portafolio ---------- */
     function setType(t, keepFocus) {
-      S.type = t; if (t !== 'sell' && t !== 'div' && t !== 'buy') S.tk = ''; if (t === 'sell' || t === 'div') { var p = posOf(S.tk); if (!p) { S.tk = ''; S.name = ''; } }
-      S.pxEd = false; S.feeEd = false; S.px = ''; S.fee = '';
-      var seg = $('.txs-seg'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b, i) { var on = b.getAttribute('data-ty') === t; b.setAttribute('aria-pressed', String(on)); if (on) seg.style.setProperty('--i', i); });
-      subBtn.textContent = SUBMIT[t];
+      S.type = t; if (t !== 'sell' && t !== 'div' && t !== 'buy') S.tk = ''; if (!editInit && (t === 'sell' || t === 'div')) { var p = posOf(S.tk); if (!p) { S.tk = ''; S.name = ''; } }
+      if (!editInit) { S.pxEd = false; S.feeEd = false; S.px = ''; S.fee = ''; }
+      var seg = $('.txs-seg'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b, i) { var on = b.getAttribute('data-ty') === t; b.setAttribute('aria-pressed', String(on)); b.disabled = !!E && !on; if (on) seg.style.setProperty('--i', i); });
+      subBtn.textContent = E ? 'Guardar cambios' : SUBMIT[t];
       if ((t === 'sell' || t === 'div') && !S.tk) { var ps = (pf() && pf().positions) || []; if (o.ticker && posOf(o.ticker)) { S.tk = o.ticker; S.name = posOf(o.ticker).name; } else if (ps.length === 1) { S.tk = ps[0].ticker; S.name = ps[0].name; } }
       if (t === 'buy' && !S.tk && o.ticker && catOf(o.ticker)) { S.tk = o.ticker; S.name = catOf(o.ticker).name; }
-      buildFields(); buildPrev(); refreshPx(true); queuePreview();
+      buildFields(); buildPrev(); if (!editInit) refreshPx(true); queuePreview(); editInit = false;
     }
 
     /* ---------- eventos ---------- */
@@ -363,11 +393,22 @@
       var u = payload(true);
       if (RL) { /* producción: se guarda en la cuenta; el botón espera la respuesta del servidor */
         var lbl = subBtn.textContent; subBtn.disabled = true; subBtn.textContent = 'Guardando…'; errEl.textContent = '';
+        var pid0 = S.pfId;
+        if (E) { /* edición: se guarda y el aviso ofrece Deshacer (deja el movimiento como estaba) */
+          Promise.resolve(T.tx.edit(pid0, o.edit.txId, u)).then(function (r) {
+            if (!r || r.error) { subBtn.textContent = lbl; subBtn.disabled = false; errEl.textContent = (r && r.error) || 'No se pudo guardar.'; return; }
+            close();
+            toast('Movimiento actualizado', function () { Promise.resolve(T.tx.restore(pid0, r.before)).then(function (x) { undoMsg(x && x.error ? x.error : 'Cambio deshecho'); }); });
+            if (typeof o.onDone === 'function') { try { o.onDone(r); } catch (x) { } }
+          });
+          return;
+        }
         Promise.resolve(T.tx.add(S.pfId, u)).then(function (r) {
           if (!r || r.error) { subBtn.textContent = lbl; subBtn.disabled = false; errEl.textContent = (r && r.error) || 'No se pudo registrar.'; return; }
           var tt = S.type, m2 = tt === 'buy' ? 'Compra de ' + nfQ.format(r.qty) + ' ' + r.tk + ' registrada' : tt === 'sell' ? 'Venta de ' + nfQ.format(r.qty) + ' ' + r.tk + ' registrada'
             : tt === 'dep' ? 'Aportación de ' + mxn(r.amount) + ' registrada' : tt === 'wd' ? 'Retiro de ' + mxn(r.amount) + ' registrado' : 'Dividendo de ' + r.tk + ' por ' + mxn(r.amount) + ' registrado';
-          close(); toast(m2, null);
+          close();
+          toast(m2, r.id ? function () { Promise.resolve(T.tx.remove(pid0, [r.id])).then(function (x) { undoMsg(x && x.error ? x.error : 'Movimiento deshecho'); }); } : null);
           if (typeof o.onDone === 'function') { try { o.onDone(r); } catch (x) { } }
         });
         return;

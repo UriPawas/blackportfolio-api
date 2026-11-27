@@ -192,11 +192,12 @@
   }
   function openMenu(btn, id) {
     var p = getP(id); if (!p) return;
-    var m = openPop(btn, '<button role="menuitem" type="button" data-m="ren" data-first>' + ic('pen') + 'Renombrar</button><button role="menuitem" type="button" data-m="csv">' + ic('down') + 'Exportar CSV</button><button role="menuitem" type="button" data-m="del" class="is-danger">' + ic('trash') + 'Eliminar</button>', 'Acciones de ' + p.name);
+    var m = openPop(btn, '<button role="menuitem" type="button" data-m="ren" data-first>' + ic('pen') + 'Renombrar</button>' + (T.canWrite ? '<button role="menuitem" type="button" data-m="edit">' + ic('pen') + 'Editar portafolio…</button>' : '') + '<button role="menuitem" type="button" data-m="csv">' + ic('down') + 'Exportar CSV</button><button role="menuitem" type="button" data-m="del" class="is-danger">' + ic('trash') + 'Eliminar</button>', 'Acciones de ' + p.name);
     m.addEventListener('click', function (e) {
       var b = e.target.closest('[data-m]'); if (!b) return;
       var a = b.dataset.m;
       if (a === 'ren') { closePop(false); startRename(id); }
+      else if (a === 'edit') { closePop(true); openEdit(id); }
       else if (a === 'csv') { closePop(true); exportCSV(p); }
       else if (a === 'del') confirmDelete(btn, id);
     });
@@ -390,6 +391,35 @@
       }
       sh.close(true); T.add(spec);
       toast('Creaste «' + v + '»'); live('Portafolio ' + v + ' creado');
+    });
+  }
+  /* editar un portafolio de la cuenta: nombre, descripción, moneda (convierte el efectivo) y referencia */
+  var BENCH_ED = [['^GSPC', 'S&P 500'], ['^IXIC', 'NASDAQ 100'], ['^DJI', 'Dow Jones'], ['URTH', 'MSCI World (ETF)'], ['EEM', 'MSCI Emerging Markets (ETF)'], ['^MXX', 'IPC México'], ['^FTSE', 'FTSE 100'], ['^N225', 'Nikkei 225'], ['none', 'Sin referencia']];
+  function openEdit(id) {
+    var m = T.meta ? T.meta(id) : null; if (!m) return;
+    var ccys = CCY.indexOf(m.currency) < 0 ? CCY.concat(m.currency) : CCY, bm = BENCH_ED.some(function (b) { return b[0] === m.benchmark; }) ? m.benchmark : '^GSPC';
+    var sh = openSheet('Editar portafolio',
+      '<form class="tkl-form" novalidate>' +
+      '<div class="tkl-fld"><label for="tklEN">Nombre</label><input id="tklEN" maxlength="40" autocomplete="off" required data-autofocus value="' + esc(m.name) + '"><p class="tkl-err" role="alert" id="tklENe"></p></div>' +
+      '<div class="tkl-fld"><label for="tklED">Descripción <span>(opcional)</span></label><input id="tklED" maxlength="120" autocomplete="off" value="' + esc(m.desc) + '"></div>' +
+      '<div class="tkl-two"><div class="tkl-fld"><label for="tklEC">Moneda</label><select id="tklEC">' + ccys.map(function (c) { return '<option' + (c === m.currency ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="tkl-fld"><label for="tklEB">Referencia</label><select id="tklEB">' + BENCH_ED.map(function (b) { return '<option value="' + esc(b[0]) + '"' + (b[0] === bm ? ' selected' : '') + '>' + esc(b[1]) + '</option>'; }).join('') + '</select></div></div>' +
+      '<p class="tkl-lead" id="tklEX" hidden></p>' +
+      '<div class="tkl-mact"><button type="button" class="btn btn-ghost btn-sm" data-mclose>Cancelar</button><button type="submit" class="btn btn-primary btn-sm">Guardar cambios</button></div></form>');
+    var f = $('form', sh.el), n = $('#tklEN', f), er = $('#tklENe', f), cs = $('#tklEC', f), note = $('#tklEX', f), sb = $('[type="submit"]', f);
+    n.addEventListener('input', function () { n.removeAttribute('aria-invalid'); er.textContent = ''; });
+    cs.addEventListener('change', function () {
+      var chg = cs.value !== m.currency; note.hidden = !chg;
+      if (chg) note.textContent = 'Tu efectivo y los importes que guardan tus movimientos se convertirán a ' + cs.value + ' con el tipo de cambio de hoy. Tus posiciones conservan la moneda de cada activo.';
+    });
+    f.addEventListener('submit', function (e) {
+      e.preventDefault(); var v = n.value.trim();
+      if (!v) { n.setAttribute('aria-invalid', 'true'); n.setAttribute('aria-describedby', 'tklENe'); er.textContent = 'Escribe un nombre para el portafolio.'; n.focus(); return; }
+      sb.disabled = true; sb.textContent = 'Guardando…'; er.textContent = '';
+      Promise.resolve(T.update(id, { name: v, desc: $('#tklED', f).value.trim(), currency: cs.value, benchmark: $('#tklEB', f).value })).then(function (r) {
+        if (!r || r.error) { sb.disabled = false; sb.textContent = 'Guardar cambios'; er.textContent = (r && r.error) || 'No se pudo guardar.'; return; }
+        sh.close(); toast('Cambios guardados en «' + v + '»' + (r.converted ? ' · efectivo convertido a ' + r.converted.to : '')); live('Portafolio ' + v + ' actualizado');
+      });
     });
   }
   function openImport() {

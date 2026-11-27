@@ -37,7 +37,7 @@
   function norm(ev, k, saved) {
     return { t: ev.t, date: ev.date, tk: ev.tk || '', name: ev.name || ev.tk || '', qty: +ev.qty || 0, px: +ev.px || 0,
       ccy: ev.ccy || '', fx: ev.fx, mxn: +ev.mxn || 0, sign: signOf(ev.t), saved: saved, k: k,
-      user: !!ev.user, uid: ev.uid, auto: !!ev.auto, note: ev.note || '' };
+      user: !!ev.user, real: !!ev.real, pf: ev.pf, uid: ev.uid, auto: !!ev.auto, note: ev.note || '' };
   }
 
   function render(mount, portfolio, T) {
@@ -142,9 +142,17 @@
         '<td class="r num">' + (sec && e.px ? pxTxt(e.ccy, e.px) : '—') + '</td>' +
         '<td class="r num">' + (e.ccy !== BS() && e.fx ? nfP.format(e.fx) : '—') + '</td>' +
         '<td class="r num pftx-mo">' + signed(e.sign * e.mxn) + '</td>' +
-        '<td class="pftx-ac">' + (e.user && !e.auto && e.uid ? '<button type="button" class="pftx-del" data-del="' + esc(e.uid) + '" data-pf="' + esc(pfId || ownerOf(e.uid)) + '" aria-label="' +
-          esc('Eliminar ' + TYPES[e.t].toLowerCase() + (e.tk ? ' de ' + e.tk : '') + ' del ' + dateTxt(e.date)) + '" title="Eliminar">' +
-          '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg></button>' : '') + '</td></tr>';
+        '<td class="pftx-ac">' + actionsHTML(e) + '</td></tr>';
+    }
+    /* movimientos propios: los del prototipo (user) se borran con Deshacer; los de la cuenta (real) además se editan */
+    function actionsHTML(e) {
+      var real = !!(e.real && e.uid && !e.auto && T.canWrite && !T.readonly), mine = real || !!(e.user && !e.auto && e.uid);
+      if (!mine) return '';
+      var pid = real ? (e.pf || pfId) : (pfId || ownerOf(e.uid)), what = TYPES[e.t].toLowerCase() + (e.tk ? ' de ' + e.tk : '') + ' del ' + dateTxt(e.date);
+      return (real ? '<button type="button" class="pftx-edit" data-edit="' + esc(e.uid) + '" data-pf="' + esc(pid) + '" aria-label="' + esc('Editar ' + what) + '" title="Editar">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg></button>' : '') +
+        '<button type="button" class="pftx-del" data-del="' + esc(e.uid) + '" data-pf="' + esc(pid) + '" aria-label="' + esc('Eliminar ' + what) + '" title="Eliminar">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg></button>';
     }
     function makeRow(e) { var t = doc.createElement('tbody'); t.innerHTML = rowHTML(e); return t.firstElementChild; }
     saved.forEach(function (e) { rowsM.push({ e: e, k: e.k, tr: makeRow(e), want: undefined, anim: null }); });
@@ -238,6 +246,29 @@
       $('[data-ax0]').textContent = monthShort(a); $('[data-ax1]').textContent = monthShort(b);
     })();
 
+    /* ---------- aviso (con Deshacer opcional) ---------- */
+    function notice(msg, undo, role) {
+      var t = doc.createElement('div'); t.className = 'txs-toast'; t.setAttribute('role', role || 'status');
+      t.innerHTML = '<span></span>' + (undo ? '<button type="button" class="txs-undo">Deshacer</button>' : ''); t.firstChild.textContent = msg;
+      doc.body.appendChild(t); void t.offsetWidth; t.classList.add('on');
+      var gone = setTimeout(function () { t.classList.remove('on'); setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 220); }, undo ? 7000 : 6000);
+      var b = t.querySelector('button'); if (b) b.onclick = function () { clearTimeout(gone); if (t.parentNode) t.parentNode.removeChild(t); undo(); };
+    }
+    /* ---------- movimientos de la cuenta: editar y eliminar (la posición y el efectivo se recalculan) ---------- */
+    function editReal(btn) {
+      if (window.CampoTxSheet) window.CampoTxSheet.open({ pfId: btn.getAttribute('data-pf'), edit: { txId: btn.getAttribute('data-edit') }, from: btn });
+    }
+    function removeReal(btn) {
+      var tid = btn.getAttribute('data-del'), pid = btn.getAttribute('data-pf'); btn.disabled = true;
+      Promise.resolve(T.tx.remove(pid, [tid])).then(function (res) {
+        btn.disabled = false;
+        if (!res || res.error) { notice((res && res.error) || 'No se pudo eliminar.', null, 'alert'); return; }
+        var rm = res.removed || {}, nm = { COMPRA: 'Compra', VENTA: 'Venta', DIVIDENDO: 'Dividendo', DEPOSITO: 'Aportación', RETIRO: 'Retiro' }[rm.type] || 'Movimiento';
+        notice(nm + (rm.ticker && rm.ticker !== 'CASH' ? ' de ' + rm.ticker : '') + ' eliminado', function () {
+          Promise.resolve(T.tx.restore(pid, rm)).then(function (x) { if (x && x.error) notice(x.error, null, 'alert'); else notice('Movimiento restaurado', null); });
+        });
+      });
+    }
     /* ---------- borrar un movimiento propio (con Deshacer) ---------- */
     function removeUser(btn) {
       var uidv = btn.getAttribute('data-del'), pid = btn.getAttribute('data-pf'), raw = T.tx.list(pid), rec = null;
@@ -282,7 +313,8 @@
       if (chip) { var f = chip.getAttribute('data-f'); if (f !== filt) { filt = f; applyFilter(true); } return; }
       var rg = e.target.closest('[data-reg]'); if (rg) { openSheet(rg); return; }
       if (e.target.closest('[data-csv]')) { exportCsv(); return; }
-      var dl = e.target.closest('[data-del]'); if (dl) { removeUser(dl); }
+      var ed = e.target.closest('[data-edit]'); if (ed) { editReal(ed); return; }
+      var dl = e.target.closest('[data-del]'); if (dl) { if (T.canWrite) removeReal(dl); else removeUser(dl); }
     });
     on(searchEl, 'input', function () { applyFilter(true); });
 

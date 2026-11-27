@@ -26,7 +26,8 @@
     { sym: 'Bono 10a EE. UU.', y: '^TNX', unit: '%' }
   ];
   var EXTRA = [{ sym: 'VIX', y: '^VIX' }, { sym: 'Índice dólar (DXY)', y: 'DX-Y.NYB' }, { sym: 'Petróleo WTI', y: 'CL=F' }];
-  var BENCH = { '^GSPC': 'S&P 500', '^IXIC': 'NASDAQ 100', '^NDX': 'NASDAQ 100', '^MXX': 'S&P/BMV IPC', 'BTC-USD': 'Bitcoin' };
+  var BENCH = { '^GSPC': 'S&P 500', '^IXIC': 'NASDAQ 100', '^NDX': 'NASDAQ 100', '^MXX': 'S&P/BMV IPC', 'BTC-USD': 'Bitcoin',
+    '^DJI': 'Dow Jones', 'URTH': 'MSCI World', 'EEM': 'MSCI Emerging Markets', '^FTSE': 'FTSE 100', '^N225': 'Nikkei 225', 'none': 'Sin referencia' }; /* las últimas son las del editor de portafolio (mismas que la app anterior) */
   var SUF = [['.MX', 'MXN'], ['.SA', 'BRL'], ['.L', 'GBP'], ['.IL', 'GBP'], ['.PA', 'EUR'], ['.DE', 'EUR'], ['.MC', 'EUR'], ['.MI', 'EUR'], ['.AS', 'EUR'],
     ['.BR', 'EUR'], ['.LS', 'EUR'], ['.VI', 'EUR'], ['.TO', 'CAD'], ['.V', 'CAD'], ['.AX', 'AUD'], ['.NZ', 'NZD'], ['.HK', 'HKD'], ['.T', 'JPY'], ['.SS', 'CNY'], ['.SZ', 'CNY']];
   var CRYPTO = /^(BTC|ETH|SOL|XRP|ADA|DOGE|DOT|AVAX|MATIC|POL|LINK|LTC|BCH|XLM|ATOM|UNI|TRX|SHIB|NEAR|APT|ARB|OP|SUI|TON|BNB|USDT|USDC|PEPE|FIL|ICP|ETC|HBAR|ALGO|AAVE|MKR|INJ|RNDR|RENDER|SEI|TIA|WIF|BONK)(-[A-Z]{3,4})?$/;
@@ -218,7 +219,8 @@
       var e = ctx.paths[tk]; h = held[tk] = { ticker: tk, name: (e && e.name) || name || tk, ccy: e ? e.ccy : dispCcy(ccy), path: e ? e.path : null, lots: [], price: null, d1: 0, q: 0, avgQ: 0, avgC: 0, avgL: 0 };
       order.push(tk); return h;
     }
-    function add(e) { e.seq = seq++; e.pf = P.id; e.real = true; ev.push(e); return e; }
+    var curUid = null; /* id de la transacción que se está repitiendo: la pestaña Transacciones lo usa para editarla o borrarla */
+    function add(e) { e.seq = seq++; e.pf = P.id; e.real = true; if (curUid && !e.auto) e.uid = curUid; ev.push(e); return e; }
 
     /* 1) transacciones válidas, en orden de fecha (las guardadas van de la más nueva a la más vieja) */
     var TY = { COMPRA: 'buy', VENTA: 'sell', DIVIDENDO: 'div', DEPOSITO: 'dep', RETIRO: 'wd' };
@@ -245,6 +247,7 @@
     var cash = 0;
     list.forEach(function (o) {
       var t = o.t, typ = TY[t.type], idx = idxOn(o.d), fxP = toMXN(pfCcy, idx, o.d), tk = up(t.ticker), q = num(t.quantity) || 0, px = num(t.price) || 0;
+      curUid = o.synth || t.id == null ? null : String(t.id);
       if (typ === 'dep' || typ === 'wd') {
         var amt = Math.abs(fin(t.net) ? t.net : px * (q || 1)); if (!(amt > 0)) return;
         var amtPf = amt * toMXN(t.currency || pfCcy, idx, o.d) / fxP, cp = typ === 'dep' ? amtPf : -amtPf;
@@ -253,6 +256,7 @@
       }
       if (!tk || !(q > 0)) return;
       var lc = (ctx.paths[tk] && ctx.paths[tk].origCcy) || ccyOf(tk, t.currency, pfCcy), fxL = toMXN(lc, idx, o.d), h = hp(tk, null, lc), ex = h.ccy === 'MXN' && lc !== 'MXN';
+      if (fin(t.fxRate) && t.fxRate > 0 && lc !== pfCcy) fxL = t.fxRate * fxP; /* el tipo de cambio que cobró el bróker (unidades del portafolio por unidad del activo) */
       var gross = q * px, comm = fin(t.commCost) ? t.commCost : gross * (num(t.commissionPercent) || 0) / 100;
       var iva = fin(t.ivaCost) ? t.ivaCost : (t.applyIva ? comm * (num(t.ivaRate) || 0) / 100 : 0);
       var pxD = ex ? px * fxL : px, fxD = ex ? 1 : fxL;
@@ -277,6 +281,7 @@
       }
     });
 
+    curUid = null;
     /* Los ajustes van en la fecha del ÚLTIMO movimiento (de la emisora, o del portafolio): el efectivo y las cantidades solo
        cambian con movimientos, así que desde ahí ya valen lo registrado. Ponerlos "hoy" dibujaría una caída o un salto falso hoy. */
     var lastAt = { idx: -1, d: localDate(P.createdAt) || isoAdd(grid[0], -1) }, lastTk = {};
@@ -621,6 +626,8 @@
       (P.transactions || []).forEach(function (t) { var k = up(t.ticker); if (k && k !== 'CASH' && /^(COMPRA|VENTA|DIVIDENDO)$/.test(t.type) && !CTX.paths[k]) need[k] = need[k] || { cur: t.currency, pf: P.currency, avg: num(t.price) }; });
     });
     await ensure(Object.keys(need), need);
+    var cc = []; RAW.forEach(function (P) { cc.push(up(P.currency)); (P.positions || []).forEach(function (x) { if (x && x.ticker) cc.push(ccyOf(up(x.ticker), x.currency, null)); }); });
+    await loadCross(cc);
     var specs = RAW.map(function (P, k) { return specOf(P, k, null); }), R = W.CAMPO_REAL;
     R.portfolios = specs; R.version = VER;
     R.catalog.length = 0; Object.keys(CTX.paths).forEach(function (tk) { var e = CTX.paths[tk]; R.catalog.push({ ticker: tk, name: e.name, cls: e.cls, currency: e.ccy, price: e.price, d1: e.d1 }); });
@@ -647,20 +654,25 @@
         var amt = num(u.amount); if (!(amt > 0)) return { error: 'Escribe un monto mayor a cero.' };
         if (u.t === 'wd' && amt > cash + 1e-9) return { error: 'No puedes retirar más del efectivo disponible (' + money(cash, pfCcy) + ').' };
         P.cashBalance = u.t === 'dep' ? cash + amt : cash - amt;
-        P.transactions.unshift({ id: genId(), date: iso, type: u.t === 'dep' ? 'DEPOSITO' : 'RETIRO', ticker: 'CASH', quantity: 1, price: amt, commissionPercent: 0, commCost: 0, net: amt, currency: pfCcy });
-        return { ok: true, t: u.t, amount: amt, ccy: pfCcy, cashBefore: cash, cashAfter: P.cashBalance };
+        var txc = { id: genId(), date: iso, type: u.t === 'dep' ? 'DEPOSITO' : 'RETIRO', ticker: 'CASH', quantity: 1, price: amt, commissionPercent: 0, commCost: 0, net: amt, currency: pfCcy };
+        P.transactions.unshift(txc);
+        return { ok: true, id: txc.id, t: u.t, amount: amt, ccy: pfCcy, cashBefore: cash, cashAfter: P.cashBalance };
       }
       var tk = up(u.tk); if (!tk) return { error: 'Elige un activo.' };
       var pos = null; P.positions.forEach(function (x) { if (up(x.ticker) === tk) pos = x; });
       var path = CTX.paths[tk], posCur = pos ? ccyOf(tk, pos.currency, pfCcy) : ccyOf(tk, (path && path.origCcy) || u.ccy, pfCcy);
-      var ix = idxOn(d), conv = mxnAt(posCur, ix, d) / mxnAt(pfCcy, ix, d);
+      /* tipo de cambio: el de mercado de ese día o, si el usuario lo escribió (el real que cobró su bróker), ese */
+      var ix = idxOn(d), cfx = customFx(u, posCur, pfCcy, d); if (cfx.error) return cfx;
+      var conv = cfx.v || mxnAt(posCur, ix, d) / mxnAt(pfCcy, ix, d);
       if (u.t === 'div') {
         if (!pos) return { error: 'El dividendo debe ser de una posición que tienes.' };
         var per = num(u.px); if (!(per > 0)) return { error: 'Escribe el dividendo por acción.' };
         var qd = qtyHeldOn(P, tk, d); if (!(qd > 0)) return { error: 'El ' + d + ' no tenías ' + tk + ' según tus movimientos.' };
         var gross = per * qd, gPf = gross * conv; P.cashBalance = cash + gPf;
-        P.transactions.unshift({ id: genId(), date: iso, type: 'DIVIDENDO', ticker: tk, quantity: qd, price: per, commissionPercent: 0, commCost: 0, net: gross, currency: posCur, cashApplied: gPf });
-        return { ok: true, t: 'div', tk: tk, qty: qd, amount: gPf, ccy: pfCcy, posCcy: posCur, cashBefore: cash, cashAfter: P.cashBalance };
+        var txd = { id: genId(), date: iso, type: 'DIVIDENDO', ticker: tk, quantity: qd, price: per, commissionPercent: 0, commCost: 0, net: gross, currency: posCur, cashApplied: gPf };
+        if (cfx.v) txd.fxRate = cfx.v;
+        P.transactions.unshift(txd);
+        return { ok: true, id: txd.id, t: 'div', tk: tk, qty: qd, amount: gPf, ccy: pfCcy, posCcy: posCur, cashBefore: cash, cashAfter: P.cashBalance };
       }
       var qty = num(u.qty), px = num(u.px), comm = Math.max(0, num(u.comm) || 0), applyIva = !!u.iva && comm > 0, ivaRate = applyIva ? (num(u.ivaRate) || 16) : 0;
       if (!(qty > 0)) return { error: 'Escribe una cantidad mayor a cero.' };
@@ -683,8 +695,9 @@
         P.cashBalance = cash - used;
         var tx = { id: genId(), date: iso, type: 'COMPRA', ticker: tk, quantity: qty, price: px, commissionPercent: comm, commCost: commCost, net: g2 + commCost + ivaCost, currency: posCur };
         if (ivaCost > 0) { tx.applyIva = true; tx.ivaRate = ivaRate; tx.ivaCost = ivaCost; }
+        if (cfx.v) tx.fxRate = cfx.v;
         tx.cashApplied = -used; P.transactions.unshift(tx);
-        return { ok: true, t: 'buy', tk: tk, qty: qty, amount: costPf, ccy: pfCcy, posCcy: posCur, used: used, external: costPf - used, cashBefore: cash, cashAfter: P.cashBalance,
+        return { ok: true, id: tx.id, t: 'buy', tk: tk, qty: qty, amount: costPf, ccy: pfCcy, posCcy: posCur, used: used, external: costPf - used, cashBefore: cash, cashAfter: P.cashBalance,
           qtyBefore: qBefore, qtyAfter: num(pos.quantity), avgBefore: avgBefore, avgAfter: num(pos.avgPrice) };
       }
       if (u.t === 'sell') {
@@ -698,14 +711,144 @@
         P.cashBalance = cash + netPf;
         var tx2 = { id: genId(), date: iso, type: 'VENTA', ticker: tk, quantity: qty, price: px, commissionPercent: comm, commCost: commCost, net: net, currency: posCur };
         if (ivaCost > 0) { tx2.applyIva = true; tx2.ivaRate = ivaRate; tx2.ivaCost = ivaCost; }
+        if (cfx.v) tx2.fxRate = cfx.v;
         tx2.cashApplied = netPf; P.transactions.unshift(tx2);
         var cls = path ? path.cls : '', taxRate = /Cripto/.test(cls) ? 0.30 : /Deuda/.test(cls) ? 0 : 0.10;
-        return { ok: true, t: 'sell', tk: tk, qty: qty, amount: netPf, ccy: pfCcy, posCcy: posCur, cashBefore: cash, cashAfter: P.cashBalance,
+        return { ok: true, id: tx2.id, t: 'sell', tk: tk, qty: qty, amount: netPf, ccy: pfCcy, posCcy: posCur, cashBefore: cash, cashAfter: P.cashBalance,
           qtyBefore: qBefore, qtyAfter: Math.max(0, qBefore - qty), realized: realized, taxRate: taxRate, tax: Math.max(0, realized) * taxRate };
       }
       return { error: 'Tipo de movimiento desconocido.' };
     };
   }
+  /* ====== tipo de cambio que escribe el usuario ====== */
+  function marketConv(cur, pc, d) { var ix = idxOn(d); return mxnAt(cur, ix, d) / mxnAt(pc, ix, d); }
+  /* { v } con el tipo de cambio escrito (unidades del portafolio por unidad del activo), { v: 0 } si no aplica, o { error } si se aleja de lo razonable */
+  function customFx(u, cur, pc, d) {
+    var v = num(u && u.fx); if (!(v > 0) || cur === pc) return { v: 0 };
+    var m = marketConv(cur, pc, d);
+    if (m > 0 && Math.abs(v / m - 1) > 0.4) return { error: 'Ese tipo de cambio (' + v + ') se aleja mucho del de mercado (≈ ' + m.toFixed(4) + '). Revísalo.' };
+    return { v: v };
+  }
+
+  /* ====== editar o eliminar un movimiento ======
+     Misma aritmética que applyTxMutation de main.js (la app anterior). El libro es la bitácora y las posiciones se guardan aparte con promedio móvil
+     (la venta solo baja la cantidad; el precio y la comisión promedio no cambian). Al tocar una compra o venta se reconstruye la posición de esa emisora
+     repitiendo su historial sobre la parte que ninguna transacción explica (posición capturada a mano o importada); el efectivo se corrige revirtiendo el
+     efecto EXACTO del movimiento viejo y aplicando el del nuevo. oldT null = alta (deshacer un borrado); newT null = baja. */
+  function txKind(t) { return t.type === 'COMPRA' || t.type === 'VENTA'; }
+  function txFind(P, id) { var r = null; (P.transactions || []).forEach(function (t, i) { if (t && id != null && String(t.id) === String(id)) r = { t: t, i: i }; }); return r; }
+  function commOf(t) { return fin(t.commCost) ? t.commCost : (num(t.price) || 0) * (num(t.quantity) || 0) * (num(t.commissionPercent) || 0) / 100; }
+  function ivaOf(t) { return fin(t.ivaCost) ? t.ivaCost : (t.applyIva ? commOf(t) * (num(t.ivaRate) || 0) / 100 : 0); }
+  function netOf(t) {
+    if (fin(t.net) && t.net > 0) return t.net;
+    var g = (num(t.price) || 0) * (num(t.quantity) || 1);
+    return t.type === 'COMPRA' ? g + commOf(t) + ivaOf(t) : t.type === 'VENTA' ? g - commOf(t) - ivaOf(t) : g;
+  }
+  function convFor(P, t, d) { /* unidades de la moneda del portafolio por unidad de la del movimiento */
+    var pc = up(P.currency) || 'USD', c = up(t.currency) || pc; if (c === pc) return 1;
+    return fin(t.fxRate) && t.fxRate > 0 ? t.fxRate : marketConv(c, pc, d);
+  }
+  function idealCash(P, t) { var d = localDate(t.date) || todayLocal(); return ((t.type === 'COMPRA' || t.type === 'RETIRO') ? -1 : 1) * netOf(t) * convFor(P, t, d); }
+  function cashEffect(P, t) { return fin(t.cashApplied) ? t.cashApplied : idealCash(P, t); } /* el registrado al crearlo; si es anterior a eso, el teórico */
+  function posOf(P, tk) { var r = null; (P.positions || []).forEach(function (x) { if (up(x.ticker) === tk) r = x; }); return r; }
+  function txOrder(P, tk) { /* compras y ventas de la emisora en orden cronológico (las guardadas van de la más nueva a la más vieja) */
+    var l = []; (P.transactions || []).forEach(function (t, i) { if (t && txKind(t) && up(t.ticker) === tk) l.push({ t: t, ms: Date.parse(t.date) || 0, i: i }); });
+    l.sort(function (a, b) { return a.ms - b.ms || b.i - a.i; }); return l.map(function (x) { return x.t; });
+  }
+  /* repite compras y ventas desde s = { q, inv, comm, iva } (lo invertido, la comisión y el IVA de esas q unidades); A = cuánto de s sobrevive a las ventas */
+  function runPos(txs, s) {
+    var q = s.q, inv = s.inv, comm = s.comm, iva = s.iva, first = s.date || null, A = 1, cur = null, bad = null;
+    txs.forEach(function (t) {
+      var n = num(t.quantity) || 0, d = localDate(t.date), c = up(t.currency); if (c) cur = c;
+      if (t.type === 'COMPRA') {
+        if (d && (q <= 1e-9 || !first || d < first)) first = d;
+        q += n; inv += (num(t.price) || 0) * n; comm += commOf(t); iva += ivaOf(t);
+      } else {
+        if (n > q + 1e-9 && !bad) bad = { d: d };
+        var f = q > 1e-12 ? Math.max(0, (q - n) / q) : 0; q = Math.max(0, q - n); inv *= f; comm *= f; iva *= f; A *= f;
+      }
+    });
+    return { q: q, inv: inv, comm: comm, iva: iva, date: first, A: A, cur: cur, bad: bad };
+  }
+  /* la parte de la posición que ninguna transacción explica, resuelta hacia atrás sobre el estado de ANTES de mutar */
+  function baselineOf(P, tk) {
+    var pos = posOf(P, tk), txs = txOrder(P, tk), z = { q: 0, inv: 0, comm: 0, iva: 0, date: pos ? pos.purchaseDate || null : null };
+    if (!pos) return z;
+    var net = 0; txs.forEach(function (t) { net += (t.type === 'COMPRA' ? 1 : -1) * (num(t.quantity) || 0); });
+    var Q = num(pos.quantity) || 0, q0 = Q - net; if (q0 <= 1e-9) return z;
+    var B = runPos(txs, { q: q0, inv: 0, comm: 0, iva: 0 }); if (!(B.A > 1e-9)) return z;
+    var I = (num(pos.avgPrice) || 0) * Q, C = I * (num(pos.commissionPercent) || 0) / 100, V = C * (pos.applyIva ? (num(pos.ivaRate) || 0) : 0) / 100;
+    return { q: q0, inv: Math.max(0, (I - B.inv) / B.A), comm: Math.max(0, (C - B.comm) / B.A), iva: Math.max(0, (V - B.iva) / B.A), date: z.date };
+  }
+  function rebuildPos(P, tk, base) {
+    var r = runPos(txOrder(P, tk), base), q = +r.q.toFixed(10), pos = posOf(P, tk); P.positions = P.positions || [];
+    if (q <= 1e-9) { if (pos) P.positions = P.positions.filter(function (x) { return x !== pos; }); return; } /* posición cerrada */
+    var avg = r.inv / q, cp = r.inv > 0 ? r.comm / r.inv * 100 : 0, on = r.iva > 1e-12, rate = on && r.comm > 1e-12 ? r.iva / r.comm * 100 : 0;
+    if (pos) { pos.quantity = q; pos.avgPrice = avg; pos.commissionPercent = cp; pos.applyIva = on; pos.ivaRate = rate; if (r.date) pos.purchaseDate = r.date; if (r.cur) pos.currency = r.cur; }
+    else P.positions.push({ id: genId(), ticker: tk, avgPrice: avg, quantity: q, commissionPercent: cp, applyIva: on, ivaRate: rate, purchaseDate: r.date, currency: r.cur || up(P.currency) || 'USD' });
+  }
+  function histError(P, tk, base) {
+    var r = runPos(txOrder(P, tk), base); if (!r.bad) return null;
+    return 'Con ese cambio, la venta de ' + tk + (r.bad.d ? ' del ' + r.bad.d.split('-').reverse().join('/') : '') + ' vendería más de lo que tenías. Ajusta o elimina primero esa venta.';
+  }
+  function applyMutation(P, oldT, newT) {
+    var pc = up(P.currency) || 'USD', aff = {}, base = {}, tks, i;
+    [oldT, newT].forEach(function (t) { if (t && txKind(t)) aff[up(t.ticker)] = 1; });
+    tks = Object.keys(aff); tks.forEach(function (k) { base[k] = baselineOf(P, k); });
+    var cash = num(P.cashBalance) || 0;
+    if (oldT) cash -= cashEffect(P, oldT);
+    if (newT) {
+      var ideal = idealCash(P, newT);
+      if (newT.type === 'RETIRO' && -ideal > Math.max(0, cash) + 1e-9) return { error: 'No puedes retirar más del efectivo disponible (' + money(Math.max(0, cash), pc) + ').' };
+      var applied = ideal < 0 && newT.type !== 'RETIRO' ? -Math.min(-ideal, Math.max(0, cash)) : ideal; /* una compra solo gasta el efectivo que hay; el resto es aportación externa */
+      newT.cashApplied = applied; cash += applied;
+    }
+    if (cash < -0.005) return { error: 'Sin ese movimiento tu efectivo quedaría en ' + money(cash, pc) + '. Cambia o elimina primero lo que gastó ese dinero.' };
+    P.transactions = P.transactions || [];
+    if (oldT) { var f = txFind(P, oldT.id); if (!f) return { error: 'No encontramos ese movimiento.' }; if (newT) P.transactions[f.i] = newT; else P.transactions.splice(f.i, 1); }
+    else if (newT) P.transactions.unshift(newT);
+    for (i = 0; i < tks.length; i++) { var bad = histError(P, tks[i], base[tks[i]]); if (bad) return { error: bad }; }
+    tks.forEach(function (k) { rebuildPos(P, k, base[k]); });
+    P.cashBalance = Math.abs(cash) < 1e-9 ? 0 : cash;
+    return { ok: true };
+  }
+  /* un movimiento nuevo a partir de la intención del formulario (mismos campos que txIntent), conservando el id y la hora si no cambió el día */
+  function buildTx(P, u, oldT) {
+    var pc = up(P.currency) || 'USD', today = todayLocal(), oldD = oldT ? localDate(oldT.date) : null, d = u.date || oldD || today;
+    if (d > today) return { error: 'La fecha no puede ser futura.' };
+    var iso = oldD === d ? oldT.date : (d === today ? new Date().toISOString() : new Date(d + 'T12:00:00').toISOString()), id = oldT ? oldT.id : genId();
+    if (u.t === 'dep' || u.t === 'wd') {
+      var amt = num(u.amount); if (!(amt > 0)) return { error: 'Escribe un monto mayor a cero.' };
+      return { tx: { id: id, date: iso, type: u.t === 'dep' ? 'DEPOSITO' : 'RETIRO', ticker: 'CASH', quantity: 1, price: amt, commissionPercent: 0, commCost: 0, net: amt, currency: pc } };
+    }
+    var tk = up(u.tk); if (!tk) return { error: 'Elige un activo.' };
+    var pos = posOf(P, tk), path = CTX.paths[tk];
+    var cur = (oldT && up(oldT.ticker) === tk && up(oldT.currency)) || (pos ? ccyOf(tk, pos.currency, pc) : ccyOf(tk, (path && path.origCcy) || u.ccy, pc));
+    var cfx = customFx(u, cur, pc, d); if (cfx.error) return cfx;
+    if (u.t === 'div') {
+      var per = num(u.px); if (!(per > 0)) return { error: 'Escribe el dividendo por acción.' };
+      var qd = qtyHeldOn(P, tk, d); if (!(qd > 0)) return { error: 'El ' + d + ' no tenías ' + tk + ' según tus movimientos.' };
+      var dv = { id: id, date: iso, type: 'DIVIDENDO', ticker: tk, quantity: qd, price: per, commissionPercent: 0, commCost: 0, net: per * qd, currency: cur };
+      if (cfx.v) dv.fxRate = cfx.v; return { tx: dv };
+    }
+    var qty = num(u.qty), px = num(u.px), comm = Math.max(0, num(u.comm) || 0), applyIva = !!u.iva && comm > 0, ivaRate = applyIva ? (num(u.ivaRate) || 16) : 0;
+    if (!(qty > 0)) return { error: 'Escribe una cantidad mayor a cero.' };
+    if (!(px > 0)) return { error: 'Escribe un precio mayor a cero.' };
+    var g = qty * px, commCost = g * comm / 100, ivaCost = commCost * ivaRate / 100, buy = u.t === 'buy';
+    var tx = { id: id, date: iso, type: buy ? 'COMPRA' : 'VENTA', ticker: tk, quantity: qty, price: px, commissionPercent: comm, commCost: commCost, net: buy ? g + commCost + ivaCost : g - commCost - ivaCost, currency: cur };
+    if (ivaCost > 0) { tx.applyIva = true; tx.ivaRate = ivaRate; tx.ivaCost = ivaCost; }
+    if (cfx.v) tx.fxRate = cfx.v;
+    return { tx: tx };
+  }
+  /* divisas cruzadas (EUR, GBP…) que solo se cargaban al arrancar: un portafolio nuevo o con la moneda cambiada las necesita ya */
+  async function loadCross(cs) {
+    cs = cs.filter(function (c, i) { return c && c !== 'USD' && c !== 'MXN' && !CTX.cross[c] && cs.indexOf(c) === i; }); if (!cs.length) return;
+    var syms = cs.map(function (c) { return c + 'MXN=X'; }), live = await livePrices(syms), H = {};
+    await pool(syms, 3, async function (s) { H[s] = await history(s, '1y', '1d', grid[LAST - 1]); });
+    cs.forEach(function (c) { var s = c + 'MXN=X'; if (H[s] || live[s]) CTX.cross[c] = seriesFor(H[s], live[s], null).a; });
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
   var WRITE = {
     busy: function () { return SAVING; },
     limits: limits,
@@ -724,7 +867,63 @@
     deletePortfolio: function (id) {
       return commit(function (arr) { var i = -1; arr.forEach(function (P, k) { if (String(P.id) === String(id)) i = k; }); if (i < 0) return { error: 'No encontramos ese portafolio.' }; arr.splice(i, 1); return { ok: true }; });
     },
+    portfolioMeta: function (id) { var P = pfById(RAW, id); return P ? { name: P.name || '', desc: P.description || '', currency: up(P.currency) || 'USD', benchmark: P.benchmark || '^GSPC', cash: num(P.cashBalance) || 0 } : null; },
+    updatePortfolio: async function (id, o) {
+      var want = up(o.currency); if (want) await loadCross([want]);
+      return commit(function (arr) {
+        var P = pfById(arr, id); if (!P) return { error: 'No encontramos ese portafolio.' };
+        var n = String(o.name == null ? P.name : o.name).trim(); if (!n) return { error: 'Escribe un nombre.' };
+        P.name = n.slice(0, 120); P.description = String(o.desc == null ? (P.description || '') : o.desc).trim().slice(0, 500);
+        if (o.benchmark) P.benchmark = BENCH_OUT[o.benchmark] || o.benchmark;
+        var oc = up(P.currency) || 'USD', nc = want || oc, res = { ok: true };
+        if (nc !== oc) {
+          /* el efectivo se CONVIERTE, no se redenomina (10 000 USD no pasan a 10 000 MXN); y con él los importes que cada movimiento guardó para poder revertirse */
+          if (nc !== 'USD' && nc !== 'MXN' && !MX.cross[nc]) return { error: 'No pudimos obtener el tipo de cambio de ' + nc + '. La moneda no se cambió, para no redenominar tu efectivo.' };
+          var rate = mxnPer(oc, LAST) / mxnPer(nc, LAST), cash = num(P.cashBalance) || 0;
+          P.cashBalance = cash * rate;
+          (P.transactions || []).forEach(function (t) { if (fin(t.cashApplied)) t.cashApplied *= rate; if (fin(t.fxRate)) t.fxRate *= rate; });
+          P.currency = nc; res.converted = { from: oc, to: nc, cash: cash, cashAfter: P.cashBalance };
+        }
+        return res;
+      });
+    },
     addTx: function (id, u) { return commit(txIntent(id, u)); },
+    getTx: function (pfId, txId) { var P = pfById(RAW, pfId), f = P && txFind(P, txId); return f ? clone(f.t) : null; },
+    editTx: function (pfId, txId, u) {
+      return commit(function (arr) {
+        var P = pfById(arr, pfId); if (!P) return { error: 'No encontramos ese portafolio.' };
+        var f = txFind(P, txId); if (!f) return { error: 'No encontramos ese movimiento.' };
+        var old = clone(f.t), b = buildTx(P, u, old); if (b.error) return b;
+        var r = applyMutation(P, f.t, b.tx); if (r.error) return r;
+        return { ok: true, id: txId, before: old };
+      });
+    },
+    deleteTx: function (pfId, txId) {
+      return commit(function (arr) {
+        var P = pfById(arr, pfId); if (!P) return { error: 'No encontramos ese portafolio.' };
+        var f = txFind(P, txId); if (!f) return { error: 'No encontramos ese movimiento.' };
+        var old = clone(f.t), r = applyMutation(P, f.t, null); if (r.error) return r;
+        return { ok: true, id: txId, removed: old };
+      });
+    },
+    /* vista previa de una edición: la misma intención sobre una copia, sin guardar */
+    previewEdit: function (pfId, txId, u) {
+      var arr = clone(RAW), P = pfById(arr, pfId); if (!P) return { error: 'No encontramos ese portafolio.' };
+      var f = txFind(P, txId); if (!f) return { error: 'No encontramos ese movimiento.' };
+      var b = buildTx(P, u, clone(f.t)); if (b.error) return b;
+      var cashB = num(P.cashBalance) || 0, r = applyMutation(P, f.t, b.tx); if (r.error) return r;
+      var tk = up(b.tx.ticker), pos = tk && tk !== 'CASH' ? posOf(P, tk) : null;
+      return { ok: true, t: u.t, tk: tk === 'CASH' ? undefined : tk, qty: num(b.tx.quantity), amount: Math.abs(idealCash(P, b.tx)), ccy: up(P.currency) || 'USD', posCcy: up(b.tx.currency),
+        cashBefore: cashB, cashAfter: P.cashBalance, qtyAfter: pos ? num(pos.quantity) : 0, avgAfter: pos ? num(pos.avgPrice) : null };
+    },
+    /* deshacer un borrado (vuelve a meter el movimiento) o una edición (lo deja como estaba): el movimiento tal como estaba */
+    restoreTx: function (pfId, tx) {
+      return commit(function (arr) {
+        var P = pfById(arr, pfId); if (!P || !tx) return { error: 'No encontramos ese portafolio.' };
+        var f = txFind(P, tx.id), r = applyMutation(P, f ? f.t : null, clone(tx)); if (r.error) return r;
+        return { ok: true, id: tx.id };
+      });
+    },
     /* vista previa: la misma intención sobre una copia, sin guardar */
     preview: function (id, u) { var arr = JSON.parse(JSON.stringify(RAW)); return txIntent(id, u)(arr); },
     cash: function (id) { var P = pfById(RAW, id); return P ? { cash: num(P.cashBalance) || 0, ccy: up(P.currency) || 'USD' } : null; },

@@ -231,6 +231,13 @@
     if (W8) { var old = p.name; p.name = n; emit('change', { type: 'rename', id: id }); return W8.renamePortfolio(id, n).then(function (r) { if (r && r.error) { var q = T.get(id); if (q) q.name = old; emit('change', { type: 'rename', id: id }); } return r; }); }
     p.name = n; store(); emit('change', { type: 'rename', id: id }); return true;
   };
+  /* producción: datos del portafolio tal como están guardados y su edición completa (nombre, descripción, moneda y referencia) */
+  T.meta = function (id) { return W8 ? W8.portfolioMeta(id) : null; };
+  T.update = function (id, o) {
+    if (T.readonly) { readonly(); return { error: REAL.readonlyMsg }; }
+    if (!W8 || !T.get(id)) return { error: 'Solo se pueden editar los portafolios de tu cuenta.' };
+    return W8.updatePortfolio(id, o);
+  };
   T.remove = function (id) {
     if (T.readonly) { readonly(); return false; }
     var i = T.order().indexOf(id); if (i < 0) return false;
@@ -350,8 +357,17 @@
       if (bad) { USER[id] = list.filter(function (x) { return made.indexOf(x.id) < 0; }); return { error: bad.replace('depende de esa compra: bórrala primero.', 'no es posible en esa fecha: aún no tenías esa cantidad.') }; }
       saveTx(); rebuild(id); return { ok: true, ids: made, ev: e };
     },
+    /* producción: editar, borrar y restaurar un movimiento de la cuenta (promesas { ok, ... } | { error }); borrar y restaurar sirven también para Deshacer */
+    get: function (id, txId) { return W8 ? W8.getTx(id, txId) : null; },
+    previewEdit: function (id, txId, u) {
+      var r = W8 ? W8.previewEdit(id, txId, u) : null; if (!r || r.error) return { error: (r && r.error) || 'No se pudo calcular.' };
+      return { ev: { t: u.t, mxn: r.amount, ccy: r.posCcy || r.ccy, tk: r.tk, qty: r.qty }, cashBefore: r.cashBefore, cashAfter: r.cashAfter, fund: 0, external: 0, qtyAfter: r.qtyAfter, avgAfter: r.avgAfter, pfCcy: r.ccy };
+    },
+    edit: function (id, txId, u) { if (T.readonly) { readonly(); return { error: REAL.readonlyMsg }; } return W8 ? W8.editTx(id, txId, u) : { error: 'Solo se pueden editar movimientos de tu cuenta.' }; },
+    restore: function (id, tx) { if (T.readonly) { readonly(); return { error: REAL.readonlyMsg }; } return W8 ? W8.restoreTx(id, tx) : { error: 'Solo se pueden restaurar movimientos de tu cuenta.' }; },
     remove: function (id, ids) {
       if (T.readonly) { readonly(); return { error: REAL.readonlyMsg }; }
+      if (W8) return W8.deleteTx(id, [].concat(ids)[0]);
       ids = [].concat(ids); var list = USER[id] || [], next = list.filter(function (x) { return ids.indexOf(x.id) < 0; });
       var bad = BASE[id] ? checkList(BASE[id], next) : null; if (bad) return { error: bad };
       USER[id] = next; saveTx(); rebuild(id); return { ok: true };

@@ -34,6 +34,11 @@
 .txs-badge { display: inline-block; justify-self: start; padding: 2px 8px; border-radius: 999px; background: color-mix(in oklch, var(--accent) 16%, var(--s2)); color: var(--accent-ink); font-weight: 500; }
 .txs-link { justify-self: start; min-height: 44px; margin-top: -8px; padding: 0 2px; border: 0; background: none; color: var(--accent-ink); font-size: 13.5px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 .txs-fxr { margin-top: -6px; }
+/* al editar: el activo va fijo y el tipo de movimiento no se cambia */
+.txs-fixed { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border-radius: var(--r-md); background: var(--s2); border: 1px solid var(--line); }
+.txs-fixed .txs-ot { display: grid; min-width: 0; }
+.txs-fixed small { color: var(--text-3); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.txs-seg > button:disabled { opacity: 0.45; cursor: default; }
 
 /* combobox */
 .txs-cbw { position: relative; }
