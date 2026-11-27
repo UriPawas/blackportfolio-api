@@ -144,7 +144,7 @@
     var P = planOf(U.plan), us = usage();
     return backBtn() + ct('Cuenta') +
       card('stH-perfil', 'Perfil', 'Así apareces dentro de Portify.',
-        '<div class="st-prof"><div class="st-av-w"><button type="button" class="st-av" id="stAv" data-act="av" aria-haspopup="true" aria-expanded="false" aria-label="Cambiar el color del avatar" style="--t:' + TINTS[S.tint][1] + '"><span data-b="ini">' + esc(ini()) + '</span></button>' +
+        '<div class="st-prof"><div class="st-av-w"><button type="button" class="st-av" id="stAv" data-act="av" aria-haspopup="true" aria-expanded="false" aria-label="Cambiar el color del avatar" style="--t:' + TINTS[S.tint][1] + '"><span data-b="ini">' + esc(ini()) + '</span>' + (U.photo ? '<img src="' + esc(U.photo) + '" alt="" referrerpolicy="no-referrer" decoding="async">' : '') + '</button>' +
         '<div class="st-pop" id="stPop" role="radiogroup" aria-label="Color del avatar" hidden>' + t + '</div></div>' +
         '<div class="st-prof-f"><div class="st-fld"><span class="st-lab">Nombre</span><div class="st-mail"><span class="st-mailv">' + (S.name ? esc(S.name) : 'Sin nombre') + '</span></div></div>' +
         '<div class="st-fld"><span class="st-lab">Correo</span><div class="st-mail"><span class="st-mailv">' + esc(EMAIL) + '</span></div></div></div></div>') +
@@ -360,6 +360,8 @@
     $('#stAv').style.setProperty('--t', TINTS[S.tint][1]); live('Color del avatar: ' + TINTS[S.tint][0]);
   };
   doc.addEventListener('click', function (e) { if (popOpen && !e.target.closest('.st-av-w')) popToggle(false); });
+  /* si la foto no carga (enlace caído, bloqueo), se quita y quedan las iniciales; 'error' no burbujea, de ahí la captura */
+  set.addEventListener('error', function (e) { var t = e.target; if (t && t.tagName === 'IMG' && t.parentNode && t.parentNode.id === 'stAv') t.remove(); }, true);
   set.addEventListener('keydown', function (e) { if (popOpen && e.key === 'Escape') { popToggle(false); $('#stAv').focus(); } });
 
   /* sesión */
