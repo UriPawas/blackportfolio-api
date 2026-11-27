@@ -315,13 +315,17 @@
     }
     function chk(name, label, val) { return '<label class="pmc-ck"><input type="checkbox" data-c="' + name + '"' + (val ? ' checked' : '') + '><span>' + label + '</span></label>'; }
     var scope = pf === 'todos' ? 'Todos tus portafolios, en ' + BS() : esc(inp.name || 'Este portafolio');
+    var GL0 = window.CampoPfMetas && window.CampoPfMetas.goalsOf ? window.CampoPfMetas.goalsOf(pf) : []; /* metas guardadas en la pestaña Metas de este mismo portafolio */
     var ctrlHTML = '<section class="pmc-s panel pmc-ctl" aria-labelledby="' + id + 'h1"><div class="panel-head"><h2 id="' + id + 'h1">Proyección a futuro</h2><span class="muted" data-sub></span></div>' +
-      '<div class="pmc-row"><div class="pmc-g"><span class="pmc-l" id="' + id + '-hl">Horizonte, en años</span><div class="seg pmc-seg" role="group" aria-labelledby="' + id + '-hl" style="--n:6;--i:3"><span class="seg-pill" aria-hidden="true"></span>' +
+      '<div class="pmc-row"><div class="pmc-g"><span class="pmc-l" id="' + id + '-hl">Horizonte, en años <em data-hc hidden></em></span><div class="seg pmc-seg" role="group" aria-labelledby="' + id + '-hl" style="--n:6;--i:3"><span class="seg-pill" aria-hidden="true"></span>' +
       YEARS.map(function (y) { return '<button type="button" data-y="' + y + '" aria-label="' + y + (y === 1 ? ' año' : ' años') + '" aria-pressed="' + (y === P.years) + '">' + y + '</button>'; }).join('') + '</div></div>' +
       '<div class="pmc-g pmc-gm"><label class="pmc-l" for="' + id + '-mn">Aporte mensual</label><div class="pmc-sl"><input type="range" id="' + id + '-ms" min="0" max="50000" step="500" value="' + P.monthly + '" aria-label="Aporte mensual, deslizador" data-ms>' +
       '<div class="pmc-num"><span aria-hidden="true">' + SYM() + '</span><input type="number" id="' + id + '-mn" min="0" max="1000000" step="500" inputmode="numeric" value="' + P.monthly + '" data-mn></div></div></div>' +
       '<div class="pmc-g pmc-gg"><label class="pmc-l" for="' + id + '-gl">Meta <em>(opcional)</em></label><div class="pmc-num pmc-numg"><span aria-hidden="true">' + SYM() + '</span><input type="number" id="' + id + '-gl" min="0" step="10000" inputmode="numeric" placeholder="Ej. 2,000,000" data-gl></div></div>' +
       '<div class="pmc-g pmc-gr"><span class="pmc-l" id="' + id + '-rl">Valores en</span><button type="button" class="pmc-sw" role="switch" aria-checked="true" aria-labelledby="' + id + '-rl ' + id + '-rt" data-real><span class="pmc-swt" aria-hidden="true"><i></i></span><span id="' + id + '-rt">Valor de hoy</span></button></div></div>' +
+      (GL0.length ? '<div class="pmc-gs" data-gs><span class="pmc-l" id="' + id + '-gsl">Usar una meta guardada</span><div class="pmc-gchips" role="group" aria-labelledby="' + id + '-gsl">' +
+        GL0.map(function (g) { return '<button type="button" class="pmc-gc" data-g="' + esc(g.id) + '" aria-pressed="false"><b>' + esc(g.name) + '</b><span class="num">' + compact(g.target) + ' · ' + g.years + (g.years === 1 ? ' año' : ' años') + '</span></button>'; }).join('') +
+        '</div><p class="pmc-gnote" data-gnote role="status" hidden></p></div>' : '') +
       '<details class="pmc-adv"><summary><span>Supuestos avanzados</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><div class="pmc-advb"><div class="pmc-advg">' +
       sel('dist', 'Distribución de rendimientos', [['normal', 'Normal'], ['t', 't de Student (colas gruesas)'], ['block', 'Bootstrap por bloques (meses reales)']], P.dist) +
       sel('drift', 'Deriva (rendimiento esperado)', [['blend', 'Mixta: prior de largo plazo y último año'], ['prior', 'Solo prior de largo plazo'], ['sample', 'Solo el último año']], P.drift) +
@@ -438,14 +442,32 @@
     var seg = $('.pmc-seg'), ms = $('[data-ms]'), mn = $('[data-mn]'), gl = $('[data-gl]'), sw = $('[data-real]');
     function fill() { ms.style.setProperty('--pct', (clamp(P.monthly, 0, 50000) / 50000 * 100).toFixed(2) + '%'); }
     fill();
+    /* metas guardadas (pestaña Metas): al elegir una se cargan su monto, plazo y aporte; si luego se toca cualquier control, deja de estar marcada */
+    var hc = $('[data-hc]'), gnote = $('[data-gnote]');
+    function clearGoal() { $$('[data-g]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); }); if (gnote) gnote.hidden = true; }
+    function setYears(y) { /* los plazos fijos son 1/3/5/10/20/30; una meta puede traer otro (p. ej. 8): ninguno queda marcado y se dice cuál es */
+      P.years = y; var yi = YEARS.indexOf(y);
+      $$('button', seg).forEach(function (x) { x.setAttribute('aria-pressed', String(+x.dataset.y === y)); });
+      if (yi >= 0) { seg.style.setProperty('--i', yi); seg.removeAttribute('data-custom'); } else seg.setAttribute('data-custom', '');
+      if (hc) { hc.hidden = yi >= 0; hc.textContent = yi >= 0 ? '' : '(' + y + ' años, de tu meta)'; }
+    }
     on(seg, 'click', function (e) {
-      var b = e.target.closest('button[data-y]'); if (!b) return; var y = +b.dataset.y; if (y === P.years) return; P.years = y;
-      $$('button', seg).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); seg.style.setProperty('--i', YEARS.indexOf(y)); queue();
+      var b = e.target.closest('button[data-y]'); if (!b) return; var y = +b.dataset.y; if (y === P.years) return; clearGoal(); setYears(y); queue();
     });
-    on(ms, 'input', function () { P.monthly = +ms.value; mn.value = P.monthly; fill(); queue(); });
-    on(mn, 'input', function () { var v = clamp(parseNum(mn.value), 0, 1000000); P.monthly = v; ms.value = clamp(v, 0, 50000); fill(); queue(); });
+    on(ms, 'input', function () { clearGoal(); P.monthly = +ms.value; mn.value = P.monthly; fill(); queue(); });
+    on(mn, 'input', function () { clearGoal(); var v = clamp(parseNum(mn.value), 0, 1000000); P.monthly = v; ms.value = clamp(v, 0, 50000); fill(); queue(); });
     on(mn, 'blur', function () { mn.value = P.monthly; });
-    on(gl, 'input', function () { P.goal = Math.max(0, parseNum(gl.value)); queue(); });
+    on(gl, 'input', function () { clearGoal(); P.goal = Math.max(0, parseNum(gl.value)); queue(); });
+    $$('[data-g]').forEach(function (b) {
+      on(b, 'click', function () {
+        var g = GL0.filter(function (x) { return x.id === b.dataset.g; })[0]; if (!g) return;
+        clearGoal(); b.setAttribute('aria-pressed', 'true');
+        P.goal = g.target; P.monthly = g.monthly; setYears(clamp(Math.round(g.years), 1, 40));
+        gl.value = P.goal; mn.value = P.monthly; ms.value = clamp(P.monthly, 0, 50000); fill();
+        if (gnote) { gnote.hidden = !(g.share < 100); gnote.textContent = g.share < 100 ? 'En Metas, esta meta usa el ' + g.share + ' % del portafolio; aquí se proyecta todo el portafolio, así que la probabilidad puede ser mayor.' : ''; }
+        queue();
+      });
+    });
     on(sw, 'click', function () { P.real = !P.real; sw.setAttribute('aria-checked', String(P.real)); queue(); });
     $$('select[data-p]').forEach(function (s) { on(s, 'change', function () { P[s.dataset.p === 'reb' ? 'reb' : s.dataset.p] = s.value; queue(); }); });
     $$('input[data-n]').forEach(function (n) { on(n, 'input', function () { var v = parseNum(n.value), mx = n.dataset.n === 'fee' ? 5 : 3; P[n.dataset.n] = clamp(v, 0, mx); queue(); }); });

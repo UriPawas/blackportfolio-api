@@ -162,3 +162,17 @@
   .pmc *, .pmc *::before, .pmc *::after { transition: none !important; animation: none !important; }
   .pmc-defi p { opacity: 1; transform: none; }
 }
+
+/* metas guardadas: fichas para cargar monto, plazo y aporte de la pestaña Metas */
+.pmc-gs { display: grid; gap: 8px; min-width: 0; }
+.pmc-gchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pmc-gc { display: inline-flex; align-items: baseline; gap: 8px; min-height: 44px; padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--s2); color: var(--text-2); font-size: 14px; cursor: pointer; transition: border-color 150ms var(--ease-out), background-color 150ms var(--ease-out), transform 120ms var(--ease-out); }
+.pmc-gc b { font-weight: 600; color: var(--text); }
+.pmc-gc span { color: var(--text-3); font-size: 13px; }
+.pmc-gc:active { transform: scale(0.98); }
+.pmc-gc:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.pmc-gc[aria-pressed="true"] { border-color: var(--accent-ink); background: color-mix(in oklch, var(--accent) 12%, var(--s2)); }
+@media (hover: hover) and (pointer: fine) { .pmc-gc:hover { border-color: color-mix(in oklch, var(--accent-ink) 55%, var(--line)); } }
+.pmc-gnote { margin: 0; font-size: 13px; color: var(--text-3); }
+.pmc-seg[data-custom] .seg-pill { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .pmc-gc { transition: none; } .pmc-gc:active { transform: none; } }

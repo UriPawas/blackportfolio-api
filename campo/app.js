@@ -114,7 +114,7 @@
   var PT = 12, PB = 8;
   var NC = { '1S': 35, '1M': 42, '3M': 42, '6M': 42, 'MAX': 50 };
   var CAPT = { '1S': '1 hora', '1M': '12 horas', '3M': '1,5 días', '6M': '3 días', 'MAX': '5 días' };
-  var CAP0 = window.CAMPO_REAL ? 'Cierres diarios del último año; hoy, el último precio. La misma serie que usan el Tracker y sus pestañas.' : 'Precio de muestra: la misma serie que usan el Tracker y sus pestañas. No es historial real.';
+  var CAP0 = window.CAMPO_REAL ? 'Cierres diarios del último año; hoy, el último precio. La misma serie que usan Portafolios y sus pestañas.' : 'Precio de muestra: la misma serie que usan el Tracker y sus pestañas. No es historial real.';
 
   /* ---------- utilidades de movimiento ---------- */
   function bezF(x1, y1, x2, y2) {
@@ -559,10 +559,10 @@
     { id: 'out', label: 'Cerrar sesión', kw: 'salir logout', keys: [], run: function () { $('#logout').click(); } }
   ];
   /* secciones y pestañas a las que se salta con la búsqueda */
-  var SECS = [['inicio', 'Inicio', 'resumen hub', ''], ['tracker', 'Tracker', 'portafolios posiciones', '#tracker'], ['mercados', 'Mercados', 'cotizaciones indices divisas', '#mercados'], ['informes', 'Informes', 'reportes pdf', '#informes'],
+  var SECS = [['inicio', 'Inicio', 'resumen hub', ''], ['tracker', 'Portafolios', 'tracker posiciones', '#tracker'], ['mercados', 'Mercados', 'cotizaciones indices divisas', '#mercados'], ['informes', 'Informes', 'reportes pdf', '#informes'],
     ['ajustes', 'Ajustes', 'cuenta perfil', '#ajustes'], ['ajustes', 'Plan y facturación', 'plan suscripcion pago limites', '#ajustes/plan'], ['ajustes', 'Seguridad', 'contrasena 2fa verificacion', '#ajustes/seguridad'],
     ['ajustes', 'Preferencias', 'tema apariencia moneda', '#ajustes/preferencias']];
-  var PTABS = [['desempeno', 'Desempeño', 'rendimiento retorno'], ['correlacion', 'Correlación', ''], ['rebalanceo', 'Rebalanceo', 'pesos objetivo'], ['montecarlo', 'Monte Carlo', 'simulacion proyeccion'], ['metas', 'Metas', 'objetivos'], ['whatif', 'What-If', 'escenarios'], ['transacciones', 'Transacciones', 'movimientos compras ventas'], ['dividendos', 'Dividendos', 'ingresos']];
+  var PTABS = [['desempeno', 'Desempeño', 'rendimiento retorno'], ['correlacion', 'Correlación', ''], ['rebalanceo', 'Rebalanceo', 'pesos objetivo'], ['montecarlo', 'Monte Carlo', 'simulacion proyeccion'], ['metas', 'Metas', 'objetivos'], ['whatif', 'Escenarios', 'escenarios'], ['transacciones', 'Transacciones', 'movimientos compras ventas'], ['dividendos', 'Dividendos', 'ingresos']];
   function navItems() {
     var out = SECS.map(function (x) { return { sec: x[0], label: x[1], kw: x[2], hash: x[3], kind: 'Sección' }; }), p = curPf();
     if (p) PTABS.forEach(function (t) { out.push({ sec: 'tracker', label: t[1] + ' · ' + p.name, kw: t[2], hash: '#tracker/' + encodeURIComponent(p.id) + '/' + t[0], kind: 'Pestaña' }); });

@@ -194,6 +194,24 @@ html.tkl-lock { overflow: hidden; scrollbar-gutter: stable; }
 @media (prefers-reduced-motion: reduce) { .tkl-ind, .tkl-tabs button, .tkl-tabw::before, .tkl-tabw::after { transition: none; } }
 .tkl-tabs button:disabled { opacity: 0.5; cursor: default; }
 .tkl-tabs button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
+/* segundo nivel ("Análisis y plan"): más bajo y discreto que las secciones; oculto fuera de su grupo */
+.tkl-subw { margin-top: 2px; }
+.tkl-subw[hidden] { display: none; }
+.tkl-subtabs { border-bottom-color: transparent; }
+.tkl-subtabs button { min-height: 40px; font-size: 14px; }
+/* selector rápido de portafolio junto al nombre */
+.tkl-dnamew { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.tkl-swb { all: unset; box-sizing: border-box; flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -8px 0; border-radius: var(--r-sm); color: var(--text-3); cursor: pointer; transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out), transform 120ms var(--ease-out); }
+.tkl-swb .tkl-ic { width: 18px; height: 18px; transform: rotate(90deg); }
+.tkl-swb:active { transform: scale(0.97); }
+.tkl-swb:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
+.tkl-swb[aria-expanded="true"] { background: var(--s2); color: var(--text); }
+@media (hover: hover) and (pointer: fine) { .tkl-swb:hover { background: var(--s2); color: var(--text); } }
+.tkl-pop-sw { min-width: 220px; max-width: min(320px, calc(100vw - 16px)); }
+.tkl-pop-sw [data-sw] { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tkl-pop-sw [aria-current="true"] { color: var(--accent-ink); font-weight: 600; }
+.tkl-swn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tkl-swc { flex: none; color: var(--text-3); font-size: 12.5px; font-weight: 400; }
 .tkl-tp { display: grid; gap: 14px; padding-top: 16px; }
 .tkl-soon { padding: 18px 20px; border: 1px dashed var(--line); border-radius: var(--r-md); color: var(--text-2); }
 .tkl-soon strong { color: var(--text); font-weight: 600; font-size: 16px; }

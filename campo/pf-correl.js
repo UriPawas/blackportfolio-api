@@ -465,7 +465,7 @@
       if (go) rows.forEach(function (r) { var e = rcRows[A.tk[r.i]], d = tops[A.tk[r.i]] - e.getBoundingClientRect().top; if (Math.abs(d) > 1 && e.animate) e.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO }); });
       var kp = $('[data-kp]'), kvs = [['Volatilidad del portafolio', fN(S.volP, 1) + ' %', 'anualizada'], ['Sin diversificación', fN(S.volNo, 1) + ' %', 'suma ponderada de σ'], ['Ahorro por diversificar', '−' + fN(S.saving, 0) + ' %', 'menos volatilidad']];
       kp.innerHTML = kvs.map(function (k, q) { return '<div class="pfc-kpi' + (q === 2 ? ' good' : '') + '"><span class="pfc-kl">' + k[0] + '</span><strong class="num">' + k[1] + '</strong><span class="pfc-ks">' + k[2] + '</span></div>'; }).join('');
-      $('[data-rn]').textContent = (S.W < 60 ? 'Solo ' + S.W + ' retornos diarios en el periodo: toma estos resultados con cautela. ' : '') + 'Calculado con ' + S.W + ' retornos diarios · retornos logarítmicos en ' + BS() + '.';
+      $('[data-rn]').textContent = (S.W < 60 ? 'Solo ' + S.W + ' retornos diarios en el periodo: toma estos resultados con cautela. ' : '') + 'Calculado con ' + S.W + ' retornos diarios · retornos logarítmicos en ' + BS() + '. Correlaciones observadas en el periodo; Rebalanceo y Monte Carlo usan el último año (1A) con las correlaciones suavizadas del modelo, por eso sus cifras pueden diferir unos puntos.';
     }
 
     /* ---------- con el portafolio y el benchmark ---------- */

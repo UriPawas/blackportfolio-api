@@ -293,9 +293,22 @@
   function fireInf() { window.dispatchEvent(new CustomEvent('campo:route', { detail: { sec: 'informes', hash: location.hash } })); }
   function fireMk() { window.dispatchEvent(new CustomEvent('campo:route', { detail: { sec: 'mercados', hash: location.hash } })); }
   function fireTk() { window.dispatchEvent(new CustomEvent('campo:route', { detail: { sec: 'tracker', hash: location.hash } })); }
+  /* el título de la pestaña (y lo que anuncia un lector de pantalla) sigue a la sección: "Monte Carlo… | Portafolios | Portify" */
+  function setTitle(t) {
+    var T = window.CampoTracker, s = 'Inicio';
+    if (t.sec === 'tracker') {
+      var p = t.id && T && T.get ? T.get(t.id) : null;
+      s = t.id ? ((p && p.name) || (t.id === 'todos' ? 'Todos los portafolios' : 'Portafolio')) + ' | Portafolios' : 'Portafolios';
+    } else if (t.sec === 'mercados') {
+      var sym = t.id || ''; try { sym = decodeURIComponent(sym); } catch (e) { }
+      s = sym ? sym.toUpperCase() + ' | Mercados' : 'Mercados';
+    } else if (t.sec === 'informes') s = 'Informes';
+    else if (t.sec === 'ajustes') { var c = CATS.filter(function (x) { return x.id === t.cat; })[0]; s = c ? c.label + ' | Ajustes' : 'Ajustes'; }
+    doc.title = s + ' | Portify';
+  }
   function route(animate) {
     if (doc.body.dataset.view !== 'app') return;
-    var t = parse();
+    var t = parse(); setTitle(t);
     /* aviso general de sección (la moneda base de la vista depende de dónde estás) */
     try { window.dispatchEvent(new CustomEvent('campo:section', { detail: { sec: t.sec } })); } catch (e) { }
     if (t.sec === 'inicio') { if (sec !== 'inicio') showSec('inicio', animate); return; }

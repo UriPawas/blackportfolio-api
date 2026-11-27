@@ -396,5 +396,9 @@
     return api;
   }
 
-  window.CampoPfMetas = { render: render };
+  /* las metas guardadas del portafolio (las mismas que muestra la pestaña Metas), para que Monte Carlo pueda usarlas */
+  function goalsOf(pf) {
+    try { return load(pfKey(pf)).goals.map(function (g) { return { id: g.id, name: g.name, target: g.target, years: g.years, monthly: g.monthly, share: g.share }; }); } catch (e) { return []; }
+  }
+  window.CampoPfMetas = { render: render, goalsOf: goalsOf };
 })();

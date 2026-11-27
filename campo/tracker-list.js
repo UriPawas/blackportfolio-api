@@ -202,6 +202,21 @@
       else if (a === 'del') confirmDelete(btn, id);
     });
   }
+  /* selector rápido dentro del detalle: salta a otro portafolio (o a "Todos") conservando la pestaña, sin volver a la lista */
+  function openSwitch(btn) {
+    var items = T.portfolios.map(function (p) { return [p.id, p.name, p.currency]; });
+    if (items.length > 1) items.unshift(['todos', 'Todos los portafolios', '']);
+    var m = openPop(btn, items.map(function (x) {
+      var on = x[0] === cur;
+      return '<button role="menuitem" type="button" data-sw="' + esc(x[0]) + '"' + (on ? ' aria-current="true" data-first' : '') + '><span class="tkl-swn">' + esc(x[1]) + '</span>' + (x[2] ? '<span class="tkl-swc">' + esc(x[2]) + '</span>' : '') + '</button>';
+    }).join(''), 'Cambiar de portafolio');
+    m.classList.add('tkl-pop-sw');
+    m.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sw]'); if (!b) return;
+      closePop(false);
+      if (b.dataset.sw !== cur) { var h = tabHash(b.dataset.sw, tab); if (window.CampoSections) window.CampoSections.navigate(h, false); else location.hash = h; }
+    });
+  }
   function confirmDelete(anchor, id) {
     var p = getP(id); if (!p) return;
     var c = openPop(anchor, '<div class="tkl-conf" role="alertdialog" aria-label="Confirmar eliminación"><p><strong>¿Eliminar «' + esc(p.name) + '»?</strong></p><p>Se quitan sus posiciones y transacciones. No se puede deshacer.</p><div class="tkl-conf-b"><button type="button" class="btn btn-ghost btn-sm" data-c="no" data-first>Cancelar</button><button type="button" class="btn btn-secondary btn-sm tkl-danger" data-c="yes">Eliminar</button></div></div>', 'Confirmar eliminación');
@@ -478,9 +493,27 @@
   function destroyRs() { if (rsApi && rsApi.destroy) { try { rsApi.destroy(); } catch (e) { } } rsApi = null; if (briefApi && briefApi.destroy) { try { briefApi.destroy(); } catch (e) { } } briefApi = null; }
   var briefApi = null; /* nota del portafolio (window.CampoBrief, _dev_proto-campo-brief.js): entre el encabezado y las pestañas */
   /* ---------- pestañas del portafolio ---------- */
-  var TABS = [['resumen', 'Resumen', true], ['desempeno', 'Desempeño', true], ['correlacion', 'Correlación', true], ['rebalanceo', 'Rebalanceo', true], ['montecarlo', 'Monte Carlo', true], ['metas', 'Metas', true], ['whatif', 'What-If', true], ['transacciones', 'Transacciones', true], ['dividendos', 'Dividendos', true]];
+  var TABS = [['resumen', 'Resumen', true], ['desempeno', 'Desempeño', true], ['correlacion', 'Correlación', true], ['rebalanceo', 'Rebalanceo', true], ['montecarlo', 'Monte Carlo', true], ['metas', 'Metas', true], ['whatif', 'Escenarios', true], ['transacciones', 'Transacciones', true], ['dividendos', 'Dividendos', true]];
   var tab = 'resumen', tabSeq = 0;
   function tabOk(t) { return TABS.some(function (x) { return x[0] === t && x[2]; }); }
+  /* dos niveles en vez de nueve pestañas planas: cinco secciones y, dentro de "Análisis y plan", sus cinco herramientas.
+     Los ids de pestaña y las rutas #tracker/<id>/<pestaña> no cambian; un grupo recuerda la última herramienta usada. */
+  var GROUPS = [['resumen', 'Resumen', ['resumen']], ['desempeno', 'Desempeño', ['desempeno']], ['movimientos', 'Movimientos', ['transacciones']], ['dividendos', 'Dividendos', ['dividendos']],
+    ['analisis', 'Análisis y plan', ['correlacion', 'rebalanceo', 'montecarlo', 'metas', 'whatif']]], lastIn = {};
+  function groupOf(t) { return GROUPS.filter(function (g) { return g[2].indexOf(t) >= 0; })[0] || GROUPS[0]; }
+  function tabLabel(t) { return (TABS.filter(function (x) { return x[0] === t; })[0] || [0, ''])[1]; }
+  function groupsHTML() {
+    var cg = groupOf(tab);
+    return GROUPS.map(function (g) {
+      var on = g === cg, rep = on ? tab : (lastIn[g[0]] || g[2][0]), single = g[2].length === 1;
+      return '<button type="button" role="tab" id="' + (single ? 'tklTab-' + g[2][0] : 'tklGrp-' + g[0]) + '" data-tab="' + rep + '" data-group="' + g[0] + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '"' + (single ? ' aria-controls="tklPanel"' : '') + '>' + g[1] + '</button>';
+    }).join('');
+  }
+  function subRowHTML() {
+    var g = GROUPS[GROUPS.length - 1], on = groupOf(tab) === g;
+    return '<div class="tkl-tabw tkl-subw" data-subw' + (on ? '' : ' hidden') + '><div class="tkl-tabs tkl-subtabs" role="tablist" aria-label="' + g[1] + '" data-tabs><span class="tkl-ind" aria-hidden="true"></span>' +
+      g[2].map(function (t) { var s = t === tab; return '<button type="button" role="tab" id="tklTab-' + t + '" data-tab="' + t + '" aria-selected="' + s + '" tabindex="' + (s ? 0 : -1) + '" aria-controls="tklPanel">' + tabLabel(t) + '</button>'; }).join('') + '</div></div>';
+  }
   function tabFromHash() { var m = /^#\/?tracker\/[^/?]+\/([\w-]+)/.exec(location.hash || ''); return m && tabOk(m[1]) ? m[1] : 'resumen'; }
   function tabHash(id, t) { return '#tracker/' + encodeURIComponent(id) + (t === 'resumen' ? '' : '/' + t); }
   var ENG = { desempeno: 'CampoPfDesempeno', correlacion: 'CampoPfCorrel', rebalanceo: 'CampoPfRebal', montecarlo: 'CampoPfMc', metas: 'CampoPfMetas', whatif: 'CampoPfWhatif', transacciones: 'CampoPfTx', dividendos: 'CampoPfDiv' };
@@ -492,29 +525,40 @@
     try { rsApi = E.render(rsEl, d.cons ? 'todos' : getP(id), T); } catch (e) { if (window.console) console.error(e); }
   }
   function placeInd(animate) {
-    var bar = $('[data-tabs]', detEl); if (!bar) return; var ind = $('.tkl-ind', bar), on = $('[aria-selected="true"]', bar); if (!ind || !on) return;
-    var still = !animate || reduce();
-    if (still) ind.style.transition = 'none';
-    ind.style.width = on.offsetWidth + 'px'; ind.style.transform = 'translateX(' + on.offsetLeft + 'px)';
-    if (still) { void ind.offsetWidth; ind.style.transition = ''; }
-    if (bar.scrollWidth > bar.clientWidth && bar.scrollTo) {
-      var l = on.offsetLeft, r = l + on.offsetWidth, v0 = bar.scrollLeft, v1 = v0 + bar.clientWidth, to = l < v0 + 24 ? l - 24 : r > v1 - 24 ? r - bar.clientWidth + 24 : null;
-      if (to != null) { try { bar.scrollTo({ left: Math.max(0, to), behavior: still ? 'auto' : 'smooth' }); } catch (e) { } }
-    }
+    $$('[data-tabs]', detEl).forEach(function (bar) {
+      if (!bar.offsetParent) return; /* la fila de "Análisis y plan" está oculta fuera de su grupo */
+      var ind = $('.tkl-ind', bar), on = $('[aria-selected="true"]', bar); if (!ind || !on) return;
+      var still = !animate || reduce();
+      if (still) ind.style.transition = 'none';
+      ind.style.width = on.offsetWidth + 'px'; ind.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+      if (still) { void ind.offsetWidth; ind.style.transition = ''; }
+      if (bar.scrollWidth > bar.clientWidth && bar.scrollTo) {
+        var l = on.offsetLeft, r = l + on.offsetWidth, v0 = bar.scrollLeft, v1 = v0 + bar.clientWidth, to = l < v0 + 24 ? l - 24 : r > v1 - 24 ? r - bar.clientWidth + 24 : null;
+        if (to != null) { try { bar.scrollTo({ left: Math.max(0, to), behavior: still ? 'auto' : 'smooth' }); } catch (e) { } }
+      }
+    });
     tabEdges();
   }
   /* bordes difuminados: aparecen solo del lado donde aún hay pestañas fuera de vista */
   function tabEdges() {
-    var bar = $('[data-tabs]', detEl), w = bar && bar.parentNode; if (!w || !w.classList) return;
-    w.classList.toggle('can-l', bar.scrollLeft > 4); w.classList.toggle('can-r', bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 4);
+    $$('[data-tabs]', detEl).forEach(function (bar) {
+      var w = bar.parentNode; if (!w || !w.classList) return;
+      w.classList.toggle('can-l', bar.scrollLeft > 4); w.classList.toggle('can-r', bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 4);
+    });
   }
   /* cambia de pestaña: indicador deslizante (260 ms), el contenido saliente se desvanece (110 ms) y el entrante sube 8 px (220 ms, en su render) */
   function selectTab(t, focus) {
     if (!tabOk(t) || t === tab || !cur) return;
     var bar = $('[data-tabs]', detEl), rsEl = $('[data-rs]', detEl), d = detailData(cur), my = ++tabSeq; if (!bar || !rsEl || !d) { tab = t; return; }
-    var id = cur; tab = t;
-    $$('[role="tab"]', bar).forEach(function (b) { var on = b.dataset.tab === t; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus({ preventScroll: true }); });
-    $('#tklPanel', detEl).setAttribute('aria-labelledby', 'tklTab-' + t); placeInd(true);
+    var id = cur, g = groupOf(t), sw = $('[data-subw]', detEl), subWas = sw && !sw.hidden; tab = t; lastIn[g[0]] = t;
+    $$('[data-tabs] [role="tab"]', detEl).forEach(function (b) { /* solo las dos filas de pestañas, no otros tablist del contenido */
+      var grp = b.dataset.group, on = grp ? grp === g[0] : b.dataset.tab === t;
+      if (grp) b.dataset.tab = on ? t : (lastIn[grp] || GROUPS.filter(function (x) { return x[0] === grp; })[0][2][0]);
+      b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1;
+    });
+    if (sw) sw.hidden = g[0] !== 'analisis';
+    if (focus) { var fb = $('#tklTab-' + t, detEl); if (fb) fb.focus({ preventScroll: true }); }
+    $('#tklPanel', detEl).setAttribute('aria-labelledby', 'tklTab-' + t); placeInd(!!subWas === !!(sw && !sw.hidden));
     function swap() { if (my !== tabSeq || cur !== id) return; mountTab(rsEl, id, d); live('Sección ' + (TABS.filter(function (x) { return x[0] === t; })[0] || [0, ''])[1]); }
     if (reduce() || !rsEl.animate) { swap(); return; }
     var a = rsEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, easing: 'linear', fill: 'forwards' });
@@ -523,7 +567,8 @@
   function goTab(t) { if (!cur || t === tab || !tabOk(t)) return; var h = tabHash(cur, t); if (window.CampoSections) window.CampoSections.navigate(h, false); else { location.hash = h; selectTab(t, false); } }
   function onTabsKey(e) {
     var b = e.target.closest && e.target.closest('[role="tab"]'); if (!b) return;
-    var en = $$('[role="tab"]:not(:disabled)', detEl), i = en.indexOf(b), n = i;
+    var tl = b.closest('[data-tabs]'); if (!tl) return; /* un tablist del contenido maneja sus propias flechas */
+    var en = $$('[role="tab"]:not(:disabled)', tl), i = en.indexOf(b), n = i; /* las flechas recorren la fila en la que estás */
     if (e.key === 'ArrowRight') n = (i + 1) % en.length; else if (e.key === 'ArrowLeft') n = (i - 1 + en.length) % en.length; else if (e.key === 'Home') n = 0; else if (e.key === 'End') n = en.length - 1; else return;
     e.preventDefault(); en[n].focus(); goTab(en[n].dataset.tab);
   }
@@ -540,11 +585,12 @@
       '<nav aria-label="Ruta" class="tkl-crumb"><ol><li>Portafolios</li><li aria-current="page">' + esc(d.name) + '</li></ol></nav>' +
       '<button type="button" class="btn btn-primary btn-sm tkl-addtx" data-act="addtx"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Agregar movimiento</button></div>' +
       '<header class="tkl-dhead"><span class="tkl-dsw" data-part="sw" style="--pc:' + esc(d.color) + '" aria-hidden="true"></span>' +
-      '<div class="tkl-dtitle"><h2 class="tkl-dname" data-part="name" tabindex="-1">' + esc(d.name) + '</h2>' + (d.desc ? '<p class="tkl-ddesc tkl-late">' + esc(d.desc) + '</p>' : '') + '</div>' +
+      '<div class="tkl-dtitle"><div class="tkl-dnamew"><h2 class="tkl-dname" data-part="name" tabindex="-1">' + esc(d.name) + '</h2>' +
+        (T.portfolios.length > 1 ? '<button type="button" class="tkl-swb tkl-late" data-act="switch" aria-haspopup="menu" aria-expanded="false" aria-label="Cambiar de portafolio" title="Cambiar de portafolio">' + ic('chev') + '</button>' : '') + '</div>' + (d.desc ? '<p class="tkl-ddesc tkl-late">' + esc(d.desc) + '</p>' : '') + '</div>' +
       '<div class="tkl-dval"><span class="tkl-dv tkl-num" data-part="value">' + fM(d.value) + '</span>' + (fx ? '<span class="tkl-late tkl-dfx tkl-num" title="Equivalente al tipo de cambio de hoy">' + esc(fx.equiv) + '</span>' : '') + '<span class="tkl-late tkl-dsub tkl-num"><span class="' + cls(d.day.amt) + '">Hoy ' + fS(d.day.amt) + ' (' + fP(d.day.pct) + ')</span><span class="' + cls(d.ret.pct) + '" title="' + RET_TIP + '">Rentabilidad ' + fP(d.ret.pct) + '</span></span></div>' +
       '<dl class="tkl-dmeta tkl-late">' + d.meta.map(function (m) { return '<div><dt>' + m[0] + '</dt><dd>' + esc(m[1]) + '</dd></div>'; }).join('') + (T.currencies && T.currencies().length > 1 ? '<div class="tkl-dccy"><dt>Ver cifras en</dt><dd><div data-ccy></div></dd></div>' : '') + (fx ? '<div class="tkl-dfxm"><dt>Tipo de cambio</dt><dd class="tkl-num">' + esc(fx.rate) + '</dd></div>' : '') + '</dl></header>' +
       '<div class="tkl-late tkl-brief" data-brief></div>' +
-      '<div class="tkl-late"><div class="tkl-tabw"><div class="tkl-tabs" role="tablist" aria-label="Secciones del portafolio" data-tabs><span class="tkl-ind" aria-hidden="true"></span>' + tabs.map(function (t) { var on = t[0] === tab, en = !!t[2]; return '<button type="button" role="tab" id="tklTab-' + t[0] + '" data-tab="' + t[0] + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '" aria-controls="tklPanel"' + (en ? '' : ' disabled title="Próximamente" aria-label="' + t[1] + ', próximamente"') + '>' + t[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div class="tkl-late"><div class="tkl-tabw"><div class="tkl-tabs" role="tablist" aria-label="Secciones del portafolio" data-tabs><span class="tkl-ind" aria-hidden="true"></span>' + groupsHTML() + '</div></div>' + subRowHTML() +
       '<div class="tkl-tp" id="tklPanel" role="tabpanel" aria-labelledby="tklTab-' + tab + '"><div class="tkl-rs" data-rs></div></div></div></div>';
     placeInd(false); requestAnimationFrame(function () { placeInd(false); }); if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(function () { placeInd(false); });
     var cEl = $('[data-ccy]', detEl); if (cEl && window.__campo && window.__campo.ccySeg) window.__campo.ccySeg(cEl, d.cons ? 'todos' : id);
@@ -681,6 +727,7 @@
     listEl.addEventListener('focusin', function (e) { var r = e.target.closest('.tkl-row'); if (r) hoverOut(r.dataset.id); });
     listEl.addEventListener('focusout', function (e) { if (!listEl.contains(e.relatedTarget)) hoverOut(null); });
     detEl.addEventListener('click', function (e) { if (e.target.closest('[data-act="back"]')) { T.back(); return; }
+      var swb = e.target.closest('[data-act="switch"]'); if (swb) { openSwitch(swb); return; }
       /* Agregar movimiento (encabezado de la ficha o encabezado de Posiciones del Resumen): hoja de captura conectada al libro */
       var ax = e.target.closest('[data-act="addtx"], [data-addtx]'); if (ax) { if (window.CampoTxSheet) window.CampoTxSheet.open({ pfId: cur === 'todos' ? null : cur, type: 'buy', from: ax }); return; } var tb = e.target.closest('[role="tab"]'); if (tb && !tb.disabled) goTab(tb.dataset.tab); });
     detEl.addEventListener('keydown', onTabsKey);

@@ -138,7 +138,7 @@
       '<ul class="prb-ba" role="list"><li class="prb-bh" aria-hidden="true"><span></span><span class="prb-bv">Antes</span><span class="prb-bv">Después</span><span class="prb-bd">Cambio</span></li>' +
       baRow('vol', 'Volatilidad anual', DEF.vol) + baRow('er', 'Rendimiento esperado', DEF.er) + baRow('beta', 'Beta frente al S&P 500', DEF.beta) + baRow('loss', 'Pérdida en un mal año (1 de cada 20)', DEF.loss) + '</ul>' +
       '<div class="prb-rch"><h3>Contribución al riesgo</h3><ul class="prb-key" aria-hidden="true"><li><i class="prb-k5"></i>Antes</li><li><i class="prb-k6"></i>Después</li></ul></div>' +
-      '<p class="prb-rcn">Qué parte de la volatilidad del portafolio aporta cada posición. Una posición pequeña puede aportar mucho riesgo si se mueve fuerte o sube y baja con las demás.</p>' +
+      '<p class="prb-rcn">Qué parte de la volatilidad del portafolio aporta cada posición. Una posición pequeña puede aportar mucho riesgo si se mueve fuerte o sube y baja con las demás. Se calcula con los retornos diarios del último año y las correlaciones suavizadas del modelo (las mismas de Monte Carlo y Metas); la pestaña Correlación usa las observadas del periodo que elijas, así que sus cifras pueden diferir unos puntos.</p>' +
       '<ul class="prb-rl" role="list" data-rl>' + rcRows + '</ul></section>';
 
     mount.innerHTML = '<div class="prb" id="' + id + '"><p class="prb-tag">Un plan en ' + BS() + ' para acercar <b>' + esc(inp.name || 'tu portafolio') + '</b> al objetivo que elijas, con comisiones e ISR estimados.</p>' +
