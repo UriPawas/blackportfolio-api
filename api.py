@@ -1992,7 +1992,18 @@ def ticker_logo(request: Request, symbol: str):
 _LOGO_UPSTREAM = "https://api.elbstream.com/logos/symbol/"  # atribución en el pie de index.html
 # Divisas de cotización que Yahoo pega a las criptos (BTC-USD); el CDN las indexa sin ella.
 _LOGO_QUOTE_CCY = {"USD", "USDT", "USDC", "EUR", "MXN"}
-_LOGO_HEADERS = {"Cache-Control": "public, max-age=604800, immutable"}
+# `Cross-Origin-Resource-Policy: cross-origin` es lo que deja a Chrome pintar el <img> desde otro
+# origen (el sitio vive en web.app y la API en railway.app); sin él, ORB bloquea la respuesta.
+_LOGO_CORP = {"Cross-Origin-Resource-Policy": "cross-origin"}
+_LOGO_HEADERS = {"Cache-Control": "public, max-age=604800, immutable", **_LOGO_CORP}
+# "No hay logo": 404 SIN cuerpo ni JSON (un JSON a un <img> entre orígenes dispara ERR_BLOCKED_BY_ORB).
+_LOGO_MISS = {"Cache-Control": "public, max-age=3600", **_LOGO_CORP}
+# El proveedor falló por algo pasajero (red, 429, 5xx): no se cachea ni aquí ni en el navegador.
+_LOGO_RETRY = {"Cache-Control": "no-store", **_LOGO_CORP}
+
+
+def _logo_404(headers):
+    return Response(status_code=404, headers=headers)
 
 
 @app.get("/api/logo/{symbol}")
@@ -2009,10 +2020,8 @@ def ticker_logo_image(request: Request, symbol: str):
     concatena a un prefijo fijo: no se acepta una URL arbitraria (SSRF).
     """
     sym = (symbol or "").strip().upper()[:20]
-    if not sym or not all(c.isalnum() or c in ".-" for c in sym):
-        raise HTTPException(status_code=404, detail="Simbolo no valido")
-    if not sym[0].isalnum():
-        raise HTTPException(status_code=404, detail="Simbolo no valido")
+    if not sym or not all(c.isalnum() or c in ".-" for c in sym) or not sym[0].isalnum():
+        return _logo_404(_LOGO_MISS)
     # El CDN indexa el ticker CON su sufijo de bolsa (WALMEX.MX sí, WALMEX no) y las
     # criptos por su símbolo sin la divisa de cotización (BTC, no BTC-USD).
     candidates = [sym]
@@ -2023,10 +2032,11 @@ def ticker_logo_image(request: Request, symbol: str):
     cached = _LOGO_BYTES_CACHE.get(sym)
     if cached is not None:
         if not cached:
-            raise HTTPException(status_code=404, detail="Sin logo")
+            return _logo_404(_LOGO_MISS)
         return Response(content=cached, media_type="image/png", headers=_LOGO_HEADERS)
 
     data = b""
+    definitive = True  # False si el proveedor falló por algo pasajero: entonces NO se cachea el vacío
     for cand in candidates:
         try:
             res = _HTTP_SESSION.get(
@@ -2034,21 +2044,27 @@ def ticker_logo_image(request: Request, symbol: str):
                 params={"format": "png", "size": 64},
                 timeout=8,
             )
-            ok = (res.status_code == 200 and res.content
-                  and res.headers.get("content-type", "").startswith("image/")
-                  and len(res.content) <= 300_000)
         except Exception:
-            ok = False
-        if ok:
+            definitive = False
+            continue
+        if (res.status_code == 200 and res.content
+                and res.headers.get("content-type", "").startswith("image/")
+                and len(res.content) <= 300_000):
             data = res.content
             break
+        if res.status_code not in (200, 404):  # 429, 403, 5xx…: no es "no existe"
+            definitive = False
 
-    # Cachea también el vacío: sin esto, una cartera con diez tickers sin
-    # logo sale a internet diez veces en cada render.
-    _LOGO_BYTES_CACHE.set(sym, data)
-    if not data:
-        raise HTTPException(status_code=404, detail="Sin logo")
-    return Response(content=data, media_type="image/png", headers=_LOGO_HEADERS)
+    if data:
+        _LOGO_BYTES_CACHE.set(sym, data)
+        return Response(content=data, media_type="image/png", headers=_LOGO_HEADERS)
+    # Cachea el vacío solo cuando el proveedor dijo que no hay logo: así una cartera con diez
+    # tickers sin logo no sale a internet diez veces por render, pero un fallo pasajero ya no
+    # deja a AAPL o MSFT sin logo 24 h (así quedaron en producción hasta el siguiente reinicio).
+    if definitive:
+        _LOGO_BYTES_CACHE.set(sym, b"")
+        return _logo_404(_LOGO_MISS)
+    return _logo_404(_LOGO_RETRY)
 
 
 RAPIDAPI_FINANCE_HOST = "real-time-finance-data.p.rapidapi.com"

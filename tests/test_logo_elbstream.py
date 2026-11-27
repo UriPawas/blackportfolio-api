@@ -58,3 +58,41 @@ def test_simbolo_invalido_no_llega_al_proveedor(client, upstream):
     for malo in ("-ABC", ".."):
         assert client.get(f"/api/logo/{malo}").status_code == 404
     assert upstream.llamadas == []
+
+
+def test_404_va_sin_cuerpo_json_y_con_corp(client, upstream):
+    """Un JSON a un <img> entre orígenes dispara ERR_BLOCKED_BY_ORB en Chrome."""
+    r = client.get("/api/logo/TVACIO.MX")
+    assert r.status_code == 404 and r.content == b""
+    assert "json" not in r.headers.get("content-type", "")
+    assert r.headers["cross-origin-resource-policy"] == "cross-origin"
+    malo = client.get("/api/logo/-ABC")
+    assert malo.status_code == 404 and malo.content == b""
+    assert malo.headers["cross-origin-resource-policy"] == "cross-origin"
+
+
+def test_200_lleva_corp_para_el_img_entre_origenes(client, upstream):
+    upstream.tiene = {"TCORP"}
+    r = client.get("/api/logo/TCORP")
+    assert r.status_code == 200 and r.headers["cross-origin-resource-policy"] == "cross-origin"
+
+
+@pytest.mark.parametrize("fallo", ["excepcion", "429", "503"])
+def test_fallo_pasajero_del_proveedor_no_se_cachea(client, monkeypatch, fallo):
+    """AAPL y MSFT quedaron 24 h sin logo porque un fallo pasajero se cacheó como 'no hay logo'."""
+    sym = "TPASAJ" + fallo[:3].upper()
+    llamadas = []
+
+    def get(url, params=None, timeout=None):
+        llamadas.append(url)
+        if len(llamadas) == 1:
+            if fallo == "excepcion":
+                raise TimeoutError("sin red")
+            return SimpleNamespace(status_code=int(fallo), content=b"", headers={"content-type": "text/plain"})
+        return SimpleNamespace(status_code=200, content=PNG, headers={"content-type": "image/png"})
+
+    monkeypatch.setattr(api._HTTP_SESSION, "get", get)
+    primero = client.get(f"/api/logo/{sym}")
+    assert primero.status_code == 404 and primero.headers["cache-control"] == "no-store"
+    assert client.get(f"/api/logo/{sym}").status_code == 200  # reintentó al proveedor en vez de servir el vacío
+    assert len(llamadas) == 2
