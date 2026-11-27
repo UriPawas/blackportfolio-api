@@ -500,7 +500,7 @@
   /* ---------- cabecera, modo y leyenda ---------- */
   function renderChrome() {
     var n = T.portfolios.length, mode = n === 0 ? 'empty' : n === 1 ? 'single' : 'multi';
-    single = mode === 'single'; hero.dataset.mode = mode;
+    single = mode === 'single'; hero.dataset.mode = mode; sec.toggleAttribute('data-empty', mode === 'empty'); /* sin portafolios, la única llamada a la acción es la de la tarjeta vacía */
     $('#tkSub').textContent = n === 0 ? 'Aún no tienes portafolios · base ' + T.base : n + (n === 1 ? ' portafolio' : ' portafolios') + ' · base ' + T.base + ' · precios al ' + D.asOf;
     var chip = $('#tkChip'); chip.hidden = !isFinite(T.limit.max) || T.limit.max >= 99; chip.textContent = n + ' de ' + T.limit.max; chip.title = 'Plan ' + T.limit.plan + ': ' + n + ' de ' + T.limit.max + ' portafolios';
     elK.textContent = single ? 'Patrimonio · ' + T.portfolios[0].name : 'Patrimonio total';

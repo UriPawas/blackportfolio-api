@@ -69,9 +69,12 @@
       return '<li><span class="cbf-aw">' + esc(when) + '</span><span class="cbf-an">' + esc(what) + '</span><span class="cbf-ak">' + esc(a.kind) + esc(amt) + '</span></li>';
     }).join('');
 
+    /* la nota de hoy sin leer lleva la insignia "Nuevo". Antes se desplegaba sola 380 ms después de pintar y empujaba toda la página (salto de diseño);
+       ahora nace plegada, sin movimiento, y se da por leída al abrirla */
+    var today = todayISO(), fresh = lsGet(key) !== today;
     root.innerHTML =
       '<button type="button" class="cbf-bar" aria-expanded="false" aria-controls="' + panelId + '">' +
-        '<span class="cbf-mark">Nota de hoy</span>' +
+        '<span class="cbf-mark">Nota de hoy</span>' + (fresh ? '<span class="cbf-new">Nuevo</span>' : '') +
         '<span class="cbf-head">' + esc(b.headline) + '</span>' +
         '<span class="cbf-act"><span class="cbf-act-t">Leer nota</span>' + CHEV + '</span>' +
       '</button>' +
@@ -93,6 +96,7 @@
       bar.setAttribute('aria-expanded', open ? 'true' : 'false');
       panel.setAttribute('aria-hidden', open ? 'false' : 'true');
       var t = bar.querySelector('.cbf-act-t'); if (t) t.textContent = open ? 'Ocultar' : 'Leer nota';
+      if (open) { lsSet(key, today); var nb = bar.querySelector('.cbf-new'); if (nb) nb.remove(); }
     }
     listen(bar, 'click', function () { setOpen(!open); });
 
@@ -109,12 +113,6 @@
       listen(c, 'click', function () { showPulse(c); });
     });
 
-    /* primera vez del día por portafolio: se despliega sola, tras un instante para que el movimiento se vea */
-    var today = todayISO();
-    if (lsGet(key) !== today) {
-      lsSet(key, today);
-      later(function () { setOpen(true); }, 380);
-    }
     return { destroy: destroy };
   }
 

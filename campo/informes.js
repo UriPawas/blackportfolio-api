@@ -14,7 +14,7 @@
     abrir: 'Abrir', ren: 'Renombrar', del: 'Eliminar', undo: 'Deshacer', deleted: 'Informe eliminado', save: 'Guardar', cancel: 'Cancelar',
     back: 'Informes', print: 'Imprimir o guardar PDF', missing: 'Este informe no existe', missingD: 'Pudo haberse eliminado. Vuelve a tus informes.',
     noRend: 'Este formato aún no está disponible.', badRange: 'Elige un rango con fechas de mercado dentro de los datos disponibles.',
-    badOrder: 'La fecha de inicio debe ser anterior a la final.', noPf: 'Aún no tienes portafolios para armar un informe.', noData: 'No hay sesiones en ese periodo.',
+    badOrder: 'La fecha de inicio debe ser anterior a la final.', noPf: 'Aún no tienes portafolios para armar un informe.', noPfT: 'Aún no tienes portafolios', noPfD: 'Un informe resume lo que pasó con un portafolio en un periodo. Crea el primero y aquí podrás armar tu informe.', newPf: 'Nuevo portafolio', noData: 'No hay sesiones en ese periodo.',
     foot: 'Los informes describen lo que pasó con tus datos; no son una recomendación de inversión.',
     limit: 'Tu plan Explorer incluye 1 informe al mes y ya usaste el de este mes.'
   } };
@@ -104,6 +104,15 @@
     var C = CR(), t = T(); teardownViewer(true);
     root.className = 'inf'; root.dataset.mode = 'landing';
     if (!C || !t) { root.innerHTML = '<header class="inf-head"><h1 tabindex="-1">' + S.title + '</h1><p>' + S.lede + '</p></header><p class="inf-note">' + S.noData + '</p>'; return; }
+    if (!t.portfolios.length) { /* sin portafolios no hay formulario ni vista previa que mostrar: una tarjeta vacía centrada, con la única acción posible */
+      form.pf = null;
+      root.innerHTML = '<header class="inf-head"><h1 tabindex="-1">' + S.title + '</h1><p>' + S.lede + '</p></header>' +
+        '<div class="inf-void"><strong>' + S.noPfT + '</strong><p>' + (t.readonly ? S.noPf : S.noPfD) + '</p>' + (t.readonly ? '' : '<button type="button" class="btn btn-primary" data-create>' + S.newPf + '</button>') + '</div>' +
+        (store.items.length ? '<section class="inf-hist" aria-labelledby="infHT"><h2 id="infHT">' + S.hist + '</h2><div id="infList"></div></section>' : '') +
+        '<p class="inf-foot">' + S.foot + '</p><div class="inf-toast" id="infToast" role="status" hidden></div>';
+      if (store.items.length) { $('#infList').addEventListener('click', onListClick); $('#infList').addEventListener('keydown', onListKey); paintList(false); }
+      return;
+    }
     if (!form.pf || (form.pf !== 'todos' && !t.get(form.pf))) form.pf = t.portfolios[0] ? t.portfolios[0].id : null;
     var b = bounds(); if (!form.from) { form.from = b.min; form.to = b.max; }
     root.innerHTML =
@@ -149,7 +158,11 @@
     else if (!resolvePeriod(formPeriod())) msg = form.per === 'custom' ? S.badRange : S.noData;
     else rep = buildReport({ pf: form.pf, per: formPeriod() });
     var lm = overLimit(); lim.textContent = lm ? S.limit : ''; bad(msg); if (lm) go.disabled = true;
-    if (!rep) { $('#infPrevS').textContent = ''; return; }
+    if (!rep) { /* sin informe que previsualizar, las cifras llevan un guion en vez de quedar en blanco */
+      $('#infPrevS').textContent = '';
+      ['#infG', '#infT', '#infV'].forEach(function (s) { var e = $(s); if (!e) return; if (e._raf) cancelAnimationFrame(e._raf); e._v = null; e.textContent = '—'; e.className = 'inf-num'; });
+      return;
+    }
     $('#infPrevS').textContent = rep.meta.portfolioName + ' · ' + rep.meta.periodLabel;
     var K = rep.kpis, F = C.fmt, g = $('#infG'), tw = $('#infT'), v = $('#infV');
     tween(g, K.gain, F.smoney); tween(tw, K.twr, function (x) { return F.pct(x, 2); }); tween(v, K.excess * 100, F.pts);

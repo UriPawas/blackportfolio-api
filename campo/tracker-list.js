@@ -110,7 +110,7 @@
     list.forEach(function (p) { maxC = Math.max(maxC, Math.abs(p.contrib || 0)); });
     var rows = list.map(function (p, i) { return rowHTML(p, i, n, maxC, single); }).join('');
     var chip = (n && isFinite(lim.max) && lim.max < 99) ? '<span class="tkl-chipplan' + (atLimit() ? ' is-lim' : '') + '">' + (atLimit() ? 'Límite del plan ' + lim.plan : n + ' de ' + lim.max) + '</span>' : '';
-    var add = '<li class="tkl-add"><button type="button" data-act="new">' + ic('plus') + '<span>Nuevo portafolio</span>' + chip + '</button>' + (empty ? '<button type="button" data-act="imp">' + ic('up') + '<span>Importar CSV</span></button>' : '') + '</li>';
+    var add = empty ? '' : '<li class="tkl-add"><button type="button" data-act="new">' + ic('plus') + '<span>Nuevo portafolio</span>' + chip + '</button>' + (empty ? '<button type="button" data-act="imp">' + ic('up') + '<span>Importar CSV</span></button>' : '') + '</li>';
     listEl.innerHTML = '<div class="tkl" data-n="' + n + '"' + (single ? ' data-single' : '') + '>' +
       (empty ? '' : '<div class="tkl-cols" aria-hidden="true"><span></span><span></span><span>Portafolio</span><span class="r">Valor</span><span' + (single ? ' style="visibility:hidden"' : '') + '>Parte del total</span><span class="r">Hoy</span><span>Aporte de hoy</span><span class="r">Rentab.</span><span>3 meses</span><span></span><span></span></div>') +
       '<ul class="tkl-list" role="list" aria-label="Portafolios">' + rows + add + '</ul></div>';

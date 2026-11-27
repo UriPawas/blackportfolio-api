@@ -81,3 +81,6 @@
   .cbf-panel, .cbf.is-open .cbf-panel, .cbf-sec, .cbf-fade, .cbf.is-open .cbf-sec, .cbf.is-open .cbf-fade, .cbf-chev, .cbf-act, .cbf-chip { transition: none !important; }
   .cbf-sec, .cbf-fade { transform: none; }
 }
+
+/* nota de hoy sin leer: insignia en vez de desplegarse sola (que empujaba la página) */
+.cbf-new { flex: none; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--bg); }

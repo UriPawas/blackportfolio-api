@@ -118,3 +118,9 @@
   .inf * { transition-duration: 0.01ms !important; }
 }
 @media print { .inf-bar, .inf-foot, .inf-toast { display: none; } }
+
+/* cuenta sin portafolios: tarjeta vacía centrada (antes, el aviso rojo quedaba dentro del cuadro "Periodo" y las cifras en blanco) */
+.inf-void { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 56px 20px; border: 1.5px dashed var(--line); border-radius: var(--r-lg); background: var(--s1); }
+.inf-void strong { font-size: 18px; }
+.inf-void p { margin: 0; max-width: 46ch; color: var(--text-3); font-size: 14.5px; text-wrap: pretty; }
+.inf-void .btn { margin-top: 10px; }

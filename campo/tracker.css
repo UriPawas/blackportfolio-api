@@ -58,6 +58,8 @@
 
 /* estados */
 .tk-hero .tk-empty { display: none; padding: 32px 20px; text-align: left; gap: 8px; }
+/* cuenta sin portafolios: el encabezado y la fila punteada repetían "Nuevo portafolio" (tres botones iguales apilados); queda el de la tarjeta vacía */
+[data-empty] > .tk-head [data-tk="create"], [data-empty] > .tk-head [data-tk="import"] { display: none; }
 .tk-hero[data-mode="empty"] .tk-in { display: none; }
 .tk-hero[data-mode="empty"] .tk-empty { display: grid; justify-items: start; }
 .tk-empty h2 { font-size: 18px; }
