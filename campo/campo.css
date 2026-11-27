@@ -428,13 +428,18 @@ input[aria-invalid="true"] { border-color: var(--loss); }
   .acc-form { padding: var(--s-5) var(--s-4); }
   .step { margin: 0 auto; }
   .appview { grid-template-columns: minmax(0, 1fr); }
-  .side { position: static; height: auto; flex-direction: row; align-items: center; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); gap: 8px; overflow-x: auto; }
-  .side .brand span { display: none; }
-  .side-nav { display: flex; gap: 2px; }
-  .side-nav button { padding: 0 12px; } .side-nav button span { display: none; } .side-nav button.on span { display: inline; }
-  .side-foot { margin-top: 0; margin-left: auto; display: flex; align-items: center; }
-  .who { display: none; }
-  .app-main { padding: 16px 12px 96px; }
+  /* barra inferior fija: los 5 destinos a la vista y con nombre (antes, una barra superior con scroll horizontal, botones de 42 px sin etiqueta
+     y Salir/cuenta fuera de pantalla). Salir y la cuenta viven en Ajustes; crear un portafolio, en la propia sección Portafolios. */
+  :root { --tabbar-h: 64px; }
+  .side { position: fixed; z-index: 45; left: 0; right: 0; bottom: 0; top: auto; height: auto; flex-direction: row; align-items: stretch; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--line); gap: 0; overflow: visible; }
+  .side .brand, .side-foot, .side-nav [data-create] { display: none; }
+  .side-nav { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
+  .side-nav button { flex-direction: column; justify-content: center; gap: 3px; min-height: 52px; padding: 4px 2px; border-radius: var(--r-md); font-size: 11.5px; line-height: 1.1; text-align: center; }
+  .side-nav button .ic { width: 22px; height: 22px; }
+  .side-nav button span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-main { padding: 16px 12px calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom)); }
+  /* los avisos flotantes que iban a 20 px del borde quedarían bajo la barra */
+  body[data-view="app"] :is(.txs-toast, .inf-toast, .pmt-toast, .hub-toast, .st-undo, .toast) { bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 640px) {
   :root { --gutter: 16px; }
