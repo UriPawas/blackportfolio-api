@@ -62,7 +62,7 @@
     if (p && p.ledger) {
       var R0 = p.ledger;
       return finish({ id: p.id, name: p.name, events: R0.events.slice(), rows: R0.rows.map(function (r) { var o = {}; for (var k in r) o[k] = r[k]; return o; }),
-        V: R0.V, F: R0.F, Dc: R0.Dc, Wc: R0.Wc, cashAt: R0.cashAt, dates: R0.dates, fxLast: R0.fxLast, fxPrev: R0.fxPrev, benchmark: p.benchmark || R0.benchmark, held: R0.held, pfCcy: R0.pfCcy });
+        V: R0.V, F: R0.F, Dc: R0.Dc, Wc: R0.Wc, cashAt: R0.cashAt, dates: R0.dates, fxLast: R0.fxLast, fxPrev: R0.fxPrev, benchmark: p.benchmark || R0.benchmark, held: R0.held, pfCcy: R0.pfCcy, base: R0.base, attr: R0.attr });
     }
     var dates = T.dates, fxs = T.fx.series, ev = [], seq = 0, held = [], rows = [], rng = mulberry32(hashStr(p.id + '·led'));
     var w0 = isoMs(dates[0]), created = p.created || dates[0];
@@ -202,14 +202,43 @@
       for (var i = 0; i < TOT; i++) { V[i] += L.V[i]; F[i] += L.F[i]; Dc[i] += L.Dc[i]; Wc[i] += L.Wc[i]; cashAt[i] += L.cashAt[i]; }
       L.rows.forEach(function (r) {
         var m = by[r.ticker];
-        if (!m) { m = by[r.ticker] = { ticker: r.ticker, name: r.name, cls: r.cls, qty: 0, price: r.price, prev: r.prev, d1: r.d1, ccy: r.ccy, isU: r.isU, fx1: r.fx1, fx0: r.fx0, cost: 0, mv: 0, local: 0, lcost: 0 }; rows.push(m); }
+        if (!m) { m = by[r.ticker] = { ticker: r.ticker, name: r.name, cls: r.cls, qty: 0, price: r.price, prev: r.prev, d1: r.d1, ccy: r.ccy, isU: r.isU, fx1: r.fx1, fx0: r.fx0, cost: 0, mv: 0, local: 0, lcost: 0, up: 0, uf: 0, rp: 0, rf: 0, dv: 0 }; rows.push(m); }
         m.qty += r.qty; m.cost += r.cost; m.mv += r.mv; m.local += r.local; m.lcost += r.lcost || 0;
+        m.up += r.up || 0; m.uf += r.uf || 0; m.rp += r.rp || 0; m.rf += r.rf || 0; m.dv += r.dv || 0;
       });
     });
     ev.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.seq - b.seq; });
     var T0 = T.portfolios[0];
-    return finish({ id: 'todos', name: 'Todos los portafolios', events: ev, rows: rows, V: V, F: F, Dc: Dc, Wc: Wc, cashAt: cashAt, dates: T.dates, fxLast: T.fx.usdmxn, fxPrev: T.fx.series[LAST - 1], benchmark: 'S&P 500', parts: Ls });
+    var AG = finish({ id: 'todos', name: 'Todos los portafolios', events: ev, rows: rows, V: V, F: F, Dc: Dc, Wc: Wc, cashAt: cashAt, dates: T.dates, fxLast: T.fx.usdmxn, fxPrev: T.fx.series[LAST - 1], benchmark: 'S&P 500', parts: Ls });
+    if (Ls.length && Ls.every(function (L) { return L.attr; })) AG.attr = mergeAttr(Ls.map(function (L) { return L.attr; }));
+    return AG;
   }
+
+  /* ============================== de dónde viene la ganancia (precio · tipo de cambio · dividendos) ==============================
+     El cálculo vive en campo/datos.js (CAMPO_REAL.attribute); aquí solo se suma por portafolio y se pide por ventana. En muestra no hay. */
+  var ATK = ['price', 'fx', 'div', 'total', 'resid', 'cashFx', 'fees'], ATP = ['q', 'cl', 'cb', 'rp', 'rf', 'dv', 'up', 'uf', 'mv', 'price', 'fx', 'total', 'cost'];
+  function mergeAttr(list) {
+    var o = { s: null, e: null, base: null, byTk: {} }; ATK.forEach(function (k) { o[k] = 0; });
+    list.forEach(function (a) {
+      if (!a) return; if (o.s == null) { o.s = a.s; o.e = a.e; o.base = a.base; }
+      ATK.forEach(function (k) { o[k] += a[k] || 0; });
+      Object.keys(a.byTk).forEach(function (tk) {
+        var x = a.byTk[tk], m = o.byTk[tk]; if (!m) { m = o.byTk[tk] = { tk: tk, ccy: x.ccy, open: false }; ATP.forEach(function (k) { m[k] = 0; }); }
+        ATP.forEach(function (k) { m[k] += x[k] || 0; }); m.open = m.open || x.open;
+      });
+    });
+    return o;
+  }
+  /* s = −1: desde el inicio (la que ya trae el libro); s ≥ 0: lo que se tenía ese día vale lo que valía entonces */
+  function attrOf(L, s, e) {
+    var RL = window.CAMPO_REAL; if (!RL || !RL.attribute || !L) return null;
+    s = s == null ? -1 : s; e = e == null ? LAST : e;
+    if (s === -1 && e === LAST && L.attr) return L.attr;
+    if (L.parts) { var list = L.parts.map(function (P) { return RL.attribute(P, s, e); }); return list.every(Boolean) ? mergeAttr(list) : null; }
+    return RL.attribute(L, s, e);
+  }
+  /* "USD/MXN": el par en el orden en que se cotiza; si no es peso–dólar, moneda del activo / base */
+  function pairOf(c, B) { return (c === 'USD' && B === 'MXN') || (c === 'MXN' && B === 'USD') ? 'USD/MXN' : c + '/' + B; }
 
   /* ============================== cálculos ============================== */
   function twr(V, F, s, e) { var g = 1; for (var t = s + 1; t <= e; t++) { var den = V[t - 1] + F[t]; if (den > 0) g *= V[t] / den; } return g - 1; }
@@ -280,6 +309,23 @@
       arr.push(['TWR · ' + PERIODS[Pi][0], fP(val), 'res']);
       return { val: val, lines: arr };
     }
+    /* ---------- de dónde viene la ganancia: barra de dos lados (pierde ← 0 → gana) y su leyenda ---------- */
+    var AT = L.attr || null, AT_DEF = [['price', 'Precio', 'var(--pf-1)'], ['fx', 'Tipo de cambio', 'var(--pf-4)'], ['div', 'Dividendos', 'var(--pf-2)']];
+    function atItems(a) { return AT_DEF.map(function (d) { return { id: d[0], name: d[1], col: d[2], v: a[d[0]] }; }).filter(function (x) { return x.id === 'price' || Math.abs(x.v) >= 0.5; }); }
+    function atHTML(a) {
+      var it = atItems(a), neg = it.filter(function (x) { return x.v < -0.005; }).sort(function (x, y) { return x.v - y.v; }), pos = it.filter(function (x) { return x.v > 0.005; }).sort(function (x, y) { return y.v - x.v; });
+      function seg(x) { return '<i class="pfr-ats" style="flex:' + Math.abs(x.v).toFixed(2) + ' 1 0;--c:' + x.col + '"></i>'; }
+      var bar = neg.map(seg).join('') + (neg.length && pos.length ? '<i class="pfr-atz"></i>' : '') + pos.map(seg).join('');
+      var say = it.map(function (x) { return x.name.toLowerCase() + ' ' + fS(x.v); }).join(', ');
+      return '<div class="pfr-at"><div class="pfr-atb" role="img" aria-label="Origen de la ganancia: ' + esc(say) + '">' + bar + '</div><ul class="pfr-atl" role="list">' +
+        it.map(function (x) { return '<li><i class="pfr-atd" style="--c:' + x.col + '"></i><span>' + x.name + '</span><b class="num ' + sgnCls(x.v) + '">' + (Math.abs(x.v) < 0.5 ? fM(0) : fS(x.v)) + '</b></li>'; }).join('') + '</ul></div>';
+    }
+    function atLines(a) {
+      var o = [['Origen de la ganancia: precio + tipo de cambio + dividendos'], ['Precio: ganancia en la moneda de cada activo × el tipo de cambio al que lo compraste', fS2(a.price)],
+        ['Tipo de cambio: lo que el ' + PAIR + ' sumó o restó sobre lo invertido' + (a.cashFx ? ' y sobre el efectivo en otra moneda' : ''), fS2(a.fx)], ['Dividendos cobrados', fS2(a.div)], ['Suma = ganancia total', fS2(a.price + a.fx + a.div), 'res']];
+      if (Math.abs(a.resid) >= 0.01) o.push(['El precio incluye ' + fS2(a.resid) + ' de redondeo de centavos de los movimientos.']);
+      return o;
+    }
     var ledgerM = (function () {
       var usdLocal = 0, usdMxn = 0, mxnLoc = 0; L.rows.forEach(function (r) { if (r.isU) { usdLocal += r.local; usdMxn += r.mv; } else mxnLoc += r.local; });
       var rent = L.dep ? L.gain / L.dep * 100 : 0, tw = twrInfo();
@@ -293,7 +339,7 @@
         { id: 'gan', name: 'Ganancia total', to: L.gain, fmt: fS, sign: true, sub: 'Realizada, no realizada, dividendos y tipo de cambio',
           lines: [['Patrimonio + retiros acumulados − aportaciones acumuladas'], ['Patrimonio', fM2(L.value)], ['+ Retiros acumulados', fM2(L.wd)], ['− Aportaciones acumuladas', fM2(L.dep)], ['Ganancia total', fS2(L.gain), 'res'],
             ['Desglose: no realizada (valor − costo de lotes abiertos, a su TC)', fS2(L.unrealized)], ['Realizada (ventas − su costo)', fS2(L.realized)], ['Dividendos cobrados', fS2(L.div)],
-            ['Suma del desglose', fS2(L.unrealized + L.realized + L.div)]] },
+            ['Suma del desglose', fS2(L.unrealized + L.realized + L.div)]].concat(AT ? atLines(AT) : []) },
         { id: 'ren', name: 'Rentabilidad', to: rent, fmt: function (v) { return fP(v); }, sign: true, sub: 'Sobre ' + fM(L.dep) + ' aportados',
           lines: [['Ganancia total ÷ capital aportado'], ['Ganancia total', fS2(L.gain)], ['Capital aportado (Σ aportaciones)', fM2(L.dep)], ['Rentabilidad', fP(rent), 'res'], ['El denominador es todo lo aportado, no solo el costo de lo que sigue abierto.']] },
         { id: 'twr', name: 'TWR · ' + PERIODS[Pi][0], to: tw.val, fmt: function (v) { return fP(v); }, sign: true, sub: 'Ponderado por tiempo, sin efecto de las aportaciones', lines: tw.lines },
@@ -315,7 +361,7 @@
 
     var ledHTML = K.map(function (k, n) {
       var did = id + '-d' + n;
-      return '<article class="pfr-k" data-k="' + k.id + '"><h3 class="pfr-kn">' + esc(k.name) + '</h3><p class="pfr-kv num" data-kv>' + (k.to == null ? '—' : esc(k.fmt(k.to))) + '</p><p class="pfr-ks">' + k.sub + '</p>' +
+      return '<article class="pfr-k" data-k="' + k.id + '"><h3 class="pfr-kn">' + esc(k.name) + '</h3><p class="pfr-kv num" data-kv>' + (k.to == null ? '—' : esc(k.fmt(k.to))) + '</p><p class="pfr-ks">' + k.sub + '</p>' + (k.id === 'gan' && AT ? atHTML(AT) : '') +
         '<button type="button" class="pfr-q" aria-expanded="false" aria-controls="' + did + '">¿Cómo se calcula?<svg class="pfr-qi" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>' +
         '<div class="pfr-dx" id="' + did + '" role="region" aria-label="Cálculo de ' + esc(k.name) + '"><div class="pfr-dxi"><ul class="pfr-fls" data-lines>' + lines(k.lines) + '</ul></div></div></article>';
     }).join('');
@@ -343,10 +389,16 @@
        Si son pesos y la vista no lo es, lleva el código: un "$" pelado junto a un "US$" confundiría. */
     function avgOf(r) { return r.lcost > 0 && r.qty > 0 ? r.lcost / r.qty : 0; }
     function pxTxt(r, v) { if (!(v > 0)) return '—'; var c = r.ccy || BASE, sy = D.fmt.sym(c); return sy + fN(v, v < 1 ? 4 : 2) + (c !== BASE && sy === '$' ? ' ' + c : ''); }
+    /* posición extranjera: de su ganancia (la columna de la derecha), cuánto fue del activo y cuánto del tipo de cambio; suman en puntos */
+    function fxSplit(r) {
+      if (!AT || r.uf == null || !(r.cost > 0) || !r.ccy || r.ccy === BASE) return null;
+      return { a: r.up / r.cost * 100, f: r.uf / r.cost * 100, pair: pairOf(r.ccy, BASE) };
+    }
     function rowHTML(r) {
-      var av = pxTxt(r, avgOf(r)), px = pxTxt(r, r.price);
-      return '<li class="pfr-prow" data-t="' + esc(r.ticker) + '" data-c="' + esc(r.cls) + '"><button type="button" class="pfr-pr" aria-label="' + esc(r.ticker) + ', ' + esc(r.name) + '. Precio promedio con comisiones ' + esc(av) + ', precio actual ' + esc(px) + '. Ver ficha"><span class="pfr-pa">' + mark(r.ticker) + '<span class="pfr-pn"><strong>' + esc(r.ticker) + '</strong><span class="pfr-pnm">' + esc(r.name) + '</span></span></span>' +
-        '<span class="pfr-pw num">' + fN(r.w * 100, 1) + ' %</span><span class="pfr-pv num">' + fM(r.mv) + '</span><span class="pfr-pavg num">' + esc(av) + '</span><span class="pfr-ppx num">' + esc(px) + '</span><span class="pfr-pd num ' + sgnCls(r.d1) + '">' + fP(r.d1) + '</span><span class="pfr-pg num ' + sgnCls(r.gp) + '">' + fP(r.gp, 1) + '</span><span class="pfr-pns num">Prom. ' + esc(av) + ' · Precio ' + esc(px) + '</span></button></li>';
+      var av = pxTxt(r, avgOf(r)), px = pxTxt(r, r.price), sp = fxSplit(r);
+      return '<li class="pfr-prow" data-t="' + esc(r.ticker) + '" data-c="' + esc(r.cls) + '"><button type="button" class="pfr-pr" aria-label="' + esc(r.ticker) + ', ' + esc(r.name) + '. Precio promedio con comisiones ' + esc(av) + ', precio actual ' + esc(px) + (sp ? '. De la ganancia, ' + fN(sp.a, 1) + ' por ciento del activo y ' + fN(sp.f, 1) + ' por ciento del tipo de cambio ' + sp.pair : '') + '. Ver ficha"><span class="pfr-pa">' + mark(r.ticker) + '<span class="pfr-pn"><strong>' + esc(r.ticker) + '</strong><span class="pfr-pnm">' + esc(r.name) + '</span></span></span>' +
+        '<span class="pfr-pw num">' + fN(r.w * 100, 1) + ' %</span><span class="pfr-pv num">' + fM(r.mv) + '</span><span class="pfr-pavg num">' + esc(av) + '</span><span class="pfr-ppx num">' + esc(px) + '</span><span class="pfr-pd num ' + sgnCls(r.d1) + '">' + fP(r.d1) + '</span><span class="pfr-pg num ' + sgnCls(r.gp) + '">' + fP(r.gp, 1) + '</span><span class="pfr-pns num">Prom. ' + esc(av) + ' · Precio ' + esc(px) + '</span>' +
+        (sp ? '<span class="pfr-pfx num" title="La ganancia de la derecha se parte en lo que hizo el activo en su moneda y lo que hizo el tipo de cambio desde que compraste"><span>Activo <b class="' + sgnCls(sp.a) + '">' + fP(sp.a, 1) + '</b></span><span>' + esc(sp.pair) + ' <b class="' + sgnCls(sp.f) + '">' + fP(sp.f, 1) + '</b></span></span>' : '') + '</button></li>';
     }
     function sorted() { return L.rows.slice().sort(function (a, b) { var x = a[sortKey], y = b[sortKey]; if (sortKey === 'ticker') return sortDir * String(x).localeCompare(String(y)); return sortDir * (x - y) || a.ticker.localeCompare(b.ticker); }); }
 
@@ -682,5 +734,5 @@
     }
   });
 
-  window.CampoPfResumen = { render: render, calc: { DPS: DPS, clsOf: clsOf, buildLedger: buildLedger, aggregate: aggregate, twr: twr, twrSeries: twrSeries, xirrOf: xirrOf, solveXirr: solveXirr, npv: npv, benchOf: benchOf } };
+  window.CampoPfResumen = { render: render, calc: { DPS: DPS, clsOf: clsOf, buildLedger: buildLedger, aggregate: aggregate, attrOf: attrOf, mergeAttr: mergeAttr, pairOf: pairOf, twr: twr, twrSeries: twrSeries, xirrOf: xirrOf, solveXirr: solveXirr, npv: npv, benchOf: benchOf } };
 })();

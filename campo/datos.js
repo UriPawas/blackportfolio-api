@@ -358,7 +358,8 @@
     var cr = MX.cross[c]; return cr ? cr[0] : MX.fx[0];
   }
   function foreignOf(B) { return B === 'USD' ? 'MXN' : 'USD'; }
-  function rebase(L, B) {
+  function rebase(L, B) { return withAttr(rebase0(L, B)); }
+  function rebase0(L, B) {
     B = up(B) || 'MXN'; if (B === 'MXN' || !L) return L;
     var Rb = new Float64Array(TOT), i, FOR = foreignOf(B); for (i = 0; i < TOT; i++) Rb[i] = mxnPer(B, i);
     function k(e) { return e.idx >= 0 ? Rb[e.idx] : mxnAt(B, -1, e.date); }
@@ -389,6 +390,68 @@
     return { id: L.id, name: L.name, events: ev, rows: rows, V: V, F: F, Dc: Dc, Wc: Wc, cashAt: cashAt, usdLocal: usd, dates: L.dates,
       fxLast: mxnPer(FOR, LAST) / Rb[LAST], fxPrev: mxnPer(FOR, LAST - 1) / Rb[LAST - 1], benchmark: L.benchmark, held: L.held,
       cashPf: L.cashPf, pfCcy: L.pfCcy, warnings: L.warnings, base: B };
+  }
+
+  /* ============================== de dónde viene la ganancia: precio · tipo de cambio · dividendos ==============================
+     Una ganancia en pesos de una acción en dólares mezcla dos cosas: lo que subió la acción y lo que se movió el dólar. Por emisora se
+     repiten las transacciones con costo promedio en DOS monedas (la del activo y la base de la vista): de lo que sigue abierto queda su
+     costo local (cl) y su costo en la base (cb), y de ahí el tipo de cambio promedio de compra f̄ = cb ÷ cl.
+       precio     = (ganancia en la moneda del activo) × f̄     lo que ves en tu bróker, llevado a la base al TC al que compraste
+       cambio     = (ganancia total en la base) − precio        en lo abierto, cantidad × precio × (TC de hoy − f̄); en lo vendido, igual con el TC de la venta
+       dividendos = lo cobrado, que ya entra a la caja en la moneda del portafolio
+     El efectivo en una moneda distinta de la base (portafolio en USD visto en pesos) también se revalúa: va a "cambio".
+     s = −1: desde que se compró, al costo; s ≥ 0: lo que se tenía el día s vale lo que valía ese día (como si se comprara entonces).
+     Suma: precio + cambio + dividendos = (V − aportado + retirado) al final − lo mismo al inicio. Los centavos de redondeo de los
+     movimientos (mxn va redondeado a 2 decimales) quedan en `resid` y se suman a "precio" para que la barra cierre exacto. */
+  function attribute(L, s, e) {
+    if (!L || !L.events || !L.held || !L.V) return null;
+    s = s == null ? -1 : s; e = e == null ? LAST : e;
+    var B = L.base || 'MXN', st = {}, heldBy = {}, cashFx = 0, fees = 0;
+    function rt(c, i, iso) { return mxnAt(c, i, iso) / mxnAt(B, i, iso); } /* unidades de la base por unidad de c; x ÷ x es exactamente 1 */
+    function mk(tk, c) { return st[tk] || (st[tk] = { tk: tk, ccy: c, q: 0, cl: 0, cb: 0, rp: 0, rf: 0, dv: 0, up: 0, uf: 0, mv: 0, open: false }); }
+    L.held.forEach(function (h) { heldBy[h.ticker] = h; });
+    if (s >= 0) L.held.forEach(function (h) {
+      var q = 0; for (var l = 0; l < h.lots.length; l++) if (h.lots[l].idx <= s) q += h.lots[l].q;
+      if (q > 1e-12) { var o = mk(h.ticker, h.ccy); o.q = q; o.cl = q * h.path[s]; o.cb = o.cl * rt(h.ccy, s); }
+    });
+    if (e > s) L.events.forEach(function (ev) {
+      if (!(ev.idx <= e && (s < 0 || ev.idx > s))) return;
+      if (L.pfCcy && L.pfCcy !== B && ev.cpf) cashFx -= ev.cpf * rt(L.pfCcy, ev.idx, ev.date); /* caja: lo que entró o salió al TC del día */
+      if (!ev.tk) return;
+      var same = ev.ccy === B || !(ev.fx > 0), loc = same ? ev.mxn : ev.mxn / ev.fx, o = mk(ev.tk, ev.ccy);
+      if (ev.t === 'buy') { o.q += ev.qty; o.cl += loc; o.cb += ev.mxn; fees += ev.fee || 0; }
+      else if (ev.t === 'sell') {
+        var qs = Math.min(ev.qty, o.q), f = o.q > 0 ? qs / o.q : 0, cl = o.cl * f, cb = o.cb * f;
+        if (!ev.adj) { /* un ajuste (cantidad registrada a mano) sale a su costo: no es ganancia ni pérdida */
+          var tot = ev.mxn - cb, pg = cl > 0 ? (loc - cl) * (cb / cl) : tot; o.rp += pg; o.rf += tot - pg; fees += ev.fee || 0;
+        }
+        o.q -= qs; o.cl -= cl; o.cb -= cb;
+      } else if (ev.t === 'div') o.dv += ev.mxn;
+    });
+    var price = 0, fx = 0, div = 0, byTk = {};
+    Object.keys(st).forEach(function (tk) {
+      var o = st[tk], h = heldBy[tk];
+      if (o.q > 1e-9 && h) {
+        var mv = o.q * h.path[e] * rt(o.ccy, e), tot = mv - o.cb, pg = o.cl > 0 ? (o.q * h.path[e] - o.cl) * (o.cb / o.cl) : tot;
+        o.mv = mv; o.up = pg; o.uf = tot - pg; o.open = true;
+      }
+      o.price = o.rp + o.up; o.fx = o.rf + o.uf; o.total = o.price + o.fx + o.dv; o.cost = o.cb;
+      price += o.price; fx += o.fx; div += o.dv; byTk[tk] = o;
+    });
+    if (L.pfCcy && L.pfCcy !== B) cashFx += (L.cashAt[e] - (s >= 0 ? L.cashAt[s] : 0)); else cashFx = 0;
+    fx += cashFx;
+    function G(t) { return L.V[t] - (L.Dc[t] - L.Wc[t]); } /* ganancia acumulada al día t */
+    var total = e > s ? G(e) - (s >= 0 ? G(s) : 0) : 0, resid = total - (price + fx + div);
+    return { s: s, e: e, base: B, price: price + resid, fx: fx, div: div, total: total, resid: resid, cashFx: cashFx, fees: fees, byTk: byTk };
+  }
+  /* cada libro en una base lleva su atribución desde el inicio y, en cada renglón abierto, la parte de precio (up) y de cambio (uf) */
+  function withAttr(L) {
+    if (!L || L.attr || !L.events) return L;
+    try {
+      var a = attribute(L, -1, LAST); if (!a) return L; L.attr = a;
+      L.rows.forEach(function (r) { var o = a.byTk[r.ticker]; r.up = o ? o.up : 0; r.uf = o ? o.uf : 0; r.rp = o ? o.rp : 0; r.rf = o ? o.rf : 0; r.dv = o ? o.dv : 0; });
+    } catch (x) { if (W.console) console.error(x); }
+    return L;
   }
 
   /* ============================== piezas compartidas por la carga y la escritura ============================== */
@@ -539,7 +602,7 @@
     W.CAMPO_REAL = {
       readonly: false, readonlyMsg: READONLY, plan: normPlan(plan), limit: limits(), write: WRITE,
       portfolios: specs, paths: ctx.paths, catalog: catalog, grid: grid, fx: fxS, warnings: warnings, version: boot0.portfolioVersion || 0,
-      mxnPer: mxnPer, mxnAt: mxnAt, rebase: rebase, foreignOf: foreignOf, defaultCcy: defaultCcy, currencies: currencies,
+      mxnPer: mxnPer, mxnAt: mxnAt, rebase: rebase, attribute: attribute, foreignOf: foreignOf, defaultCcy: defaultCcy, currencies: currencies,
       extraMarkets: EXTRA.map(function (m) { var s = seriesFor(H[m.y], live[m.y], null), h = Array.prototype.slice.call(s.a); return { sym: m.sym, last: h[LAST], chg: h[LAST - 1] ? (h[LAST] / h[LAST - 1] - 1) * 100 : 0, spark: h.slice(-40).map(function (v) { return v / h[TOT - 40] * 100; }), stale: s.stale }; })
     };
     if (warnings.length && W.console) console.info('[Portify] avisos del adaptador:', warnings);

@@ -355,6 +355,20 @@
     }
     var riskHTML = '<section class="pfd-s panel" aria-labelledby="' + id + 'h2"><div class="panel-head"><h2 id="' + id + 'h2">Riesgo</h2><span class="muted" data-riskp>Periodo ' + PERIODS[Pi][0] + ' · frente a ' + esc(bench.name) + '</span></div><div class="pfd-led" data-led>' + M.map(mHTML).join('') + '</div></section>';
 
+    /* ---------- bloque: origen de tu rendimiento (precio · tipo de cambio · dividendos) ----------
+       El cálculo vive en campo/datos.js (CAMPO_REAL.attribute). "Todo" es desde la primera compra (al costo, con el tipo de cambio de
+       cada compra); los demás periodos parten de lo que valía cada posición el primer día del periodo. Solo con datos reales. */
+    var OR_ON = !!(window.CAMPO_REAL && R.calc.attrOf && R.calc.attrOf(L, -1, LAST)), OR_CAP = 8, orAll = false, orState = {}, orSeq = 0;
+    var OR_DEF = [['price', 'Precio', 'var(--pf-1)', 'Lo que subieron o bajaron tus activos, en su propia moneda'], ['fx', 'Tipo de cambio', 'var(--pf-4)', 'Lo que el cambio de moneda te sumó o te restó'], ['div', 'Dividendos', 'var(--pf-2)', 'Lo que cobraste']];
+    var NAMES = {}; (function () { var src = (L.held || []).slice(); (L.parts || []).forEach(function (P) { (P.held || []).forEach(function (h) { src.push(h); }); }); src.forEach(function (h) { if (h.name) NAMES[h.ticker] = h.name; }); L.rows.forEach(function (r) { if (r.name) NAMES[r.ticker] = r.name; }); })();
+    function fS2(v) { var a = Math.abs(v); return (a < 0.005 ? '' : v < 0 ? '−' : '+') + SYM() + fN(a, 2); }
+    function orStart() { return PERIODS[Pi][0] === 'Todo' ? -1 : sIdx(); }
+    var orHTML = !OR_ON ? '' : '<section class="pfd-s panel pfd-or" aria-labelledby="' + id + 'h7"><div class="panel-head"><h2 id="' + id + 'h7">Origen de tu rendimiento</h2><span class="muted" data-ors></span></div>' +
+      '<div class="pfd-orh">' + OR_DEF.map(function (d) { return '<div class="pfd-orf" data-of="' + d[0] + '"><span class="pfd-orl"><i style="--c:' + d[2] + '"></i>' + d[1] + '</span><b class="pfd-orv num flat" data-ov="' + d[0] + '">—</b><span class="pfd-ord" data-od="' + d[0] + '">' + d[3] + '</span></div>'; }).join('') + '</div>' +
+      '<div class="pfd-orb" data-orb role="img"></div><p class="pfd-sum" data-orn></p>' +
+      '<ul class="pfd-ol" role="list" data-ol></ul><button type="button" class="btn btn-secondary btn-sm pfd-orm" data-orm hidden></button>' +
+      dxHTML(id + '-d7', 'Cálculo del origen del rendimiento', []) + '</section>';
+
     /* ---------- selector compartido ---------- */
     var barHTML = '<div class="pfd-bar" role="group" aria-label="Periodo del análisis"><span class="pfd-barl">Periodo del análisis</span><div class="seg pfd-sp" role="group" aria-label="Periodo" style="--n:5;--i:' + Pi + '"><span class="seg-pill" aria-hidden="true"></span>' + PERIODS.map(function (p, i) { return '<button type="button" data-p="' + i + '" aria-pressed="' + (i === Pi) + '">' + p[0] + '</button>'; }).join('') + '</div><span class="pfd-barn" data-barn></span></div>';
 
@@ -391,7 +405,7 @@
       '<div class="pfd-stage" tabindex="0" role="group" aria-labelledby="' + id + 'h6" aria-describedby="' + id + 'k6" data-st="cv"><canvas aria-hidden="true"></canvas></div><p class="pfd-sr" id="' + id + 'k6" aria-live="polite" data-sr="cv">Con las flechas izquierda y derecha lees cada día.</p>' +
       dxHTML(id + '-d6', 'Cálculo de capital contra mercado', [['Ganancia de mercado = valor − capital neto aportado'], ['Capital neto aportado', 'Σ aportaciones − Σ retiros hasta cada fecha, cada flujo en ' + BS() + ' al tipo de cambio de su fecha'], ['Valor', 'patrimonio con efectivo, igual que en Resumen'], ['La brecha entre las dos líneas es lo que ganó (o perdió) el mercado, no lo que pusiste.']]) + '</section>';
 
-    mount.innerHTML = '<div class="pfd" id="' + id + '"><p class="pfd-tag">Base ' + BS() + ' · tasa libre de riesgo ' + esc(rfTxt) + ' · benchmark ' + esc(bench.name) + ' en ' + BS() + '</p>' + perHTML + barHTML + riskHTML +
+    mount.innerHTML = '<div class="pfd" id="' + id + '"><p class="pfd-tag">Base ' + BS() + ' · tasa libre de riesgo ' + esc(rfTxt) + ' · benchmark ' + esc(bench.name) + ' en ' + BS() + '</p>' + perHTML + barHTML + riskHTML + orHTML +
       '<div class="pfd-cols">' + ddHTML + hmHTML + '</div><div class="pfd-cols pfd-cols-b">' + contHTML + cvHTML + '</div></div>';
     var $ = function (s, r) { return (r || mount).querySelector(s); }, $$ = function (s, r) { return Array.prototype.slice.call((r || mount).querySelectorAll(s)); };
     var rootEl = $('.pfd');
@@ -552,13 +566,67 @@
     clEl.addEventListener('click', function (e) { var n = e.target.closest('.pfd-cr'); if (n) contTip(n); });
     $('.pfd-ch5').addEventListener('click', function (e) { var b = e.target.closest('.pfd-sh'); if (!b) return; var k = b.dataset.s; if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = k === 'tk' ? 1 : -1; } applyCont(true); });
 
+    /* ---------- origen del rendimiento ---------- */
+    function orSegs(parts, tot) { return parts.map(function (x) { return '<i style="flex:' + (Math.abs(x.v) / (tot || 1) * 100).toFixed(3) + ' 1 0;--c:' + x.col + '"></i>'; }).join(''); }
+    function orSplit(items) { var neg = items.filter(function (x) { return x.v < -0.005; }).sort(function (x, y) { return x.v - y.v; }), pos = items.filter(function (x) { return x.v > 0.005; }).sort(function (x, y) { return y.v - x.v; }); return { neg: neg, pos: pos, sn: neg.reduce(function (s, x) { return s - x.v; }, 0), sp: pos.reduce(function (s, x) { return s + x.v; }, 0) }; }
+    function orLines(a, s0) {
+      var B = BS(), n = 0, net = 0; for (var t = Math.max(0, s0 + 1); t <= LAST; t++) if (Math.abs(F[t]) > 0.004) { net += F[t]; n++; }
+      var arr = [['Ganancia del periodo = V<sub>final</sub> − V<sub>inicial</sub> − flujos netos'], ['Periodo', s0 < 0 ? 'desde la primera compra → ' + dTxt(dates[LAST]) : dTxt(dates[s0]) + ' → ' + dTxt(dates[LAST])]];
+      if (s0 < 0) arr.push(['Patrimonio final', fM(V[LAST])], ['− Capital neto aportado (aportaciones − retiros)', fM(L.Dc[LAST] - L.Wc[LAST])]);
+      else arr.push(['Patrimonio ' + dTxt(dates[s0], true) + ' → ' + dTxt(dates[LAST], true), fM(V[s0]) + ' → ' + fM(V[LAST])], ['− Flujos netos del periodo (' + n + (n === 1 ? ' movimiento)' : ' movimientos)'), fS(net)]);
+      arr.push(['Ganancia del periodo', fS2(a.total), 'res'], ['Precio: ganancia en la moneda de cada activo × el tipo de cambio de compra' + (s0 < 0 ? '' : ' (o el del primer día del periodo)'), fS2(a.price)],
+        ['Tipo de cambio: cantidad × precio × (tipo de cambio final − tipo de cambio de compra)' + (a.cashFx ? ', más el efectivo en otra moneda (' + fS2(a.cashFx) + ')' : ''), fS2(a.fx)], ['Dividendos cobrados', fS2(a.div)], ['Suma', fS2(a.price + a.fx + a.div), 'res'],
+        ['Las ventas parten el costo con promedio móvil, igual que Resumen; las comisiones quedan dentro del precio.']);
+      if (Math.abs(a.resid) >= 0.01) arr.push(['El precio incluye ' + fS2(a.resid) + ' de redondeo de centavos de los movimientos.']);
+      if (s0 >= 0) arr.push(['En "Todo" la cuenta empieza en la primera compra, no en el primer día del historial.']);
+      return arr;
+    }
+    function orRow(o, half) {
+      var B = BS(), it = [{ v: o.price, col: OR_DEF[0][2] }, { v: o.fx, col: OR_DEF[1][2] }, { v: o.dv, col: OR_DEF[2][2] }], sp = orSplit(it), det = [];
+      if (!o.cash) det.push('<span>Precio <b class="' + sgnCls(o.price) + '">' + (Math.abs(o.price) < 0.5 ? fM(0) : fS(o.price)) + '</b></span>');
+      if (o.cash) det.push('<span>Tipo de cambio <b class="' + sgnCls(o.fx) + '">' + fS(o.fx) + '</b></span>');
+      else if (o.ccy !== B || Math.abs(o.fx) >= 0.5) det.push('<span>' + esc(R.calc.pairOf(o.ccy, B)) + ' <b class="' + sgnCls(o.fx) + '">' + (Math.abs(o.fx) < 0.5 ? fM(0) : fS(o.fx)) + '</b></span>');
+      if (Math.abs(o.dv) >= 0.5) det.push('<span>Dividendos <b class="gain">' + fS(o.dv) + '</b></span>');
+      return '<li class="pfd-or-r' + (o.open ? '' : ' closed') + '" data-t="' + esc(o.tk) + '"><span class="pfd-ca">' + mark(o.tk) + '<span class="pfd-cn"><strong>' + esc(o.tk) + '</strong><span>' + esc(o.cash ? 'Efectivo en otra moneda' : NAMES[o.tk] || '') + (o.open ? '' : ' · vendida') + '</span></span></span>' +
+        '<span class="pfd-ob" aria-hidden="true"><span class="pfd-obn" style="--w:' + (sp.sn / half * 100).toFixed(2) + '%">' + orSegs(sp.neg, sp.sn) + '</span><span class="pfd-obp" style="--w:' + (sp.sp / half * 100).toFixed(2) + '%">' + orSegs(sp.pos, sp.sp) + '</span></span>' +
+        '<b class="pfd-or-v num ' + sgnCls(o.total) + '">' + (Math.abs(o.total) < 0.5 ? fM(0) : fS(o.total)) + '</b><span class="pfd-or-d num">' + det.join('') + '</span></li>';
+    }
+    function applyOrigin(animate) {
+      if (!OR_ON) return; var s0 = orStart(), a = R.calc.attrOf(L, s0, LAST); if (!a) return; var B = BS(), seq = ++orSeq;
+      var foreign = Object.keys(a.byTk).some(function (k) { return a.byTk[k].ccy !== B; }) || Math.abs(a.cashFx) >= 0.5;
+      $('[data-ors]').textContent = (s0 < 0 ? 'Desde tu primera compra' : 'Periodo ' + PERIODS[Pi][0]) + ' · en ' + B;
+      OR_DEF.forEach(function (d) {
+        var el = $('[data-ov="' + d[0] + '"]'), v = a[d[0]], off = d[0] === 'fx' && !foreign, from = orState[d[0]] == null ? 0 : orState[d[0]];
+        $('[data-od="' + d[0] + '"]').textContent = off ? 'Todo está en ' + B + ': no hay efecto cambiario' : d[3];
+        el.classList.remove('gain', 'loss', 'flat'); el.classList.add(off ? 'flat' : sgnCls(v)); orState[d[0]] = v;
+        if (off) { el._r = ++rollId; el.textContent = '—'; } else roll(el, from, v, function (x) { return Math.abs(x) < 0.5 ? fM(0) : fS(x); }, animate ? 360 : 0, 0);
+      });
+      var items = OR_DEF.map(function (d) { return { v: a[d[0]], col: d[2], n: d[1] }; }).filter(function (x, i) { return i === 0 || Math.abs(x.v) >= 0.5; }), sp = orSplit(items), bar = $('[data-orb]');
+      bar.innerHTML = orSegs(sp.neg, sp.sn + sp.sp) + (sp.neg.length && sp.pos.length ? '<i class="pfd-orz"></i>' : '') + orSegs(sp.pos, sp.sn + sp.sp);
+      bar.setAttribute('aria-label', 'Origen del rendimiento: ' + items.map(function (x) { return x.n.toLowerCase() + ' ' + fS(x.v); }).join(', '));
+      bar.classList.remove('go'); if (animate && !reduce()) { void bar.offsetWidth; bar.classList.add('go'); }
+      var okc = Math.abs(a.resid) < 0.5;
+      $('[data-orn]').innerHTML = 'Ganancia del periodo <b class="num ' + sgnCls(a.total) + '">' + fS(a.total) + '</b> = precio <b class="num ' + sgnCls(a.price) + '">' + fS(a.price) + '</b> + tipo de cambio <b class="num ' + sgnCls(a.fx) + '">' + fS(a.fx) + '</b> + dividendos <b class="num ' + sgnCls(a.div) + '">' + fS(a.div) + '</b>' +
+        '<em class="pfd-ok' + (okc ? '' : ' bad') + '">' + (okc ? 'Cuadra con el patrimonio' : 'Diferencia ' + fS(a.resid)) + '</em>';
+      var rows = Object.keys(a.byTk).map(function (k) { return a.byTk[k]; }).filter(function (o) { return Math.abs(o.price) + Math.abs(o.fx) + Math.abs(o.dv) >= 0.005; }).sort(function (x, y) { return Math.abs(y.total) - Math.abs(x.total) || x.tk.localeCompare(y.tk); });
+      if (Math.abs(a.cashFx) >= 0.5) rows.push({ tk: 'Efectivo', cash: true, open: true, price: 0, fx: a.cashFx, dv: 0, total: a.cashFx, ccy: B }); /* para que las filas sumen lo mismo que el encabezado */
+      rows.sort(function (x, y) { return Math.abs(y.total) - Math.abs(x.total) || x.tk.localeCompare(y.tk); });
+      var half = 0; rows.forEach(function (o) { var q = orSplit([{ v: o.price }, { v: o.fx }, { v: o.dv }]); half = Math.max(half, q.sn, q.sp); }); half = half || 1;
+      var shown = orAll ? rows : rows.slice(0, OR_CAP), more = rows.length - shown.length, mb = $('[data-orm]'), ol = $('[data-ol]');
+      ol.innerHTML = rows.length ? shown.map(function (o) { return orRow(o, half); }).join('') : '<li class="pfd-or-none">Sin posiciones con movimiento en este periodo.</li>';
+      mb.hidden = !(more > 0 || (orAll && rows.length > OR_CAP)); mb.textContent = orAll ? 'Mostrar menos' : 'Ver las ' + more + ' restantes';
+      ol.classList.remove('go'); if (animate && !reduce()) { void ol.offsetWidth; ol.classList.add('go'); }
+      $('#' + id + '-d7').querySelector('[data-lines]').innerHTML = lines(orLines(a, s0));
+    }
+    if (OR_ON) $('[data-orm]').addEventListener('click', function () { orAll = !orAll; applyOrigin(false); });
+
     /* ---------- selector de periodo ---------- */
     var segP = $('.pfd-sp');
     segP.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-p]'); if (!b) return; var i = +b.dataset.p; if (i === Pi) return; Pi = i;
       $$('button', segP).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); segP.style.setProperty('--i', Pi);
       st = stats(C, sIdx()); hideTip(tipEl); hideTip(tip2);
-      applyMetrics(true); ddChart.set(st.s, true); cvChart.set(st.s, true); paintHeat(); applyCont(true);
+      applyMetrics(true); ddChart.set(st.s, true); cvChart.set(st.s, true); paintHeat(); applyCont(true); applyOrigin(true);
       $('#' + id + '-d3').querySelector('[data-lines]').innerHTML = lines(ddLines());
     });
 
@@ -577,7 +645,7 @@
       ddChart.start(); cvChart.start();
     }
     if (mount.animate && !reduce()) mount.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: EXPO });
-    applyMetrics(false); ddChart.set(st.s, false); cvChart.set(st.s, false); paintHeat(); applyCont(false);
+    applyMetrics(false); ddChart.set(st.s, false); cvChart.set(st.s, false); paintHeat(); applyCont(false); applyOrigin(false);
     if (window.ResizeObserver) { var ro = new ResizeObserver(function () { ddChart.size(); cvChart.size(); if (!started && visible()) start(); }); $$('.pfd-stage').forEach(function (s) { ro.observe(s); }); ro.observe(mount); off.push(function () { ro.disconnect(); }); }
     var resz = function () { ddChart.size(); cvChart.size(); }; window.addEventListener('resize', resz); off.push(function () { window.removeEventListener('resize', resz); });
     var mob = new MutationObserver(function () { ddChart.theme(); cvChart.theme(); }); mob.observe(root, { attributes: true, attributeFilter: ['data-theme'] }); off.push(function () { mob.disconnect(); });

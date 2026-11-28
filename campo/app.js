@@ -37,7 +37,8 @@
       var q = 0, c = 0, where = [];
       scope.forEach(function (P) { (P.positions || []).forEach(function (x) { if (x.ticker === r.ticker) { q += x.qty; c += x.qty * x.avg; if (where.indexOf(P.name) < 0) where.push(P.name); } }); });
       out.push({ ticker: r.ticker, name: r.name, cls: r.cls, ccy: r.ccy, qty: r.qty, avg: q ? c / q : r.price, price: r.price, d1: r.d1, value: r.mv, cost: r.cost,
-        pnl: r.mv - r.cost, pnlPct: r.cost ? (r.mv / r.cost - 1) * 100 : 0, weight: r.mv / tot * 100, where: where, scope: pf === 'todos' ? 'Todos tus portafolios' : pf.name });
+        pnl: r.mv - r.cost, pnlPct: r.cost ? (r.mv / r.cost - 1) * 100 : 0, weight: r.mv / tot * 100, where: where, scope: pf === 'todos' ? 'Todos tus portafolios' : pf.name,
+        up: r.up, uf: r.uf, rp: r.rp, rf: r.rf, dv: r.dv }); /* de la ganancia: precio, tipo de cambio, lo realizado y los dividendos (campo/datos.js, attribute) */
     });
     out.sort(function (a, b) { return b.value - a.value; });
     rcache[id] = { key: key, rows: out }; return out;
@@ -400,6 +401,14 @@
   function curP() { return byTicker(st.ticker); }
   function keyRow(label, val, sub, cls) { return '<div><dt>' + label + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + val + (sub || '') + '</dd></div>'; }
   function mxn0(v) { return F.mxn(Math.abs(v), 0); }
+  function keyWide(label, val, cls) { return '<div class="fi-wide"><dt>' + label + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + val + '</dd></div>'; }
+  /* ganancia de una posición extranjera: cuánto fue del activo y cuánto del tipo de cambio (suman en puntos al total) */
+  function fxSplit(p) {
+    var base = (window.CampoTracker && window.CampoTracker.base) || 'MXN', R = window.CampoPfResumen;
+    if (p.uf == null || !(p.cost > 0) || !p.ccy || p.ccy === base) return '';
+    var a = p.up / p.cost * 100, f = p.uf / p.cost * 100, pair = R && R.calc && R.calc.pairOf ? R.calc.pairOf(p.ccy, base) : p.ccy + '/' + base, c = function (v) { return v > 0.0049 ? 'gain' : v < -0.0049 ? 'loss' : 'flat'; };
+    return keyWide('De dónde viene la ganancia', '<span class="fi-or"><span class="' + c(p.pnlPct) + '">' + F.pct(p.pnlPct, 1) + ' <small>total</small></span><span class="' + c(a) + '">' + F.pct(a, 1) + ' <small>activo</small></span><span class="' + c(f) + '">' + F.pct(f, 1) + ' <small>' + esc(pair) + '</small></span></span>');
+  }
   /* Registrar compra / venta desde la ficha: abre CampoTxSheet con el portafolio de la ruta, o el primero que tenga el ticker */
   function pfHolding(tk) { var T = window.CampoTracker, r = []; if (T) T.portfolios.forEach(function (q) { if ((q.positions || []).some(function (x) { return x.ticker === tk; })) r.push(q.id); }); return r; }
   function txBtns(tk) {
@@ -427,6 +436,9 @@
       keyRow('Costo promedio', nf(p.avg), '<small>' + esc(p.ccy) + '</small>') +
       keyRow('Valor', '<span data-roll="value">' + mxn0(p.value) + '</span>', '<small>' + ((window.CampoTracker && window.CampoTracker.base) || 'MXN') + '</small>') +
       keyRow('Ganancia no realizada', sgn(pl) + mxn0(pl), '<span class="fi-sub">' + F.pct(p.pnlPct, 1) + '</span>', pl >= 0 ? 'gain' : 'loss') +
+      fxSplit(p) +
+      (p.dv > 0.5 ? keyRow('Dividendos cobrados', '+' + mxn0(p.dv), '', 'gain') : '') +
+      (Math.abs((p.rp || 0) + (p.rf || 0)) >= 0.5 ? keyRow('Ganancia realizada', sgn(p.rp + p.rf) + mxn0(p.rp + p.rf), '', p.rp + p.rf >= 0 ? 'gain' : 'loss') : '') +
       keyRow(p.scope ? 'Peso en ' + esc(p.scope) : 'Peso', F.num(p.weight, 1), '<small>%</small>') +
       keyRow('Divisa', esc(p.ccy), fx) + '</dl></section>' +
       (window.CAMPO_REAL && !news.length ? '' : '<section aria-labelledby="fiNw"><h3 class="fi-h" id="fiNw">Noticias de ' + esc(p.ticker) + '</h3>' +

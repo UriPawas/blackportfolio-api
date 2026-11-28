@@ -42,6 +42,18 @@
 .pfr-ok.bad { color: var(--loss); }
 .pfr-ok.bad::before { content: "✕ "; }
 
+/* origen de la ganancia: barra de dos lados (lo que restó a la izquierda del 0, lo que sumó a la derecha) y su leyenda */
+.pfr-at { margin: 0 0 6px; display: grid; gap: 8px; }
+.pfr-atb { display: flex; gap: 2px; align-items: center; height: 14px; }
+.pfr-ats { display: block; align-self: center; height: 8px; min-width: 3px; background: var(--c); border-radius: 2px; transform-origin: left; }
+.pfr-atz { flex: none; width: 2px; height: 14px; background: var(--text-2); border-radius: 1px; }
+.pfr-atl { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.pfr-atl li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 22px; font-size: 13px; color: var(--text-2); }
+.pfr-atl .num { font-weight: 500; white-space: nowrap; }
+.pfr-atd { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+@media (prefers-reduced-motion: no-preference) { .pfr-k[data-k="gan"] .pfr-ats { animation: pfr-atin 520ms var(--ease-expo) both; } }
+@keyframes pfr-atin { from { transform: scaleX(0); } }
+
 /* ---------- gráfico ---------- */
 .pfr-ch { display: grid; gap: 12px; padding: 16px; }
 .pfr-ctop { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -115,6 +127,10 @@
 .pfr-pavg, .pfr-ppx { text-align: right; font-size: 13.5px; white-space: nowrap; }
 .pfr-pavg { color: var(--text-2); }
 .pfr-pns { grid-column: 1 / -1; padding: 0 0 10px 38px; margin-top: -4px; font-size: 12.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* posición extranjera: cuánto de su ganancia fue del activo y cuánto del tipo de cambio (siempre visible, a todo el ancho de la fila) */
+.pfr-pfx { grid-column: 1 / -1; padding: 0 0 10px 38px; margin-top: -4px; display: flex; flex-wrap: wrap; gap: 0 14px; font-size: 12.5px; color: var(--text-3); }
+.pfr-pfx b { font-weight: 500; }
+.pfr-pns:has(+ .pfr-pfx) { padding-bottom: 2px; }
 .pfr-pw, .pfr-pv, .pfr-pd, .pfr-pg { text-align: right; font-size: 13.5px; white-space: nowrap; }
 .pfr-pd, .pfr-pg { font-size: 13px; }
 .pfr[data-hl] .pfr-seg:not(.is-on), .pfr[data-hl] .pfr-lg:not(.is-on) { opacity: 0.4; }

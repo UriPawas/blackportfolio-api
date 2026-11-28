@@ -193,3 +193,44 @@
   .pfd *, .pfd *::before, .pfd *::after { transition: none !important; animation: none !important; }
   .pfd-fl { opacity: 1; transform: none; }
 }
+
+/* ---------- origen de tu rendimiento: precio · tipo de cambio · dividendos ---------- */
+.pfd-orh { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-md); overflow: clip; }
+.pfd-orf { background: var(--s1); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: baseline; min-width: 0; }
+.pfd-orl { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--text-2); }
+.pfd-orl i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+.pfd-orv { font-size: 20px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; text-align: right; }
+.pfd-ord { grid-column: 1 / -1; font-size: 12.5px; line-height: 1.4; color: var(--text-3); margin-top: 2px; }
+.pfd-orb { display: flex; gap: 2px; align-items: center; height: 16px; }
+.pfd-orb i, .pfd-ob i { display: block; background: var(--c); border-radius: 2px; min-width: 3px; }
+.pfd-orb i { height: 10px; }
+.pfd-orz { flex: none; width: 2px; height: 16px; background: var(--text-2); border-radius: 1px; }
+.pfd-ol { list-style: none; margin: 0; padding: 0; display: grid; }
+.pfd-or-r { display: grid; grid-template-columns: minmax(0, 1fr) 84px; column-gap: 12px; row-gap: 0; align-items: center; padding: 8px 0 10px; border-bottom: 1px solid var(--line); }
+.pfd-or-r:last-child { border-bottom: 0; }
+.pfd-or-r .pfd-ca { grid-column: 1; grid-row: 1; }
+.pfd-or-r .pfd-ob { grid-column: 1 / -1; grid-row: 2; height: 14px; margin-top: 6px; }
+.pfd-or-v { grid-column: 2; grid-row: 1; text-align: right; font-size: 14.5px; font-weight: 600; white-space: nowrap; }
+.pfd-or-d { grid-column: 1 / -1; grid-row: 3; margin-top: 4px; font-size: 12.5px; line-height: 1.4; color: var(--text-3); display: flex; flex-wrap: wrap; gap: 0 12px; }
+.pfd-or-d b { font-weight: 500; }
+.pfd-or-r.closed .pfd-cn strong { color: var(--text-2); }
+.pfd-or-none { padding: 14px 0; font-size: 13.5px; color: var(--text-3); }
+.pfd-ob { position: relative; }
+.pfd-ob::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.pfd-obn, .pfd-obp { position: absolute; top: 3px; bottom: 3px; width: calc(var(--w, 0%) / 2); display: flex; gap: 1px; }
+.pfd-obn { right: 50%; flex-direction: row-reverse; }
+.pfd-obp { left: 50%; }
+.pfd-ob i { flex-basis: 0; }
+.pfd-orm { justify-self: start; }
+.pfd-orb.go i { animation: pfd-orin 460ms var(--ease-expo) both; transform-origin: left; }
+.pfd-ol.go .pfd-obp i { animation: pfd-orin 460ms var(--ease-expo) both; transform-origin: left; }
+.pfd-ol.go .pfd-obn i { animation: pfd-orin 460ms var(--ease-expo) both; transform-origin: right; }
+@keyframes pfd-orin { from { transform: scaleX(0); } }
+@container (min-width: 480px) { .pfd-orh { grid-template-columns: repeat(3, minmax(0, 1fr)); } .pfd-orf { display: block; padding: 12px 14px; } .pfd-orv { display: block; text-align: left; margin: 6px 0 2px; font-size: 22px; } }
+@container (min-width: 600px) {
+  .pfd-or-r { grid-template-columns: minmax(0, 1.15fr) minmax(90px, 1.5fr) 84px; }
+  .pfd-or-r .pfd-ca { grid-column: 1; grid-row: 1; }
+  .pfd-or-r .pfd-ob { grid-column: 2; grid-row: 1; margin-top: 0; height: 16px; }
+  .pfd-or-v { grid-column: 3; grid-row: 1; }
+  .pfd-or-d { grid-row: 2; margin-top: 0; padding-left: 34px; }
+}
