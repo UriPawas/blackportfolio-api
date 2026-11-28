@@ -223,10 +223,7 @@
         setNum($('[data-gain]', n), t.side === 'sell' ? t.gain : 0, function (v) { return t.side === 'sell' ? fS(v) : '—'; }, animate);
         setNum($('[data-tax]', n), t.tax, function (v) { return v >= 0.5 ? fM(v) : '—'; }, animate); taxRows += t.tax;
       });
-      if (changed && animate && !reduce()) ord.forEach(function (i) {
-        var n = rowsByI[i], o = tops[i]; if (o == null || !n.animate) return; var d = o - n.getBoundingClientRect().top;
-        if (Math.abs(d) > 1) n.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO });
-      });
+      if (changed && animate && !reduce()) CampoFlip.play(ord.map(function (i) { return { el: rowsByI[i], from: tops[i] }; }));
       $('[data-taxfn]').hidden = !(taxRows - R.totals.tax > 1);
       var tt = R.totals, st = $('[data-status]');
       if (!tt.ops) st.textContent = S.mode === 'contrib' && tt.cashBefore < S.minTrade ? 'Para comprar necesitas efectivo: agrega una aportación adicional.' : 'Sin operaciones: ya estás en el objetivo o las diferencias son menores a la operación mínima.';

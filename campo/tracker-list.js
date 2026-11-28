@@ -78,11 +78,7 @@
   function snapshot() { var m = {}; $$('.tkl-row[data-id]', listEl).forEach(function (r) { m[r.dataset.id] = r.getBoundingClientRect().top; }); return m; }
   function playFlip(snap) {
     if (reduce() || !snap) return;
-    $$('.tkl-row[data-id]', listEl).forEach(function (r) {
-      var o = snap[r.dataset.id]; if (o == null) return;
-      var d = o - r.getBoundingClientRect().top; if (Math.abs(d) < 1 || !r.animate) return;
-      r.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO });
-    });
+    CampoFlip.play($$('.tkl-row[data-id]', listEl).map(function (r) { return { el: r, from: snap[r.dataset.id] }; }));
   }
 
   function rowHTML(p, i, n, maxC, single) {
@@ -344,23 +340,32 @@
   }
 
   /* ---------- hojas (crear / importar) ---------- */
-  var sheetN = 0;
+  var sheetN = 0, guardN = 0;
   function openSheet(title, html) {
     var opener = doc.activeElement, r = doc.createElement('div'); r.className = 'tkl-modal';
     r.innerHTML = '<div class="tkl-mback"></div><div class="tkl-mpanel" role="dialog" aria-modal="true" aria-labelledby="tklMT" tabindex="-1"><button class="icon-btn tkl-mx" type="button" aria-label="Cerrar" data-mclose>' + ic('x') + '</button><div class="tkl-mscroll"><h2 class="tkl-mt" id="tklMT">' + esc(title) + '</h2><div class="tkl-mbody">' + html + '</div></div></div>';
     doc.body.appendChild(r); root.classList.add('tkl-lock'); sheetN++;
-    var panel = $('.tkl-mpanel', r), closed = false;
+    var panel = $('.tkl-mpanel', r), closed = false, gk = 'tkl' + (++guardN);
     var api = {
-      el: r, body: $('.tkl-mbody', r),
+      el: r, body: $('.tkl-mbody', r), dirty: false,
+      /* cerrar por iniciativa de la persona (X, Cancelar, fuera de la hoja, Esc): con cambios sin guardar pide confirmar */
+      ask: function () {
+        var G = window.CampoGuard, host = $('.tkl-mscroll', r) || panel;
+        if (G && G.isOpen(host)) { G.cancel(host); return; }
+        if (api.dirty && G) { G.confirm(host, { onDiscard: function () { api.close(); } }); return; }
+        api.close();
+      },
       close: function (noRestore) {
-        if (closed) return; closed = true; r.removeAttribute('data-open');
+        if (closed) return; closed = true; r.removeAttribute('data-open'); if (window.CampoGuard) window.CampoGuard.set(gk, false);
         setTimeout(function () { r.remove(); if (--sheetN <= 0) { sheetN = 0; root.classList.remove('tkl-lock'); } }, reduce() ? 0 : 220);
         if (!noRestore && opener && doc.contains(opener)) opener.focus({ preventScroll: true });
       }
     };
-    r.addEventListener('click', function (e) { if (e.target.classList.contains('tkl-mback') || e.target.closest('[data-mclose]')) api.close(); });
+    r.addEventListener('click', function (e) { if (e.target.classList.contains('tkl-mback') || e.target.closest('[data-mclose]')) api.ask(); });
+    function touched(e) { if (api.dirty || !e.target || e.target.type === 'file') return; api.dirty = true; if (window.CampoGuard) window.CampoGuard.set(gk, true); }
+    r.addEventListener('input', touched); r.addEventListener('change', touched);
     r.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { e.stopPropagation(); api.close(); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); api.ask(); return; }
       if (e.key !== 'Tab') return;
       var f = $$('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]', panel).filter(function (x) { return x.offsetParent !== null || x.classList.contains('tkl-file'); });
       if (!f.length) { e.preventDefault(); return; }
@@ -401,7 +406,7 @@
         Promise.resolve(T.add(spec)).then(function (r) {
           if (!r || r.error) { sb.disabled = false; sb.textContent = 'Crear portafolio'; er.textContent = (r && r.error) || 'No se pudo crear.'; return; }
           sh.close(true); toast('Creaste «' + v + '»'); live('Portafolio ' + v + ' creado'); if (r.id) { try { T.open(r.id); } catch (x) { } }
-        });
+        }).catch(function () { sb.disabled = false; sb.textContent = 'Crear portafolio'; er.textContent = 'No se pudo crear. Revisa tu conexión e inténtalo de nuevo.'; });
         return;
       }
       sh.close(true); T.add(spec);
@@ -434,7 +439,7 @@
       Promise.resolve(T.update(id, { name: v, desc: $('#tklED', f).value.trim(), currency: cs.value, benchmark: $('#tklEB', f).value })).then(function (r) {
         if (!r || r.error) { sb.disabled = false; sb.textContent = 'Guardar cambios'; er.textContent = (r && r.error) || 'No se pudo guardar.'; return; }
         sh.close(); toast('Cambios guardados en «' + v + '»' + (r.converted ? ' · efectivo convertido a ' + r.converted.to : '')); live('Portafolio ' + v + ' actualizado');
-      });
+      }).catch(function () { sb.disabled = false; sb.textContent = 'Guardar cambios'; er.textContent = 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.'; });
     });
   }
   function openImport() {
@@ -530,7 +535,7 @@
       var ind = $('.tkl-ind', bar), on = $('[aria-selected="true"]', bar); if (!ind || !on) return;
       var still = !animate || reduce();
       if (still) ind.style.transition = 'none';
-      ind.style.width = on.offsetWidth + 'px'; ind.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+      ind.style.transform = 'translateX(' + on.offsetLeft + 'px) scaleX(' + on.offsetWidth + ')';
       if (still) { void ind.offsetWidth; ind.style.transition = ''; }
       if (bar.scrollWidth > bar.clientWidth && bar.scrollTo) {
         var l = on.offsetLeft, r = l + on.offsetWidth, v0 = bar.scrollLeft, v1 = v0 + bar.clientWidth, to = l < v0 + 24 ? l - 24 : r > v1 - 24 ? r - bar.clientWidth + 24 : null;
@@ -585,7 +590,7 @@
       '<nav aria-label="Ruta" class="tkl-crumb"><ol><li>Portafolios</li><li aria-current="page">' + esc(d.name) + '</li></ol></nav>' +
       '<button type="button" class="btn btn-primary btn-sm tkl-addtx" data-act="addtx"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Agregar movimiento</button></div>' +
       '<header class="tkl-dhead"><span class="tkl-dsw" data-part="sw" style="--pc:' + esc(d.color) + '" aria-hidden="true"></span>' +
-      '<div class="tkl-dtitle"><div class="tkl-dnamew"><h2 class="tkl-dname" data-part="name" tabindex="-1">' + esc(d.name) + '</h2>' +
+      '<div class="tkl-dtitle"><div class="tkl-dnamew"><h1 class="tkl-dname" data-part="name" tabindex="-1">' + esc(d.name) + '</h1>' +
         (T.portfolios.length > 1 ? '<button type="button" class="tkl-swb tkl-late" data-act="switch" aria-haspopup="menu" aria-expanded="false" aria-label="Cambiar de portafolio" title="Cambiar de portafolio">' + ic('chev') + '</button>' : '') + '</div>' + (d.desc ? '<p class="tkl-ddesc tkl-late">' + esc(d.desc) + '</p>' : '') + '</div>' +
       '<div class="tkl-dval"><span class="tkl-dv tkl-num" data-part="value">' + fM(d.value) + '</span>' + (fx ? '<span class="tkl-late tkl-dfx tkl-num" title="Equivalente al tipo de cambio de hoy">' + esc(fx.equiv) + '</span>' : '') + '<span class="tkl-late tkl-dsub tkl-num"><span class="' + cls(d.day.amt) + '">Hoy ' + fS(d.day.amt) + ' (' + fP(d.day.pct) + ')</span><span class="' + cls(d.ret.pct) + '" title="' + RET_TIP + '">Rentabilidad ' + fP(d.ret.pct) + '</span></span></div>' +
       '<dl class="tkl-dmeta tkl-late">' + d.meta.map(function (m) { return '<div><dt>' + m[0] + '</dt><dd>' + esc(m[1]) + '</dd></div>'; }).join('') + (T.currencies && T.currencies().length > 1 ? '<div class="tkl-dccy"><dt>Ver cifras en</dt><dd><div data-ccy></div></dd></div>' : '') + (fx ? '<div class="tkl-dfxm"><dt>Tipo de cambio</dt><dd class="tkl-num">' + esc(fx.rate) + '</dd></div>' : '') + '</dl></header>' +

@@ -36,7 +36,7 @@
 .cv-brand { font: 400 22px var(--display); letter-spacing: -0.01em; }
 .cv-kick { color: var(--p-mut); font-size: 14px; }
 .cv-title { margin-top: 64px; }
-.cv-title h1 { font-size: 48px; line-height: 1.04; font-weight: 400; max-width: 640px; }
+.cv-title h2 { font-size: 48px; line-height: 1.04; font-weight: 400; max-width: 640px; }
 .cv-per { margin: 12px 0 0; font-size: 17px; color: var(--p-ink2); }
 .cv-fig { margin-top: 44px; display: flex; flex-direction: column; gap: 2px; }
 .cv-lab { font-size: 13px; color: var(--p-mut); font-weight: 500; }
@@ -68,7 +68,7 @@
 /* ---------- títulos y prosa ---------- */
 .crd-sh { display: flex; align-items: baseline; gap: 12px; padding-top: 6px; margin-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--p-rule); position: relative; }
 .crd-sh::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 56px; height: 2px; background: var(--p-acc); }
-.crd-sn { font: 800 22px var(--font); font-variant-numeric: tabular-nums; color: var(--p-acc-ink); font-variant-numeric: normal; min-width: 22px; }
+.crd-sn { font: 800 22px var(--font); color: var(--p-acc-ink); font-variant-numeric: normal; min-width: 22px; }
 .crd-sh h2 { font-size: 28px; line-height: 1.1; font-weight: 400; }
 .crd-p { margin: 0 0 20px; max-width: 520px; font-size: 14.5px; line-height: 1.6; color: var(--p-ink2); }
 .crd-lede { font-size: 15px; color: var(--p-ink); max-width: 560px; }

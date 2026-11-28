@@ -144,7 +144,7 @@
     var P = planOf(U.plan), us = usage();
     return backBtn() + ct('Cuenta') +
       card('stH-perfil', 'Perfil', 'Así apareces dentro de Portify.',
-        '<div class="st-prof"><div class="st-av-w"><button type="button" class="st-av" id="stAv" data-act="av" aria-haspopup="true" aria-expanded="false" aria-label="Cambiar el color del avatar" style="--t:' + TINTS[S.tint][1] + '"><span data-b="ini">' + esc(ini()) + '</span>' + (U.photo ? '<img src="' + esc(U.photo) + '" alt="" referrerpolicy="no-referrer" decoding="async">' : '') + '</button>' +
+        '<div class="st-prof"><div class="st-av-w"><button type="button" class="st-av" id="stAv" data-act="av" aria-haspopup="true" aria-expanded="false" aria-label="Cambiar el color del avatar" style="--t:' + TINTS[S.tint][1] + '"><span data-b="ini">' + esc(ini()) + '</span>' + (U.photo ? '<img src="' + esc(U.photo) + '" alt="" width="64" height="64" referrerpolicy="no-referrer" decoding="async">' : '') + '</button>' +
         '<div class="st-pop" id="stPop" role="radiogroup" aria-label="Color del avatar" hidden>' + t + '</div></div>' +
         '<div class="st-prof-f"><div class="st-fld"><span class="st-lab">Nombre</span><div class="st-mail"><span class="st-mailv">' + (S.name ? esc(S.name) : 'Sin nombre') + '</span></div></div>' +
         '<div class="st-fld"><span class="st-lab">Correo</span><div class="st-mail"><span class="st-mailv">' + esc(EMAIL) + '</span></div></div></div></div>') +
@@ -271,7 +271,7 @@
       setSideOn(to);
       if (to === 'ajustes') { measure(); if (then) then(); }
       else { window.dispatchEvent(new Event('resize')); requestAnimationFrame(function () { window.dispatchEvent(new Event('resize')); }); if (then) then(); }
-      if (animate) { var tgt = to === 'inicio' ? $('h1', home) : to === 'tracker' ? $('h1', trk) : to === 'mercados' ? $('h1', mer) : to === 'informes' ? $('h1', inf) : (mode() === 'stack' && set.dataset.screen === 'detail' ? $('.st-cat:not([hidden]) .st-ct', set) : $('h1', set)); if (tgt) tgt.focus({ preventScroll: true }); }
+      if (animate) { var tgt = to === 'inicio' ? $('h1', home) : to === 'tracker' ? ((trk.dataset.view === 'detail' && $('.tkl-dname', trk)) || $('h1', trk)) : to === 'mercados' ? $('h1', mer) : to === 'informes' ? $('h1', inf) : (mode() === 'stack' && set.dataset.screen === 'detail' ? $('.st-cat:not([hidden]) .st-ct', set) : $('h1', set)); if (tgt) tgt.focus({ preventScroll: true }); }
       if (animate && !reduce() && inEl.animate) inEl.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: EASE });
     }
     if (!animate || reduce() || !outEl.animate || outEl.hidden) finish();
@@ -283,11 +283,25 @@
     if (m !== mode()) { set.dataset.mode = m; if (sec === 'ajustes') applyCat(cat, false); }
     placeInd();
   }
+  /* estado de la vista en la URL: #sección/id?clave=valor. Así recargar o compartir el enlace conserva divisa, periodo, tipo de gráfica y formato.
+     setQuery reescribe la URL en sitio (replaceState): no crea un paso en el historial ni vuelve a disparar el enrutador. */
+  function hashPath() { return (location.hash || '').split('?')[0]; }
+  function query() {
+    var q = {}, i = (location.hash || '').indexOf('?'); if (i < 0) return q;
+    location.hash.slice(i + 1).split('&').forEach(function (kv) { if (!kv) return; var p = kv.split('='); try { q[decodeURIComponent(p[0])] = decodeURIComponent((p[1] || '').replace(/\+/g, ' ')); } catch (e) { } });
+    return q;
+  }
+  function setQuery(patch) {
+    var q = query(); Object.keys(patch || {}).forEach(function (k) { if (patch[k] == null || patch[k] === '') delete q[k]; else q[k] = String(patch[k]); });
+    var s = Object.keys(q).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(q[k]); }).join('&'), h = (hashPath() || '#') + (s ? '?' + s : '');
+    if (h === (location.hash || '#')) return; try { history.replaceState(history.state, '', h); } catch (e) { }
+  }
   function parse() {
-    var tk = /^#tracker(?:\/([\w-]+)(?:\/[\w-]+)?)?$/.exec(location.hash); if (tk) return { sec: 'tracker', id: tk[1] || null };
-    var mk = /^#mercados(?:\/(.+))?$/.exec(location.hash); if (mk) return { sec: 'mercados', id: mk[1] || null };
-    var ir = /^#informes(?:\/([\w-]+))?$/.exec(location.hash); if (ir) return { sec: 'informes', id: ir[1] || null };
-    var m = /^#ajustes(?:\/([a-z]+))?$/.exec(location.hash); if (!m) return { sec: 'inicio' };
+    var H = hashPath();
+    var tk = /^#tracker(?:\/([\w-]+)(?:\/[\w-]+)?)?$/.exec(H); if (tk) return { sec: 'tracker', id: tk[1] || null };
+    var mk = /^#mercados(?:\/(.+))?$/.exec(H); if (mk) return { sec: 'mercados', id: mk[1] || null };
+    var ir = /^#informes(?:\/([\w-]+))?$/.exec(H); if (ir) return { sec: 'informes', id: ir[1] || null };
+    var m = /^#ajustes(?:\/([a-z]+))?$/.exec(H); if (!m) return { sec: 'inicio' };
     return { sec: 'ajustes', cat: m[1] && panels[m[1]] ? m[1] : null };
   }
   function fireInf() { window.dispatchEvent(new CustomEvent('campo:route', { detail: { sec: 'informes', hash: location.hash } })); }
@@ -341,7 +355,7 @@
   }); });
   /* API de secciones para otros módulos (Tracker): navigate(hash, replace) y show(nombre[, hash]); 'campo:route' se emite al resolver una ruta del Tracker */
   window.CampoSections = {
-    current: function () { return sec; },
+    current: function () { return sec; }, query: query, setQuery: setQuery,
     navigate: function (h, replace) { navigate(h, !!replace, { st: 1 }); },
     show: function (name, h) { navigate(h != null ? h : name === 'tracker' ? '#tracker' : name === 'mercados' ? '#mercados' : name === 'informes' ? '#informes' : name === 'ajustes' ? '#ajustes' : '', false, { st: 1 }); }
   };

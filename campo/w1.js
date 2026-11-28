@@ -179,10 +179,8 @@
       for (k in rowMap) first[k] = rowMap[k].getBoundingClientRect().top;
       sorted().forEach(function (p) { if (rowMap[p.ticker]) rowsHost.appendChild(rowMap[p.ticker]); });
       if (ctx.reduced()) return;
-      for (k in rowMap) {
-        var dy = first[k] - rowMap[k].getBoundingClientRect().top;
-        if (dy && rowMap[k].animate) rowMap[k].animate([{ transform: 'translateY(' + dy + 'px)' }, { transform: 'none' }], { duration: 260, easing: 'cubic-bezier(0.77,0,0.175,1)' });
-      }
+      var items = []; for (k in rowMap) items.push({ el: rowMap[k], from: first[k] });
+      CampoFlip.play(items, { duration: 260, easing: 'cubic-bezier(0.77,0,0.175,1)' });
     }
     ctx.setMeta('Precios al ' + asOfDay());
     build();
@@ -194,7 +192,7 @@
   }
   reg('portfolio', {
     label: 'Resumen de cartera', desc: '¿Cuánto vale tu cartera y cómo se reparte?', group: 'Portafolio',
-    icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M2.5 8.5h15M7 12.5h6"/></svg>',
+    icon: '<svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M2.5 8.5h15M7 12.5h6"/></svg>',
     sizes: ['S', 'M', 'L'], size: 'L', defaults: {},
     thumb: function (e) { thumbSvg(e, '<rect x="8" y="10" width="104" height="9" rx="2" stroke="none" fill="currentColor" opacity=".55"/><rect x="8" y="10" width="40" height="9" rx="2" stroke="none" fill="var(--accent)"/><path d="M8 32h104M8 44h104M8 56h104" opacity=".35"/><path d="M12 32v0M12 44v0" /><circle cx="14" cy="38" r="3" opacity=".5"/><circle cx="14" cy="50" r="3" opacity=".5"/>'); },
     render: portfolioRender
@@ -365,8 +363,8 @@
       var c = cfg.mode === 'candle';
       tgl.setAttribute('aria-pressed', c ? 'true' : 'false');
       tgl.setAttribute('aria-label', c ? 'Cambiar a línea' : 'Cambiar a velas'); tgl.title = c ? 'Ver como línea' : 'Ver como velas';
-      tgl.innerHTML = c ? '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 14l4.5-5 3.5 3L17.5 5"/></svg>'
-        : '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6 3v3M6 14v3M14 6v3M14 16v2M6 6h0M4.5 6h3v8h-3zM12.5 9h3v7h-3z"/></svg>';
+      tgl.innerHTML = c ? '<svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 14l4.5-5 3.5 3L17.5 5"/></svg>'
+        : '<svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6 3v3M6 14v3M14 6v3M14 16v2M6 6h0M4.5 6h3v8h-3zM12.5 9h3v7h-3z"/></svg>';
     }
     tgl.addEventListener('click', function () { ctx.save({ mode: cfg.mode === 'candle' ? 'line' : 'candle' }); });
 
@@ -421,7 +419,7 @@
   }
   reg('chart', {
     label: 'Gráfica de precio', desc: '¿Cómo ha rendido tu cartera frente al mercado?', group: 'Mercado',
-    icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.5v13h15"/><path d="M5.5 12.5l3.5-4 3 2.5 4-5.5"/></svg>',
+    icon: '<svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.5v13h15"/><path d="M5.5 12.5l3.5-4 3 2.5 4-5.5"/></svg>',
     sizes: ['M', 'L', 'XL'], size: 'L', duplicable: true, defaults: { symbol: 'Tu portafolio', bench: true, range: '1A', mode: 'line' },
     thumb: function (e) { thumbSvg(e, '<path d="M8 60h104M8 40h104M8 20h104" opacity=".18"/><path d="M8 54l14-6 12 4 16-14 14 6 14-18 14 8 16-6" stroke="var(--accent)" stroke-width="2"/><path d="M8 56l14-3 12 2 16-8 14 3 14-8 14 4 16-3" opacity=".5"/>'); },
     render: chartRender, settings: chartSettings
@@ -455,7 +453,7 @@
     var cfg = Object.assign({ symbols: defaultSyms(), ytd: false }, ctx.config || {});
     var root = el('div', 'w1-wl'); body.appendChild(root);
     var addBox = el('div', 'w1-add'), input = el('input', 'w1-in'), sug = el('ul', 'w1-sug'), msg = el('div', 'w1-msg'), list = el('div', 'w1-wrows'), foot = el('p', 'w1-note');
-    input.type = 'text'; input.placeholder = 'Añadir de tus posiciones o mercados'; input.setAttribute('aria-label', 'Añadir símbolo a la lista'); input.autocomplete = 'off';
+    input.type = 'text'; input.placeholder = 'Añadir de tus posiciones o mercados…'; input.setAttribute('aria-label', 'Añadir símbolo a la lista'); input.autocomplete = 'off';
     input.setAttribute('role', 'combobox'); input.setAttribute('aria-expanded', 'false'); input.setAttribute('aria-controls', 'w1sug-' + ctx.id);
     sug.id = 'w1sug-' + ctx.id; sug.setAttribute('role', 'listbox'); sug.hidden = true; msg.setAttribute('role', 'status'); msg.hidden = true;
     addBox.appendChild(input); addBox.appendChild(sug);
@@ -475,7 +473,7 @@
       main.appendChild(el('span', 'w1-wl-sp', sparkSvg(x.spark, x.d1)));
       if (cfg.ytd) main.appendChild(el('span', 'w1-wl-ytd ' + (x.ytd == null ? 'w1-flat' : sgnCls(x.ytd)), x.ytd == null ? '–' : esc(D.fmt.pct(x.ytd, 1))));
       r.appendChild(main);
-      var rm = el('button', 'w1-rm', '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>'); rm.type = 'button'; rm.setAttribute('aria-label', 'Quitar ' + x.key + ' de la lista');
+      var rm = el('button', 'w1-rm', '<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>'); rm.type = 'button'; rm.setAttribute('aria-label', 'Quitar ' + x.key + ' de la lista');
       rm.addEventListener('click', function () { remove(x.key); });
       r.appendChild(rm); return r;
     }
@@ -547,7 +545,7 @@
   }
   reg('watchlist', {
     label: 'Lista de seguimiento', desc: '¿Cómo van los activos que sigues hoy?', group: 'Mercado',
-    icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5z"/><circle cx="10" cy="10" r="2.2"/></svg>',
+    icon: '<svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5z"/><circle cx="10" cy="10" r="2.2"/></svg>',
     sizes: ['S', 'M', 'L'], size: 'M', duplicable: true, defaults: { symbols: defaultSyms(), ytd: false },
     thumb: function (e) { thumbSvg(e, '<path d="M8 16h104M8 36h104M8 56h104" opacity=".25"/><circle cx="14" cy="10" r="3.5" opacity=".6"/><circle cx="14" cy="30" r="3.5" opacity=".6"/><circle cx="14" cy="50" r="3.5" opacity=".6"/><path d="M60 12l8-3 8 4 10-5M60 32l8 3 8-2 10 4M60 52l8-2 8 3 10-4" opacity=".6"/><circle cx="94" cy="8" r="2" fill="var(--gain)" stroke="none"/><circle cx="94" cy="36" r="2" fill="var(--loss)" stroke="none"/><circle cx="94" cy="49" r="2" fill="var(--gain)" stroke="none"/>'); },
     render: watchRender, settings: watchSettings
@@ -587,7 +585,7 @@
         (sz === 'L' ? '<div class="w1-trk-l"><span style="left:55%">55</span><span style="left:75%">75</span></div>' : '');
       root.appendChild(main);
       var marker = main.querySelector('.w1-mk-pt');
-      if (first && !ctx.reduced()) { marker.style.left = '0%'; after(function () { marker.style.left = R.score + '%'; }); } else marker.style.left = R.score + '%';
+      if (first && !ctx.reduced()) { marker.style.setProperty('--p', '0'); after(function () { marker.style.setProperty('--p', R.score); }); } else marker.style.setProperty('--p', R.score);
       first = false;
       if (sz === 'S') return;
       main.appendChild(el('p', 'w1-why', esc(R.why)));
@@ -616,7 +614,7 @@
   }
   reg('risk', {
     label: 'Riesgo de cartera', desc: '¿Qué tan expuesta está tu cartera?', group: 'Portafolio',
-    icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5l6.5 2.5v4.5c0 4-2.7 6.7-6.5 8-3.8-1.3-6.5-4-6.5-8V5L10 2.5z"/><path d="M7.5 10l1.8 1.8L13 8"/></svg>',
+    icon: '<svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5l6.5 2.5v4.5c0 4-2.7 6.7-6.5 8-3.8-1.3-6.5-4-6.5-8V5L10 2.5z"/><path d="M7.5 10l1.8 1.8L13 8"/></svg>',
     sizes: ['S', 'M'], size: 'M', defaults: {},
     thumb: function (e) { thumbSvg(e, '<path d="M10 22h100" stroke-width="6" opacity=".25" stroke-linecap="round"/><path d="M92 14v16" stroke-width="3" stroke="currentColor"/><path d="M10 44h60M10 54h42M10 64h30" stroke-width="4" opacity=".5"/>'); },
     render: riskRender
@@ -691,7 +689,7 @@
   }
   reg('dividends', {
     label: 'Dividendos y flujo', desc: '¿Cuánto has recibido en dividendos?', group: 'Ingresos',
-    icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16.5h14"/><path d="M5 16.5V11M9 16.5V7M13 16.5V9.5M17 16.5V5"/></svg>',
+    icon: '<svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16.5h14"/><path d="M5 16.5V11M9 16.5V7M13 16.5V9.5M17 16.5V5"/></svg>',
     sizes: ['M', 'L'], size: 'M', defaults: {},
     thumb: function (e) { thumbSvg(e, '<path d="M8 62h104" opacity=".4"/><g stroke="none" fill="currentColor" opacity=".55"><rect x="12" y="36" width="9" height="26" rx="1.5"/><rect x="30" y="50" width="9" height="12" rx="1.5"/><rect x="48" y="26" width="9" height="36" rx="1.5"/><rect x="66" y="48" width="9" height="14" rx="1.5"/><rect x="84" y="20" width="9" height="42" rx="1.5"/></g><rect x="102" y="40" width="9" height="22" rx="1.5" stroke="none" fill="var(--accent)"/>'); },
     render: divRender

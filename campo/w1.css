@@ -146,9 +146,9 @@ button.w1-wmain { cursor: pointer; }
 .w1-rk[data-size="S"] .w1-rk-sc strong { font-size: 34px; }
 .w1-rk-lb { font-style: normal; font-weight: 600; font-size: 15px; color: var(--text); }
 .w1-rk-lb.w1-dn { color: var(--loss); }
-.w1-trk { position: relative; height: 8px; margin-top: 8px; border-radius: 4px; background: var(--s3); }
+.w1-trk { position: relative; container-type: inline-size; height: 8px; margin-top: 8px; border-radius: 4px; background: var(--s3); }
 .w1-tk { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--text-3); opacity: 0.55; }
-.w1-mk-pt { position: absolute; top: -6px; width: 4px; height: 20px; margin-left: -2px; border-radius: 2px; background: var(--text); transition: left 700ms var(--ease-expo); box-shadow: 0 0 0 2px var(--s1); }
+.w1-mk-pt { position: absolute; top: -6px; width: 4px; height: 20px; margin-left: -2px; border-radius: 2px; background: var(--text); left: 0; translate: calc(var(--p, 0) * 1cqw) 0; transition: translate 700ms var(--ease-expo); box-shadow: 0 0 0 2px var(--s1); }
 .w1-trk-l { position: relative; height: 14px; font-size: 11.5px; color: var(--text-3); }
 .w1-trk-l span { position: absolute; transform: translateX(-50%); }
 .w1-why { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text-2); text-wrap: pretty; }

@@ -69,6 +69,15 @@
     }
     var id = 'txs' + (++uid), root_ = doc.createElement('div'), lastPv = null, pvT = 0, nBox = {}, closing = false;
     var lastFocus = o.from || doc.activeElement;
+    /* cambios sin guardar: Esc, la X o un clic fuera piden confirmar en vez de descartar en silencio; recargar la pestaña también avisa */
+    var dirty = false, saving = false;
+    function markDirty() { if (!dirty) { dirty = true; if (window.CampoGuard) window.CampoGuard.set(id, true); } }
+    function askClose() {
+      var G = window.CampoGuard;
+      if (G && G.isOpen(form)) { G.cancel(form); return; }
+      if (dirty && !saving && G) { G.confirm(form, { onDiscard: function () { close(); } }); return; }
+      close();
+    }
     root_.className = 'txs-root';
     root_.innerHTML = '<div class="txs-back" data-close></div>' +
       '<div class="txs" role="dialog" aria-modal="true" aria-labelledby="' + id + 't" tabindex="-1">' +
@@ -127,7 +136,7 @@
           field('<span>Cantidad</span>', '<input data-in="qty" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(S.qty) + '">')) + '</div>';
       } else if (t === 'buy') {
         h += '<div class="txs-f txs-cb"><label for="' + id + 'tk"><span>Activo</span></label>' +
-          '<div class="txs-cbw"><input id="' + id + 'tk" data-in="q" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="' + id + 'lb" autocomplete="off" spellcheck="false" placeholder="Busca por ticker o nombre" value="' + esc(S.tk ? S.tk + ' · ' + S.name : '') + '">' +
+          '<div class="txs-cbw"><input id="' + id + 'tk" data-in="q" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="' + id + 'lb" autocomplete="off" spellcheck="false" placeholder="Busca por ticker o nombre…" value="' + esc(S.tk ? S.tk + ' · ' + S.name : '') + '">' +
           '<ul class="txs-lb" id="' + id + 'lb" role="listbox" aria-label="Activos" hidden></ul></div><p class="txs-h" data-held></p></div>';
         h += '<div class="txs-row">' + dateField() + field('<span>Cantidad</span>', '<input data-in="qty" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(S.qty) + '">') + '</div>';
       } else if (t === 'sell') {
@@ -293,6 +302,15 @@
       if (final && t === 'buy') u.fund = fundC.checked;
       return u;
     }
+    /* el primer dato que falta, para marcarlo (aria-invalid), decirlo y enfocarlo al pulsar Intro */
+    function firstInvalid() {
+      var t = S.type, f = function (k) { return $('[data-in="' + k + '"]'); };
+      if (!S.pfId) return null;
+      if ((t === 'buy' || t === 'sell' || t === 'div') && !S.tk) return [t === 'buy' ? f('q') : $('[data-pick]'), 'Elige el activo.'];
+      if (t === 'buy' || t === 'sell') { if (!(num(S.qty) > 0)) return [f('qty'), 'Escribe la cantidad.']; if (!(num(S.px) > 0)) return [f('px'), 'Escribe el precio.']; }
+      else if (!(num(S.amount) > 0)) return [f('amount'), 'Escribe el monto.'];
+      return null;
+    }
     function queuePreview() { clearTimeout(pvT); pvT = setTimeout(runPreview, 120); subBtn.disabled = true; }
     function runPreview() {
       var u = payload(false), pe = $('[data-pe]'), pg = $('[data-pg]'), pd = $('[data-pd]');
@@ -341,7 +359,7 @@
 
     /* ---------- eventos ---------- */
     root_.addEventListener('click', function (e) {
-      if (e.target.closest('[data-close]')) { close(); return; }
+      if (e.target.closest('[data-close]')) { askClose(); return; }
       var ty = e.target.closest('[data-ty]'); if (ty) { if (ty.getAttribute('data-ty') !== S.type) { S.qty = ''; S.amount = ''; setType(ty.getAttribute('data-ty')); } return; }
       var pfb = e.target.closest('[data-pf]');
       if (pfb) { S.pfId = pfb.getAttribute('data-pf'); S.tk = ''; S.name = ''; setPcc(); buildPf(); setType(S.type); var nb = $('[data-pf="' + S.pfId + '"]'); if (nb) nb.focus(); return; }
@@ -357,6 +375,7 @@
     });
     root_.addEventListener('input', function (e) {
       var k = e.target.getAttribute && e.target.getAttribute('data-in'); if (!k) return;
+      markDirty(); if (e.target.removeAttribute) e.target.removeAttribute('aria-invalid');
       if (k === 'q') { S.tk = ''; S.name = ''; cbRender(); updateHints(); queuePreview(); return; }
       if (k === 'date') { S.date = e.target.value || S.date; refreshPx(false); updateHints(); }
       else if (k === 'px') { S.px = e.target.value; S.pxEd = true; refreshFee(); }
@@ -389,28 +408,28 @@
     });
     form.addEventListener('submit', function (e) {
       e.preventDefault(); clearTimeout(pvT); runPreview();
-      if (subBtn.disabled) return;
+      if (subBtn.disabled) { if (!saving) { var bad = firstInvalid(); if (bad && bad[0]) { bad[0].setAttribute('aria-invalid', 'true'); errEl.textContent = bad[1]; bad[0].focus(); } } return; }
       var u = payload(true);
       if (RL) { /* producción: se guarda en la cuenta; el botón espera la respuesta del servidor */
-        var lbl = subBtn.textContent; subBtn.disabled = true; subBtn.textContent = 'Guardando…'; errEl.textContent = '';
-        var pid0 = S.pfId;
+        var lbl = subBtn.textContent; subBtn.disabled = true; subBtn.textContent = 'Guardando…'; errEl.textContent = ''; saving = true;
+        var pid0 = S.pfId, fail = function (r) { saving = false; subBtn.textContent = lbl; subBtn.disabled = false; errEl.textContent = (r && r.error) || 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.'; };
         if (E) { /* edición: se guarda y el aviso ofrece Deshacer (deja el movimiento como estaba) */
           Promise.resolve(T.tx.edit(pid0, o.edit.txId, u)).then(function (r) {
-            if (!r || r.error) { subBtn.textContent = lbl; subBtn.disabled = false; errEl.textContent = (r && r.error) || 'No se pudo guardar.'; return; }
+            if (!r || r.error) { fail(r); return; }
             close();
             toast('Movimiento actualizado', function () { Promise.resolve(T.tx.restore(pid0, r.before)).then(function (x) { undoMsg(x && x.error ? x.error : 'Cambio deshecho'); }); });
             if (typeof o.onDone === 'function') { try { o.onDone(r); } catch (x) { } }
-          });
+          }).catch(function () { fail(null); });
           return;
         }
         Promise.resolve(T.tx.add(S.pfId, u)).then(function (r) {
-          if (!r || r.error) { subBtn.textContent = lbl; subBtn.disabled = false; errEl.textContent = (r && r.error) || 'No se pudo registrar.'; return; }
+          if (!r || r.error) { fail(r); return; }
           var tt = S.type, m2 = tt === 'buy' ? 'Compra de ' + nfQ.format(r.qty) + ' ' + r.tk + ' registrada' : tt === 'sell' ? 'Venta de ' + nfQ.format(r.qty) + ' ' + r.tk + ' registrada'
             : tt === 'dep' ? 'Aportación de ' + mxn(r.amount) + ' registrada' : tt === 'wd' ? 'Retiro de ' + mxn(r.amount) + ' registrado' : 'Dividendo de ' + r.tk + ' por ' + mxn(r.amount) + ' registrado';
           close();
           toast(m2, r.id ? function () { Promise.resolve(T.tx.remove(pid0, [r.id])).then(function (x) { undoMsg(x && x.error ? x.error : 'Movimiento deshecho'); }); } : null);
           if (typeof o.onDone === 'function') { try { o.onDone(r); } catch (x) { } }
-        });
+        }).catch(function () { fail(null); });
         return;
       }
       var res = T.tx.add(S.pfId, u);
@@ -434,7 +453,7 @@
     function onDocKey(e) {
       if (e.key === 'Escape') {
         e.preventDefault(); e.stopImmediatePropagation();
-        if (cbClose()) return; close(); return;
+        if (cbClose()) return; askClose(); return;
       }
       if (e.key === 'Tab') {
         var f = focusables(); if (!f.length) return;
@@ -454,7 +473,7 @@
     }
     var inst = {
       close: function (instant) {
-        if (closing) return; closing = true; if (cur === inst) cur = null;
+        if (closing) return; closing = true; if (cur === inst) cur = null; if (window.CampoGuard) window.CampoGuard.set(id, false);
         root_.classList.remove('on');
         if (lastFocus && lastFocus.isConnected && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (x) { } }
         if (instant || reduce()) finish(); else setTimeout(finish, 190);

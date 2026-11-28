@@ -34,6 +34,7 @@
 
 .tk-tipw { position: relative; display: inline-flex; }
 .tk-info { width: 22px; height: 22px; padding: 0; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--text-3); font-size: 12px; font-weight: 600; font-family: var(--font); line-height: 1; position: relative; }
+.tk-info:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .tk-info::after { content: ""; position: absolute; inset: -11px; } /* área táctil de 44 px */
 @media (hover: hover) { .tk-info:hover { color: var(--text); background: var(--s2); } }
 .tk-tip { position: absolute; left: -4px; top: calc(100% + 8px); z-index: 20; width: min(260px, 72vw); padding: 10px 12px; border-radius: var(--r-sm); background: var(--s3); color: var(--text); border: 1px solid var(--line); box-shadow: var(--sh-2); font-size: 13px; font-weight: 400; line-height: 1.45; opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }

@@ -141,7 +141,10 @@
       mount.innerHTML = '<div class="pfc"><div class="pfc-empty"><strong>' + (A && A.n === 1 ? 'Necesitas al menos 2 posiciones para medir correlaciones' : 'Este portafolio aún no tiene posiciones') + '</strong><p>Con dos o más activos verás cómo se mueven entre sí, qué tan diversificado está el portafolio y cuánto riesgo aporta cada posición.</p></div></div>';
       return api;
     }
-    var id = 'pfc' + (++uid), n = A.n, dates = A.dates, Pi = 3, mode = 'peso', St = stats(A, sIdx(Pi)), started = false, sel = null;
+    var id = 'pfc' + (++uid), n = A.n, dates = A.dates, Pi = 3, mode = 'peso', started = false, sel = null;
+    var qsP = window.CampoSections && window.CampoSections.query ? window.CampoSections.query().p : null, piQ = PERIODS.map(function (p) { return p[0]; }).indexOf(qsP); /* ?p=3M del enlace */
+    if (piQ >= 0 && piQ !== 3) Pi = piQ;
+    var St = stats(A, sIdx(Pi));
     var base = A.w.map(function (x, i) { return i; });
     function orderFor() { return mode === 'peso' ? base.slice() : cluster(St, base); }
     var order = orderFor(), pos = []; function setPos() { order.forEach(function (a, k) { pos[a] = k; }); } setPos();
@@ -462,7 +465,7 @@
         e.title = t + ' — peso ' + fN(r.weight, 1) + ' % · riesgo ' + fN(r.risk, 1) + ' %' + (r.weight > 0 ? ' (' + fN(ratio, 1) + '× su peso)' : '') + ' · σ anualizada ' + fN(r.sigmaAnn, 0) + ' %' + (hedge ? ' · reduce el riesgo total (cobertura)' : '');
         roll($('[data-rv]', e), rcState[t], r.risk, function (v) { return fPu(v, 1); }, animate ? 360 : 0, 0); rcState[t] = r.risk;
       });
-      if (go) rows.forEach(function (r) { var e = rcRows[A.tk[r.i]], d = tops[A.tk[r.i]] - e.getBoundingClientRect().top; if (Math.abs(d) > 1 && e.animate) e.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO }); });
+      if (go) CampoFlip.play(rows.map(function (r) { return { el: rcRows[A.tk[r.i]], from: tops[A.tk[r.i]] }; }));
       var kp = $('[data-kp]'), kvs = [['Volatilidad del portafolio', fN(S.volP, 1) + ' %', 'anualizada'], ['Sin diversificación', fN(S.volNo, 1) + ' %', 'suma ponderada de σ'], ['Ahorro por diversificar', '−' + fN(S.saving, 0) + ' %', 'menos volatilidad']];
       kp.innerHTML = kvs.map(function (k, q) { return '<div class="pfc-kpi' + (q === 2 ? ' good' : '') + '"><span class="pfc-kl">' + k[0] + '</span><strong class="num">' + k[1] + '</strong><span class="pfc-ks">' + k[2] + '</span></div>'; }).join('');
       $('[data-rn]').textContent = (S.W < 60 ? 'Solo ' + S.W + ' retornos diarios en el periodo: toma estos resultados con cautela. ' : '') + 'Calculado con ' + S.W + ' retornos diarios · retornos logarítmicos en ' + BS() + '. Correlaciones observadas en el periodo; Rebalanceo y Monte Carlo usan el último año (1A) con las correlaciones suavizadas del modelo, por eso sus cifras pueden diferir unos puntos.';
@@ -486,7 +489,7 @@
         e.setAttribute('aria-label', t + ': correlación con el portafolio ' + (p == null ? 'sin dato' : fRs(p)) + ', con ' + A.bench.name + ' ' + (b == null ? 'sin dato' : fRs(b)));
         e.title = t + ' — con el portafolio ' + (p == null ? '—' : fRs(p)) + ' · con ' + A.bench.name + ' ' + (b == null ? '—' : fRs(b)) + (S.rhoB[i].why ? ' · ' + S.rhoB[i].why : '');
       });
-      if (go) idx.forEach(function (i) { var e = blRows[A.tk[i]], d = tops[A.tk[i]] - e.getBoundingClientRect().top; if (Math.abs(d) > 1 && e.animate) e.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO }); });
+      if (go) CampoFlip.play(idx.map(function (i) { return { el: blRows[A.tk[i]], from: tops[A.tk[i]] }; }));
     }
 
     /* ---------- periodo y orden ---------- */
@@ -501,6 +504,7 @@
     var segP = $('.pfc-sp');
     segP.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-p]'); if (!b) return; var i = +b.dataset.p; if (i === Pi) return; Pi = i;
+      if (window.CampoSections && window.CampoSections.setQuery) window.CampoSections.setQuery({ p: Pi === 3 ? '' : PERIODS[Pi][0] });
       $$('button', segP).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); segP.style.setProperty('--i', Pi);
       St = stats(A, sIdx(Pi)); hideTip();
       if (mode === 'grupo') applyOrder(true);

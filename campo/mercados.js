@@ -67,6 +67,14 @@
   function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
   function finite(v) { return typeof v === 'number' && isFinite(v); }
   function toast(m) { try { if (win.__campo && win.__campo.toast) win.__campo.toast(m); } catch (e) { } }
+  /* aviso con "Deshacer" (el aviso común no lleva botón): dejar de seguir un símbolo ya no es irreversible */
+  var undoEl = null, undoT = 0;
+  function undoToast(msg, run) {
+    if (!undoEl) { undoEl = doc.createElement('div'); undoEl.className = 'mk-toast'; undoEl.setAttribute('role', 'status'); doc.body.appendChild(undoEl); }
+    undoEl.innerHTML = '<span></span><button type="button" class="mk-undo">Deshacer</button>'; undoEl.firstChild.textContent = msg;
+    undoEl.querySelector('button').onclick = function () { clearTimeout(undoT); undoEl.classList.remove('on'); run(); };
+    void undoEl.offsetWidth; undoEl.classList.add('on'); clearTimeout(undoT); undoT = setTimeout(function () { undoEl.classList.remove('on'); }, 7000);
+  }
   function safeDecode(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
   function safeUrl(u) { u = String(u || '').trim(); return /^https?:\/\//i.test(u) ? u : ''; }
   var nfs = {};
@@ -444,8 +452,9 @@
   function Combo(host, o) {
     var uid = 'mkcb' + (++comboN), items = [], active = -1, isOpen = false, tok = 0, timer = 0, pendingEnter = false;
     host.innerHTML = '<div class="mk-sb' + (o.small ? ' mk-sb-s' : '') + '">' + ICON_SEARCH +
-      '<input class="mk-in" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="' + uid + '-l" aria-label="' + esc(o.label) + '" placeholder="' + esc(o.placeholder) + '" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">' +
+      '<input class="mk-in" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="' + uid + '-l"' + (o.star ? ' aria-describedby="' + uid + '-h"' : '') + ' aria-label="' + esc(o.label) + '" placeholder="' + esc(o.placeholder) + '" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">' +
       '<span class="mk-spin" aria-hidden="true"></span>' + (o.kbd ? '<kbd class="mk-kbd" aria-hidden="true">/</kbd>' : '') + '</div>' +
+      (o.star ? '<span class="sr" id="' + uid + '-h">Con una opción activa, Mayús e Intro la siguen o dejan de seguirla.</span><span class="sr mk-live" role="status" aria-live="polite"></span>' : '') +
       '<div class="mk-pop" id="' + uid + '-l" role="listbox" aria-label="Resultados"><div class="mk-opts"><i class="mk-hl" aria-hidden="true"></i><div class="mk-rows"></div></div></div>';
     var sb = host.querySelector('.mk-sb'), input = host.querySelector('.mk-in'), pop = host.querySelector('.mk-pop'), rowsEl = host.querySelector('.mk-rows'), hlEl = host.querySelector('.mk-hl');
 
@@ -455,6 +464,13 @@
       if (!v) { input.removeAttribute('aria-activedescendant'); active = -1; }
     }
     function optEls() { return $$('.mk-opt', rowsEl); }
+    /* la estrella es solo un asa para el puntero (aria-hidden): para teclado y lector de pantalla, Mayús + Intro sobre la opción activa */
+    var liveEl = host.querySelector('.mk-live');
+    function followRow(row, it, say) {
+      var on = isFollowed(it.sym), st_ = row && row.querySelector('.mk-star-sm'), fl = row && row.querySelector('.mk-fol');
+      if (st_) st_.classList.toggle('is-on', on); if (fl) fl.textContent = on ? ', seguida' : '';
+      if (say && liveEl) liveEl.textContent = (on ? 'Sigues ' : 'Dejaste de seguir ') + it.sym + '.';
+    }
     function setActive(i, scroll) {
       var list = optEls(); if (!list.length) { active = -1; return; }
       active = (i + list.length) % list.length;
@@ -471,7 +487,7 @@
           var i = items.push(it) - 1, on = isFollowed(it.sym);
           h += '<div class="mk-opt" role="option" id="' + uid + '-o' + i + '" data-i="' + i + '" aria-selected="false">' + mark(it.sym, 28) + '<span class="mk-chip">' + hl(it.sym, q) + '</span>' +
             '<span class="mk-on">' + hl(it.name, q) + '</span><span class="mk-om">' + esc(it.type || '') + (it.exch ? ' · ' + esc(it.exch) : '') + '</span>' +
-            (o.star ? '<button type="button" class="mk-star-sm' + (on ? ' is-on' : '') + '" tabindex="-1" data-star="' + i + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Dejar de seguir ' : 'Seguir ') + esc(it.sym) + '">' + ICON_STAR + '</button>' : '') + '</div>';
+            (o.star ? '<span class="sr mk-fol">' + (on ? ', seguida' : '') + '</span><span class="mk-star-sm' + (on ? ' is-on' : '') + '" data-star="' + i + '" aria-hidden="true">' + ICON_STAR + '</span>' : '') + '</div>';
         });
       });
       if (!items.length && empty) h = '<div class="mk-none" role="presentation">' + empty + '</div>';
@@ -521,6 +537,7 @@
         if (items.length) setActive(active < 0 ? (k === 'ArrowDown' ? 0 : items.length - 1) : active + (k === 'ArrowDown' ? 1 : -1), true);
       } else if (k === 'Enter') {
         e.preventDefault();
+        if (e.shiftKey && o.star && active >= 0 && items[active]) { toggleFollow(items[active].sym, items[active].name); followRow(optEls()[active], items[active], true); return; }
         if (active >= 0 && items[active]) pick(items[active]);
         else if (items.length && !sb.classList.contains('is-busy')) pick(items[0]);
         else if (input.value.trim()) { pendingEnter = true; run(true); }
@@ -533,7 +550,7 @@
     rowsEl.addEventListener('mousedown', function (e) { e.preventDefault(); });
     rowsEl.addEventListener('click', function (e) {
       var s = e.target.closest('.mk-star-sm');
-      if (s) { var it = items[+s.dataset.star]; if (it) { toggleFollow(it.sym, it.name); var on = isFollowed(it.sym); s.classList.toggle('is-on', on); s.setAttribute('aria-pressed', on); s.setAttribute('aria-label', (on ? 'Dejar de seguir ' : 'Seguir ') + it.sym); } return; }
+      if (s) { var it = items[+s.dataset.star]; if (it) { toggleFollow(it.sym, it.name); followRow(s.closest('.mk-opt'), it, true); } return; }
       var r = e.target.closest('.mk-opt'); if (r) pick(items[+r.dataset.i]);
     });
     doc.addEventListener('pointerdown', function (e) { if (isOpen && !host.contains(e.target)) close(false); });
@@ -541,7 +558,7 @@
     return {
       input: input, close: close,
       focus: function () { input.focus(); try { input.select(); } catch (e) { } },
-      refreshStars: function () { $$('.mk-star-sm', rowsEl).forEach(function (s) { var it = items[+s.dataset.star]; if (!it) return; var on = isFollowed(it.sym); s.classList.toggle('is-on', on); s.setAttribute('aria-pressed', on); }); }
+      refreshStars: function () { $$('.mk-star-sm', rowsEl).forEach(function (s) { var it = items[+s.dataset.star]; if (it) followRow(s.closest('.mk-opt'), it, false); }); }
     };
   }
 
@@ -721,7 +738,7 @@
     box.classList.remove('is-nd');
     var p = clamp((px - lo) / (hi - lo), 0, 1);
     els.mkRlo.textContent = pxTxt(st.sym, lo); els.mkRhi.textContent = pxTxt(st.sym, hi);
-    els.mkFill.style.transform = 'scaleX(' + p.toFixed(4) + ')'; els.mkMk52.style.left = (p * 100).toFixed(2) + '%';
+    els.mkFill.style.transform = 'scaleX(' + p.toFixed(4) + ')'; els.mkMk52.style.setProperty('--p', (p * 100).toFixed(2));
     box.setAttribute('aria-label', 'Rango de 52 semanas: mínimo ' + pxTxt(st.sym, lo) + ', máximo ' + pxTxt(st.sym, hi) + '. El precio está al ' + Math.round(p * 100) + ' % del rango.');
   }
 
@@ -1029,9 +1046,13 @@
   }
   function unfollow(sym) {
     sym = up(sym); if (!isFollowed(sym)) return;
+    var at = -1, ent = null; st.watch.forEach(function (w, k) { if (w.s === sym) { at = k; ent = w; } });
     st.watch = st.watch.filter(function (w) { return w.s !== sym; }); save();
     var li = rt.tab === 'watch' ? $$('.mk-li', els.mkUl).filter(function (x) { return x.dataset.s === sym; })[0] : null;
-    var fin = function () { toast('Quitado de seguimiento'); afterWatch(''); };
+    var fin = function () {
+      undoToast('Quitado de seguimiento', function () { if (isFollowed(sym)) return; st.watch.splice(Math.min(at, st.watch.length), 0, ent); save(); afterWatch(rt.tab === 'watch' ? sym : ''); });
+      afterWatch('');
+    };
     paintFollow(); if (mainCombo) mainCombo.refreshStars(); paintTabs();
     if (li && li.animate && !reduce()) {
       li.classList.add('is-out'); li.style.overflow = 'hidden'; placeBar(false);
@@ -1154,9 +1175,19 @@
     fetchInfo(sym).then(function (info) { if (tok !== rt.tok) return; rt.info = info; paintStats(); paintHead(); }, noop);
     if (!rt.live[sym]) poll();
   }
+  /* periodo y tipo de gráfica viajan en la URL (?r=3M&t=velas) solo cuando no son los de siempre */
+  function syncQuery() {
+    var S = win.CampoSections; if (!S || !S.setQuery || !rt.visible) return;
+    S.setQuery({ r: st.period === '1A' ? '' : st.period, t: st.type === 'candles' ? 'velas' : '' });
+  }
+  function setType(t) {
+    if (t === st.type) return; st.type = t; save();
+    $$('button', els.mkType).forEach(function (x, i) { var on = x.dataset.t === t; x.setAttribute('aria-pressed', on ? 'true' : 'false'); if (on) els.mkType.style.setProperty('--i', i); });
+    applyChart('morph');
+  }
   function changePeriod(p) {
     if (p === st.period) return;
-    st.period = p; save(); paintPerf(); placePerInd(false);
+    st.period = p; save(); syncQuery(); paintPerf(); placePerInd(false);
     rt.roKey = ''; loadMain('morph').then(function () { paintPerf(); });
     paintCmp(); paintInd();
   }
@@ -1165,7 +1196,8 @@
   function go(sym, name) {
     sym = up(sym); if (!sym || !SYM_RE.test(sym)) return; if (name) nm[sym] = name;
     var S = win.CampoSections, h = '#mercados/' + encodeURIComponent(sym);
-    if (S && S.navigate) S.navigate(h, !!(S.current && S.current() === 'mercados'));
+    if (S && S.current && S.current() === 'mercados' && sym === st.sym) return;
+    if (S && S.navigate) S.navigate(h, false); /* cada símbolo es un paso del historial: "Atrás" vuelve al anterior (antes se reescribía el mismo paso) */
     else { st.sym = sym; if (rt.built) loadSymbol(); }
   }
   function ensureBuilt() {
@@ -1176,8 +1208,8 @@
         ch = win.CampoMktChart.create(els.mkCv, { fmt: function (v) { return fmtNum(v, rt.dec); }, fmtPct: function (v) { return pct(v); }, onCross: onCross, label: 'Gráfica de precios del símbolo seleccionado' });
       } catch (e) { ch = null; if (win.console) console.error(e); }
     }
-    mainCombo = Combo(els.mkSearch, { label: 'Buscar un instrumento', placeholder: 'Busca una acción, ETF, índice, divisa o cripto', kbd: true, star: true, recents: true, onPick: function (it) { go(it.sym, it.name); } });
-    cmpCombo = Combo(els.mkCmpAdd, { label: 'Comparar con otro símbolo', placeholder: 'Agrega un símbolo para comparar', small: true, onPick: addCompare, onClose: function () { rt.cmpOpen = false; paintCmp(); els.mkCmpB.focus(); } });
+    mainCombo = Combo(els.mkSearch, { label: 'Buscar un instrumento', placeholder: 'Busca una acción, ETF, índice, divisa o cripto…', kbd: true, star: true, recents: true, onPick: function (it) { go(it.sym, it.name); } });
+    cmpCombo = Combo(els.mkCmpAdd, { label: 'Comparar con otro símbolo', placeholder: 'Agrega un símbolo para comparar…', small: true, onPick: addCompare, onClose: function () { rt.cmpOpen = false; paintCmp(); els.mkCmpB.focus(); } });
     root.addEventListener('click', onClick);
     els.mkPer.addEventListener('keydown', function (e) {
       var l = $$('.mkp', els.mkPer), i = l.indexOf(doc.activeElement); if (i < 0) return;
@@ -1217,9 +1249,7 @@
     if ((b = t.closest('.mkc'))) { go(b.dataset.y); return; }
     if ((b = t.closest('.mkp'))) { changePeriod(b.dataset.p); return; }
     if ((b = t.closest('#mkType button'))) {
-      if (b.dataset.t === st.type) return; st.type = b.dataset.t; save();
-      $$('button', els.mkType).forEach(function (x, i) { var on = x === b; x.setAttribute('aria-pressed', on ? 'true' : 'false'); if (on) els.mkType.style.setProperty('--i', i); });
-      applyChart('morph'); return;
+      if (b.dataset.t === st.type) return; setType(b.dataset.t); syncQuery(); return;
     }
     if ((b = t.closest('.mk-tabs button'))) { rt.tab = b.dataset.tab; renderWatch(''); return; }
     if (t.closest('#mkFollow')) {
@@ -1241,8 +1271,10 @@
   }
   function onRoute(e) {
     var d = e.detail || {}; if (d.sec !== 'mercados') return;
+    var qs = win.CampoSections && win.CampoSections.query ? win.CampoSections.query() : {}, qp = qs.r && PERIODS.indexOf(qs.r) >= 0 ? qs.r : null, qt = qs.t === 'velas' ? 'candles' : qs.t === 'area' ? 'area' : null, wasBuilt = rt.built;
+    if (!wasBuilt) { if (qp) st.period = qp; if (qt) st.type = qt; } /* antes de armar la pantalla, para que nazca con lo del enlace */
     ensureBuilt();
-    var m = /^#mercados\/(.+)$/.exec(d.hash || ''), sym = m ? up(safeDecode(m[1])) : '';
+    var m = /^#mercados\/([^?]+)/.exec(d.hash || ''), sym = m ? up(safeDecode(m[1])) : '';
     if (sym && !SYM_RE.test(sym)) sym = ''; /* basura en la URL: se ignora y no se guarda */
     var first = !rt.shown; rt.visible = true; rt.shown = true;
     if (first) {
@@ -1253,6 +1285,8 @@
     if (sym && sym !== st.sym) { st.sym = sym; loadSymbol(); }
     else if (!rt.loaded) loadSymbol();
     if (first || !rt.pt) { startPolling(); paintStatus(); }
+    if (wasBuilt) { if (qp && qp !== st.period) changePeriod(qp); if (qt && qt !== st.type) setType(qt); }
+    syncQuery();
     requestAnimationFrame(function () { placePerInd(true); placeBar(true); });
   }
   win.addEventListener('campo:route', onRoute);

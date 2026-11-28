@@ -34,7 +34,7 @@ button.who:active { transform: scale(0.97); }
 .st-ind { position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: var(--h, 44px); transform: translateY(var(--y, 0px)); border-radius: var(--r-sm); pointer-events: none; opacity: 0;
   background: color-mix(in oklch, var(--accent) 15%, var(--s2)); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--accent) 26%, transparent); }
 .st[data-mode="split"] .st-ind { opacity: 1; }
-.st-ind[data-ready] { transition: transform 260ms var(--ease-in-out), height 260ms var(--ease-in-out); }
+.st-ind[data-ready] { transition: transform 260ms var(--ease-in-out); }
 
 .st-content { min-width: 0; }
 .st-cat { display: grid; gap: 16px; min-width: 0; }
@@ -185,14 +185,14 @@ button.who:active { transform: scale(0.97); }
 .st-add-g { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
 .st-add .field { margin: 0; }
 .st-cbx { position: relative; }
-.st-sugg { position: absolute; z-index: 6; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none; background: var(--s2); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-2); max-height: 280px; overflow: auto; animation: stPop 140ms var(--ease-out); transform-origin: 50% 0; }
+.st-sugg { position: absolute; z-index: 6; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none; background: var(--s2); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-2); max-height: 280px; overflow: auto; animation: stPop 140ms var(--ease-out); transform-origin: 50% 0; overscroll-behavior: contain; }
 .st-sugg li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: var(--r-sm); cursor: pointer; font-size: 14.5px; }
 .st-sugg li small { color: var(--text-3); margin-left: auto; font-size: 13px; }
 .st-sugg li[aria-selected="true"] { background: var(--s3); }
 .st-suf { position: relative; }
 .st-suf input { padding-right: 56px; }
 .st-suf span { position: absolute; right: 14px; top: 0; bottom: 0; display: grid; align-items: center; color: var(--text-3); font-size: 14px; pointer-events: none; }
-.st-undo { position: fixed; z-index: 1150; left: 50%; bottom: 84px; transform: translate(-50%, 8px); display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 16px; background: var(--s3); border-radius: var(--r-md); box-shadow: var(--sh-2); font-size: 14px; opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); max-width: calc(100vw - 32px); }
+.st-undo { position: fixed; z-index: 1150; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px); display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 16px; background: var(--s3); border-radius: var(--r-md); box-shadow: var(--sh-2); font-size: 14px; opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); max-width: calc(100vw - 32px); }
 .st-undo[data-on] { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .st-undo button { color: var(--accent-ink); flex: none; }
 #toast { z-index: 1200; }

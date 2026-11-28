@@ -147,7 +147,7 @@
 .pfd-cn span { font-size: 12.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pfd-cb { position: relative; height: 16px; }
 .pfd-cb::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); }
-.pfd-bp, .pfd-bn { position: absolute; top: 3px; bottom: 3px; width: calc(var(--w, 0%) / 2); transition: width 360ms var(--ease-expo); }
+.pfd-bp, .pfd-bn { position: absolute; top: 3px; bottom: 3px; width: 50%; transform: scaleX(var(--s, 0)); transition: transform 360ms var(--ease-expo); } /* la longitud va en scaleX (--s de 0 a 1): width animaba layout */
 .pfd-bp { left: 50%; background: var(--gain); border-radius: 0 3px 3px 0; transform-origin: left center; }
 .pfd-bn { right: 50%; background: var(--loss); border-radius: 3px 0 0 3px; transform-origin: right center; }
 .pfd-cw { text-align: right; font-size: 13.5px; color: var(--text-2); }

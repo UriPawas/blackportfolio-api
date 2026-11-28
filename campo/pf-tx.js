@@ -96,7 +96,7 @@
         '<div class="pftx-top"><h2 id="' + id + 'h2">Movimientos</h2><div class="pftx-acts"><button type="button" class="btn btn-secondary btn-sm" data-csv>Exportar CSV</button>' +
         (window.CampoTxSheet && !(window.CampoTracker && window.CampoTracker.readonly) ? '<button type="button" class="btn btn-primary btn-sm" data-reg>Registrar movimiento</button>' : '') + '</div></div>' +
         '<div class="pftx-tools"><div class="pftx-chips" role="group" aria-label="Filtrar por tipo">' + chipsHTML + '</div>' +
-        '<label class="pftx-search"><span class="pftx-sr">Buscar por ticker o nombre</span><input type="search" data-q placeholder="Buscar ticker o nombre" autocomplete="off"></label></div>' +
+        '<label class="pftx-search"><span class="pftx-sr">Buscar por ticker o nombre</span><input type="search" data-q placeholder="Buscar ticker o nombre…" autocomplete="off"></label></div>' +
         '<p class="pftx-st" data-st aria-live="polite"></p>' +
         '<div class="pftx-tw"><table class="pftx-tb" data-tb><caption class="pftx-sr">Movimientos del libro, agrupados por mes</caption>' +
           '<thead><tr><th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Activo</th><th scope="col" class="r">Cantidad</th><th scope="col" class="r">Precio</th><th scope="col" class="r">TC a ' + BS() + '</th><th scope="col" class="r">Monto ' + BS() + '</th><th scope="col" class="pftx-ac"><span class="pftx-sr">Acciones</span></th></tr></thead></table></div>' +
@@ -179,8 +179,10 @@
     }
 
     /* alta y baja de filas con opacidad y transform; las que salen se ocultan al terminar */
+    var animLeft = 0; /* tope de filas animadas por cambio de filtro: el resto cambia sin animación */
     function setRow(m, want, anim) {
       if (m.want === want) return;
+      if (anim && animLeft-- <= 0) anim = false;
       var wasSet = m.want !== undefined;
       m.want = want;
       if (m.anim) { m.anim.onfinish = null; m.anim.cancel(); m.anim = null; }
@@ -198,6 +200,7 @@
     }
 
     function applyFilter(anim) {
+      animLeft = 24;
       var q = (searchEl.value || '').trim().toLowerCase(), cnt = { all: 0, dep: 0, buy: 0, sell: 0, div: 0, wd: 0 };
       var t = { n: 0, dep: 0, wd: 0, div: 0 }, vis = 0;
       rowsM.forEach(function (m) {
@@ -248,7 +251,9 @@
 
     /* ---------- aviso (con Deshacer opcional) ---------- */
     function notice(msg, undo, role) {
-      var t = doc.createElement('div'); t.className = 'txs-toast'; t.setAttribute('role', role || 'status');
+      var lv = doc.getElementById('pftxLive'); if (!lv) { lv = doc.createElement('div'); lv.id = 'pftxLive'; lv.className = 'sr'; lv.setAttribute('role', 'status'); lv.setAttribute('aria-live', 'polite'); doc.body.appendChild(lv); }
+      lv.textContent = ''; setTimeout(function () { lv.textContent = msg; }, 30); /* región viva montada siempre: la que nace con el aviso no se anuncia de forma fiable */
+      var t = doc.createElement('div'); t.className = 'txs-toast'; if (role === 'alert') t.setAttribute('role', 'alert');
       t.innerHTML = '<span></span>' + (undo ? '<button type="button" class="txs-undo">Deshacer</button>' : ''); t.firstChild.textContent = msg;
       doc.body.appendChild(t); void t.offsetWidth; t.classList.add('on');
       var gone = setTimeout(function () { t.classList.remove('on'); setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 220); }, undo ? 7000 : 6000);
@@ -310,16 +315,20 @@
     /* ---------- eventos ---------- */
     on(mount, 'click', function (e) {
       var chip = e.target.closest('.pftx-chip');
-      if (chip) { var f = chip.getAttribute('data-f'); if (f !== filt) { filt = f; applyFilter(true); } return; }
+      if (chip) { var f = chip.getAttribute('data-f'); if (f !== filt) { filt = f; applyFilter(true); syncTx(); } return; }
       var rg = e.target.closest('[data-reg]'); if (rg) { openSheet(rg); return; }
       if (e.target.closest('[data-csv]')) { exportCsv(); return; }
       var ed = e.target.closest('[data-edit]'); if (ed) { editReal(ed); return; }
       var dl = e.target.closest('[data-del]'); if (dl) { if (T.canWrite) removeReal(dl); else removeUser(dl); }
     });
-    on(searchEl, 'input', function () { applyFilter(true); });
+    function syncTx() { var S = window.CampoSections; if (S && S.setQuery) S.setQuery({ f: filt === 'all' ? '' : filt, q: searchEl.value.trim() }); }
+    on(searchEl, 'input', function () { applyFilter(false); syncTx(); }); /* al teclear no se anima fila por fila: con miles de movimientos eran miles de animaciones por tecla */
 
     /* ---------- primera pintura y entrada ---------- */
     layout();
+    var qsT = window.CampoSections && window.CampoSections.query ? window.CampoSections.query() : {}; /* ?f=…&q=… del enlace */
+    if (qsT.f && $$('.pftx-chip').some(function (b) { return b.getAttribute('data-f') === qsT.f; })) filt = qsT.f;
+    if (qsT.q) searchEl.value = qsT.q;
     applyFilter(false);
     function start() {
       if (started || dead) return; started = true;

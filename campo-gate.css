@@ -18,5 +18,6 @@
 @keyframes gate-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 @keyframes gate-dot { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
+  .gate-fx--css .gate-word i { animation: none; opacity: 1; }
   .gate-fx--hold.gate-fx--css .gate-logo, .gate-fx--hold.gate-fx--css .gate-dot { animation: none; }
 }

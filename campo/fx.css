@@ -121,8 +121,8 @@ b > .od, b > .od span { font-size: inherit; color: inherit; }
 /* ---------- R11: esqueleto con barrido compuesto y aparición diferida ---------- */
 .skel { animation: skel-on 1ms linear 150ms backwards; }
 @keyframes skel-on { from { opacity: 0; } to { opacity: 1; } }
-.skel i { position: relative; overflow: hidden; background: var(--s2); animation: none; }
-.skel i::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+.skel i, .hw-skel i, .mk-skel i, .mk-sk { position: relative; overflow: hidden; background: var(--s2); animation: none; }
+.skel i::after, .hw-skel i::after, .mk-skel i::after, .mk-sk::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
   background: linear-gradient(100deg, transparent 30%, color-mix(in oklch, var(--text) 6%, transparent) 50%, transparent 70%);
   animation: skel-sweep 1.6s linear infinite; }
 @keyframes skel-sweep { to { transform: translateX(100%); } }
@@ -142,6 +142,7 @@ b > .od, b > .od span { font-size: inherit; color: inherit; }
 
 /* ---------- movimiento reducido: sin escala, desplazamiento ni bucles de adorno ---------- */
 @media (prefers-reduced-motion: reduce) {
+  .plan::before, .plan::after, #view-app .panel::before, #view-app .panel::after, #view-app .insight::before, #view-app .insight::after { display: none; } /* la luz que sigue al puntero */
   .btn:active, .btn[data-pressed], .icon-btn[data-pressed], .pw-btn[data-pressed], .seg > button[data-pressed], .side-nav button[data-pressed] { transform: none; }
   .btn:active, .btn[data-pressed] { background-image: linear-gradient(color-mix(in oklch, black 8%, transparent), color-mix(in oklch, black 8%, transparent)); }
   .btn-primary::before { display: none; }
@@ -155,6 +156,6 @@ b > .od, b > .od span { font-size: inherit; color: inherit; }
   .plan { transition: none; }
   .plan:hover { transform: none; }
   .tip, .tip.on { transform: none; transition: opacity 80ms linear; }
-  .skel i::after { animation: none; display: none; }
+  .skel i::after, .hw-skel i::after, .mk-skel i::after, .mk-sk::after { animation: none; display: none; }
   .toast, .toast.on { transform: translateX(-50%); }
 }

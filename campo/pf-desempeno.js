@@ -288,7 +288,8 @@
       return api;
     }
     var id = 'pfd' + (++uid), C = context(T, L, pf), dates = C.dates, bench = C.bench, V = C.V, F = C.F;
-    var Pi = 3, st = stats(C, Math.max(0, LAST - PERIODS[Pi][1])), per = periodRows(C), mo = monthly(C), acc = perAsset(C), started = false;
+    var Pi = 3, qsP = window.CampoSections && window.CampoSections.query ? window.CampoSections.query().p : null, piQ = PERIODS.map(function (p) { return p[0]; }).indexOf(qsP); if (piQ >= 0) Pi = piQ; /* ?p=3M del enlace */
+    var st = stats(C, Math.max(0, LAST - PERIODS[Pi][1])), per = periodRows(C), mo = monthly(C), acc = perAsset(C), started = false;
     function sIdx() { return Math.max(0, LAST - PERIODS[Pi][1]); }
     var rfTxt = fN(C.rf * 100, 2) + ' % anual · ' + C.rfName + ' (supuesto)';
     var scaleTxt = C.crypto ? 'Δt = días calendario ÷ 365 (portafolio solo cripto, mercado 24/7)' : 'Δt = 1 ÷ 252 por cierre (serie de días hábiles' + (C.hasCrypto ? '; cartera mixta, la cripto entra con su cierre de día hábil' : '') + ')';
@@ -545,13 +546,13 @@
         var n = by[r.tk]; if (!n) { var t = doc.createElement('div'); t.innerHTML = contRow(r); n = t.firstChild; by[r.tk] = n; }
         clEl.appendChild(n); n._r = r;
         var cvEl = n.querySelector('[data-cv]'), bp = n.querySelector('.pfd-bp'), bn = n.querySelector('.pfd-bn'), w = Math.abs(r.c) / maxAbs * 100;
-        bp.style.setProperty('--w', (r.c > 0 ? w : 0).toFixed(2) + '%'); bn.style.setProperty('--w', (r.c < 0 ? w : 0).toFixed(2) + '%');
+        bp.style.setProperty('--s', (r.c > 0 ? w / 100 : 0).toFixed(4)); bn.style.setProperty('--s', (r.c < 0 ? w / 100 : 0).toFixed(4));
         n.querySelector('.pfd-cw').textContent = fN(r.w, 1) + ' %';
         var prevC = contState[r.tk] == null ? 0 : contState[r.tk]; cvEl.className = 'pfd-cv2 num ' + sgnCls(r.c); roll(cvEl, prevC, r.c, function (v) { return sgn(v, 2, ' pts'); }, animate ? 360 : 0, 0); contState[r.tk] = r.c;
         n.querySelector('.pfd-crb').setAttribute('aria-label', r.tk + ', ' + r.name + '. Peso medio ' + fN(r.w, 1) + ' por ciento' + (r.ret != null ? ', rentabilidad ' + fN(r.ret, 1) + ' por ciento' : '') + ', contribución ' + sgn(r.c, 2, ' puntos') + '.');
       });
       Object.keys(contState).forEach(function (k) { if (!keep[k]) delete contState[k]; });
-      if (animate && !reduce()) $$('.pfd-cr', clEl).forEach(function (n) { var o = tops[n.dataset.t]; if (o == null) { if (n.animate) n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: EXPO }); return; } var d = o - n.getBoundingClientRect().top; if (Math.abs(d) > 1 && n.animate) n.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO }); });
+      if (animate && !reduce()) { var moved = []; $$('.pfd-cr', clEl).forEach(function (n) { var o = tops[n.dataset.t]; if (o == null) { if (n.animate) n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: EXPO }); return; } moved.push({ el: n, from: o }); }); CampoFlip.play(moved); }
       var sumC = CB.total, diff = Math.abs(sumC - CB.twr);
       $('[data-sum]').innerHTML = 'Suma de contribuciones <b class="num ' + sgnCls(sumC) + '">' + sgn(sumC, 2, ' pts') + '</b> = TWR del periodo <b class="num ' + sgnCls(CB.twr) + '">' + fP(CB.twr, 2) + '</b><em class="pfd-ok' + (diff < 0.005 ? '' : ' bad') + '">' + (diff < 0.005 ? 'Cuadra' : 'Diferencia ' + fN(diff, 3) + ' pts') + '</em> <span class="pfd-sumn">El efectivo contribuye 0.</span>';
       $('[data-cs]').textContent = PERIODS[Pi][0] + ' · en puntos porcentuales del TWR';
@@ -624,6 +625,7 @@
     var segP = $('.pfd-sp');
     segP.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-p]'); if (!b) return; var i = +b.dataset.p; if (i === Pi) return; Pi = i;
+      if (window.CampoSections && window.CampoSections.setQuery) window.CampoSections.setQuery({ p: Pi === 3 ? '' : PERIODS[Pi][0] });
       $$('button', segP).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); segP.style.setProperty('--i', Pi);
       st = stats(C, sIdx()); hideTip(tipEl); hideTip(tip2);
       applyMetrics(true); ddChart.set(st.s, true); cvChart.set(st.s, true); paintHeat(); applyCont(true); applyOrigin(true);
@@ -640,7 +642,7 @@
         rollReg.forEach(function (r, k) { var el = $('[data-r="' + k + '"]'); if (el) roll(el, 0, r.v, r.f, 700, 120 + Math.floor(k / 3) * 40); });
         M.forEach(function (k, n) { if (k.to == null || k.text != null) return; roll($('[data-k="' + k.id + '"] [data-kv]'), 0, k.to, k.fmt, 700, 160 + n * 40); });
         hmCells.forEach(function (c) { if (c.animate) c.animate([{ opacity: 0 }, { opacity: c.classList.contains('out') ? 0.3 : 1 }], { duration: 300, delay: 200 + parseFloat(c.style.getPropertyValue('--d')), easing: EXPO, fill: 'backwards' }); });
-        $$('.pfd-cr', clEl).forEach(function (n, i) { var b = n.querySelector('.pfd-bp'), bn = n.querySelector('.pfd-bn'); [b, bn].forEach(function (x) { if (x.animate) x.animate([{ transform: 'scaleX(0)' }, { transform: 'none' }], { duration: 500, delay: 260 + i * 40, easing: EXPO, fill: 'backwards' }); }); });
+        $$('.pfd-cr', clEl).forEach(function (n, i) { var b = n.querySelector('.pfd-bp'), bn = n.querySelector('.pfd-bn'); [b, bn].forEach(function (x) { if (x.animate) x.animate([{ transform: 'scaleX(0)' }], { duration: 500, delay: 260 + i * 40, easing: EXPO, fill: 'backwards' }); }); });
       }
       ddChart.start(); cvChart.start();
     }

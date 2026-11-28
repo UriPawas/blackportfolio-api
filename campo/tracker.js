@@ -416,6 +416,7 @@
     if (!okCcy(ccy)) return;
     lsSet(!id || id === 'todos' ? CK : CK + '.' + id, ccy);
     if (!T.setBase(ccy)) emit('change', { type: 'base', base: ccy });
+    if (window.CampoSections && window.CampoSections.setQuery && window.CampoSections.current && window.CampoSections.current() === 'tracker') window.CampoSections.setQuery({ c: ccy });
   };
   if (REAL) { T.base = T.consolidatedCcy(); D.base = T.base; applyFx(); }
 
@@ -423,10 +424,13 @@
   window.CampoTracker = T; window.__tracker = T;
 
   /* ============================== ruta ============================== */
-  function idFromHash() { var m = /^#tracker(?:\/([\w%.-]+)(?:\/[\w-]+)?)?$/.exec(location.hash); return m ? (m[1] ? decodeURIComponent(m[1]) : null) : undefined; }
+  function idFromHash() { var m = /^#tracker(?:\/([\w%.-]+)(?:\/[\w-]+)?)?$/.exec((location.hash || '').split('?')[0]); return m ? (m[1] ? decodeURIComponent(m[1]) : null) : undefined; }
   window.addEventListener('campo:route', function (e) {
     if (!e.detail || e.detail.sec !== 'tracker') return;
     var id = idFromHash(); if (id === undefined) id = null;
+    /* ?c=USD en el enlace: esa divisa para esta vista (se recuerda como si la hubieras elegido tú) */
+    var qs = window.CampoSections && window.CampoSections.query ? window.CampoSections.query() : {};
+    if (REAL && qs.c && T.currencies().indexOf(qs.c) >= 0 && qs.c !== T.viewCcy(id)) T.setViewCcy(id || 'todos', qs.c);
     if (REAL) T.setBase(T.viewCcy(id), !!id); /* cada vista en su moneda, ANTES de pintarla */
     T.route = id; sec.dataset.view = id ? 'detail' : 'list'; emit('route', id);
     if (!id) { hoverId = null; schedule(); }

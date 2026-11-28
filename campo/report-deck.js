@@ -82,7 +82,7 @@
     var sub = [FM.pct2(K.twr) + ' ' + S.twrSub];
     if (K.bench != null) sub.push(S.vs + ' ' + K.benchName + ' ' + FM.pct2(K.bench));
     return { html: '<div class="crk-in crk-cover"><div class="crk-cv-top"><span class="crk-brand">' + esc(S.brand) + '</span><span class="crk-k">' + esc(S.kickCover) + '</span></div>' +
-      '<h1 class="crk-t crk-cv-t">' + esc(r.meta.portfolioName) + '</h1><p class="crk-cv-per">' + esc(r.meta.periodName) + ' · ' + esc(r.meta.periodLabel) + '</p>' +
+      '<h2 class="crk-t crk-cv-t">' + esc(r.meta.portfolioName) + '</h2><p class="crk-cv-per">' + esc(r.meta.periodName) + ' · ' + esc(r.meta.periodLabel) + '</p>' +
       '<div class="crk-cv-fig"><span class="crk-lab">' + esc(S.gainLab) + '</span>' + num(K.gain, 'smoney', 'crk-huge ' + tone(K.gain)) + '<span class="crk-cv-sub">' + esc(sub.join(' · ')) + '</span></div>' + svg +
       '<p class="crk-cv-s">' + esc(S.sample) + '</p></div>' };
   });
@@ -240,7 +240,7 @@
 
   /* ============================== motor ============================== */
   function render(mount, report, opts) {
-    opts = opts || {}; var S = STR.es, reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches, rafs = {}, timers = [], dead = false, scale = 1;
+    opts = opts || {}; var S = STR.es, reduce = function () { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }, rafs = {}, timers = [], dead = false, scale = 1;
     var ctx = { r: report, S: S, hov: {} }, slides = [];
     SL.forEach(function (fn) { var o = null; try { o = fn(ctx); } catch (e) { if (window.console) console.error('crk slide', e); } if (o) slides.push(o); });
     var root = document.createElement('div'); root.className = 'crk'; root.tabIndex = 0; root.setAttribute('role', 'region'); root.setAttribute('aria-roledescription', 'presentación'); root.setAttribute('aria-label', report.meta.portfolioName + ' · ' + report.meta.periodLabel);
@@ -258,7 +258,7 @@
 
     function stopTweens(el) { Object.keys(rafs).forEach(function (k) { cancelAnimationFrame(rafs[k]); delete rafs[k]; }); if (el) [].forEach.call(el.querySelectorAll('[data-cu]'), function (n) { n.textContent = FM[n.getAttribute('data-f')](+n.getAttribute('data-cu')); }); }
     function countUps(el) {
-      if (reduce) return;
+      if (reduce()) return;
       [].forEach.call(el.querySelectorAll('[data-cu]'), function (n, i) {
         var to = +n.getAttribute('data-cu'), f = FM[n.getAttribute('data-f')], t0 = null, dur = 1100, key = 'cu' + i;
         n.textContent = f(0);
@@ -274,7 +274,7 @@
         el.classList.toggle('is-active', i === n); el.classList.toggle('is-before', i < n); el.classList.toggle('is-after', i > n); el.setAttribute('aria-hidden', i === n ? 'false' : 'true');
         if (i !== n && el.classList.contains('is-on')) { (function (e) { timers.push(setTimeout(function () { if (!e.classList.contains('is-active')) e.classList.remove('is-on'); }, 460)); })(el); }
       });
-      var act = els[n]; if (prev < 0 || reduce) act.classList.add('is-on'); else timers.push(setTimeout(function () { if (!dead && cur === n) act.classList.add('is-on'); }, 90));
+      var act = els[n]; if (prev < 0 || reduce()) act.classList.add('is-on'); else timers.push(setTimeout(function () { if (!dead && cur === n) act.classList.add('is-on'); }, 90));
       countUps(act); hideTip();
       [].forEach.call(dots.children, function (b, i) { b.classList.toggle('is-cur', i === n); if (i === n) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
       count.textContent = (n + 1) + ' ' + S.of + ' ' + slides.length;

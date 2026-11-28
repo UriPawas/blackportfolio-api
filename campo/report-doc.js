@@ -139,7 +139,7 @@
     /* producción: imagen Pexels por sector (aquí no hay fotografía; la portada lleva la curva del periodo) */
     var gainCls = sgn(K.gain, 0.5), cover = '<div class="crd-cover-in">' +
       '<div class="cv-top"><span class="cv-brand">' + esc(S.brand) + '</span><span class="cv-kick">' + esc(S.kicker) + '</span></div>' +
-      '<div class="cv-title"><h1>' + esc(M.portfolioName) + '</h1><p class="cv-per">' + esc(M.periodName) + ' · ' + esc(M.periodLabel) + '</p></div>' +
+      '<div class="cv-title"><h2>' + esc(M.portfolioName) + '</h2><p class="cv-per">' + esc(M.periodName) + ' · ' + esc(M.periodLabel) + '</p></div>' +
       '<div class="cv-fig"><span class="cv-lab">' + esc(K.gain >= 0 ? S.coverGain : S.coverGainLoss) + '</span><span class="cv-big ' + gainCls + '">' + esc(F.smoney(K.gain)) + '</span>' +
       '<span class="cv-sub"><b class="' + sgn(K.twr) + '">' + esc(pc(K.twr, 2)) + '</b> ' + esc(S.coverTwr.toLowerCase()) + (K.bench != null ? ' · ' + esc(S.coverVs + (K.benchName || '')) + ' <b class="' + sgn(K.bench) + '">' + esc(pc(K.bench, 2)) + '</b>' : '') + '</span></div>' +
       '<div class="cv-curve">' + curve(R, { W: 794, H: 360, pl: 48, pr: 48, pt: 34, pb: 30, axes: false, legend: true }, S) + '</div>' +

@@ -14,12 +14,17 @@
 
   /* ---------- luz del puntero (R1, R8) y punto de entrada (R2): un listener delegado cada uno ---------- */
   var LIT = '.btn-primary, .plan, #view-app .panel, #view-app .insight';
+  var litP = null, litRaf = 0;
   document.addEventListener('pointermove', function (e) {
-    if (e.pointerType !== 'mouse' || !e.target.closest) return;
-    for (var n = e.target.closest(LIT); n; n = n.parentElement && n.parentElement.closest(LIT)) {
-      var r = n.getBoundingClientRect();
-      n.style.setProperty('--mx', (e.clientX - r.left) + 'px'); n.style.setProperty('--my', (e.clientY - r.top) + 'px');
-    }
+    if (e.pointerType !== 'mouse' || rm.matches || !e.target.closest) return;
+    litP = { t: e.target, x: e.clientX, y: e.clientY };
+    if (litRaf) return;
+    litRaf = raf(function () { /* a lo más una vez por cuadro; primero se leen todas las cajas y luego se escribe (antes se intercalaban) */
+      litRaf = 0; var p = litP; litP = null; if (!p || !p.t.isConnected) return;
+      var nodes = []; for (var n = p.t.closest(LIT); n; n = n.parentElement && n.parentElement.closest(LIT)) nodes.push(n);
+      var rects = nodes.map(function (n) { return n.getBoundingClientRect(); });
+      nodes.forEach(function (n, i) { n.style.setProperty('--mx', (p.x - rects[i].left) + 'px'); n.style.setProperty('--my', (p.y - rects[i].top) + 'px'); });
+    });
   }, { passive: true });
   function edge(e) {
     var b = e.target.closest && e.target.closest('.btn-secondary, .btn-ghost');
@@ -120,7 +125,7 @@
     strips.forEach(function (o) {
       o.s.addEventListener('transitionend', function (e) {
         if (e.propertyName !== 'translate') return;
-        o.p = (o.p % 10) + 10; o.s.classList.add('snap'); o.s.style.setProperty('--p', o.p); void o.s.offsetWidth; o.s.classList.remove('snap');
+        o.p = (o.p % 10) + 10; o.s.classList.add('snap'); o.s.style.setProperty('--p', o.p); raf(function () { raf(function () { o.s.classList.remove('snap'); }); }); /* sin forzar layout: el salto sin transición se quita dos cuadros después */
       });
     });
     el._od = { sig: text.replace(/\d/g, '#'), strips: strips };

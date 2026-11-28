@@ -94,7 +94,7 @@
     var wn = D.user.name || D.user.email || 'Tu cuenta', av = doc.createElement('span'), ini = doc.createElement('b'), nm = doc.createElement('span');
     av.className = 'who-av'; av.setAttribute('aria-hidden', 'true'); ini.textContent = ((wn.match(/[A-Za-z0-9À-ſ]/) || ['?'])[0]).toUpperCase(); av.appendChild(ini);
     if (D.user.photo) {
-      var ph = doc.createElement('img'); ph.alt = ''; ph.referrerPolicy = 'no-referrer'; ph.decoding = 'async';
+      var ph = doc.createElement('img'); ph.alt = ''; ph.width = 28; ph.height = 28; ph.referrerPolicy = 'no-referrer'; ph.decoding = 'async';
       ph.addEventListener('error', function () { ph.remove(); }); ph.src = D.user.photo; av.appendChild(ph);
     }
     nm.className = 'who-n'; nm.textContent = wn;
@@ -108,6 +108,8 @@
   $$('[data-soon]').forEach(function (b) { b.addEventListener('click', function () { toast(b.dataset.soon || 'Esta sección sigue en la versión anterior de la app.'); }); });
   var out = $('#logout');
   if (out) out.addEventListener('click', function () {
+    if (window.CampoGuard && window.CampoGuard.any() && !window.confirm('Tienes cambios sin guardar. ¿Cerrar sesión de todos modos?')) return;
+    if (window.CampoGuard) window.CampoGuard.clear();
     out.disabled = true;
     var A = window.BlackPortfolioAuth;
     try { A.stopSessionTimeout(); } catch (e) { }
@@ -151,6 +153,86 @@
       setTimeout(function () { reveal(); setTimeout(function () { runKpis(false); }, reduce() ? 0 : 380); }, reduce() ? 0 : 120);
     }); });
   });
+
+
+  /* ================= cambios sin guardar =================
+     CampoGuard.set(clave, true|false) marca un formulario con cambios: mientras haya alguno, cerrar o recargar la pestaña pregunta antes.
+     CampoGuard.confirm(host, {onDiscard, onKeep}) pone dentro del diálogo "¿Descartar lo que escribiste?" (Esc o "Seguir editando" la quitan).
+     Antes, Esc o un clic fuera de la hoja descartaba todo en silencio. */
+  var dirtyKeys = {}, guardOn = false;
+  function onBeforeUnload(e) { e.preventDefault(); e.returnValue = ''; return ''; }
+  var Guard = {
+    set: function (key, on) {
+      if (!!dirtyKeys[key] === !!on) return; if (on) dirtyKeys[key] = 1; else delete dirtyKeys[key];
+      var any = Object.keys(dirtyKeys).length > 0;
+      if (any && !guardOn) { window.addEventListener('beforeunload', onBeforeUnload); guardOn = true; }
+      else if (!any && guardOn) { window.removeEventListener('beforeunload', onBeforeUnload); guardOn = false; }
+    },
+    any: function () { return Object.keys(dirtyKeys).length > 0; },
+    clear: function () { dirtyKeys = {}; if (guardOn) { window.removeEventListener('beforeunload', onBeforeUnload); guardOn = false; } },
+    isOpen: function (host) { return !!(host && host.querySelector('.cg-bar')); },
+    cancel: function (host) { var b = host && host.querySelector('.cg-bar'); if (b) b._end(false); },
+    confirm: function (host, o) {
+      if (!host || Guard.isOpen(host)) return; o = o || {};
+      var bar = doc.createElement('div'), opener = doc.activeElement; bar.className = 'cg-bar'; bar.setAttribute('role', 'alertdialog'); bar.setAttribute('aria-label', 'Cambios sin guardar');
+      bar.innerHTML = '<p>¿Descartar lo que escribiste?</p><div class="cg-a"><button type="button" class="btn btn-ghost btn-sm" data-cg="discard">Descartar</button><button type="button" class="btn btn-primary btn-sm" data-cg="keep">Seguir editando</button></div>';
+      bar._end = function (discard) {
+        if (!bar.parentNode) return; bar.remove();
+        if (discard) { if (o.onDiscard) o.onDiscard(); } else { if (opener && opener.isConnected && opener.focus) { try { opener.focus({ preventScroll: true }); } catch (x) { } } if (o.onKeep) o.onKeep(); }
+      };
+      bar.addEventListener('click', function (e) { var b = e.target.closest('[data-cg]'); if (b) bar._end(b.dataset.cg === 'discard'); });
+      bar.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); bar._end(false); return; }
+        if (e.key === 'Tab') { var f = bar.querySelectorAll('button'); if (e.shiftKey && doc.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && doc.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); } }
+      });
+      host.appendChild(bar); var keep = bar.querySelector('[data-cg="keep"]'); if (keep) keep.focus({ preventScroll: false });
+      try { bar.scrollIntoView({ block: 'nearest' }); } catch (x) { }
+    }
+  };
+  window.CampoGuard = Guard;
+
+  /* FLIP en dos pasadas: primero se leen TODAS las posiciones nuevas (un solo cálculo de layout) y después se lanzan las animaciones.
+     Antes cada fila leía y animaba por turnos y forzaba un layout por fila. items: [{ el, from }] con from = top anterior (o null si es nueva). */
+  window.CampoFlip = {
+    play: function (items, o) {
+      o = o || {}; var lasts = items.map(function (x) { return x.el.getBoundingClientRect().top; });
+      items.forEach(function (x, i) {
+        if (x.from == null || !x.el.animate) return; var d = x.from - lasts[i]; if (Math.abs(d) <= 1) return;
+        x.el.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: o.duration || 300, easing: o.easing || 'cubic-bezier(0.16, 1, 0.3, 1)' });
+      });
+    }
+  };
+
+  /* ================= atributos de los campos =================
+     Los campos se pintan desde una veintena de módulos; en vez de repetir lo mismo en cada plantilla, aquí se completa lo que falte:
+     name (para autocompletar del navegador y para depurar), autocomplete="off" y sin corrector ni mayúsculas en tickers y cifras
+     (inputmode, combobox, búsqueda, número). Los textos libres (nombres, notas) se dejan como están. */
+  var NAMEABLE = 'input:not([type=hidden]):not([type=button]):not([type=submit]), select, textarea', TICKERISH = 'input[inputmode], input[role=combobox], input[type=search], input[type=number]';
+  var pendingNodes = [], hardenQ = 0;
+  function nameOf(n) {
+    if (n.name) return '';
+    for (var i = 0; i < n.attributes.length; i++) { var a = n.attributes[i]; if (/^data-/.test(a.name) && !/^data-(autofocus|tip|i|id)$/.test(a.name)) return a.value && a.value.length < 24 ? a.name.slice(5) + '-' + a.value : a.name.slice(5); }
+    var slug = String(n.getAttribute('aria-label') || n.placeholder || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
+    return n.id || (n.className && String(n.className).split(' ')[0]) || slug || n.type || '';
+  }
+  function hardenOne(n) {
+    var nm = nameOf(n); if (nm) n.setAttribute('name', nm);
+    if (n.matches && n.matches(TICKERISH)) {
+      if (!n.hasAttribute('autocomplete')) n.setAttribute('autocomplete', 'off');
+      if (!n.hasAttribute('spellcheck')) n.setAttribute('spellcheck', 'false');
+      if (!n.hasAttribute('autocapitalize')) n.setAttribute('autocapitalize', 'off');
+    }
+  }
+  function hardenTree(root) {
+    if (!root || root.nodeType !== 1) return;
+    if (root.matches(NAMEABLE)) hardenOne(root);
+    var list = root.querySelectorAll ? root.querySelectorAll(NAMEABLE) : []; for (var i = 0; i < list.length; i++) hardenOne(list[i]);
+  }
+  new MutationObserver(function (recs) {
+    recs.forEach(function (r) { for (var i = 0; i < r.addedNodes.length; i++) if (r.addedNodes[i].nodeType === 1) pendingNodes.push(r.addedNodes[i]); });
+    if (pendingNodes.length && !hardenQ) hardenQ = setTimeout(function () { hardenQ = 0; var q = pendingNodes; pendingNodes = []; q.forEach(hardenTree); }, 16);
+  }).observe(doc.body, { childList: true, subtree: true });
+  hardenTree(doc.body);
 
   window.__campo = {
     go: function () { /* la app ya es la vista; landing y acceso son páginas aparte */ },

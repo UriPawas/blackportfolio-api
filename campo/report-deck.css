@@ -85,6 +85,7 @@
 .is-on .crk-bar { transform: scaleY(1); }
 .crk-bar.is-up { fill: color-mix(in oklch, var(--gain) 78%, var(--s1)); } .crk-bar.is-dn { fill: color-mix(in oklch, var(--loss) 78%, var(--s1)); } .crk-bar.is-tot { fill: var(--accent); }
 .crk-bg { outline: none; cursor: default; } .crk-bg:hover .crk-bar, .crk-bg:focus-visible .crk-bar { filter: brightness(1.12); }
+.crk-bg:focus-visible .crk-bar, .crk-sg:focus-visible .crk-seg { stroke: var(--text); stroke-width: 2px; vector-effect: non-scaling-stroke; } /* el brillo solo no basta (contraste WCAG 1.4.11): trazo visible al enfocar con teclado */
 .crk-bv { font: 600 20px var(--font); fill: var(--text); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity 400ms var(--ez); } .is-on .crk-bv { opacity: 1; }
 .crk-bv.up { fill: var(--gain); } .crk-bv.dn { fill: var(--loss); }
 .crk-bl { font: 500 18px var(--font); fill: var(--text-2); } .crk-bl.is-tot { fill: var(--text); font-weight: 600; }

@@ -294,6 +294,7 @@
     var id = 'pfr' + (++uid), dates = T.dates, fx0 = T.fx.usdmxn, BASE = T.base || 'MXN', FOR = (T.fx && T.fx.foreign) || (BASE === 'USD' ? 'MXN' : 'USD'), PAIR = FOR + '/' + BASE; if (FOR === 'MXN' && BASE === 'USD' && fx0 > 0) { PAIR = 'USD/MXN'; fx0 = 1 / fx0; }
     var bench = benchOf(T, L.benchmark), V = L.V, F = L.F;
     var PERIODS = [['1M', 21], ['3M', 63], ['6M', 126], ['1A', LAST]], Pi = 3, mode = 'rend';
+    var qsP = window.CampoSections && window.CampoSections.query ? window.CampoSections.query().p : null, piQ = PERIODS.map(function (p) { return p[0]; }).indexOf(qsP); if (piQ >= 0) Pi = piQ; /* ?p=3M del enlace */
     function startIdx() { return Math.max(0, LAST - PERIODS[Pi][1]); }
 
     /* ---------- KPIs ---------- */
@@ -605,6 +606,7 @@
     });
     segP.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-p]'); if (!b) return; var i = +b.dataset.p; if (i === Pi) return; var old = twrInfo().val; Pi = i;
+      if (window.CampoSections && window.CampoSections.setQuery) window.CampoSections.setQuery({ p: Pi === 3 ? '' : PERIODS[Pi][0] });
       $$('button', segP).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); pill(segP, Pi); hIdx = -1; kbIdx = -1; retarget(true);
       var info = twrInfo(), k = K[4]; k.to = info.val; k.name = 'TWR · ' + PERIODS[Pi][0]; k.lines = info.lines;
       var cell = $('[data-k="twr"]'); cell.querySelector('.pfr-kn').textContent = k.name; cell.querySelector('[data-lines]').innerHTML = lines(info.lines); paintSign(kEl('twr'), info.val);
@@ -646,7 +648,7 @@
       var by = {}; $$('.pfr-prow', plEl).forEach(function (r) { by[r.dataset.t] = r; });
       sorted().forEach(function (r) { plEl.appendChild(by[r.ticker]); });
       paintSort();
-      if (!reduce()) $$('.pfr-prow', plEl).forEach(function (r) { var d = tops[r.dataset.t] - r.getBoundingClientRect().top; if (Math.abs(d) > 1 && r.animate) r.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO }); });
+      if (!reduce()) CampoFlip.play($$('.pfr-prow', plEl).map(function (r) { return { el: r, from: tops[r.dataset.t] }; }));
     });
 
     /* ---------- primera vista ---------- */

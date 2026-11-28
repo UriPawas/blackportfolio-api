@@ -181,7 +181,7 @@
     var ttl = w.title || d.label;
     el.innerHTML = '<header class="hw-head"><button type="button" class="hw-grip" aria-pressed="false">' + I.grip + '</button>' +
       '<span class="hw-mv"><button type="button" class="hw-up">' + I.up + '</button><button type="button" class="hw-dn">' + I.dn + '</button></span>' +
-      '<h3 class="hw-title"></h3><span class="hw-meta"></span><span class="hw-sp"></span><div class="hw-headslot"></div>' +
+      '<h2 class="hw-title"></h2><span class="hw-meta"></span><span class="hw-sp"></span><div class="hw-headslot"></div>' +
       '<button type="button" class="hw-more" aria-haspopup="menu" aria-expanded="false">' + I.more + '</button><button type="button" class="hw-x">' + I.x + '</button></header>' +
       '<div class="hw-body"></div><button type="button" class="hw-rs" tabindex="-1" aria-hidden="true">' + I.rs + '</button>';
     var e = { el: el, ins: null, ctx: null, themeCbs: [] };
@@ -438,18 +438,26 @@
     if (gal) { gal.input.focus(); return; } if (!rendered) return; closeDrawer(); closeMenu(false);
     var scrim = mk('div', 'hub-scrim'), p = mk('aside', 'hub-panel'); p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Añadir widget');
     p.innerHTML = '<div class="hp-head"><h2>Añadir widget</h2><button type="button" class="hp-x" aria-label="Cerrar">' + I.x + '</button></div>' +
-      '<label class="hp-search"><span class="sr">Buscar widgets</span>' + I.search + '<input type="search" placeholder="Buscar widgets" autocomplete="off" spellcheck="false"></label>' +
-      '<div class="hp-chips" role="group" aria-label="Filtrar por grupo"></div><div class="hp-list" role="list"></div><p class="hp-empty" hidden></p>';
+      '<label class="hp-search"><span class="sr">Buscar widgets</span>' + I.search + '<input type="search" placeholder="Buscar widgets…" autocomplete="off" spellcheck="false"></label>' +
+      '<div class="hp-chips" role="group" aria-label="Filtrar por grupo"></div><ul class="hp-list" role="list"></ul><p class="hp-empty" hidden></p>';
     gal = { el: p, scrim: scrim, input: $('input', p), chips: $('.hp-chips', p), list: $('.hp-list', p), none: $('.hp-empty', p), group: 'Todos', q: '', trigger: trigger || document.activeElement };
     var gs = ['Todos'].concat(GROUPS.filter(function (g) { return regOrder.some(function (t) { return defs[t].group === g; }); }));
     gs.forEach(function (g) { var c = mk('button', 'hp-chip', esc(g)); c.type = 'button'; c.setAttribute('aria-pressed', g === 'Todos'); c.addEventListener('click', function () { gal.group = g; Array.prototype.forEach.call(gal.chips.children, function (x) { x.setAttribute('aria-pressed', x === c); }); fillGallery(); }); gal.chips.appendChild(c); });
     gal.input.addEventListener('input', function () { gal.q = norm(gal.input.value); fillGallery(); });
     $('.hp-x', p).addEventListener('click', function () { closeGallery(true); }); scrim.addEventListener('click', function () { closeGallery(true); });
     document.body.appendChild(scrim); document.body.appendChild(p); fillGallery();
+    /* con telón (móvil) es una hoja modal: lo de atrás se inhabilita y Tab no se escapa; en escritorio es un panel lateral que deja seguir editando */
+    if (getComputedStyle(scrim).display !== 'none') {
+      gal.app = document.getElementById('view-app'); p.setAttribute('aria-modal', 'true'); if (gal.app) gal.app.inert = true;
+      p.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Tab') return; var f = Array.prototype.slice.call(p.querySelectorAll('button,input,select,textarea,[tabindex]:not([tabindex="-1"])')).filter(function (n) { return !n.disabled && n.getAttribute('aria-disabled') !== 'true' && n.offsetParent !== null; }); if (!f.length) return;
+        var a = document.activeElement; if (ev.shiftKey && (a === f[0] || !p.contains(a))) { ev.preventDefault(); f[f.length - 1].focus(); } else if (!ev.shiftKey && (a === f[f.length - 1] || !p.contains(a))) { ev.preventDefault(); f[0].focus(); }
+      });
+    }
     requestAnimationFrame(function () { scrim.classList.add('on'); p.classList.add('on'); }); setTimeout(function () { if (gal) gal.input.focus(); }, 60);
   }
   function closeGallery(refocus) {
-    if (!gal) return; var g = gal; gal = null; g.el.classList.remove('on'); g.scrim.classList.remove('on');
+    if (!gal) return; var g = gal; gal = null; g.el.classList.remove('on'); g.scrim.classList.remove('on'); if (g.app) g.app.inert = false;
     setTimeout(function () { g.el.remove(); g.scrim.remove(); }, reduced() ? 0 : 260);
     if (refocus && g.trigger && g.trigger.isConnected) g.trigger.focus({ preventScroll: true });
   }
@@ -459,13 +467,13 @@
     regOrder.forEach(function (t) {
       var d = defs[t]; if (gal.group !== 'Todos' && d.group !== gal.group) return; if (gal.q && norm(d.label + ' ' + d.desc + ' ' + d.group).indexOf(gal.q) < 0) return;
       var has = state.widgets.some(function (w) { return w.type === t; }), off = has && !d.duplicable;
-      var c = mk('button', 'hg-card'); c.type = 'button'; c.setAttribute('role', 'listitem'); c.dataset.type = t; if (off) c.setAttribute('aria-disabled', 'true');
+      var c = mk('button', 'hg-card'); c.type = 'button'; c.dataset.type = t; if (off) c.setAttribute('aria-disabled', 'true');
       var th = mk('div', 'hg-thumb'); th.setAttribute('aria-hidden', 'true'); try { if (d.thumb) d.thumb(th); else th.innerHTML = d.icon || ''; } catch (x) { th.innerHTML = d.icon || ''; }
       var dots = d.sizes.map(function (s) { return '<i class="hg-dot' + (s === d.size ? ' def' : '') + '" data-s="' + s + '"></i>'; }).join('');
       var tx = mk('div', 'hg-tx', '<b class="hg-n">' + esc(d.label) + '</b><span class="hg-d">' + esc(d.desc || '') + '</span><span class="hg-f"><span class="hg-dots" role="img" aria-label="Tamaños: ' + d.sizes.join(', ') + '">' + dots + '</span><span class="hg-st' + (off ? ' is-on' : '') + '">' + (off ? 'Añadido' : has ? 'Añadir otro' : 'Añadir') + '</span></span>');
       c.appendChild(th); c.appendChild(tx);
       c.addEventListener('click', function () { if (off) { var w = state.widgets.filter(function (x) { return x.type === t; })[0]; if (w) { flash(w.id); inst[w.id].el.scrollIntoView({ block: 'center', behavior: reduced() ? 'auto' : 'smooth' }); announce(d.label + ' ya está en tu inicio.'); } return; } addWidget(t); });
-      L.appendChild(c); shown++;
+      var li = mk('li'); li.appendChild(c); L.appendChild(li); shown++;
     });
     gal.none.hidden = shown > 0; if (!shown) gal.none.textContent = 'Ningún widget coincide' + (gal.q ? ' con «' + gal.input.value + '»' : '') + '.';
   }

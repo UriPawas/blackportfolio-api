@@ -179,7 +179,7 @@ html.tkl-lock { overflow: hidden; scrollbar-gutter: stable; }
 .tkl-dmeta div { display: grid; gap: 2px; }
 .tkl-dmeta dt { font-size: 13px; color: var(--text-3); }
 .tkl-dmeta dd { margin: 0; font-size: 15px; font-weight: 500; }
-.tkl-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.tkl-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
 .tkl-tabs button { all: unset; box-sizing: border-box; min-height: 44px; padding: 0 14px; font-size: 15px; font-weight: 500; color: var(--text-3); white-space: nowrap; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tkl-tabs { position: relative; overscroll-behavior-x: contain; }
 .tkl-tabw { position: relative; }
@@ -189,7 +189,7 @@ html.tkl-lock { overflow: hidden; scrollbar-gutter: stable; }
 .tkl-tabw.can-l::before, .tkl-tabw.can-r::after { opacity: 1; }
 .tkl-tabs button { transition: color 180ms var(--ease-out); }
 .tkl-tabs button[aria-selected="true"] { color: var(--text); }
-.tkl-ind { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; border-radius: 1px; background: var(--accent); pointer-events: none; transition: transform 260ms var(--ease-in-out), width 260ms var(--ease-in-out); }
+.tkl-ind { position: absolute; left: 0; bottom: 0; height: 2px; width: 1px; transform-origin: 0 50%; border-radius: 1px; background: var(--accent); pointer-events: none; transition: transform 260ms var(--ease-in-out); } /* el largo va en scaleX: width animaba layout */
 @media (hover: hover) and (pointer: fine) { .tkl-tabs button:not(:disabled):not([aria-selected="true"]):hover { color: var(--text-2); } }
 @media (prefers-reduced-motion: reduce) { .tkl-ind, .tkl-tabs button, .tkl-tabw::before, .tkl-tabw::after { transition: none; } }
 .tkl-tabs button:disabled { opacity: 0.5; cursor: default; }

@@ -98,7 +98,7 @@
   }
   defs.push({ type: 'macro', def: {
     label: 'Mapa macro', desc: '¿Cómo está el entorno: volatilidad, dólar, tasas, petróleo, oro y peso?', group: 'Mercado',
-    icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="6" height="5.5" rx="1.5"/><rect x="11" y="3.5" width="6" height="5.5" rx="1.5"/><rect x="3" y="11" width="6" height="5.5" rx="1.5"/><path d="M11.5 15l2-2 1.5 1.2 2-2.5"/></svg>',
+    icon: '<svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="6" height="5.5" rx="1.5"/><rect x="11" y="3.5" width="6" height="5.5" rx="1.5"/><rect x="3" y="11" width="6" height="5.5" rx="1.5"/><path d="M11.5 15l2-2 1.5 1.2 2-2.5"/></svg>',
     sizes: ['S', 'M', 'L'], size: 'M', defaults: {},
     thumb: function (el) { thumbSvg(el, '<g fill="none" stroke="currentColor" stroke-width="1.5" opacity=".7"><rect x="10" y="8" width="48" height="26" rx="4"/><rect x="62" y="8" width="48" height="26" rx="4"/><rect x="10" y="38" width="48" height="26" rx="4"/><rect x="62" y="38" width="48" height="26" rx="4"/></g><g fill="none" stroke="var(--gain)" stroke-width="1.5"><path d="M16 28l8-6 6 3 10-9"/></g><g fill="none" stroke="var(--loss)" stroke-width="1.5"><path d="M68 16l10 6 8-3 12 8"/></g>'); },
     render: Macro
@@ -118,6 +118,9 @@
     function flush() { clearTimeout(timer); timer = 0; if (pending != null) { var t = pending; pending = null; ctx.save({ text: t }); saved.dataset.on = ''; clearTimeout(fade); fade = setTimeout(function () { delete saved.dataset.on; }, 1400); } }
     ta.addEventListener('input', function () { pending = ta.value; clearTimeout(timer); timer = setTimeout(flush, 400); });
     ta.addEventListener('blur', flush);
+    /* una nota escrita hace menos de 400 ms se perdía al cerrar la pestaña o cambiar de app: se guarda al ocultarse la página */
+    function onHide() { if (doc.visibilityState === 'hidden') flush(); }
+    window.addEventListener('pagehide', flush); doc.addEventListener('visibilitychange', onHide);
     function paint() {
       var kmode = cfg.mode === 'kpi'; ta.hidden = kmode; kpi.hidden = !kmode; saved.hidden = kmode;
       if (!kmode) { if (doc.activeElement !== ta && ta.value !== (cfg.text || '')) ta.value = cfg.text || ''; return; }
@@ -129,19 +132,19 @@
       if (t && isFinite(nt) && nt !== 0) {
         var pc = isFinite(nv) ? clamp(nv / nt * 100, 0, 100) : 0;
         var pb = h('div', 'w2-prog'); pb.setAttribute('role', 'progressbar'); pb.setAttribute('aria-valuemin', '0'); pb.setAttribute('aria-valuemax', '100'); pb.setAttribute('aria-valuenow', Math.round(pc));
-        var fl = h('i'); fl.style.width = pc + '%'; pb.appendChild(fl); kpi.appendChild(pb);
+        var fl = h('i'); fl.style.setProperty('--s', (pc / 100).toFixed(4)); pb.appendChild(fl); kpi.appendChild(pb);
         kpi.appendChild(h('span', 'w2-kt', 'Meta ' + t + (isFinite(nv) ? ' · ' + Math.round(pc) + ' %' : '')));
       }
     }
     paint();
     return {
       update: function (c) { cfg = c || {}; paint(); },
-      resize: function () {}, destroy: function () { flush(); clearTimeout(fade); }
+      resize: function () {}, destroy: function () { flush(); clearTimeout(fade); window.removeEventListener('pagehide', flush); doc.removeEventListener('visibilitychange', onHide); }
     };
   }
   defs.push({ type: 'note', def: {
     label: 'Nota / KPI', desc: 'Una nota rápida o un número que quieres tener a la vista.', group: 'Apuntes',
-    icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="3.5" width="11" height="13" rx="2"/><path d="M7.5 7.5h5M7.5 10.5h5M7.5 13.5h3"/></svg>',
+    icon: '<svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="3.5" width="11" height="13" rx="2"/><path d="M7.5 7.5h5M7.5 10.5h5M7.5 13.5h3"/></svg>',
     sizes: ['S', 'M'], size: 'S', duplicable: true, defaults: { text: '', mode: 'note', kpiValue: '', kpiLabel: '', kpiTarget: '' },
     thumb: function (el) { thumbSvg(el, '<rect x="16" y="8" width="88" height="56" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".7"/><g fill="currentColor" opacity=".5"><rect x="26" y="20" width="68" height="4" rx="2"/><rect x="26" y="30" width="56" height="4" rx="2"/><rect x="26" y="40" width="40" height="4" rx="2"/></g><rect x="26" y="52" width="30" height="3" rx="1.5" fill="var(--accent)"/>'); },
     render: Note,
@@ -151,7 +154,7 @@
       var f0 = h('div', 'w2-fld'); f0.appendChild(h('label', null, 'Modo')); f0.appendChild(s.el); form.appendChild(f0);
       var box = h('div', 'w2-kfields'); form.appendChild(box);
       [['kpiValue', 'Número', 'Ej. 128,400'], ['kpiLabel', 'Etiqueta', 'Ej. Ahorro del año'], ['kpiTarget', 'Meta (opcional)', 'Ej. 200,000']].forEach(function (a) {
-        var f = h('div', 'w2-fld'), l = h('label', null, a[1]), i = h('input', 'w2-in'); i.type = 'text'; i.placeholder = a[2]; i.value = cfg[a[0]] || ''; i.id = 'w2-k-' + a[0] + '-' + Math.random().toString(36).slice(2, 6); l.htmlFor = i.id;
+        var f = h('div', 'w2-fld'), l = h('label', null, a[1]), i = h('input', 'w2-in'); i.type = 'text'; i.name = a[0]; i.autocomplete = 'off'; if (a[0] !== 'kpiLabel') { i.inputMode = 'decimal'; i.spellcheck = false; } i.placeholder = a[2]; i.value = cfg[a[0]] || ''; i.id = 'w2-k-' + a[0] + '-' + Math.random().toString(36).slice(2, 6); l.htmlFor = i.id;
         i.addEventListener('input', function () { var p = {}; p[a[0]] = i.value; apply(p); });
         f.appendChild(l); f.appendChild(i); box.appendChild(f);
       });

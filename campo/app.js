@@ -360,7 +360,7 @@
     cs = document.createElement('section'); cs.className = 'fi-cs';
     cs.innerHTML = '<div class="fi-top"><span class="fi-ctl" id="fiCtl"></span><div class="seg fi-mode" id="fiMode" role="group" aria-label="Tipo de gráfica" style="--n:2"><i class="seg-pill" aria-hidden="true"></i>' +
       '<button type="button" data-m="line" aria-pressed="true">Línea</button><button type="button" data-m="candle" aria-pressed="false">Velas</button></div></div>' +
-      '<div class="fi-ro" id="fiRo"></div><div class="fi-chart" id="fiChart" tabindex="0" role="group"><canvas aria-hidden="true"></canvas><i class="fi-xh"></i><i class="fi-dot"></i></div>' +
+      '<div class="fi-ro" id="fiRo" aria-live="polite" aria-atomic="true"></div><div class="fi-chart" id="fiChart" tabindex="0" role="group" aria-label="Gráfica de precio. Con las flechas izquierda y derecha lees cada día" aria-describedby="fiCap"><canvas aria-hidden="true"></canvas><i class="fi-xh"></i><i class="fi-dot"></i></div>' +
       '<div class="fi-per" id="fiPer" role="group" aria-label="Periodo y rendimiento"><i class="fi-pill" aria-hidden="true"></i></div><p class="fi-cap" id="fiCap"></p>';
     box = $('#fiChart', cs); cv = $('canvas', box); cx2 = cv.getContext('2d');
     var per = $('#fiPer', cs);
@@ -688,7 +688,7 @@
     if (pk) return;
     var wrap = document.createElement('div'); wrap.className = 'pk-wrap';
     wrap.innerHTML = '<div class="pk" role="dialog" aria-modal="true" aria-label="Buscar en Portify">' +
-      '<div class="pk-top">' + ICON.search + '<input class="pk-in" type="text" role="combobox" aria-expanded="true" aria-controls="pkList" aria-autocomplete="list" aria-label="Buscar posiciones, mercados y acciones" placeholder="Buscar posiciones, mercados y acciones" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go"><kbd>Esc</kbd></div>' +
+      '<div class="pk-top">' + ICON.search + '<input class="pk-in" type="text" role="combobox" aria-expanded="true" aria-controls="pkList" aria-autocomplete="list" aria-label="Buscar posiciones, mercados y acciones" placeholder="Buscar posiciones, mercados y acciones…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go"><kbd>Esc</kbd></div>' +
       '<div class="pk-list" id="pkList" role="listbox" aria-label="Resultados"></div>' +
       '<div class="pk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> moverse</span><span><kbd>↵</kbd> abrir</span><span><kbd>Esc</kbd> cerrar</span></div>' +
       '<div class="sr" role="status" aria-live="polite" id="pkLive"></div></div>';

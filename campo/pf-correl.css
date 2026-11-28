@@ -152,11 +152,11 @@
 .pfc-tkl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pfc-bd { font-style: normal; font-size: 11.5px; font-weight: 600; padding: 1px 5px; border-radius: 4px; color: var(--text); background: color-mix(in oklab, var(--pfc-warm) 35%, var(--s2)); }
 .pfc-bd[hidden] { display: none; }
-.pfc-trk { position: relative; height: 10px; border-radius: 5px; background: var(--s2); }
+.pfc-trk { position: relative; container-type: inline-size; height: 10px; border-radius: 5px; background: var(--s2); }
 .pfc-fill { position: absolute; inset: 0; border-radius: 5px; background: var(--text-3); transform-origin: left center; transform: scaleX(var(--w, 0)); transition: transform 360ms var(--ease-expo), background-color 200ms var(--ease-out); }
 .pfc-rr.alert .pfc-fill { background: var(--pfc-warm); }
 .pfc-rr.hedge .pfc-fill { background: var(--pfc-cool); }
-.pfc-mk { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; left: calc(var(--w, 0) * 100%); background: var(--text); border-radius: 1px; transition: left 360ms var(--ease-expo); }
+.pfc-mk { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; left: 0; translate: calc(var(--w, 0) * 100cqw) 0; background: var(--text); border-radius: 1px; transition: translate 360ms var(--ease-expo); }
 .pfc-nums { display: grid; justify-items: end; line-height: 1.2; min-width: 64px; }
 .pfc-nums b { font-size: 14px; font-weight: 600; color: var(--text); }
 .pfc-nums small { font-size: 12px; color: var(--text-3); }

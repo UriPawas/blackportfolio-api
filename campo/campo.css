@@ -213,6 +213,9 @@ a { color: inherit; }
 .tag-x { background: var(--s3); color: var(--text); border: 1px solid var(--accent-ink); line-height: 16px; transform: translateX(-50%); opacity: 0; transition: opacity 120ms var(--ease-out); }
 .tag.on { opacity: 1; }
 .cd-cap { padding: 6px 16px 12px; font-size: 12px; color: var(--text-3); }
+.cg-bar { position: sticky; bottom: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 14px; padding: 10px 12px 10px 14px; background: var(--s3); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-2); }
+.cg-bar p { margin: 0; font-size: 14px; font-weight: 500; color: var(--text); }
+.cg-a { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .acc-visual canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .plot { position: absolute; left: 56px; right: 40px; top: 28px; bottom: 56px; touch-action: pan-y; cursor: crosshair; border-radius: var(--r-sm); }
@@ -352,7 +355,13 @@ input[aria-invalid="true"] { border-color: var(--loss); }
 .side-nav button.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
 @media (hover: hover) { .side-nav button:hover { background: var(--s2); color: var(--text); } }
 .side-foot { margin-top: auto; display: grid; gap: 4px; }
-.who { font-size: 12.5px; color: var(--text-3); padding: 0 8px; overflow: hidden; text-overflow: ellipsis; }
+.who { font-size: 12.5px; color: var(--text-3); padding: 0 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* desplegables nativos: mismo tema y tipografía que la app (en oscuro salían blancos con letra del sistema) */
+select { font: inherit; color: var(--text); }
+select option, select optgroup { background: var(--s1); color: var(--text); font: inherit; }
+/* sin el retardo de 300 ms ni el zoom por doble toque en controles; los gestos de las gráficas siguen con su propio touch-action */
+a, button, input, select, summary, label, [role="button"], [role="tab"], [role="option"], [role="radio"] { touch-action: manipulation; }
+html { scroll-padding: 12px 0; }
 .side-foot .btn { justify-content: flex-start; }
 .app-main { padding: 20px 24px 96px; min-width: 0; display: grid; gap: 16px; align-content: start; }
 .app-head h1 { font-size: 24px; letter-spacing: -0.03em; }
@@ -404,7 +413,7 @@ input[aria-invalid="true"] { border-color: var(--loss); }
 .dock { position: fixed; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: var(--r-pill); background: var(--s1); border: 1px solid var(--line); box-shadow: var(--sh-2), var(--inset); view-transition-name: dock; }
 .dock-tag { font-size: 12.5px; color: var(--text-3); padding: 0 8px 0 10px; }
 .dock-seg { min-width: 232px; }
-.toast { position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 8px); z-index: 60; background: var(--primary); color: var(--on-primary); padding: 12px 18px; border-radius: var(--r-pill); box-shadow: var(--sh-2); font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); max-width: calc(100vw - 32px); }
+.toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px); z-index: 60; background: var(--primary); color: var(--on-primary); padding: 12px 18px; border-radius: var(--r-pill); box-shadow: var(--sh-2); font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); max-width: calc(100vw - 32px); }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; animation-timing-function: var(--ease-out); }
@@ -431,6 +440,7 @@ input[aria-invalid="true"] { border-color: var(--loss); }
   /* barra inferior fija: los 5 destinos a la vista y con nombre (antes, una barra superior con scroll horizontal, botones de 42 px sin etiqueta
      y Salir/cuenta fuera de pantalla). Salir y la cuenta viven en Ajustes; crear un portafolio, en la propia sección Portafolios. */
   :root { --tabbar-h: 64px; }
+  html { scroll-padding-bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom)); } /* el foco por teclado no queda tapado por la barra inferior */
   .side { position: fixed; z-index: 45; left: 0; right: 0; bottom: 0; top: auto; height: auto; flex-direction: row; align-items: stretch; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--line); gap: 0; overflow: visible; }
   .side .brand, .side-foot, .side-nav [data-create] { display: none; }
   .side-nav { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
@@ -439,7 +449,7 @@ input[aria-invalid="true"] { border-color: var(--loss); }
   .side-nav button span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .app-main { padding: 16px 12px calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom)); }
   /* los avisos flotantes que iban a 20 px del borde quedarían bajo la barra */
-  body[data-view="app"] :is(.txs-toast, .inf-toast, .pmt-toast, .hub-toast, .st-undo, .toast) { bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); }
+  body[data-view="app"] :is(.txs-toast, .inf-toast, .pmt-toast, .hub-toast, .mk-toast, .st-undo, .toast) { bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 640px) {
   :root { --gutter: 16px; }

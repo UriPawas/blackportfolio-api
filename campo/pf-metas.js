@@ -306,7 +306,7 @@
         ringTo(nc, nc.eng.pAt(g.monthly), 700, 80); if (!reduce() && nc.el.animate) nc.el.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: EXPO }); flip(tops2);
       });
     }
-    function flip(tops) { if (reduce()) return; st.goals.forEach(function (g) { var c = cards[g.id]; if (!c || tops[g.id] == null || !c.el.animate) return; var d = tops[g.id] - c.el.getBoundingClientRect().top; if (Math.abs(d) > 1) c.el.animate([{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], { duration: 300, easing: EXPO }); }); }
+    function flip(tops) { if (reduce()) return; CampoFlip.play(st.goals.filter(function (g) { return cards[g.id]; }).map(function (g) { return { el: cards[g.id].el, from: tops[g.id] }; })); }
     function showToast(msg, label, fn) {
       clearTimeout(toastT); toastEl.innerHTML = '<span>' + esc(msg) + '</span>' + (label ? '<button type="button" class="pmt-tb">' + esc(label) + '</button>' : ''); toastEl.hidden = false;
       if (!reduce() && toastEl.animate) toastEl.animate([{ opacity: 0, transform: 'translate(-50%, 12px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 240, easing: EXPO });
@@ -329,7 +329,15 @@
         '<div class="pmt-fa"><button type="submit" class="btn btn-primary btn-sm">' + (isNew ? 'Agregar meta' : 'Guardar cambios') + '</button><button type="button" class="btn btn-ghost btn-sm" data-cancel>Cancelar</button></div>';
       var ref = g && cards[g.id] ? cards[g.id].el : listEl.firstChild; if (ref) listEl.insertBefore(f, ref); else listEl.appendChild(f);
       if (g && cards[g.id]) cards[g.id].el.classList.add('is-editing');
-      sheet = { el: f, gid: g ? g.id : null, isNew: isNew };
+      sheet = { el: f, gid: g ? g.id : null, isNew: isNew, dirty: false };
+      /* con cambios sin guardar, Esc / Cancelar piden confirmar; recargar la pestaña también avisa */
+      var gkey = id + 'sheet';
+      function askClose() {
+        var G = window.CampoGuard;
+        if (G && G.isOpen(f)) { G.cancel(f); return; }
+        if (sheet && sheet.dirty && G) { G.confirm(f, { onDiscard: function () { closeSheet(false); } }); return; }
+        closeSheet(false);
+      }
       var qi = function (n) { return f.querySelector('[name="' + n + '"]'); };
       function read() { return { name: qi('name').value.trim(), target: parseNum(qi('target').value), years: parseNum(qi('years').value), monthly: parseNum(qi('monthly').value), share: parseNum(qi('share').value) }; }
       var RULES = {
@@ -346,10 +354,10 @@
         var tot = others + v.share; pv.className = 'pmt-pv2' + (tot > 100 ? ' warn' : '');
         pv.innerHTML = 'Asignas <strong class="num">' + fM(inp.value * v.share / 100) + '</strong> de hoy a esta meta. ' + (tot > 100 ? 'Con esto tus metas suman <strong class="num">' + tot + ' %</strong>: pasarías de 100 % y se contaría dos veces el mismo dinero.' : 'Tus metas sumarían <span class="num">' + tot + ' %</span> del portafolio.');
       }
-      f.addEventListener('input', function (e) { var n = e.target.name; if (n && RULES[n] && e.target.getAttribute('aria-invalid') === 'true') setErr(n, RULES[n](read())); preview(); });
+      f.addEventListener('input', function (e) { if (sheet && !sheet.dirty) { sheet.dirty = true; if (window.CampoGuard) window.CampoGuard.set(gkey, true); } var n = e.target.name; if (n && RULES[n] && e.target.getAttribute('aria-invalid') === 'true') setErr(n, RULES[n](read())); preview(); });
       f.addEventListener('focusout', function (e) { var n = e.target.name; if (!n || !RULES[n]) return; var v = read(); if ((n === 'target' || n === 'monthly') && isFinite(v[n])) e.target.value = Math.round(v[n]).toLocaleString('en'); if (e.target.value !== '') setErr(n, RULES[n](v)); });
-      f.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); closeSheet(false); } });
-      f.querySelector('[data-cancel]').addEventListener('click', function () { closeSheet(false); });
+      f.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); askClose(); } });
+      f.querySelector('[data-cancel]').addEventListener('click', askClose);
       f.addEventListener('submit', function (e) {
         e.preventDefault(); var v = read(), bad = null;
         Object.keys(RULES).forEach(function (n) { var m = RULES[n](v); setErr(n, m); if (m && !bad) bad = n; }); if (bad) { qi(bad).focus(); return; }
@@ -365,7 +373,7 @@
       f.scrollIntoView({ block: 'nearest', behavior: reduce() ? 'auto' : 'smooth' }); qi('name').focus({ preventScroll: true });
     }
     function closeSheet(instant) {
-      if (!sheet) return; var s = sheet, ret = s.gid && cards[s.gid] ? cards[s.gid].el.querySelector('[data-edit]') : $('[data-new]'); sheet = null;
+      if (!sheet) return; var s = sheet, ret = s.gid && cards[s.gid] ? cards[s.gid].el.querySelector('[data-edit]') : $('[data-new]'); sheet = null; if (window.CampoGuard) window.CampoGuard.set(id + 'sheet', false);
       if (s.gid && cards[s.gid]) cards[s.gid].el.classList.remove('is-editing');
       var inside = s.el.contains(doc.activeElement);
       if (!instant && !reduce() && s.el.animate) { var a = s.el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-8px)' }], { duration: 200, easing: EXPO, fill: 'forwards' }); a.onfinish = function () { s.el.remove(); }; } else s.el.remove();

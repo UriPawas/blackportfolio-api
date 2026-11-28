@@ -20,7 +20,8 @@
   } };
   var S = STR.es;
   var CR = function () { return win.CampoReport; }, T = function () { return win.CampoTracker; };
-  var RM = !!(win.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var RMQ = win.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null, RM = !!(RMQ && RMQ.matches);
+  if (RMQ && RMQ.addEventListener) RMQ.addEventListener('change', function (e) { RM = e.matches; }); /* viva: se puede cambiar con la app abierta */
 
   /* ---------- utilidades ---------- */
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -108,11 +109,17 @@
       form.pf = null;
       root.innerHTML = '<header class="inf-head"><h1 tabindex="-1">' + S.title + '</h1><p>' + S.lede + '</p></header>' +
         '<div class="inf-void"><strong>' + S.noPfT + '</strong><p>' + (t.readonly ? S.noPf : S.noPfD) + '</p>' + (t.readonly ? '' : '<button type="button" class="btn btn-primary" data-create>' + S.newPf + '</button>') + '</div>' +
-        (store.items.length ? '<section class="inf-hist" aria-labelledby="infHT"><h2 id="infHT">' + S.hist + '</h2><div id="infList"></div></section>' : '') +
-        '<p class="inf-foot">' + S.foot + '</p><div class="inf-toast" id="infToast" role="status" hidden></div>';
+        (store.items.length ? '<section class="inf-hist" aria-labelledby="infHT"><h2 id="infHT" tabindex="-1">' + S.hist + '</h2><div id="infList"></div></section>' : '') +
+        '<p class="inf-foot">' + S.foot + '</p><div class="inf-toast" id="infToast" hidden></div><div class="sr" id="infLive" role="status" aria-live="polite"></div>';
       if (store.items.length) { $('#infList').addEventListener('click', onListClick); $('#infList').addEventListener('keydown', onListKey); paintList(false); }
       return;
     }
+    /* ?pf=…&per=…&fmt=… del enlace: el formulario nace como lo dejó quien lo compartió */
+    var qs = win.CampoSections && win.CampoSections.query ? win.CampoSections.query() : {};
+    if (qs.pf && (qs.pf === 'todos' || t.get(qs.pf))) form.pf = qs.pf;
+    if (qs.per && (qs.per === 'custom' || CR().periods().some(function (p) { return p.id === qs.per; }))) form.per = qs.per;
+    if (qs.fmt === 'doc' || qs.fmt === 'pres') form.fmt = qs.fmt;
+    if (form.per === 'custom' && /^\d{4}-\d{2}-\d{2}$/.test(qs.from || '') && /^\d{4}-\d{2}-\d{2}$/.test(qs.to || '')) { form.from = qs.from; form.to = qs.to; }
     if (!form.pf || (form.pf !== 'todos' && !t.get(form.pf))) form.pf = t.portfolios[0] ? t.portfolios[0].id : null;
     var b = bounds(); if (!form.from) { form.from = b.min; form.to = b.max; }
     root.innerHTML =
@@ -128,9 +135,9 @@
       '<aside class="inf-side"><div class="inf-prev" aria-live="polite"><h2>' + S.prev + '</h2><p class="inf-prevs" id="infPrevS"></p>' +
       '<dl class="inf-figs"><div><dt>' + S.gain + '</dt><dd class="inf-num" id="infG"></dd></div><div><dt>' + S.twr + '</dt><dd class="inf-num" id="infT"></dd></div><div><dt id="infVsK">' + S.vs + '</dt><dd class="inf-num" id="infV"></dd></div></dl></div>' +
       '<button type="button" class="btn btn-primary inf-go" id="infGo">' + S.crear + '</button><p class="inf-lim" id="infLim" role="status"></p></aside></div>' +
-      '<section class="inf-hist" aria-labelledby="infHT"><h2 id="infHT">' + S.hist + '</h2><div id="infList"></div></section>' +
+      '<section class="inf-hist" aria-labelledby="infHT"><h2 id="infHT" tabindex="-1">' + S.hist + '</h2><div id="infList"></div></section>' +
       '<p class="inf-plan">Plan ' + esc(plan()) + ' · ' + (/^explorer$/i.test(plan()) ? '1 informe al mes' : 'informes ilimitados') + '</p>' +
-      '<p class="inf-foot">' + S.foot + '</p><div class="inf-toast" id="infToast" role="status" hidden></div>';
+      '<p class="inf-foot">' + S.foot + '</p><div class="inf-toast" id="infToast" hidden></div><div class="sr" id="infLive" role="status" aria-live="polite"></div>';
     bindLanding(); paintPreview(true); paintList(false);
   }
   function fmtBtn(id, name, sub, ic) {
@@ -138,11 +145,15 @@
   }
   function $(s, r) { return (r || root).querySelector(s); }
   function setPressed(wrap, attr, val) { Array.prototype.forEach.call(wrap.children, function (b) { if (b.hasAttribute(attr)) b.setAttribute('aria-pressed', String(b.getAttribute(attr) === val)); }); }
+  function syncForm() {
+    var S = win.CampoSections; if (!S || !S.setQuery) return; var c = form.per === 'custom';
+    S.setQuery({ pf: form.pf, per: form.per, fmt: form.fmt, from: c ? form.from : '', to: c ? form.to : '' });
+  }
   function bindLanding() {
-    $('#infPf').addEventListener('click', function (e) { var b = e.target.closest('[data-pf]'); if (!b) return; form.pf = b.dataset.pf; setPressed(this, 'data-pf', form.pf); paintPreview(); });
-    $('#infPer').addEventListener('click', function (e) { var b = e.target.closest('[data-per]'); if (!b) return; form.per = b.dataset.per; setPressed(this, 'data-per', form.per); $('#infCust').hidden = form.per !== 'custom'; paintPreview(); });
-    $('#infFmt').addEventListener('click', function (e) { var b = e.target.closest('[data-fmt]'); if (!b) return; form.fmt = b.dataset.fmt; setPressed(this, 'data-fmt', form.fmt); });
-    ['#infFrom', '#infTo'].forEach(function (s) { $(s).addEventListener('input', function () { form.from = $('#infFrom').value; form.to = $('#infTo').value; paintPreview(); }); });
+    $('#infPf').addEventListener('click', function (e) { var b = e.target.closest('[data-pf]'); if (!b) return; form.pf = b.dataset.pf; setPressed(this, 'data-pf', form.pf); paintPreview(); syncForm(); });
+    $('#infPer').addEventListener('click', function (e) { var b = e.target.closest('[data-per]'); if (!b) return; form.per = b.dataset.per; setPressed(this, 'data-per', form.per); $('#infCust').hidden = form.per !== 'custom'; paintPreview(); syncForm(); });
+    $('#infFmt').addEventListener('click', function (e) { var b = e.target.closest('[data-fmt]'); if (!b) return; form.fmt = b.dataset.fmt; setPressed(this, 'data-fmt', form.fmt); syncForm(); });
+    ['#infFrom', '#infTo'].forEach(function (s) { $(s).addEventListener('input', function () { form.from = $('#infFrom').value; form.to = $('#infTo').value; paintPreview(); syncForm(); }); });
     $('#infGo').addEventListener('click', createReport);
     $('#infList').addEventListener('click', onListClick);
     $('#infList').addEventListener('keydown', onListKey);
@@ -197,21 +208,24 @@
     else if (b.dataset.act === 'ren') startRename(li, it);
     else if (b.dataset.act === 'del') removeItem(it);
   }
-  function onListKey(e) { /* Esc cancela el renombrado */ if (e.key === 'Escape' && e.target.classList.contains('inf-rn')) { e.preventDefault(); paintList(false); } }
+  /* al repintar la lista el foco caía a <body>: se devuelve a la tarjeta que se tocaba (o a la siguiente, o al título de la lista) */
+  function focusCard(id, act) { var b = $('.inf-card[data-id="' + id + '"] [data-act="' + act + '"]'); if (b) { try { b.focus({ preventScroll: true }); } catch (x) { } return true; } return false; }
+  function focusAfterDelete(i) { var nx = store.items[i] || store.items[i - 1], ok = nx && focusCard(nx.id, 'open'); if (!ok) { var h = $('#infHT') || $('h1'); if (h) { try { h.focus({ preventScroll: true }); } catch (x) { } } } }
+  function onListKey(e) { /* Esc cancela el renombrado */ if (e.key === 'Escape' && e.target.classList.contains('inf-rn')) { e.preventDefault(); var li = e.target.closest('.inf-card'), id = li && li.dataset.id; e.target.onblur = null; paintList(false); if (id) focusCard(id, 'ren'); } }
   function startRename(li, it) {
     var h = li.querySelector('.inf-ct'); h.innerHTML = '<input class="inf-rn" type="text" maxlength="60" value="' + esc(itemTitle(it)) + '" aria-label="' + S.ren + '">';
     var inp = h.firstChild; inp.focus(); inp.select();
-    function done(ok) { if (ok) { var v = inp.value.trim(); it.title = v === (pfName(it.pf) + ' · ' + periodName(it.per)) ? '' : v; save(); } paintList(false); }
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.onblur = null; done(true); } });
-    inp.onblur = function () { done(true); };
+    function done(ok, refocus) { if (ok) { var v = inp.value.trim(); it.title = v === (pfName(it.pf) + ' · ' + periodName(it.per)) ? '' : v; save(); } paintList(false); if (refocus) focusCard(it.id, 'ren'); }
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.onblur = null; done(true, true); } });
+    inp.onblur = function () { done(true, false); };
   }
   function removeItem(it) {
     var i = store.items.indexOf(it), li = $('.inf-card[data-id="' + it.id + '"]');
-    function commit() { store.items.splice(i, 1); save(); paintList(false); toast(S.deleted, function () { store.items.splice(i, 0, it); save(); paintList(false); }); }
+    function commit() { store.items.splice(i, 1); save(); paintList(false); focusAfterDelete(i); toast(S.deleted, function () { store.items.splice(i, 0, it); save(); paintList(false); focusCard(it.id, 'open'); }); }
     if (li && !RM && li.animate) { li.style.pointerEvents = 'none'; li.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-12px)' }], { duration: 200, easing: EASE, fill: 'forwards' }).onfinish = commit; } else commit();
   }
   function toast(msg, undo) {
-    var t = $('#infToast'); if (!t) return; clearTimeout(view.toastT);
+    var t = $('#infToast'); if (!t) return; clearTimeout(view.toastT); var lv = $('#infLive'); if (lv) lv.textContent = msg; /* región viva montada siempre: la que se muestra y oculta no se anuncia */
     t.innerHTML = '<span>' + esc(msg) + '</span><button type="button" class="inf-undo">' + S.undo + '</button>'; t.hidden = false;
     t.querySelector('button').onclick = function () { clearTimeout(view.toastT); t.hidden = true; undo(); };
     view.toastT = setTimeout(function () { t.hidden = true; }, 6000);
